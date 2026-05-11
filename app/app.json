@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "FantasyFocus",
+    "slug": "fantasy-focus",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "scheme": "fantasyfocus",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fantasyfocus.app"
+    },
+    "plugins": ["expo-router"]
+  }
+}

@@ -1,0 +1,9 @@
+node_modules
+dist
+.expo
+pnpm-lock.yaml
+coverage
+android
+ios
+# Canonical spec — avoid drive-by formatting churn
+PLAN.md

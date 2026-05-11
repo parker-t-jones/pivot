@@ -1,0 +1,29 @@
+# Project conventions
+
+This project is specified in PLAN.md. When working on any task, 
+first read the relevant section(s) of PLAN.md and follow the 
+specification exactly.
+
+## Hard rules
+- TypeScript everywhere, strict mode on
+- Never add fields, endpoints, or features not specified in PLAN.md
+- Never use localStorage or browser storage; use AsyncStorage 
+  (React Native) or Supabase (backend)
+- Every external integration (Sleeper, Sportradar, streaming services) 
+  must be hidden behind an interface — see PLAN.md Section 2 
+  "Swap-ready architecture principle"
+- Write tests alongside implementation, not after
+- Prefer Fastify plugins over middleware
+
+## When unsure
+Reference the section number in PLAN.md and ask before deviating.
+Don't gold-plate. Don't add "helpful" features I didn't ask for.
+
+## File layout (see PLAN.md Appendix)
+- services/ingestion/  — Sportradar consumer
+- services/engine/     — switching engine  
+- services/dispatcher/ — deferred event firing
+- services/api/        — REST + WebSocket
+- app/screens/         — iOS screens
+- app/playback/        — PlaybackSource implementations
+- shared/types/        — shared TS types
