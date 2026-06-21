@@ -3,12 +3,12 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { useSession } from '../contexts/SessionContext';
 
-export default function Index() {
-  const { session, isReady } = useSession();
+export default function IndexScreen() {
+  const { isLoading, session } = useSession();
 
-  if (!isReady) {
+  if (isLoading) {
     return (
-      <View style={styles.centered} accessibilityLabel="Loading session">
+      <View style={styles.centered}>
         <ActivityIndicator size="large" />
       </View>
     );
@@ -23,8 +23,8 @@ export default function Index() {
 
 const styles = StyleSheet.create({
   centered: {
-    flex: 1,
     alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
   },
 });

@@ -1,41 +1,40 @@
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useSession } from '../../contexts/SessionContext';
+import { supabase } from '../../lib/supabase';
 
 export default function HomeScreen() {
-  const router = useRouter();
-  const { session, signOut } = useSession();
-  const [signingOut, setSigningOut] = useState(false);
+  const { user } = useSession();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const displayEmail =
-    session?.user.email !== undefined && session.user.email.length > 0
-      ? session.user.email
-      : 'Unknown email';
+  const onSignOut = async () => {
+    setErrorMessage(null);
+    setIsSigningOut(true);
 
-  async function onSignOut() {
-    setSigningOut(true);
-    await signOut();
-    setSigningOut(false);
-    router.replace('/(auth)/sign-in');
-  }
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      setErrorMessage(error.message);
+    }
+
+    setIsSigningOut(false);
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Home</Text>
-      <Text style={styles.label}>Signed in as</Text>
-      <Text style={styles.email}>{displayEmail}</Text>
+      <Text style={styles.subtitle}>Signed in as:</Text>
+      <Text style={styles.email}>{user?.email ?? 'Unknown email'}</Text>
 
-      <Pressable
-        style={[styles.button, signingOut && styles.buttonDisabled]}
-        onPress={() => void onSignOut()}
-        disabled={signingOut}
-      >
-        {signingOut ? (
+      {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+
+      <Pressable disabled={isSigningOut} onPress={onSignOut} style={styles.button}>
+        {isSigningOut ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonLabel}>Sign out</Text>
+          <Text style={styles.buttonText}>Sign out</Text>
         )}
       </Pressable>
     </View>
@@ -43,39 +42,43 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 64,
-    gap: 8,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    color: '#555',
-  },
-  email: {
-    fontSize: 18,
-    fontWeight: '500',
-    marginBottom: 24,
-  },
   button: {
-    alignSelf: 'flex-start',
+    alignItems: 'center',
     backgroundColor: '#111',
     borderRadius: 8,
+    marginTop: 20,
+    minWidth: 150,
+    paddingHorizontal: 18,
     paddingVertical: 12,
-    paddingHorizontal: 20,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonLabel: {
+  buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  container: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  email: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  error: {
+    color: '#B00020',
+    fontSize: 14,
+    marginTop: 8,
+  },
+  subtitle: {
+    color: '#555',
+    fontSize: 14,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '700',
+    marginBottom: 8,
   },
 });

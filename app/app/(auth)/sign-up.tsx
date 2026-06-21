@@ -1,5 +1,5 @@
-import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { Link } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -8,163 +8,174 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  View,
 } from 'react-native';
 
 import { isValidEmail } from '../../lib/email';
 import { supabase } from '../../lib/supabase';
 
-const MIN_PASSWORD_LENGTH = 8;
-
 export default function SignUpScreen() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function onSubmit() {
-    setErrorMessage(null);
-    const trimmed = email.trim();
-    if (!isValidEmail(trimmed)) {
+  const trimmedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
+
+  const onSignUp = async () => {
+    if (!isValidEmail(trimmedEmail)) {
       setErrorMessage('Enter a valid email address.');
       return;
     }
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setErrorMessage(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+
+    if (password.length < 6) {
+      setErrorMessage('Password must be at least 6 characters.');
       return;
     }
-    if (password !== confirmPassword) {
+
+    if (password !== passwordConfirmation) {
       setErrorMessage('Passwords do not match.');
       return;
     }
 
-    setSubmitting(true);
-    const { data, error } = await supabase.auth.signUp({
-      email: trimmed,
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    const { error: signUpError } = await supabase.auth.signUp({
+      email: trimmedEmail,
       password,
     });
-    setSubmitting(false);
 
-    if (error) {
-      setErrorMessage(error.message);
+    if (signUpError) {
+      setErrorMessage(signUpError.message);
+      setIsSubmitting(false);
       return;
     }
 
-    if (!data.session) {
-      setErrorMessage(
-        'Account created but no session returned. In Supabase Studio, disable email confirmation for auth (or confirm the user) for local v1 testing.',
-      );
-      return;
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: trimmedEmail,
+      password,
+    });
+
+    if (signInError) {
+      setErrorMessage(signInError.message);
     }
 
-    router.replace('/(app)');
-  }
+    setIsSubmitting(false);
+  };
 
   return (
     <KeyboardAvoidingView
+      behavior={Platform.select({ ios: 'padding', default: undefined })}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Text style={styles.title}>Sign up</Text>
+      <View style={styles.card}>
+        <Text style={styles.title}>Create account</Text>
+        <Text style={styles.subtitle}>Sign up with email and password.</Text>
 
-      <TextInput
-        style={styles.input}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="email-address"
-        textContentType="username"
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-      />
+        <TextInput
+          autoCapitalize="none"
+          autoComplete="email"
+          keyboardType="email-address"
+          onChangeText={setEmail}
+          placeholder="Email"
+          style={styles.input}
+          value={email}
+        />
 
-      <TextInput
-        style={styles.input}
-        secureTextEntry
-        textContentType="newPassword"
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-      />
+        <TextInput
+          autoCapitalize="none"
+          autoComplete="password-new"
+          onChangeText={setPassword}
+          placeholder="Password"
+          secureTextEntry
+          style={styles.input}
+          value={password}
+        />
 
-      <TextInput
-        style={styles.input}
-        secureTextEntry
-        textContentType="newPassword"
-        placeholder="Confirm password"
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-      />
+        <TextInput
+          autoCapitalize="none"
+          autoComplete="password-new"
+          onChangeText={setPasswordConfirmation}
+          placeholder="Confirm password"
+          secureTextEntry
+          style={styles.input}
+          value={passwordConfirmation}
+        />
 
-      {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+        {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
 
-      <Pressable
-        style={[styles.button, submitting && styles.buttonDisabled]}
-        onPress={() => void onSubmit()}
-        disabled={submitting}
-      >
-        {submitting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonLabel}>Sign up</Text>
-        )}
-      </Pressable>
-
-      <Link href="/(auth)/sign-in" asChild>
-        <Pressable style={styles.linkWrap}>
-          <Text style={styles.link}>Already have an account? Sign in</Text>
+        <Pressable disabled={isSubmitting} onPress={onSignUp} style={styles.button}>
+          {isSubmitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Sign up</Text>
+          )}
         </Pressable>
-      </Link>
+
+        <Text style={styles.footerText}>
+          Already have an account?{' '}
+          <Link href="/(auth)/sign-in" style={styles.link}>
+            Sign in
+          </Link>
+        </Text>
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  error: {
-    color: '#b00020',
-    fontSize: 14,
-  },
   button: {
+    alignItems: 'center',
     backgroundColor: '#111',
     borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
+    paddingVertical: 12,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonLabel: {
+  buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  linkWrap: {
-    alignSelf: 'center',
-    marginTop: 16,
+  card: {
+    gap: 12,
+    width: '100%',
+  },
+  container: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  error: {
+    color: '#B00020',
+    fontSize: 14,
+  },
+  footerText: {
+    color: '#444',
+    fontSize: 14,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  input: {
+    borderColor: '#CCC',
+    borderRadius: 8,
+    borderWidth: 1,
+    fontSize: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   link: {
-    fontSize: 16,
-    color: '#2563eb',
+    color: '#0A66FF',
+    fontWeight: '600',
+  },
+  subtitle: {
+    color: '#555',
+    fontSize: 15,
+    marginBottom: 8,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '700',
   },
 });

@@ -1,80 +1,85 @@
-import type { Session } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
+  type PropsWithChildren,
 } from 'react';
 
 import { supabase } from '../lib/supabase';
 
-interface SessionContextValue {
+type SessionContextValue = {
+  isLoading: boolean;
   session: Session | null;
-  isReady: boolean;
-  signOut: () => Promise<void>;
-}
+  user: User | null;
+};
 
-const SessionContext = createContext<SessionContextValue | null>(null);
+const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 
-export function SessionProvider({ children }: { children: ReactNode }) {
+export function SessionProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
-  const [isReady, setIsReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
+    let isMounted = true;
 
-    void (async () => {
+    const hydrateSession = async () => {
       const { data, error } = await supabase.auth.getSession();
-      if (cancelled) {
+
+      if (error) {
+        console.warn('Failed to read initial auth session.', error.message);
+      }
+
+      if (!isMounted) {
         return;
       }
-      if (error) {
-        console.warn('getSession', error.message);
-        setSession(null);
-      } else {
-        setSession(data.session ?? null);
+
+      setSession(data.session ?? null);
+      setIsLoading(false);
+    };
+
+    hydrateSession().catch((error: unknown) => {
+      if (error instanceof Error) {
+        console.warn('Unexpected auth hydration error.', error.message);
       }
-      setIsReady(true);
-    })();
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
+    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      setSession(currentSession);
+      setIsLoading(false);
     });
 
     return () => {
-      cancelled = true;
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
-  const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.warn('signOut', error.message);
-    }
-  }, []);
-
   const value = useMemo<SessionContextValue>(
     () => ({
+      isLoading,
       session,
-      isReady,
-      signOut,
+      user: session?.user ?? null,
     }),
-    [session, isReady, signOut],
+    [isLoading, session],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
-export function useSession(): SessionContextValue {
-  const ctx = useContext(SessionContext);
-  if (!ctx) {
+export function useSession() {
+  const value = useContext(SessionContext);
+
+  if (!value) {
     throw new Error('useSession must be used within SessionProvider');
   }
-  return ctx;
+
+  return value;
 }
