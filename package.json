@@ -1,20 +1,32 @@
 {
   "name": "fantasy-focus",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "pnpm -r --parallel run typecheck"
+    "typecheck": "tsc --noEmit && pnpm -r --parallel run typecheck",
+    "test": "vitest run",
+    "seed:players": "tsx scripts/seed-players.ts",
+    "db:types": "pnpm exec supabase gen types typescript --local > services/api/src/lib/database.types.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.4.2",
+    "supabase": "^2.109.1",
+    "tsx": "^4.23.0",
     "typescript": "^5.7.2",
-    "typescript-eslint": "^8.18.1"
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@fantasy-focus/shared": "workspace:^",
+    "@supabase/supabase-js": "^2.108.2",
+    "dotenv": "^17.4.2"
   }
 }

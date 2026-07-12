@@ -23,6 +23,7 @@ This document is the source of truth for the build. Sections are organized so ea
 13. [Open Questions](#13-open-questions)
 14. [v1.5 Roadmap](#14-v15-roadmap)
 15. [Phase 2 Strategy](#15-phase-2-strategy)
+- [Known Issues](#known-issues)
 
 ---
 
@@ -266,11 +267,15 @@ One row per user, upserted as session changes.
 | `user_id` | uuid | FK → users, indexed |
 | `platform` | text | `'sleeper' \| 'manual' \| 'espn' \| 'yahoo' \| 'nfl_fantasy' \| 'cbs'` |
 | `external_league_id` | text | nullable (Sleeper league ID, etc.) |
+| `external_owner_id` | text | nullable; Sleeper `user_id` of the league owner/roster (Sprint 3 addition — needed to resolve which roster in a Sleeper league belongs to this user) |
+| `external_roster_id` | text | nullable; Sleeper numeric roster ID within the league (Sprint 3 addition — needed so subsequent lineup syncs know which roster to fetch) |
 | `name` | text | |
 | `sport` | text | `'nfl'` for v1 |
 | `season_year` | int | |
 | `last_synced_at` | timestamptz | nullable |
 | `created_at` | timestamptz | |
+
+> **Sprint 3 divergence:** `external_owner_id` and `external_roster_id` were added during Sprint 3 implementation. They weren't in the original spec but are required to map a connected Sleeper account to the correct roster within a league (a league has many rosters; only one belongs to the connecting user). Both are `NULL` for `platform = 'manual'` leagues.
 
 #### `lineup_slots`
 | Column | Type | Notes |
@@ -285,6 +290,8 @@ One row per user, upserted as session changes.
 | `created_at` | timestamptz | |
 
 Composite index: `(league_id, week)`.
+
+> **Sprint 3 divergence:** added `UNIQUE (league_id, week, player_id)`. The lineup sync worker upserts on this key rather than delete-and-reinsert, so `is_star` (set independently via `POST /leagues/:id/stars`) survives repeated syncs instead of being clobbered every 5 minutes.
 
 ### NFL reference entities
 
@@ -1281,6 +1288,22 @@ Issues that need resolution but don't block the build:
 5. **TestFlight beta cohort.** Likely 50–100 users for August preseason testing.
 6. **Terms of service & privacy policy.** Lawyer review needed before App Store submission.
 7. **Whether to soft-pitch a sportsbook partner pre-launch.** Could compress Phase 2 timeline.
+
+---
+
+## Known Issues
+
+### Sleeper sync fails during the offseason/preseason — must fix before v1 launch
+
+**Symptom:** Both the best-effort initial sync run by `POST /leagues/sleeper` (connect flow) and an explicit `POST /leagues/:id/sync` fail with a `sleeper_matchup_not_found` error whenever the NFL is in the offseason or preseason. In the connect flow this is caught and logged, so it fails silently — the league gets created but its lineup stays empty; via a direct `/sync` call it surfaces as a 404 to the client.
+
+**Root cause:** Sync always targets the current week reported by Sleeper's `/v1/state/nfl` (`services/api/src/lib/nfl-state.ts`). When `season_type` is `'off'` or `'pre'`, that week is `0`. Sleeper's `/league/{id}/matchups/0` has no matchup data for week 0, so `SleeperProvider.fetchLineup` (`services/api/src/providers/sleeper-provider.ts`) can't find a matchup for the roster and throws `sleeper_matchup_not_found`.
+
+**Fix options (pick one before regular season starts):**
+1. Guard `syncLeagueLineup` (`services/api/src/lib/lineup-sync.ts`) and the sync routes to no-op — or return a distinct `season_not_active`-style response — when `nflState.seasonType` is `'off'` or `'pre'`, instead of attempting a matchup fetch that can't succeed.
+2. Fall back to `GET /league/{id}/rosters` (the roster's static `players` list, with no `starters`/week-scoping) when there's no matchup data yet, so the app can show *something* — even if not yet slotted into starter/bench positions — before Week 1 matchups exist.
+
+**Impact if unfixed:** Leagues are typically drafted in August, well before Week 1. A user connecting a Sleeper league during that window — a very common flow — sees an empty lineup screen with no path to a populated one until Sleeper publishes Week 1 matchup data.
 
 ---
 

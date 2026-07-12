@@ -1,0 +1,25 @@
+/** `{ error: { code, message, details? } }` (Section 9 "Conventions — Error format"). */
+export class ApiError extends Error {
+  readonly statusCode: number;
+  readonly code: string;
+  readonly details?: unknown;
+
+  constructor(statusCode: number, code: string, message: string, details?: unknown) {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+export function toErrorBody(error: ApiError): {
+  error: { code: string; message: string; details?: unknown };
+} {
+  return {
+    error: {
+      code: error.code,
+      message: error.message,
+      ...(error.details !== undefined ? { details: error.details } : {}),
+    },
+  };
+}
