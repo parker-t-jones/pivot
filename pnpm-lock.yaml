@@ -145,10 +145,29 @@ importers:
         version: 4.1.10(@types/node@26.1.1)(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.47.1)(tsx@4.23.0)(yaml@2.9.0))
 
   services/dispatcher:
+    dependencies:
+      '@fantasy-focus/engine':
+        specifier: workspace:^
+        version: link:../engine
+      '@fantasy-focus/shared':
+        specifier: workspace:^
+        version: link:../../shared
+      '@upstash/redis':
+        specifier: ^1.38.0
+        version: 1.38.0
     devDependencies:
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.1)(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.47.1)(tsx@4.23.0)(yaml@2.9.0))
 
   services/engine:
     dependencies:
@@ -179,6 +198,10 @@ importers:
         version: 5.9.3
 
   shared:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       typescript:
         specifier: ^5.7.2
