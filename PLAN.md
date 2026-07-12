@@ -1305,6 +1305,30 @@ Issues that need resolution but don't block the build:
 
 **Impact if unfixed:** Leagues are typically drafted in August, well before Week 1. A user connecting a Sleeper league during that window — a very common flow — sees an empty lineup screen with no path to a populated one until Sleeper publishes Week 1 matchup data.
 
+### Stale flag state when a user goes inactive mid-game (Sprint 4 discovery) — resolve in Sprint 5
+
+**Symptom:** `onPlayEvent` (`services/engine`) only recomputes flag state for users in `getActiveUsers()`. The Section 8 "game ends → fire `flag_removed` for every flagged user" behavior therefore fires only for users still active at the whistle. A user who was flagged but went inactive before the game ended keeps a `flagged: true` `FlagState` in the store and never receives the `flag_removed`.
+
+**Fix (Sprint 5):** the deferred-firing dispatcher's `isStillRelevant` re-validation must gate on liveness — drop/expire events for users who are no longer active, and don't trust a stored `flagged` state without confirming the user is live. Acceptable for v1 in isolation (an inactive user has no session to switch), but the dispatcher and cold-start resolver must not treat stale flagged state as truth.
+
+### Stored `FlagState` is not ground truth — `/flags/current` must recompute (Sprint 4 discovery)
+
+**Symptom:** Per Section 8, `onPlayEvent` persists a user's `FlagState` only when a diff crosses the event threshold (flag added/removed, or priority delta ≥ ±3). Sub-threshold priority drift is intentionally *not* persisted, so the stored `priorityScore` can lag the true current value by up to ±2, and the stored `reasons` can be slightly stale.
+
+**Fix (Sprint 5+):** `GET /flags/current` (the cold-start endpoint) must recompute fresh from `(lineup, gameState)` via `computeFlagState` rather than reading the stored `FlagState`. Only the WebSocket delta stream should rely on the diff-persisted state. Don't let any consumer treat the stored score as authoritative.
+
+### `scheduledFireAt` is a placeholder (Sprint 4) — Sprint 5 dispatcher owns the real value
+
+**Symptom:** The engine sets `FlagEvent.scheduledFireAt = newState.computedAt` as a placeholder. Real deferred firing (stream-lag calibration per `BROADCAST_LAG_SECONDS`, Section 8) is out of scope for Sprint 4.
+
+**Fix (Sprint 5):** the dispatcher's `scheduleFlagEvent` overwrites `scheduledFireAt` with `Date.now() + lag`. Nothing downstream should treat the engine-emitted value as authoritative timing.
+
+### IDP support (v1.5+) requires per-player position categories in the lineup cache (Sprint 4 note)
+
+**Symptom:** `UserLineupCache` tracks offense/defense position categories at the *team* level (`teamPositions`), not per player. `computeFlagState`'s `playerIdsOnTeam` therefore returns all of a user's players on a team and relies on `teamPositions` gating to enforce the offense-vs-defense distinction. This is exact for v1 (a team is either the user's offense stake or defense stake), but breaks with IDP, where a single team can have both offensive and individual defensive players the engine must distinguish per player.
+
+**Fix (v1.5+, when IDP lands):** grow `UserLineupCache` to carry per-player position categories and update `playerIdsOnTeam` to filter a team's players by the requested category. IDP is explicitly out of scope for v1 (Section 4).
+
 ---
 
 ## 14. v1.5 Roadmap
