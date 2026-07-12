@@ -1,0 +1,125 @@
+import { describe, expect, it } from 'vitest';
+import type { GameState } from '@fantasy-focus/shared';
+import type { Clock } from './clock.js';
+import type { PlayEvent, PlayType } from './playEvent.js';
+import { applyPlayToState } from './applyPlayToState.js';
+
+const FIXED_NOW = 1_700_000_000_000;
+const clock: Clock = () => FIXED_NOW;
+
+function makePlay(overrides: Partial<PlayEvent> = {}): PlayEvent {
+  return {
+    playId: 'p1',
+    gameId: 'g1',
+    week: 8,
+    homeTeamId: 'LV',
+    awayTeamId: 'KC',
+    possessionTeamId: 'KC',
+    playType: 'run',
+    scoreHome: 0,
+    scoreAway: 0,
+    quarter: 1,
+    secondsRemainingInQuarter: 900,
+    yardsToOpponentEndzone: 50,
+    isFinalPlay: false,
+    ...overrides,
+  };
+}
+
+describe('applyPlayToState — projection from a play', () => {
+  it('builds an in_progress game state from the first play (no previous state)', () => {
+    const state = applyPlayToState(null, makePlay(), clock);
+    expect(state).toEqual<GameState>({
+      gameId: 'g1',
+      homeTeamId: 'LV',
+      awayTeamId: 'KC',
+      possessionTeamId: 'KC',
+      unitOnField: 'offense',
+      scoreHome: 0,
+      scoreAway: 0,
+      quarter: 1,
+      timeRemainingSec: 900,
+      inRedZone: false,
+      status: 'in_progress',
+      updatedAt: FIXED_NOW,
+    });
+  });
+
+  it('stamps updatedAt from the injected clock', () => {
+    const state = applyPlayToState(null, makePlay(), () => 123);
+    expect(state.updatedAt).toBe(123);
+  });
+});
+
+describe('applyPlayToState — unitOnField mapping', () => {
+  const offensePlays: PlayType[] = ['pass', 'run', 'qb_kneel', 'qb_spike', 'two_point_attempt'];
+  it.each(offensePlays)('maps %s to offense', (playType) => {
+    expect(applyPlayToState(null, makePlay({ playType }), clock).unitOnField).toBe('offense');
+  });
+
+  const specialTeamsPlays: PlayType[] = ['punt', 'field_goal', 'kickoff', 'extra_point'];
+  it.each(specialTeamsPlays)('maps %s to special_teams', (playType) => {
+    expect(applyPlayToState(null, makePlay({ playType }), clock).unitOnField).toBe('special_teams');
+  });
+
+  const controlPlays: PlayType[] = ['no_play', 'timeout', 'end_period', 'end_game'];
+  it.each(controlPlays)('maps %s to none', (playType) => {
+    expect(applyPlayToState(null, makePlay({ playType }), clock).unitOnField).toBe('none');
+  });
+
+  it('forces unitOnField to none when no team has possession, even on an offensive play type', () => {
+    const state = applyPlayToState(null, makePlay({ possessionTeamId: null, playType: 'run' }), clock);
+    expect(state.unitOnField).toBe('none');
+    expect(state.possessionTeamId).toBeNull();
+  });
+});
+
+describe('applyPlayToState — specific transitions', () => {
+  it('reflects a possession change', () => {
+    const previous = applyPlayToState(null, makePlay({ possessionTeamId: 'KC' }), clock);
+    const next = applyPlayToState(previous, makePlay({ possessionTeamId: 'LV' }), clock);
+    expect(next.possessionTeamId).toBe('LV');
+  });
+
+  it('enters the red zone when inside the opponent 20', () => {
+    expect(applyPlayToState(null, makePlay({ yardsToOpponentEndzone: 15 }), clock).inRedZone).toBe(
+      true,
+    );
+  });
+
+  it('is not in the red zone outside the opponent 20', () => {
+    expect(applyPlayToState(null, makePlay({ yardsToOpponentEndzone: 25 }), clock).inRedZone).toBe(
+      false,
+    );
+  });
+
+  it('is not in the red zone when field position is unknown or unpossessed', () => {
+    expect(
+      applyPlayToState(null, makePlay({ yardsToOpponentEndzone: null }), clock).inRedZone,
+    ).toBe(false);
+    expect(
+      applyPlayToState(null, makePlay({ possessionTeamId: null, yardsToOpponentEndzone: 5 }), clock)
+        .inRedZone,
+    ).toBe(false);
+  });
+
+  it('reflects a scoring play in the score fields', () => {
+    const state = applyPlayToState(null, makePlay({ scoreHome: 7, scoreAway: 3 }), clock);
+    expect(state.scoreHome).toBe(7);
+    expect(state.scoreAway).toBe(3);
+  });
+
+  it('reflects a quarter change and the quarter clock', () => {
+    const state = applyPlayToState(null, makePlay({ quarter: 3, secondsRemainingInQuarter: 42 }), clock);
+    expect(state.quarter).toBe(3);
+    expect(state.timeRemainingSec).toBe(42);
+  });
+
+  it('marks the game final on the final play', () => {
+    expect(applyPlayToState(null, makePlay({ isFinalPlay: true }), clock).status).toBe('final');
+  });
+
+  it('marks the game final on an end_game play type', () => {
+    expect(applyPlayToState(null, makePlay({ playType: 'end_game' }), clock).status).toBe('final');
+  });
+});
