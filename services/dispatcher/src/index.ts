@@ -74,7 +74,26 @@ export { QueueingEventDispatcher, type ScheduleFlagEventDeps } from './scheduleF
 
 export { deliverFlagEvent, type DeliveryDeps, type FlagEventEnvelope } from './delivery.js';
 
+export {
+  CapturingPushNotifier,
+  createPushNotifier,
+  ExpoPushNotifier,
+  NoOpPushNotifier,
+  type ExpoClient,
+  type PushDriverId,
+  type PushNotifier,
+  type PushNotifierConfig,
+  type PushPayload,
+  type PushResult,
+} from './pushNotifier.js';
+
 export { buildGameSummary, type GameSummary } from './gameSummary.js';
+
+export {
+  notificationBody,
+  notificationTitle,
+  type NotificationGameContext,
+} from './notificationContent.js';
 
 export { ACTIVE_USER_TTL_MS } from './constants.js';
 

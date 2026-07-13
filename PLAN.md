@@ -1338,6 +1338,14 @@ Issues that need resolution but don't block the build:
 
 **Fix (v1.5+, when IDP lands):** grow `UserLineupCache` to carry per-player position categories and update `playerIdsOnTeam` to filter a team's players by the requested category. IDP is explicitly out of scope for v1 (Section 4).
 
+### Push receipt polling is not implemented (Sprint 6 discovery) — fix in v1.5
+
+**Symptom:** v1's `ExpoPushNotifier` (`services/dispatcher/src/pushNotifier.ts`) handles ticket-level errors synchronously (e.g. a malformed token, rejected immediately by `sendPushNotificationsAsync`) but does not poll Expo's receipt endpoint for delayed failures — most notably `DeviceNotRegistered`, which Expo only reports 15+ minutes after send, via a separate `getPushNotificationReceiptsAsync` call keyed on the ticket ids from the original send.
+
+**Fix (v1.5):** add a receipt-polling worker, persist ticket ids returned from `sendPushNotificationsAsync` to Postgres (new state — deliberately not introduced in v1 per Sprint 6 constraints), poll receipts on a delay, and clear `expo_push_token` on a confirmed `DeviceNotRegistered`.
+
+**Impact if unfixed:** a user with a stale/uninstalled-app token silently misses pushes — there's no signal back to `expo_push_token` to clear it — until they next open the app and the token re-registers (Phase 5's registration flow overwrites the stale value). Acceptable for v1 since the WebSocket channel is the primary delivery path whenever the app is open; push is the secondary channel for a backgrounded/closed app.
+
 ### `viewing_sessions.primary_priority_score` can go stale between heartbeats (Sprint 5 Phase 6)
 
 **Symptom:** `PUT /session/primary` computes `primary_priority_score` fresh via `computeFlagState` at the moment the primary game is set, but nothing recomputes it afterward — `POST /session/heartbeat` only refreshes Redis `active_users` liveness, not this stored score. As the game progresses, the stored value drifts from the game's true current priority.
@@ -1358,6 +1366,7 @@ Target: 3 months after v1 ships (mid-season).
 - **Auto-switch toggle** (functional in settings)
 - **Star players** (functional in switching engine, not just stored)
 - **Notification batching** (collapse multiple events in 10s window)
+- **Push receipt polling** (clears stale tokens automatically — see Known Issues)
 - **Android version** (same React Native codebase)
 - **Missed plays screen** (replay history of flag events)
 
@@ -1367,6 +1376,7 @@ Target: 3 months after v1 ships (mid-season).
 - Billing integration via Supabase Edge Functions or RevenueCat
 - WebSocket message: `flag_batch` for combined events
 - Multi-league lineup cache: `user_lineup_cache:{user_id}:{week}:{league_id}`
+- Push receipt-polling worker + a persisted-ticket-id table (new state, `expo_push_token` cleared on confirmed `DeviceNotRegistered`)
 
 ---
 
