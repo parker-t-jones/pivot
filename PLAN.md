@@ -231,6 +231,8 @@ Single Fly.io app for v1. Three processes: API server (handles REST + WebSocket)
 | `created_at` | timestamptz | default `now()` |
 | `updated_at` | timestamptz | default `now()` |
 
+> **Sprint 5 addition:** `preferences` — jsonb, parsed via `preferencesSchema` in `shared/src/types/preferences.ts`. Shape: `{ notificationMode: 'all' | 'high_leverage_only' | 'off', quietHours: { enabled, startHour, endHour, timezone }, autoSwitch: boolean }`. All fields default; existing `'{}'` rows parse to defaults.
+
 #### `user_app_presence`
 | Column | Type | Notes |
 |---|---|---|
@@ -386,20 +388,27 @@ Snapshot every 30 seconds from Redis. Used for replay/debugging.
 ### Redis schemas (hot path)
 
 ```
-game_state:{game_id}              hash → { possession_team_id, unit_on_field, 
-                                            score_home, score_away, quarter, 
-                                            time_remaining_sec, in_red_zone, 
-                                            updated_at }
+game_state:{game_id}              hash → { game_id, home_team_id, away_team_id,
+                                            possession_team_id, unit_on_field,
+                                            score_home, score_away, quarter,
+                                            time_remaining_sec, in_red_zone,
+                                            status, updated_at }
 
 user_flagged_games:{user_id}      sorted set → { game_id : priority_score }
                                   (highest score = current primary)
+
+user_flag_state:{user_id}:{game_id} hash → { flagged, priority_score, reasons_json, computed_at }
+                                  Change log for diffing; NOT authoritative state.
+                                  /flags/current and cold-start MUST recompute fresh, not read this.
 
 user_lineup_cache:{user_id}:{week} hash → { team_id : [position_categories] }
                                   e.g., { "IND": ["offense"], "BAL": ["offense", "defense"] }
 
 users_with_stake:{team_id}        set → user_ids with any player on this team
 
-active_users                      set → user_ids with viewing session in last 5 min
+active_users                      sorted set → { user_id : expiry_ms }
+                                  Membership = score >= now; heartbeat scores now + 300_000ms.
+                                  Expired members swept lazily.
 
 flag_event_queue                  sorted set → { event_json : fire_at_timestamp }
                                   (deferred firing queue)
@@ -1328,6 +1337,12 @@ Issues that need resolution but don't block the build:
 **Symptom:** `UserLineupCache` tracks offense/defense position categories at the *team* level (`teamPositions`), not per player. `computeFlagState`'s `playerIdsOnTeam` therefore returns all of a user's players on a team and relies on `teamPositions` gating to enforce the offense-vs-defense distinction. This is exact for v1 (a team is either the user's offense stake or defense stake), but breaks with IDP, where a single team can have both offensive and individual defensive players the engine must distinguish per player.
 
 **Fix (v1.5+, when IDP lands):** grow `UserLineupCache` to carry per-player position categories and update `playerIdsOnTeam` to filter a team's players by the requested category. IDP is explicitly out of scope for v1 (Section 4).
+
+### `viewing_sessions.primary_priority_score` can go stale between heartbeats (Sprint 5 Phase 6)
+
+**Symptom:** `PUT /session/primary` computes `primary_priority_score` fresh via `computeFlagState` at the moment the primary game is set, but nothing recomputes it afterward — `POST /session/heartbeat` only refreshes Redis `active_users` liveness, not this stored score. As the game progresses, the stored value drifts from the game's true current priority.
+
+**Fix:** any consumer needing the *current* priority score (e.g. `decideAction`'s primary-game comparison) must recompute from `(lineup, gameState)` fresh via `computeFlagState`, not read the stored `viewing_sessions.primary_priority_score`. Same class of staleness as Sprint 4 closeout #2 (`FlagState` is a change log, not ground truth) — this is the `viewing_sessions` analogue of that same rule.
 
 ---
 

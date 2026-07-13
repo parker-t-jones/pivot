@@ -12,6 +12,7 @@ import { decideAction } from './decideAction.js';
 import type { GameStateStore } from './providers/gameStateStore.js';
 import type { RateLimitStore } from './rateLimiter.js';
 import { realtimeUserChannel, type RealtimeBus } from './realtimeBus.js';
+import { buildGameSummary, type GameSummary } from './gameSummary.js';
 
 export interface DeliveryDeps {
   gameStateStore: Pick<GameStateStore, 'getGameState'>;
@@ -44,13 +45,7 @@ export interface FlagEventEnvelope {
       recommended_source: string | null;
       deep_link_url: string | null;
     };
-    game_summary: {
-      home_team: string;
-      away_team: string;
-      score: { home: number; away: number };
-      quarter: number;
-      time_remaining_sec: number;
-    };
+    game_summary: GameSummary;
     flagged_players: {
       player_id: string;
       first_name: string;
@@ -120,13 +115,7 @@ export async function deliverFlagEvent(
         recommended_source: broadcastSource,
         deep_link_url: deepLinkUrl,
       },
-      game_summary: {
-        home_team: gameSummaryInfo?.homeTeamAbbreviation ?? gameState?.homeTeamId ?? '',
-        away_team: gameSummaryInfo?.awayTeamAbbreviation ?? gameState?.awayTeamId ?? '',
-        score: { home: gameState?.scoreHome ?? 0, away: gameState?.scoreAway ?? 0 },
-        quarter: gameState?.quarter ?? 0,
-        time_remaining_sec: gameState?.timeRemainingSec ?? 0,
-      },
+      game_summary: buildGameSummary(gameState, gameSummaryInfo),
       flagged_players: players.map((p) => ({
         player_id: p.playerId,
         first_name: p.firstName,

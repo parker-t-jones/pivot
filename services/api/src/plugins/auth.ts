@@ -19,6 +19,11 @@ export function requireUser(request: FastifyRequest): AuthenticatedUser {
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    /** Verifies a raw JWT string and returns the user, or throws. Exposed so callers with a token
+     *  from somewhere other than the `Authorization` header (e.g. the `/v1/realtime` WebSocket
+     *  upgrade's `?token=` query param, Phase 4) reuse this plugin's HS256/JWKS logic rather than
+     *  re-implementing it. */
+    verifyAuthToken: (token: string) => Promise<AuthenticatedUser>;
   }
   interface FastifyRequest {
     user: AuthenticatedUser | null;
@@ -48,7 +53,20 @@ export default fp<AuthPluginOptions>(async (fastify, options) => {
     new URL('/auth/v1/.well-known/jwks.json', options.supabaseUrl),
   );
 
+  async function verifyToken(token: string): Promise<AuthenticatedUser> {
+    const { alg } = decodeProtectedHeader(token);
+    const { payload } =
+      alg === 'HS256' ? await jwtVerify(token, secretKey) : await jwtVerify(token, jwks);
+    const userId = typeof payload.sub === 'string' ? payload.sub : null;
+    const email = typeof payload['email'] === 'string' ? payload['email'] : null;
+    if (!userId || !email) {
+      throw new Error('JWT payload missing sub/email.');
+    }
+    return { id: userId, email };
+  }
+
   fastify.decorateRequest('user', null);
+  fastify.decorate('verifyAuthToken', verifyToken);
 
   fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
     const header = request.headers.authorization;
@@ -61,15 +79,7 @@ export default fp<AuthPluginOptions>(async (fastify, options) => {
     }
 
     try {
-      const { alg } = decodeProtectedHeader(token);
-      const { payload } =
-        alg === 'HS256' ? await jwtVerify(token, secretKey) : await jwtVerify(token, jwks);
-      const userId = typeof payload.sub === 'string' ? payload.sub : null;
-      const email = typeof payload['email'] === 'string' ? payload['email'] : null;
-      if (!userId || !email) {
-        throw new Error('JWT payload missing sub/email.');
-      }
-      request.user = { id: userId, email };
+      request.user = await verifyToken(token);
     } catch {
       const error = new ApiError(401, 'unauthorized', 'Invalid or expired token.');
       await reply.status(error.statusCode).send(toErrorBody(error));

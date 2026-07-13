@@ -1,5 +1,3 @@
-// Generated via `pnpm db:types` (`supabase gen types typescript --local`). Do not hand-edit —
-// regenerate after every migration.
 export type Json =
   | string
   | number
@@ -36,6 +34,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      flag_events: {
+        Row: {
+          delivered_at: string | null
+          event_type: string
+          fired_at: string
+          game_id: string
+          id: string
+          priority_score: number
+          reasons: Json
+          triggering_play_id: string | null
+          user_action: string | null
+          user_id: string
+        }
+        Insert: {
+          delivered_at?: string | null
+          event_type: string
+          fired_at: string
+          game_id: string
+          id?: string
+          priority_score: number
+          reasons: Json
+          triggering_play_id?: string | null
+          user_action?: string | null
+          user_id: string
+        }
+        Update: {
+          delivered_at?: string | null
+          event_type?: string
+          fired_at?: string
+          game_id?: string
+          id?: string
+          priority_score?: number
+          reasons?: Json
+          triggering_play_id?: string | null
+          user_action?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flag_events_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flag_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_broadcasts: {
         Row: {
           deep_link_url: string
@@ -359,14 +411,65 @@ export type Database = {
         }
         Relationships: []
       }
+      viewing_sessions: {
+        Row: {
+          device_info: Json
+          last_updated_at: string
+          primary_game_id: string | null
+          primary_priority_score: number | null
+          primary_source: string | null
+          started_at: string
+          thumbnail_game_ids: string[]
+          user_id: string
+        }
+        Insert: {
+          device_info?: Json
+          last_updated_at?: string
+          primary_game_id?: string | null
+          primary_priority_score?: number | null
+          primary_source?: string | null
+          started_at?: string
+          thumbnail_game_ids?: string[]
+          user_id: string
+        }
+        Update: {
+          device_info?: Json
+          last_updated_at?: string
+          primary_game_id?: string | null
+          primary_priority_score?: number | null
+          primary_source?: string | null
+          started_at?: string
+          thumbnail_game_ids?: string[]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "viewing_sessions_primary_game_id_fkey"
+            columns: ["primary_game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "viewing_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      is_valid_flag_event_type: { Args: { t: string }; Returns: boolean }
+      is_valid_flag_user_action: { Args: { a: string }; Returns: boolean }
       is_valid_league_platform: { Args: { p: string }; Returns: boolean }
       is_valid_slot_type: { Args: { s: string }; Returns: boolean }
       is_valid_streaming_service: { Args: { s: string }; Returns: boolean }
+      is_valid_viewing_session_source: { Args: { s: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

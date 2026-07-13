@@ -10,6 +10,9 @@ const envSchema = z.object({
   CACHE_DRIVER: z.enum(['memory', 'redis']).default('memory'),
   UPSTASH_REDIS_REST_URL: z.string().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  // Phase 4 / sprint decision #1: the `/v1/realtime` fan-out subscriber needs a persistent TCP
+  // connection (`ioredis`) — the REST client above can't hold a `(P)SUBSCRIBE`.
+  UPSTASH_REDIS_TCP_URL: z.string().optional(),
   PORT: z.coerce.number().int().positive().default(3000),
 });
 
@@ -21,9 +24,13 @@ export function loadAndValidateEnv(source: NodeJS.ProcessEnv = process.env): Env
     throw new Error(`Invalid environment configuration:\n${parsed.error.message}`);
   }
   if (parsed.data.CACHE_DRIVER === 'redis') {
-    if (!parsed.data.UPSTASH_REDIS_REST_URL || !parsed.data.UPSTASH_REDIS_REST_TOKEN) {
+    if (
+      !parsed.data.UPSTASH_REDIS_REST_URL ||
+      !parsed.data.UPSTASH_REDIS_REST_TOKEN ||
+      !parsed.data.UPSTASH_REDIS_TCP_URL
+    ) {
       throw new Error(
-        'CACHE_DRIVER=redis requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.',
+        'CACHE_DRIVER=redis requires UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, and UPSTASH_REDIS_TCP_URL.',
       );
     }
   }

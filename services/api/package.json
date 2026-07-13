@@ -14,12 +14,17 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.23.0",
     "typescript": "^5.7.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "ws": "^8.21.0"
   },
   "dependencies": {
+    "@fantasy-focus/dispatcher": "workspace:^",
+    "@fantasy-focus/engine": "workspace:^",
     "@fantasy-focus/shared": "workspace:^",
+    "@fastify/websocket": "^11.3.0",
     "@supabase/supabase-js": "^2.108.2",
     "@upstash/redis": "^1.38.0",
     "dotenv": "^17.4.2",

@@ -42,7 +42,17 @@ export {
   realtimeGameChannel,
   realtimeUserChannel,
   type RealtimeBus,
+  type RealtimeMessageHandler,
+  type RealtimeSubscriber,
+  type RealtimeSubscription,
 } from './realtimeBus.js';
+
+export {
+  RedisRealtimeSubscriber,
+  createRealtimeChannels,
+  type RealtimeChannels,
+  type RealtimeChannelsConfig,
+} from './realtimeSubscriber.js';
 
 export {
   InMemoryFlagEventPersistence,
@@ -63,6 +73,10 @@ export {
 export { QueueingEventDispatcher, type ScheduleFlagEventDeps } from './scheduleFlagEvent.js';
 
 export { deliverFlagEvent, type DeliveryDeps, type FlagEventEnvelope } from './delivery.js';
+
+export { buildGameSummary, type GameSummary } from './gameSummary.js';
+
+export { ACTIVE_USER_TTL_MS } from './constants.js';
 
 export {
   runDispatcherTick,
