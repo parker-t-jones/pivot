@@ -10,6 +10,10 @@ import type { GameSummaryInfo } from './catalogs.js';
 export interface GameSummary {
   home_team: string;
   away_team: string;
+  /** Sprint 6 Phase 3 addition (batched Section 9 spec update) — team nicknames alongside the
+   *  existing abbreviations, additive so no existing consumer's shape changes underneath it. */
+  home_team_name: string;
+  away_team_name: string;
   score: { home: number; away: number };
   quarter: number;
   time_remaining_sec: number;
@@ -22,6 +26,8 @@ export function buildGameSummary(
   return {
     home_team: info?.homeTeamAbbreviation ?? gameState?.homeTeamId ?? '',
     away_team: info?.awayTeamAbbreviation ?? gameState?.awayTeamId ?? '',
+    home_team_name: info?.homeTeamName ?? gameState?.homeTeamId ?? '',
+    away_team_name: info?.awayTeamName ?? gameState?.awayTeamId ?? '',
     score: { home: gameState?.scoreHome ?? 0, away: gameState?.scoreAway ?? 0 },
     quarter: gameState?.quarter ?? 0,
     time_remaining_sec: gameState?.timeRemainingSec ?? 0,

@@ -9,6 +9,16 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.fantasyfocus.app"
     },
-    "plugins": ["expo-router"]
+    "plugins": [
+      "expo-router",
+      "expo-notifications"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "63e2ba9a-dc24-48cc-af2b-dc2c27014634"
+      }
+    },
+    "owner": "parkertjones"
   }
 }

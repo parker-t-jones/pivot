@@ -1,6 +1,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { SessionProvider, useSession } from '../contexts/SessionContext';
 
@@ -55,9 +56,15 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <SessionProvider>
-      <RootNavigator />
-    </SessionProvider>
+    // Sprint 6 Phase 6: `FlagEventBanner` reads safe-area insets so it slides in below the status
+    // bar/notch. `expo-router`'s bundled `react-navigation` already wraps screens in a
+    // `SafeAreaProvider` internally, but `NotificationBannerHost` renders as an overlay sibling to
+    // (not nested inside) the navigator, so it needs its own provider higher up the tree.
+    <SafeAreaProvider>
+      <SessionProvider>
+        <RootNavigator />
+      </SessionProvider>
+    </SafeAreaProvider>
   );
 }
 

@@ -23,6 +23,9 @@ export interface DispatchUser {
   id: string;
   subscriptionTier: 'free' | 'pro';
   preferences: Preferences;
+  /** `users.expo_push_token` (Section 7) — `null` when unset. Sprint 6 Phase 3: `deliverFlagEvent`
+   *  skips the push send entirely when this is `null`, same as Section 8's pseudocode gate. */
+  expoPushToken: string | null;
 }
 
 export interface ViewingSessionSnapshot {
@@ -61,6 +64,12 @@ export class InMemoryUserDirectory implements UserDirectory {
 export interface GameSummaryInfo {
   homeTeamAbbreviation: string;
   awayTeamAbbreviation: string;
+  /** `teams.name` (Section 7) — Sprint 6 Phase 3 addition. Notification copy (Section 10's "Colts
+   *  have the ball") reads by team nickname, not abbreviation; the WebSocket `flag_event`/`/flags/current`
+   *  `game_summary` payload also gains `home_team_name`/`away_team_name` alongside the existing
+   *  abbreviation fields (additive — see `gameSummary.ts`). */
+  homeTeamName: string;
+  awayTeamName: string;
 }
 
 export interface GameCatalog {

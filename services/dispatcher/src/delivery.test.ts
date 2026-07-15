@@ -9,6 +9,8 @@ import {
   type DispatchUser,
 } from './catalogs.js';
 import { deliverFlagEvent, type DeliveryDeps, type FlagEventEnvelope } from './delivery.js';
+import { notificationBody, notificationTitle } from './notificationContent.js';
+import { CapturingPushNotifier } from './pushNotifier.js';
 import { InMemoryGameStateStore } from './providers/inMemoryGameStateStore.js';
 import { InMemoryRateLimitStore } from './rateLimiter.js';
 import { InMemoryRealtimeBus, realtimeUserChannel } from './realtimeBus.js';
@@ -45,6 +47,9 @@ const freeUser: DispatchUser = {
     quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
     autoSwitch: false,
   },
+  // No token by default — most of these tests predate push and shouldn't inadvertently exercise it.
+  // The "push" describe block below builds its own user fixture with a token set.
+  expoPushToken: null,
 };
 
 function buildDeps(overrides: Partial<DeliveryDeps> = {}): DeliveryDeps {
@@ -57,6 +62,7 @@ function buildDeps(overrides: Partial<DeliveryDeps> = {}): DeliveryDeps {
     persistence: new InMemoryFlagEventPersistence(),
     realtimeBus: new InMemoryRealtimeBus(),
     rateLimitStore: new InMemoryRateLimitStore(),
+    pushNotifier: new CapturingPushNotifier(),
     clock: () => 1_700_000_061_500,
     ...overrides,
   };
@@ -96,6 +102,7 @@ describe('deliverFlagEvent', () => {
     expect(envelope.id).toBe('evt-1');
     expect(envelope.type).toBe('flag_event');
     expect(envelope.timestamp).toBe(1_700_000_061_500);
+    expect(envelope.payload.event_id).toBe('evt-1');
     expect(envelope.payload.user_id).toBe('u1');
     expect(envelope.payload.game_id).toBe('g1');
     expect(envelope.payload.event_type).toBe('flag_added');
@@ -156,7 +163,12 @@ describe('deliverFlagEvent', () => {
       updatedAt: 1_700_000_050_000,
     });
     const gameCatalog = new InMemoryGameCatalog();
-    gameCatalog.setGame('g1', { homeTeamAbbreviation: 'LV', awayTeamAbbreviation: 'KC' });
+    gameCatalog.setGame('g1', {
+      homeTeamAbbreviation: 'LV',
+      awayTeamAbbreviation: 'KC',
+      homeTeamName: 'Raiders',
+      awayTeamName: 'Chiefs',
+    });
     const bus = new InMemoryRealtimeBus();
     const deps = buildDeps({ gameStateStore, gameCatalog, realtimeBus: bus });
 
@@ -166,6 +178,8 @@ describe('deliverFlagEvent', () => {
     expect(envelope.payload.game_summary).toEqual({
       home_team: 'LV',
       away_team: 'KC',
+      home_team_name: 'Raiders',
+      away_team_name: 'Chiefs',
       score: { home: 14, away: 21 },
       quarter: 3,
       time_remaining_sec: 300,
@@ -254,5 +268,153 @@ describe('deliverFlagEvent', () => {
     const envelope = bus.published[0]?.message as FlagEventEnvelope;
     expect(envelope.payload.action.type).toBe('auto_switch');
     expect(envelope.payload.action.cta).toBeNull();
+  });
+
+  describe('push (Sprint 6 Phase 3)', () => {
+    const TOKEN = 'ExponentPushToken[test-token-000000000]';
+    const pushUser: DispatchUser = { ...freeUser, expoPushToken: TOKEN };
+
+    function gameCatalogWithNames(): InMemoryGameCatalog {
+      const catalog = new InMemoryGameCatalog();
+      catalog.setGame('g1', {
+        homeTeamAbbreviation: 'IND',
+        awayTeamAbbreviation: 'DEN',
+        homeTeamName: 'Colts',
+        awayTeamName: 'Broncos',
+      });
+      return catalog;
+    }
+
+    async function setPossessingHomeGameState(
+      gameStateStore: InMemoryGameStateStore,
+    ): Promise<void> {
+      await gameStateStore.setGameState('g1', {
+        gameId: 'g1',
+        homeTeamId: 'team-ind',
+        awayTeamId: 'team-den',
+        possessionTeamId: 'team-ind',
+        unitOnField: 'offense',
+        scoreHome: 7,
+        scoreAway: 0,
+        quarter: 2,
+        timeRemainingSec: 434,
+        inRedZone: false,
+        status: 'in_progress',
+        updatedAt: 0,
+      });
+    }
+
+    it('sends push when the user has a token and the action is not in_app_indicator', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const gameStateStore = new InMemoryGameStateStore();
+      await setPossessingHomeGameState(gameStateStore);
+      const deps = buildDeps({ pushNotifier, gameStateStore, gameCatalog: gameCatalogWithNames() });
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+
+      expect(pushNotifier.calls).toHaveLength(1);
+      expect(pushNotifier.calls[0]?.token).toBe(TOKEN);
+    });
+
+    it('does NOT send push when the user has no expo_push_token', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const deps = buildDeps({ pushNotifier });
+
+      await deliverFlagEvent(deps, makeEvent(), freeUser); // freeUser.expoPushToken is null
+
+      expect(pushNotifier.calls).toHaveLength(0);
+    });
+
+    it('does NOT send push when action.type is in_app_indicator (already-primary game)', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const userDirectory = new InMemoryUserDirectory();
+      // Session's primary game IS this event's game -> decideAction returns in_app_indicator.
+      userDirectory.setViewingSession('u1', { primaryGameId: 'g1', primaryPriorityScore: 5 });
+      const deps = buildDeps({ pushNotifier, userDirectory });
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+
+      expect(pushNotifier.calls).toHaveLength(0);
+    });
+
+    it('push failure does not prevent persistence or the realtime publish (order independence)', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      pushNotifier.nextResult = { success: false, error: 'DeviceNotRegistered' };
+      const persistence = new InMemoryFlagEventPersistence();
+      const bus = new InMemoryRealtimeBus();
+      const deps = buildDeps({ pushNotifier, persistence, realtimeBus: bus });
+
+      await expect(deliverFlagEvent(deps, makeEvent(), pushUser)).resolves.toBeUndefined();
+
+      expect(persistence.records).toHaveLength(1);
+      expect(bus.published).toHaveLength(1);
+    });
+
+    it('a thrown push rejection is caught and does not propagate out of deliverFlagEvent', async () => {
+      const throwingPushNotifier = new CapturingPushNotifier();
+      throwingPushNotifier.sendPush = async () => {
+        throw new Error('network down');
+      };
+      const persistence = new InMemoryFlagEventPersistence();
+      const bus = new InMemoryRealtimeBus();
+      const deps = buildDeps({ pushNotifier: throwingPushNotifier, persistence, realtimeBus: bus });
+
+      await expect(deliverFlagEvent(deps, makeEvent(), pushUser)).resolves.toBeUndefined();
+
+      expect(persistence.records).toHaveLength(1);
+      expect(bus.published).toHaveLength(1);
+    });
+
+    it('push payload title/body match what notificationContent produces for the same inputs', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const gameStateStore = new InMemoryGameStateStore();
+      await setPossessingHomeGameState(gameStateStore);
+      const playerCatalog = new InMemoryPlayerCatalog();
+      playerCatalog.setPlayer({
+        playerId: 'p1',
+        firstName: 'Jonathan',
+        lastName: 'Taylor',
+        position: 'RB',
+      });
+      const deps = buildDeps({
+        pushNotifier,
+        gameStateStore,
+        gameCatalog: gameCatalogWithNames(),
+        playerCatalog,
+      });
+      const event = makeEvent({
+        newState: makeFlagState({
+          reasons: [{ type: 'offense_active', triggeringPlayerIds: ['p1'] }],
+        }),
+      });
+
+      await deliverFlagEvent(deps, event, pushUser);
+
+      const game = {
+        possessionTeamName: 'Colts',
+        defenseTeamName: 'Broncos',
+        quarter: 2,
+        timeRemainingSec: 434,
+      };
+      expect(pushNotifier.calls[0]?.title).toBe(
+        notificationTitle(event, game, [
+          { playerId: 'p1', firstName: 'Jonathan', lastName: 'Taylor', position: 'RB' },
+        ]),
+      );
+      expect(pushNotifier.calls[0]?.body).toBe(notificationBody(event, game));
+      expect(pushNotifier.calls[0]?.title).toBe('Jonathan Taylor active');
+      expect(pushNotifier.calls[0]?.body).toBe('Colts have the ball — Q2, 7:14. Tap to watch.');
+    });
+
+    it('push data carries the identical envelope payload published over the realtime bus', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const bus = new InMemoryRealtimeBus();
+      const deps = buildDeps({ pushNotifier, realtimeBus: bus });
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+
+      const envelope = bus.published[0]?.message as FlagEventEnvelope;
+      expect(pushNotifier.calls[0]?.data).toBe(envelope.payload);
+    });
   });
 });

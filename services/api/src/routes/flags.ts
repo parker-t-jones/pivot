@@ -7,9 +7,21 @@ import {
 } from '@fantasy-focus/dispatcher';
 import { parsePreferences, type FlagEvent, type FlagState } from '@fantasy-focus/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { z } from 'zod';
+import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
+
+/** Section 7 `flag_events.user_action` / Section 9 `POST /flags/:event_id/action` body — kept as its
+ *  own constant (rather than inlining the array in the zod call) so the accepted values are visible
+ *  in one place and can't silently drift from `is_valid_flag_user_action` (the DB check constraint,
+ *  `supabase/migrations/20260712160000_flag_events.sql`). */
+const FLAG_USER_ACTIONS = ['switched', 'added_to_split', 'dismissed', 'ignored'] as const;
+
+const flagActionBody = z.object({
+  action: z.enum(FLAG_USER_ACTIONS),
+});
 
 /**
  * Section 9's `/flags/current` response only allows three values, unlike `decideAction`'s five-way
@@ -82,10 +94,15 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     ];
     const { data: teamRows, error: teamsError } = await fastify.supabase
       .from('teams')
-      .select('id, abbreviation')
+      .select('id, abbreviation, name')
       .in('id', relevantTeamIds);
     if (teamsError) throw teamsError;
-    const abbreviationByTeamId = new Map((teamRows ?? []).map((team) => [team.id, team.abbreviation]));
+    const abbreviationByTeamId = new Map(
+      (teamRows ?? []).map((team) => [team.id, team.abbreviation]),
+    );
+    // Sprint 6 Phase 3 addition — team nicknames for the same `game_summary` builder (`buildGameSummary`)
+    // this route already shares with the WebSocket `flag_event` payload, batched from the same query.
+    const nameByTeamId = new Map((teamRows ?? []).map((team) => [team.id, team.name]));
 
     const { data: userRow, error: userError } = await fastify.supabase
       .from('users')
@@ -137,6 +154,8 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         game: buildGameSummary(gameState, {
           homeTeamAbbreviation: abbreviationByTeamId.get(game.home_team_id) ?? '',
           awayTeamAbbreviation: abbreviationByTeamId.get(game.away_team_id) ?? '',
+          homeTeamName: nameByTeamId.get(game.home_team_id) ?? '',
+          awayTeamName: nameByTeamId.get(game.away_team_id) ?? '',
         }),
         recommended_action: toRecommendedAction(action),
       });
@@ -147,6 +166,48 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
     return { flags, generated_at: generatedAt };
   });
+
+  /**
+   * PLAN.md Section 9 `POST /flags/:event_id/action` — records the user's response to a delivered
+   * notification (Sprint 6 Phase 6's banner buttons / auto-dismiss, or Phase 7's background
+   * notification-response handler) onto the `flag_events` row it's about. Skipped in Sprint 5, built
+   * here per the Sprint 6 kickoff decision.
+   *
+   * RLS note: `flag_events` (Sprint 5 migration) only has a SELECT policy for `authenticated` —
+   * writes go through `fastify.supabase` (service role, bypasses RLS) same as every other route in
+   * this file and `me.ts`, with ownership enforced explicitly via the `user_id` filter below rather
+   * than a new UPDATE policy/migration. Chosen over adding an RLS policy because it's the pattern
+   * already established everywhere else in this codebase (`me.ts`'s push-token update,
+   * `get-owned-league.ts`'s ownership check) — a client never talks to Supabase directly for this
+   * table, so an UPDATE policy would only ever be exercised by this one code path anyway.
+   */
+  fastify.post(
+    '/flags/:event_id/action',
+    { schema: { params: z.object({ event_id: z.string().uuid() }), body: flagActionBody } },
+    async (request) => {
+      const user = requireUser(request);
+      const { event_id } = request.params;
+      const { action } = request.body;
+
+      // Single round trip: the `user_id` filter IS the ownership check (service role bypasses RLS,
+      // so nothing enforces it otherwise) — a row that exists but belongs to someone else fails this
+      // filter exactly like a row that doesn't exist at all, so the 404 below can't be used to probe
+      // for other users' event ids.
+      const { data, error } = await fastify.supabase
+        .from('flag_events')
+        .update({ user_action: action })
+        .eq('id', event_id)
+        .eq('user_id', user.id)
+        .select('id, user_action')
+        .single();
+
+      if (error || !data) {
+        throw new ApiError(404, 'flag_event_not_found', `No flag event found with id "${event_id}".`);
+      }
+
+      return { event_id: data.id, user_action: data.user_action };
+    },
+  );
 };
 
 export default flagsRoutes;

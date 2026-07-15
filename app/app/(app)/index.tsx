@@ -2,16 +2,40 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useSession } from '../../contexts/SessionContext';
+import { scheduleTestFlagNotificationAsync } from '../../lib/devNotifications';
 import { supabase } from '../../lib/supabase';
+import { unregisterPushNotificationsAsync } from '../../lib/pushNotifications';
 
 export default function HomeScreen() {
   const { user } = useSession();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSendingTestNotification, setIsSendingTestNotification] = useState(false);
 
+  /** PLAN.md Section 10 Home State 3's "Subtle 'Test notifications' link" — doubles as Sprint 6
+   *  Phase 6's simulator-friendly way to exercise the foreground banner end-to-end without a real
+   *  push (see `lib/devNotifications.ts`). */
+  const onTestNotifications = async () => {
+    setIsSendingTestNotification(true);
+    try {
+      await scheduleTestFlagNotificationAsync();
+    } finally {
+      setIsSendingTestNotification(false);
+    }
+  };
+
+  /**
+   * Sprint 6 Phase 5 decision #4: unregister BEFORE clearing the session — `unregisterPushNotificationsAsync`
+   * needs a valid JWT to call `DELETE /me/push-token` (it's best-effort internally and never throws,
+   * so a network failure here can't block sign-out below it).
+   */
   const onSignOut = async () => {
     setErrorMessage(null);
     setIsSigningOut(true);
+
+    if (user) {
+      await unregisterPushNotificationsAsync(user.id);
+    }
 
     const { error } = await supabase.auth.signOut();
 
@@ -36,6 +60,12 @@ export default function HomeScreen() {
         ) : (
           <Text style={styles.buttonText}>Sign out</Text>
         )}
+      </Pressable>
+
+      <Pressable disabled={isSendingTestNotification} onPress={onTestNotifications}>
+        <Text style={styles.testNotificationsLink}>
+          {isSendingTestNotification ? 'Sending in 2s…' : 'Test notifications'}
+        </Text>
       </Pressable>
     </View>
   );
@@ -75,6 +105,12 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#555',
     fontSize: 14,
+  },
+  testNotificationsLink: {
+    color: '#888',
+    fontSize: 13,
+    marginTop: 16,
+    textDecorationLine: 'underline',
   },
   title: {
     fontSize: 32,

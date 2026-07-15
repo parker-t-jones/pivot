@@ -17,6 +17,7 @@ import {
 import type { DeliveryDeps } from './delivery.js';
 import { runDispatcherTick, type DispatcherTickDeps } from './dispatcher.js';
 import { InMemoryFlagEventQueue } from './inMemoryQueue.js';
+import { NoOpPushNotifier } from './pushNotifier.js';
 import { InMemoryGameStateStore } from './providers/inMemoryGameStateStore.js';
 import { InMemoryRateLimitStore } from './rateLimiter.js';
 import { realtimeUserChannel, InMemoryRealtimeBus } from './realtimeBus.js';
@@ -62,6 +63,7 @@ const freeUser: DispatchUser = {
     quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
     autoSwitch: false,
   },
+  expoPushToken: null, // push isn't this pipeline test's concern — see delivery.test.ts's "push" block
 };
 
 interface Pipeline {
@@ -115,6 +117,7 @@ function buildPipeline(): Pipeline {
     persistence,
     realtimeBus,
     rateLimitStore,
+    pushNotifier: new NoOpPushNotifier(),
   };
 
   const onPlayEventDeps: OnPlayEventDeps = {

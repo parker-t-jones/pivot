@@ -2,6 +2,7 @@ import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@fantasy-focus/disp
 import type { GameState, UserLineupCache } from '@fantasy-focus/shared';
 import Fastify from 'fastify';
 import {
+  hasZodFastifySchemaValidationErrors,
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider,
@@ -9,6 +10,7 @@ import {
 import { SignJWT } from 'jose';
 import { afterEach, describe, expect, it } from 'vitest';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
+import { ApiError, toErrorBody } from '../lib/errors.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
@@ -36,11 +38,18 @@ interface GameRow {
 interface TeamRow {
   id: string;
   abbreviation: string;
+  name: string;
 }
 
 interface UsersFixture {
   subscription_tier: string;
   preferences: unknown;
+}
+
+interface FlagEventRow {
+  id: string;
+  user_id: string;
+  user_action: string | null;
 }
 
 /** Chainable stand-in for a supabase-js query builder: every filter method returns itself, and the
@@ -71,12 +80,53 @@ class FakeQuery<T> implements PromiseLike<{ data: T[] | null; error: null }> {
   }
 }
 
-function makeSupabase(fixtures: { games: GameRow[]; teams: TeamRow[]; user: UsersFixture }) {
+/** Stand-in for `flag_events` specifically for `POST /flags/:event_id/action` — unlike `FakeQuery`
+ *  (read-only, ignores its filter args), this one actually applies `.eq()` filters so tests can
+ *  assert the ownership check (`user_id` must match) really gates the update, not just that a
+ *  request to the route returns 200. */
+class FakeFlagEventsQuery {
+  private readonly filters: [string, string][] = [];
+  private patch: Partial<FlagEventRow> | null = null;
+
+  constructor(private readonly rows: FlagEventRow[]) {}
+
+  update(patch: Partial<FlagEventRow>) {
+    this.patch = patch;
+    return this;
+  }
+  eq(column: string, value: string) {
+    this.filters.push([column, value]);
+    return this;
+  }
+  select() {
+    return this;
+  }
+  single(): Promise<{ data: FlagEventRow | null; error: { message: string } | null }> {
+    const row = this.rows.find((candidate) =>
+      this.filters.every(([column, value]) => candidate[column as keyof FlagEventRow] === value),
+    );
+    if (!row) {
+      return Promise.resolve({ data: null, error: { message: 'no matching row' } });
+    }
+    if (this.patch) {
+      Object.assign(row, this.patch);
+    }
+    return Promise.resolve({ data: row, error: null });
+  }
+}
+
+function makeSupabase(fixtures: {
+  games: GameRow[];
+  teams: TeamRow[];
+  user: UsersFixture;
+  flagEvents?: FlagEventRow[];
+}) {
   return {
     from: (table: string) => {
       if (table === 'games') return new FakeQuery(fixtures.games);
       if (table === 'teams') return new FakeQuery(fixtures.teams);
       if (table === 'users') return new FakeQuery([fixtures.user]);
+      if (table === 'flag_events') return new FakeFlagEventsQuery(fixtures.flagEvents ?? []);
       throw new Error(`Unexpected table in test fixture: ${table}`);
     },
   } as unknown as SupabaseServiceClient;
@@ -110,6 +160,7 @@ async function buildTestApp(fixtures: {
   games: GameRow[];
   teams: TeamRow[];
   user: UsersFixture;
+  flagEvents?: FlagEventRow[];
 }): Promise<TestApp> {
   const lineupCache = new InMemoryLineupCache();
   await lineupCache.setNflState({ season: '2026', week: WEEK, seasonType: 'regular' }, 300);
@@ -118,6 +169,24 @@ async function buildTestApp(fixtures: {
   const fastify = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
   fastify.setValidatorCompiler(validatorCompiler);
   fastify.setSerializerCompiler(serializerCompiler);
+  // Mirrors server.ts's error handler (Section 9 `{ error: { code, message } }` shape under test) —
+  // needed now that `POST /flags/:event_id/action` (Sprint 6 Phase 7) can throw `ApiError`, unlike
+  // `GET /flags/current` above it, which never did.
+  fastify.setErrorHandler((error, _request, reply) => {
+    if (hasZodFastifySchemaValidationErrors(error)) {
+      return reply.status(400).send({
+        error: {
+          code: 'validation_error',
+          message: 'Request validation failed.',
+          details: error.validation,
+        },
+      });
+    }
+    if (error instanceof ApiError) {
+      return reply.status(error.statusCode).send(toErrorBody(error));
+    }
+    throw error;
+  });
 
   await fastify.register(authPlugin, {
     jwtSecret: JWT_SECRET,
@@ -199,8 +268,8 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC' },
-        { id: 'team-lv', abbreviation: 'LV' },
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders' },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });
@@ -220,8 +289,8 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC' },
-        { id: 'team-lv', abbreviation: 'LV' },
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders' },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });
@@ -242,8 +311,8 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC' },
-        { id: 'team-lv', abbreviation: 'LV' },
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders' },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });
@@ -268,6 +337,8 @@ describe('GET /flags/current', () => {
     expect(flag.game).toEqual({
       home_team: 'KC',
       away_team: 'LV',
+      home_team_name: 'Chiefs',
+      away_team_name: 'Raiders',
       score: { home: 14, away: 7 },
       quarter: 2,
       time_remaining_sec: 500,
@@ -281,8 +352,8 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC' },
-        { id: 'team-lv', abbreviation: 'LV' },
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders' },
       ],
       user: { subscription_tier: 'free', preferences: { autoSwitch: true } },
     });
@@ -307,10 +378,10 @@ describe('GET /flags/current', () => {
         { id: 'game-a', home_team_id: 'team-a', away_team_id: 'team-a-opp' },
       ],
       teams: [
-        { id: 'team-a', abbreviation: 'AAA' },
-        { id: 'team-a-opp', abbreviation: 'AOP' },
-        { id: 'team-b', abbreviation: 'BBB' },
-        { id: 'team-b-opp', abbreviation: 'BOP' },
+        { id: 'team-a', abbreviation: 'AAA', name: 'Team A' },
+        { id: 'team-a-opp', abbreviation: 'AOP', name: 'Team A Opponents' },
+        { id: 'team-b', abbreviation: 'BBB', name: 'Team B' },
+        { id: 'team-b-opp', abbreviation: 'BOP', name: 'Team B Opponents' },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });
@@ -361,6 +432,151 @@ describe('GET /flags/current', () => {
   });
 });
 
+describe('POST /flags/:event_id/action', () => {
+  let app: TestApp;
+  const EVENT_ID = '11111111-1111-4111-8111-111111111111';
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  it('records the action on the caller\'s own flag_events row', async () => {
+    app = await buildTestApp({
+      games: [],
+      teams: [],
+      user: { subscription_tier: 'free', preferences: {} },
+      flagEvents: [{ id: EVENT_ID, user_id: 'user-1', user_action: null }],
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: `/flags/${EVENT_ID}/action`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { action: 'switched' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ event_id: EVENT_ID, user_action: 'switched' });
+  });
+
+  it.each(['switched', 'added_to_split', 'dismissed', 'ignored'] as const)(
+    'accepts the "%s" action value',
+    async (action) => {
+      app = await buildTestApp({
+        games: [],
+        teams: [],
+        user: { subscription_tier: 'free', preferences: {} },
+        flagEvents: [{ id: EVENT_ID, user_id: 'user-1', user_action: null }],
+      });
+      const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+      const response = await app.fastify.inject({
+        method: 'POST',
+        url: `/flags/${EVENT_ID}/action`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { action },
+      });
+
+      expect(response.statusCode).toBe(200);
+    },
+  );
+
+  it('rejects an invalid action value', async () => {
+    app = await buildTestApp({
+      games: [],
+      teams: [],
+      user: { subscription_tier: 'free', preferences: {} },
+      flagEvents: [{ id: EVENT_ID, user_id: 'user-1', user_action: null }],
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: `/flags/${EVENT_ID}/action`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { action: 'not_a_real_action' },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('returns 404 for an event id that does not exist', async () => {
+    app = await buildTestApp({
+      games: [],
+      teams: [],
+      user: { subscription_tier: 'free', preferences: {} },
+      flagEvents: [],
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: `/flags/${EVENT_ID}/action`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { action: 'switched' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe('flag_event_not_found');
+  });
+
+  it('returns 404 (not another user\'s data) when the event belongs to someone else', async () => {
+    app = await buildTestApp({
+      games: [],
+      teams: [],
+      user: { subscription_tier: 'free', preferences: {} },
+      flagEvents: [{ id: EVENT_ID, user_id: 'someone-else', user_action: null }],
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: `/flags/${EVENT_ID}/action`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { action: 'switched' },
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('rejects a malformed event_id', async () => {
+    app = await buildTestApp({
+      games: [],
+      teams: [],
+      user: { subscription_tier: 'free', preferences: {} },
+      flagEvents: [],
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: '/flags/not-a-uuid/action',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { action: 'switched' },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('rejects an unauthenticated request', async () => {
+    app = await buildTestApp({
+      games: [],
+      teams: [],
+      user: { subscription_tier: 'free', preferences: {} },
+      flagEvents: [{ id: EVENT_ID, user_id: 'user-1', user_action: null }],
+    });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: `/flags/${EVENT_ID}/action`,
+      payload: { action: 'switched' },
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+});
+
 describe('toRecommendedAction', () => {
   const action = (partial: Partial<Action>): Action => ({ type: 'prompt', cta: null, ...partial });
 
@@ -373,11 +589,15 @@ describe('toRecommendedAction', () => {
   });
 
   it('collapses a dismiss CTA (flag_removed) to notify_only', () => {
-    expect(toRecommendedAction(action({ type: 'notify_only', cta: 'dismiss' }))).toBe('notify_only');
+    expect(toRecommendedAction(action({ type: 'notify_only', cta: 'dismiss' }))).toBe(
+      'notify_only',
+    );
   });
 
   it('collapses a null CTA (auto_switch / in_app_indicator) to notify_only', () => {
     expect(toRecommendedAction(action({ type: 'auto_switch', cta: null }))).toBe('notify_only');
-    expect(toRecommendedAction(action({ type: 'in_app_indicator', cta: null }))).toBe('notify_only');
+    expect(toRecommendedAction(action({ type: 'in_app_indicator', cta: null }))).toBe(
+      'notify_only',
+    );
   });
 });

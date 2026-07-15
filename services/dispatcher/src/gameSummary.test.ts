@@ -21,14 +21,18 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
 }
 
 describe('buildGameSummary', () => {
-  it('prefers team abbreviations from GameSummaryInfo when available', () => {
+  it('prefers team abbreviations/names from GameSummaryInfo when available', () => {
     const summary = buildGameSummary(makeGameState(), {
       homeTeamAbbreviation: 'KC',
       awayTeamAbbreviation: 'LV',
+      homeTeamName: 'Chiefs',
+      awayTeamName: 'Raiders',
     });
     expect(summary).toEqual({
       home_team: 'KC',
       away_team: 'LV',
+      home_team_name: 'Chiefs',
+      away_team_name: 'Raiders',
       score: { home: 14, away: 7 },
       quarter: 3,
       time_remaining_sec: 400,
@@ -39,6 +43,8 @@ describe('buildGameSummary', () => {
     const summary = buildGameSummary(makeGameState(), null);
     expect(summary.home_team).toBe('home-team-id');
     expect(summary.away_team).toBe('away-team-id');
+    expect(summary.home_team_name).toBe('home-team-id');
+    expect(summary.away_team_name).toBe('away-team-id');
   });
 
   it('defaults every field when the GameState itself is unavailable', () => {
@@ -46,6 +52,8 @@ describe('buildGameSummary', () => {
     expect(summary).toEqual({
       home_team: '',
       away_team: '',
+      home_team_name: '',
+      away_team_name: '',
       score: { home: 0, away: 0 },
       quarter: 0,
       time_remaining_sec: 0,

@@ -969,6 +969,19 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 }
 ```
 
+**`POST /flags/:event_id/action` response (200):**
+```typescript
+{
+  event_id: string,
+  user_action: 'switched' | 'added_to_split' | 'dismissed' | 'ignored'
+}
+```
+
+Auth required, same as every endpoint in this section. Ownership is enforced server-side via a
+manual `user_id` check against the authenticated caller (service-role Supabase client + explicit
+check in the route handler, not an RLS policy) — the same service-role-plus-check pattern used by
+`POST /me/push-token` and the league-ownership routes (`/leagues/:id/*`).
+
 ### WebSocket protocol
 
 **Connection:** `wss://api.{domain}.com/v1/realtime?token=<jwt>`
@@ -1009,6 +1022,7 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
   type: 'flag_event',
   timestamp: number,
   payload: {
+    event_id: string,
     user_id: string,
     game_id: string,
     event_type: 'flag_added' | 'flag_removed' | 'priority_increased' | 'priority_decreased',
@@ -1023,6 +1037,8 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
     game_summary: {
       home_team: string,
       away_team: string,
+      home_team_name: string,
+      away_team_name: string,
       score: { home: number, away: number },
       quarter: number,
       time_remaining_sec: number
@@ -1351,6 +1367,24 @@ Issues that need resolution but don't block the build:
 **Symptom:** `PUT /session/primary` computes `primary_priority_score` fresh via `computeFlagState` at the moment the primary game is set, but nothing recomputes it afterward — `POST /session/heartbeat` only refreshes Redis `active_users` liveness, not this stored score. As the game progresses, the stored value drifts from the game's true current priority.
 
 **Fix:** any consumer needing the *current* priority score (e.g. `decideAction`'s primary-game comparison) must recompute from `(lineup, gameState)` fresh via `computeFlagState`, not read the stored `viewing_sessions.primary_priority_score`. Same class of staleness as Sprint 4 closeout #2 (`FlagState` is a change log, not ground truth) — this is the `viewing_sessions` analogue of that same rule.
+
+### `services/dispatcher` → `services/api` type propagation requires a manual `dist/` rebuild (Sprint 6 discovery) — fix in Sprint 9
+
+**Symptom:** `services/api` consumes `@fantasy-focus/dispatcher` as a built workspace dependency (`main`/`types` point at `dist/`, per its `package.json`). When a Sprint 6 Phase 3 change added fields to `catalogs.ts`'s `GameSummaryInfo` (a dispatcher-side type `services/api/src/routes/flags.ts` constructs literals against), `pnpm --filter services/api typecheck` kept failing with a stale "does not exist in type" error until `services/dispatcher`'s own `pnpm run build` was run first to regenerate `dist/*.d.ts`. `pnpm -w run typecheck`/`pnpm -w run test` (which build nothing, just run `tsc --noEmit`/`vitest` per package) don't surface this — they happened to pass in CI order today, but any dispatcher-side type change consumed by the API is one dist rebuild away from a false-negative typecheck (stale dist silently type-checks against the *old* shape instead of failing) or a false-positive failure (stale dist hasn't caught up yet), depending on which package's task runs first.
+
+**Root cause:** the dispatcher-to-API relationship is build-mode (compiled `dist/` + `.d.ts`) rather than source-mode. Nothing in the workspace's typecheck/test scripts declares the dependency between "dispatcher's `dist/` is fresh" and "api's typecheck is meaningful," so it's silently on whoever last remembered to rebuild.
+
+**Fix (Sprint 9):** move the dispatcher-to-API relationship to source mode — either TypeScript project references (`composite`/`references` in `tsconfig.json`, so `tsc -b` rebuilds dependencies automatically and in the right order) or matching vitest source aliases across build/test paths (so tests resolve `@fantasy-focus/dispatcher` straight to `src/index.ts`, same as how `shared`/`engine` are already consumed — worth confirming those two don't have the same latent issue while fixing this). Either way, the goal is that a dispatcher-side type change is immediately visible to `services/api` without an intermediate build step anyone has to remember to run.
+
+**Impact if unfixed:** cross-package type errors can go undetected (stale dist) or block on a rebuild step that isn't part of the documented workflow (`README.md` doesn't mention it) — a real footgun for the next several sprints, since Sprint 7+ (playback source swap) and beyond will keep touching dispatcher-side types the API consumes.
+
+### Native quick-action buttons on notifications are not registered (Sprint 6 Phase 7) — fix in v1.5
+
+**Symptom:** The client's foreground in-app banner (`FlagEventBanner`) and the background default-tap notification response (`NotificationResponseHandler`) are both wired and record a `flag_events.user_action`, but no OS-level notification category (`Notifications.setNotificationCategoryAsync`) is registered, and the dispatcher's outgoing Expo push message never sets a `categoryId`. iOS therefore never offers "Switch"/"Dismiss" as long-press quick-action buttons on the notification itself, in the notification tray, or on the lock screen — only a body tap (which opens the app) is available.
+
+**Fix (v1.5):** register a `flag_event` notification category client-side (`Notifications.setNotificationCategoryAsync`) with `switch`/`dismiss` action identifiers, and set a matching `categoryId` on the Expo push message in `services/dispatcher/src/pushNotifier.ts`. `app/components/NotificationResponseHandler.tsx` already maps `switch`/`dismiss` action identifiers defensively, so this is a two-file addition with no change to the response-handling logic itself.
+
+**Impact if unfixed:** users must open the notification (tap the body) to interact with it at all — there's no shortcut from the pull-down notification tray or lock screen the way Section 10's push format spec ("Action buttons: Switch and Dismiss") implies. Deferred to v1.5 pending actual usage data on how often users interact from the tray vs. the in-app banner, which already covers the foregrounded case.
 
 ---
 
