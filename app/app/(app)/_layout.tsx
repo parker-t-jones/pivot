@@ -5,6 +5,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { NotificationBannerHost } from '../../components/NotificationBannerHost';
 import { NotificationResponseHandler } from '../../components/NotificationResponseHandler';
 import { PushPermissionProvider, usePushPermission } from '../../contexts/PushPermissionContext';
+import { SwitchingProvider } from '../../contexts/SwitchingContext';
 
 function LoadingState({ message }: { message: string }) {
   return (
@@ -66,9 +67,11 @@ function AppNavigator() {
 export default function AppGroupLayout() {
   return (
     <PushPermissionProvider>
-      <AppNavigator />
-      <NotificationBannerHost />
-      <NotificationResponseHandler />
+      <SwitchingProvider>
+        <AppNavigator />
+        <NotificationBannerHost />
+        <NotificationResponseHandler />
+      </SwitchingProvider>
     </PushPermissionProvider>
   );
 }

@@ -26,6 +26,13 @@ export {
 } from './broadcastLag.js';
 
 export {
+  preferredBroadcast,
+  rankBroadcasts,
+  resolveBroadcasts,
+  type RankedBroadcast,
+} from './broadcastResolver.js';
+
+export {
   InMemoryRateLimitStore,
   NOTIFICATIONS_KEY_TTL_SECONDS,
   isInQuietHours,

@@ -19,6 +19,7 @@ import { createSupabaseServiceClient, type SupabaseServiceClient } from './lib/s
 import authPlugin from './plugins/auth.js';
 import servicesPlugin from './plugins/services.js';
 import flagsRoutes from './routes/flags.js';
+import gamesRoutes from './routes/games.js';
 import leaguesRoutes from './routes/leagues.js';
 import meRoutes from './routes/me.js';
 import playersRoutes from './routes/players.js';
@@ -100,6 +101,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
   await fastify.register(leaguesRoutes);
   await fastify.register(playersRoutes);
   await fastify.register(flagsRoutes);
+  await fastify.register(gamesRoutes);
   await fastify.register(sessionRoutes);
   await fastify.register(meRoutes);
   await fastify.register(realtimeRoutes, {});

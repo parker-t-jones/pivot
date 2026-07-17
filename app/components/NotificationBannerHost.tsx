@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FlagEventBanner, type FlagEventBannerData } from './FlagEventBanner';
+import { useSwitching } from '../contexts/SwitchingContext';
 import { isFlagEventPayload } from '../lib/flagEventPayload';
 import { recordNotificationAction, type NotificationUserAction } from '../lib/notificationActions';
 
@@ -37,6 +38,7 @@ let nextBannerKey = 0;
  * arrivals infrequent enough that this isn't a real product gap for v1.
  */
 export function NotificationBannerHost() {
+  const { switchToGame } = useSwitching();
   const [activeBanner, setActiveBanner] = useState<FlagEventBannerData | null>(null);
   const activeBannerRef = useRef<FlagEventBannerData | null>(null);
   activeBannerRef.current = activeBanner;
@@ -61,15 +63,29 @@ export function NotificationBannerHost() {
     return () => subscription.remove();
   }, []);
 
-  const onAction = useCallback((action: NotificationUserAction) => {
-    const banner = activeBannerRef.current;
-    if (!banner) return;
-    // Dismiss immediately — the user's action succeeds locally regardless of network state (see
-    // `recordNotificationAction`'s docstring). Not awaited: recording is fire-and-forget from the
-    // UI's perspective.
-    void recordNotificationAction(action, banner.payload);
-    setActiveBanner(null);
-  }, []);
+  const onAction = useCallback(
+    (action: NotificationUserAction) => {
+      const banner = activeBannerRef.current;
+      if (!banner) return;
+      // Dismiss immediately — the user's action succeeds locally regardless of network state (see
+      // `recordNotificationAction`'s docstring). Not awaited: recording is fire-and-forget from the
+      // UI's perspective.
+      void recordNotificationAction(action, banner.payload);
+      setActiveBanner(null);
+
+      // Sprint 7 Phase 6 — a "Switch" now actually hands off to the game's deep link (Section 10),
+      // using the recommended source the dispatcher already resolved into the flag payload.
+      if (action === 'switched') {
+        const { game_id, action: payloadAction, game_summary } = banner.payload;
+        switchToGame({
+          gameId: game_id,
+          deepLinkUrl: payloadAction.deep_link_url,
+          label: `${game_summary.away_team} @ ${game_summary.home_team}`,
+        });
+      }
+    },
+    [switchToGame],
+  );
 
   if (!activeBanner) return null;
 

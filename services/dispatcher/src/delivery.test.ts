@@ -146,6 +146,60 @@ describe('deliverFlagEvent', () => {
     expect(envelope.payload.action.deep_link_url).toBeNull();
   });
 
+  it('recommends the SAME source used for timing, even when a lower-lag free broadcast exists (Phase 3b)', async () => {
+    // User is subscribed to espn_plus (lag 60). The game also airs on free fox (lag 8), which
+    // rankBroadcasts would prefer — but resolveLikelyBroadcastSource times the fire against espn_plus
+    // (fox isn't in the user's presence), so the CTA must point at espn_plus for consistency.
+    const broadcastCatalog = new InMemoryBroadcastCatalog();
+    broadcastCatalog.setGameBroadcasts('g1', [
+      { service: 'espn_plus', deepLinkUrl: 'https://espn.example/g1', requiresSubscription: true },
+      { service: 'fox', deepLinkUrl: 'https://fox.example/g1', requiresSubscription: false },
+    ]);
+    broadcastCatalog.setUserSubscribedServices('u1', ['espn_plus']);
+    const bus = new InMemoryRealtimeBus();
+    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
+
+    await deliverFlagEvent(deps, makeEvent(), freeUser);
+
+    const envelope = bus.published[0]?.message as FlagEventEnvelope;
+    expect(envelope.payload.action.recommended_source).toBe('espn_plus');
+    expect(envelope.payload.action.deep_link_url).toBe('https://espn.example/g1');
+  });
+
+  it('falls back to the ranker preferred broadcast when there is no timing source (Phase 3b)', async () => {
+    // User has zero subscribed services -> resolveLikelyBroadcastSource returns null -> fall back to
+    // BroadcastResolver's preferred, which is the free broadcast the user can still watch.
+    const broadcastCatalog = new InMemoryBroadcastCatalog();
+    broadcastCatalog.setGameBroadcasts('g1', [
+      { service: 'nbc', deepLinkUrl: 'https://nbc.example/g1', requiresSubscription: false },
+    ]);
+    // No setUserSubscribedServices -> empty set.
+    const bus = new InMemoryRealtimeBus();
+    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
+
+    await deliverFlagEvent(deps, makeEvent(), freeUser);
+
+    const envelope = bus.published[0]?.message as FlagEventEnvelope;
+    expect(envelope.payload.action.recommended_source).toBe('nbc');
+    expect(envelope.payload.action.deep_link_url).toBe('https://nbc.example/g1');
+  });
+
+  it('degrades to null when the only broadcast is ineligible and there is no timing source (Phase 3b)', async () => {
+    const broadcastCatalog = new InMemoryBroadcastCatalog();
+    broadcastCatalog.setGameBroadcasts('g1', [
+      { service: 'sunday_ticket', deepLinkUrl: 'https://st.example/g1', requiresSubscription: true },
+    ]);
+    // User isn't subscribed -> not a timing source AND not eligible for the ranker.
+    const bus = new InMemoryRealtimeBus();
+    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
+
+    await deliverFlagEvent(deps, makeEvent(), freeUser);
+
+    const envelope = bus.published[0]?.message as FlagEventEnvelope;
+    expect(envelope.payload.action.recommended_source).toBeNull();
+    expect(envelope.payload.action.deep_link_url).toBeNull();
+  });
+
   it('builds game_summary from GameState + GameCatalog team abbreviations', async () => {
     const gameStateStore = new InMemoryGameStateStore();
     await gameStateStore.setGameState('g1', {

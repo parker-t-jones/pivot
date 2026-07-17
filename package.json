@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit && pnpm -r --parallel run typecheck",
     "test": "vitest run",
     "seed:players": "tsx scripts/seed-players.ts",
+    "seed:broadcasts": "tsx scripts/seed-broadcasts.ts",
     "db:types": "pnpm exec supabase gen types typescript --local > services/api/src/lib/database.types.ts"
   },
   "devDependencies": {

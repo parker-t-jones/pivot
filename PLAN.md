@@ -1242,11 +1242,19 @@ Nine sprints, each ~2–3 weeks for a solo dev with AI assistance. Total target:
 - Goal: real notifications surface to user
 
 ### Sprint 7: Playback abstraction + deep-link
-- `PlaybackSource` interface
-- `DeepLinkPlaybackSource` implementation
-- `BroadcastResolver` server-side logic
-- Game broadcast routing UI on Home
-- Goal: tapping "Switch" opens correct streaming app at correct game
+Shipped:
+- `PlaybackSource` interface + `DeepLinkPlaybackSource` (`app/playback/`); `AirPlayPlaybackSource`/`ChromecastPlaybackSource` ship as `canPlay: false` stubs (real implementations are Sprint 8), and the `'embedded'` id is carried ahead of Phase 2
+- `resolvePlaybackSource` registry (pure) + the `resolveSwitch` client helper (`app/lib/switching.ts`)
+- `BroadcastResolver` server-side logic — `rankBroadcasts`/`resolveBroadcasts` (`services/dispatcher/src/broadcastResolver.ts`), kept independent of the lag-timing `pickBroadcastSource` and sharing only the `lagSecondsFor` primitive
+- `GET /games/:id/broadcasts` endpoint (Section 9), powered by `rankBroadcasts`
+- `delivery.ts` populates `action.recommended_source`/`action.deep_link_url` on the `flag_event` payload, kept lag-consistent with the dispatcher's timing source (falls back to the ranker's `preferred` only when there is no timing source)
+- `scripts/seed-broadcasts.ts` fixture seeder for `game_broadcasts` — ⚠️ deep-link URLs are UNVERIFIED placeholders (Open Question #2 audit still pending)
+- Home State 1 "Now active" card + "Watch on {service}" CTA; Switch (in-app banner + Home CTA) → `resolvePlaybackSource` → deep link, with the sub-1s "Switching to…" overlay and a deep-link error state, and a best-effort `PUT /session/primary` so the dispatcher's `decideAction` treats the switched game as primary (closes the Sprint 6 loop)
+- Goal met: tapping "Switch" opens the correct streaming app at the correct game via deep link (cast handoff is Sprint 8)
+
+Deferred:
+- Real AirPlay/Chromecast sources → Sprint 8
+- Section 10 fidelity gaps (reason-chip player names, team-color flash, possessing-team overlay label, alternate-broadcast/"Get app" error sheet, live Home WebSocket updates) → Sprint 9 polish (see Known Issues)
 
 ### Sprint 8: AirPlay + Chromecast sources
 - `AirPlayPlaybackSource` via native iOS APIs
@@ -1396,6 +1404,69 @@ Issues that need resolution but don't block the build:
 
 **Impact if unfixed:** the push pipeline's Simulator-verified behavior (banner rendering, action recording, endpoint wiring) is a strong signal but not proof the real APNs path works — token format, delivery latency, and background wake behavior on a real device remain unverified until Sprint 8 or an earlier enrollment.
 
+### Broadcast timing source is a guess, not knowledge — spoiler-safety only holds for exclusive-window games (Sprint 5/7 discovery) — fix in v1.5
+
+**Symptom:** For games with a single broadcast (Thursday Night Football on Amazon, Sunday Night on NBC, Monday Night on ESPN/ABC), resolveLikelyBroadcastSource correctly identifies the service the user is watching and offsets scheduledFireAt accordingly — the stream-lag-aware deferred firing behavior works as intended and notifications arrive spoiler-safe. For games with multiple broadcasts (Sunday afternoon 1pm/4pm ET windows, which are always simulcast across a broadcast network + Sunday Ticket + often NFL+; Thanksgiving's three-game slate; select international games), the resolver picks the lowest-lag service among the user's user_app_presence entries. This is a heuristic that silently spoils plays for a specific and important cohort: users subscribed to both Sunday Ticket and a broadcast network who are actually watching on Sunday Ticket. The resolver picks broadcast (8s lag), the fire time is calibrated 67 seconds earlier than the user's actual stream, and the notification arrives before the play appears on their screen.
+
+**Root cause:** The timing resolver has no information about which broadcast the user is actively watching for a given game — only which services they're subscribed to in aggregate. Sunday afternoon simulcasts are the modal case for this app's usage (every 1pm and 4pm ET game, every week), and Sunday Ticket subscribers are the engaged fantasy power users the product is built for, so the failure mode disproportionately hits the target audience. The exclusive-window games (Thursday/Sunday/Monday night, most international slots) are unaffected because there's no ambiguity to guess wrong about.
+
+**Fix (v1.5):** Combine a user-declared preference with per-session recorded intent:
+1. Add a "preferred streaming service" field to users.preferences (single default sufficient for v1.5; per-broadcast-window granularity — Thursday / Sunday afternoon / Sunday night / Monday — as an eventual refinement). Surface it in Settings alongside the existing "Streaming services" list. resolveLikelyBroadcastSource uses it as a strong tiebreak: if the user's preferred service carries the game, pick it regardless of lag.
+2. When the user taps "Switch" on a game with multiple eligible broadcasts, GET /games/:id/broadcasts already returns the full ranked menu — present a picker instead of dispatching immediately. Record the chosen service via PUT /session/primary (source field already exists). For the remainder of that viewing session, the timing resolver reads the recorded choice for this specific game rather than falling back to preference or heuristic.
+The recorded choice is authoritative because it reflects what the user is watching, not what they might watch — which is exactly the input the spoiler-safety guarantee needs.
+**Impact if unfixed:** Sprint 7's recommended_source is being made lag-consistent with the timing calculation (both driven by resolveLikelyBroadcastSource), so the app's internal recommendation and timing are self-consistent — but "self-consistent" doesn't mean "correct." For a Sunday Ticket subscriber watching a Sunday afternoon simulcast, both the fire time and the "Watch on CBS" recommendation will be wrong in the same direction: the notification arrives 60+ seconds before the play on their actual stream, and the CTA points at a broadcast they weren't watching. Exclusive-window games are unaffected. Also relevant to the fourth patent novelty point (stream-lag-aware deferred firing as spoiler-safe): the claim is architecturally sound — the mechanism does what it says — but the input the mechanism operates on is currently a guess for the multi-broadcast case, which is worth being precise about in the specification. Deferred to v1.5 rather than v1 because (a) the fix touches Settings UI, a new preferences field, session-recording semantics, and the timing resolver simultaneously, and (b) exclusive-window games (which are unaffected) are still the majority of prime-time viewing, so the failure mode, while pointed, isn't universal.
+
+**Sprint 7 addendum:** the Home-screen "Now active" CTA resolves its target from `GET /games/:id/broadcasts`'s `preferred` (the eligibility-first `rankBroadcasts` ranker), while the notification banner's Switch uses the dispatcher's timing-consistent `action.deep_link_url` — so for a multi-broadcast game the two entry points can name different services; this is the same underlying guess surfacing in two code paths (presentation vs. timing-critical), not a separate defect, and it resolves with the recorded-choice fix above.
+
+### Home "Now active" reason chip lacks player-name fidelity (Sprint 7 Phase 5) — fix in Sprint 9
+
+**Symptom:** Section 10's State 1 reason chip specs player-level copy ("Jonathan Taylor active — RB — Colts offense"). The shipped `NowActiveCard` chip instead shows a reason-*type* label ("Your offense is on the field") with no player name, position, or possessing-team detail.
+
+**Root cause:** Home's cold-start path reads `GET /flags/current`, which returns reason *types* (`reasons: string[]`) and player *ids* (`flagged_player_ids`) but no player names or team context. The names exist on the WebSocket `flag_event` payload (`flagged_players`), but Home doesn't consume that stream (see the Home-not-WebSocket-subscribed entry below), and there is no batch player-by-id lookup endpoint (only `GET /players/search`).
+
+**Fix (Sprint 9):** either enrich `GET /flags/current`'s flag entries with resolved `flagged_players` (name/position) — a Section 9 response addition — or add a batch player-by-id read the client can call with `flagged_player_ids`; possessing-team context for the chip needs the same treatment.
+
+**Impact if unfixed:** the chip is less specific than Section 10 describes but still communicates why the game is flagged — no functional or correctness impact on the switch itself.
+
+### Switching-transition "team color flash" not implemented (Sprint 7 Phase 6) — fix in Sprint 9
+
+**Symptom:** Section 10's "Switching transition" specs a brief overlay with a "team color flash." The shipped overlay (`SwitchingContext`) is a neutral dark scrim with a spinner and "Switching to…" copy — no team-colored flash.
+
+**Root cause:** no team color reaches the client. `teams.primary_color`/`secondary_color` exist in the schema (Section 7), but neither `GET /flags/current`'s game summary nor the `flag_event` payload carries them, and no endpoint surfaces team colors to the app.
+
+**Fix (Sprint 9):** expose team colors (via the game-summary payloads or a small teams lookup) and drive an accent animation in the overlay from the possessing team's color.
+
+**Impact if unfixed:** purely cosmetic — the transition works and stays under Section 10's sub-1s budget; it just isn't team-colored.
+
+### Switching overlay label uses the matchup, not the possessing team (Sprint 7 Phase 6) — fix in Sprint 9
+
+**Symptom:** Section 10's transition copy reads "Switching to [Team] game…" (the possessing team). The shipped overlay reads the matchup instead ("DEN @ IND").
+
+**Root cause:** neither `GET /flags/current` nor the `flag_event` payload identifies which team currently has possession — `new_state` carries no team id and `game_summary` carries both team codes symmetrically — so the client can't name the possessing team from what it receives.
+
+**Fix (Sprint 9):** add possessing-team identity to the relevant payload(s) (or derive it client-side once live game state is available to the app), then label the overlay with that team's name.
+
+**Impact if unfixed:** the overlay is slightly less specific than Section 10's wording; no functional impact.
+
+### Deep-link error state is partial — no alternate-broadcast sheet or "Get app" link (Sprint 7 Phase 6) — fix in Sprint 9
+
+**Symptom:** Section 10's deep-link error spec is a "sheet with alternate broadcast or 'Get [app]' App Store link." The shipped error state (`SwitchingContext`) is a generic modal — a message ("that app doesn't seem to be installed — try another broadcast") plus a Close button — with no in-place alternate-broadcast picker and no App Store install link.
+
+**Root cause:** the overlay is handed only the single resolved deep link for the switch, not the full ranked broadcast menu, and there is no per-service App Store ID map to build a "Get [app]" link from — both are needed to offer an actionable alternate/install path in place.
+
+**Fix (Sprint 9):** pass the full `GET /games/:id/broadcasts` ranked list into the overlay so the user can pick an alternate broadcast, and add a per-service App Store ID map for the "Get [app]" link. (Also depends on the deep-link audit — Open Question #2 — to know which schemes can even fail this way.)
+
+**Impact if unfixed:** on a failed deep link the user is told to try another broadcast but must return to Home to pick one manually; the switch still fails safe (no crash, no silent no-op).
+
+### Home screen is not subscribed to the WebSocket flag stream (Sprint 7 Phase 5) — fix in Sprint 9
+
+**Symptom:** Section 10's State 1/State 2 describe the Home dashboard auto-updating "via WebSocket when the next flag fires." The shipped Home screen is cold-start only: it fetches `GET /flags/current` + `GET /games/:id/broadcasts` on mount and on pull-to-refresh, and does not update live as flag events arrive.
+
+**Root cause:** there is no client-side WebSocket consumer yet — the realtime `flag_event` stream (Section 9) reaches the app only as push notifications (which drive the banner), not as an in-app subscription Home reads from. Building that client socket is out of Sprint 7's scope.
+
+**Fix (Sprint 9, or whenever the client realtime consumer lands):** subscribe Home to the `realtime:user:{id}` `flag_event` stream and update the "Now active" card (and future "Also flagged" row) in place, keeping the cold-start fetch as the initial/refresh path.
+
+**Impact if unfixed:** the Now Active card can be stale between manual refreshes — a flag that fires while Home is open won't move the card until the next pull-to-refresh. The push/banner path fires independently, so the user is still notified; only the passive dashboard view lags.
 ---
 
 ## 14. v1.5 Roadmap

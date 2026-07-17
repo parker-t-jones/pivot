@@ -1,6 +1,7 @@
 import { defaultClock, type Clock } from '@fantasy-focus/engine';
 import type { FlagEvent, GameState } from '@fantasy-focus/shared';
 import { resolveLikelyBroadcastSource, type BroadcastCatalog } from './broadcastLag.js';
+import { preferredBroadcast, resolveBroadcasts } from './broadcastResolver.js';
 import type {
   DispatchUser,
   FlagEventPersistence,
@@ -114,6 +115,39 @@ async function resolveNotificationPlayers(
 }
 
 /**
+ * Sprint 7 Phase 3b — resolves the Section 9 `action.recommended_source`/`action.deep_link_url`.
+ *
+ * The switch CTA must stay consistent with the timing engine: `scheduleFlagEvent` (Section 8) already
+ * calibrated the deferred fire time against the source `resolveLikelyBroadcastSource` picked, so the
+ * recommendation points at that SAME source (its deep link is the catalog lookup for it). A second,
+ * independently-computed pick that disagreed would be a real bug — the notification would be timed for
+ * one broadcast while the CTA sent the user to another. (The timing heuristic itself is known-imperfect
+ * in the multi-broadcast case; that gap is filed separately as a v1.5 Known Issue, out of scope here.)
+ *
+ * Only when there's no timing source at all (the user has zero subscribed services, so there's nothing
+ * to be consistent with) do we fall back to `BroadcastResolver`'s authoritative `preferred` result —
+ * e.g. a free broadcast the user has no presence row for. Both branches degrade to `null` cleanly when
+ * neither yields a result (the common case until Phase 4 seeds `game_broadcasts` fixtures).
+ */
+async function resolveActionRecommendation(
+  deps: DeliveryDeps,
+  gameId: string,
+  userId: string,
+  timingSource: string | null,
+): Promise<{ recommendedSource: string | null; deepLinkUrl: string | null }> {
+  if (timingSource !== null) {
+    const broadcasts = await deps.broadcastCatalog.getGameBroadcasts(gameId);
+    const deepLinkUrl = broadcasts.find((b) => b.service === timingSource)?.deepLinkUrl ?? null;
+    return { recommendedSource: timingSource, deepLinkUrl };
+  }
+  const preferred = preferredBroadcast(await resolveBroadcasts(gameId, userId, deps.broadcastCatalog));
+  return {
+    recommendedSource: preferred?.service ?? null,
+    deepLinkUrl: preferred?.deepLinkUrl ?? null,
+  };
+}
+
+/**
  * PLAN.md Section 8 `deliverFlagEvent`. Builds the Section 9 envelope, persists to `flag_events`
  * (Phase 3's table via the structural `FlagEventPersistence`), publishes to `realtime:user:{user_id}`,
  * records the delivery into the rate-limit sliding window (sprint decision #8), and — Sprint 6 Phase 3
@@ -151,11 +185,12 @@ export async function deliverFlagEvent(
     event,
   );
 
-  const deepLinkUrl = broadcastSource
-    ? ((await deps.broadcastCatalog.getGameBroadcasts(event.gameId)).find(
-        (b) => b.service === broadcastSource,
-      )?.deepLinkUrl ?? null)
-    : null;
+  const { recommendedSource, deepLinkUrl } = await resolveActionRecommendation(
+    deps,
+    event.gameId,
+    event.userId,
+    broadcastSource,
+  );
 
   const triggeringPlayerIds = [
     ...new Set(event.newState.reasons.flatMap((r) => r.triggeringPlayerIds)),
@@ -177,7 +212,7 @@ export async function deliverFlagEvent(
       action: {
         type: action.type,
         cta: action.cta,
-        recommended_source: broadcastSource,
+        recommended_source: recommendedSource,
         deep_link_url: deepLinkUrl,
       },
       game_summary: buildGameSummary(gameState, gameSummaryInfo),
