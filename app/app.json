@@ -7,7 +7,10 @@
     "scheme": "fantasyfocus",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.fantasyfocus.app"
+      "bundleIdentifier": "com.fantasyfocus.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "plugins": [
       "expo-router",

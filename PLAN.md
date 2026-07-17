@@ -1386,6 +1386,16 @@ Issues that need resolution but don't block the build:
 
 **Impact if unfixed:** users must open the notification (tap the body) to interact with it at all — there's no shortcut from the pull-down notification tray or lock screen the way Section 10's push format spec ("Action buttons: Switch and Dismiss") implies. Deferred to v1.5 pending actual usage data on how often users interact from the tray vs. the in-app banner, which already covers the foregrounded case.
 
+### Push notification hardware verification deferred (Sprint 6) — fix in Sprint 8
+
+**Symptom:** The full push pipeline (dispatcher → Expo → client) is verified end-to-end in iOS Simulator only — the foreground banner, backgrounded notification delivery, and the `POST /flags/:event_id/action` endpoint wiring all check out there. A real APNs round-trip and real device token registration (`POST /me/push-token` populated from an actual `Notifications.getExpoPushTokenAsync()` call) are not yet verified.
+
+**Root cause:** Simulator cannot receive real push tokens (`getExpoPushTokenAsync` has no APNs device token to hand Expo), and a free personal-team signing identity lacks the push notification entitlement a physical-device build would need to actually register with APNs.
+
+**Fix:** defer real-device push verification to Sprint 8 — a physical device is already required by then for AirPlay/Chromecast testing, so it's a natural point to also confirm the push pipeline against real hardware. Enroll in the Apple Developer Program earlier than Sprint 8 if device verification is needed sooner.
+
+**Impact if unfixed:** the push pipeline's Simulator-verified behavior (banner rendering, action recording, endpoint wiring) is a strong signal but not proof the real APNs path works — token format, delivery latency, and background wake behavior on a real device remain unverified until Sprint 8 or an earlier enrollment.
+
 ---
 
 ## 14. v1.5 Roadmap

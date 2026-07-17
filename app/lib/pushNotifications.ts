@@ -9,8 +9,10 @@ interface PushTokenResponse {
   expo_push_token: string | null;
 }
 
+/** `expo-secure-store` keys are restricted to alphanumeric characters plus `.`, `-`, and `_` — no
+ *  `:` (SecureStore throws `Invalid key provided` otherwise, caught live on sign-out). */
 function pushTokenCacheKey(userId: string): string {
-  return `push_token:${userId}`;
+  return `push_token.${userId}`;
 }
 
 /** EAS project id, without which `getExpoPushTokenAsync` can't attribute a token to this project —
@@ -58,6 +60,7 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
     return; // Unchanged since our last successful registration — skip the round trip.
   }
 
+  console.log(`[push] registering token via POST /me/push-token for user ${userId}`);
   await apiClient.post<PushTokenResponse>('/me/push-token', { token, platform: 'ios' });
   await SecureStore.setItemAsync(cacheKey, token);
 }
@@ -74,5 +77,9 @@ export async function unregisterPushNotificationsAsync(userId: string): Promise<
   } catch (error) {
     console.warn('[push] DELETE /me/push-token failed during sign-out — proceeding anyway.', error);
   }
-  await SecureStore.deleteItemAsync(pushTokenCacheKey(userId));
+  try {
+    await SecureStore.deleteItemAsync(pushTokenCacheKey(userId));
+  } catch (error) {
+    console.warn('[push] clearing local push token cache failed — proceeding anyway.', error);
+  }
 }

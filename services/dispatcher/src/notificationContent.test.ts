@@ -1,5 +1,5 @@
 import type { FlagEvent, FlagReason, FlagState } from '@fantasy-focus/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from '../../../node_modules/.pnpm/vitest@4.1.10_@types+node@26.1.1_vite@8.1.4_@types+node@26.1.1_esbuild@0.28.1_terser@5.47.1_tsx@4.23.0_yaml@2.9.0_/node_modules/vitest/index.cjs';
 import type { PlayerInfo } from './catalogs.js';
 import {
   notificationBody,
