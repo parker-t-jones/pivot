@@ -5,7 +5,12 @@ import {
   type Action,
   type ViewingSessionSnapshot,
 } from '@fantasy-focus/dispatcher';
-import { parsePreferences, type FlagEvent, type FlagState } from '@fantasy-focus/shared';
+import {
+  parsePreferences,
+  type FlagEvent,
+  type FlagState,
+  type GameState,
+} from '@fantasy-focus/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
@@ -94,7 +99,7 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     ];
     const { data: teamRows, error: teamsError } = await fastify.supabase
       .from('teams')
-      .select('id, abbreviation, name')
+      .select('id, abbreviation, name, primary_color, secondary_color')
       .in('id', relevantTeamIds);
     if (teamsError) throw teamsError;
     const abbreviationByTeamId = new Map(
@@ -103,6 +108,14 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     // Sprint 6 Phase 3 addition — team nicknames for the same `game_summary` builder (`buildGameSummary`)
     // this route already shares with the WebSocket `flag_event` payload, batched from the same query.
     const nameByTeamId = new Map((teamRows ?? []).map((team) => [team.id, team.name]));
+    // Sprint 9 Phase 1 addition — team colors for the same `buildGameSummary` builder, batched from
+    // the same query as the abbreviation/name maps above.
+    const primaryColorByTeamId = new Map(
+      (teamRows ?? []).map((team) => [team.id, team.primary_color]),
+    );
+    const secondaryColorByTeamId = new Map(
+      (teamRows ?? []).map((team) => [team.id, team.secondary_color]),
+    );
 
     const { data: userRow, error: userError } = await fastify.supabase
       .from('users')
@@ -122,13 +135,16 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     // `decideAction`) — a reasonable cold-start recommendation when nothing is playing yet.
     const session: ViewingSessionSnapshot = { primaryGameId: null, primaryPriorityScore: null };
 
-    const flags: {
-      game_id: string;
-      priority_score: number;
-      reasons: string[];
-      flagged_player_ids: string[];
-      game: ReturnType<typeof buildGameSummary>;
-      recommended_action: 'switch_primary' | 'add_to_split' | 'notify_only';
+    // First pass: compute the flagged games' state/action, but defer resolving player names until
+    // after this loop so every flag's player ids can be looked up in a single batched query (same
+    // batching approach already used for `games`/`teams` above) rather than one `players` round trip
+    // per flagged game.
+    const flaggedGames: {
+      gameRow: (typeof games)[number];
+      gameState: GameState;
+      flagState: FlagState;
+      recommendedAction: 'switch_primary' | 'add_to_split' | 'notify_only';
+      flaggedPlayerIds: string[];
     }[] = [];
 
     for (const game of games) {
@@ -144,22 +160,69 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         toSyntheticFlagEvent(user.id, game.id, flagState),
       );
 
-      flags.push({
-        game_id: flagState.gameId,
-        priority_score: flagState.priorityScore,
-        reasons: flagState.reasons.map((reason) => reason.type),
-        flagged_player_ids: [
+      flaggedGames.push({
+        gameRow: game,
+        gameState,
+        flagState,
+        recommendedAction: toRecommendedAction(action),
+        flaggedPlayerIds: [
           ...new Set(flagState.reasons.flatMap((reason) => reason.triggeringPlayerIds)),
         ],
-        game: buildGameSummary(gameState, {
-          homeTeamAbbreviation: abbreviationByTeamId.get(game.home_team_id) ?? '',
-          awayTeamAbbreviation: abbreviationByTeamId.get(game.away_team_id) ?? '',
-          homeTeamName: nameByTeamId.get(game.home_team_id) ?? '',
-          awayTeamName: nameByTeamId.get(game.away_team_id) ?? '',
-        }),
-        recommended_action: toRecommendedAction(action),
       });
     }
+
+    const allFlaggedPlayerIds = [
+      ...new Set(flaggedGames.flatMap((entry) => entry.flaggedPlayerIds)),
+    ];
+    const playersById = new Map<
+      string,
+      { id: string; first_name: string; last_name: string; position: string }
+    >();
+    if (allFlaggedPlayerIds.length > 0) {
+      const { data: playerRows, error: playersError } = await fastify.supabase
+        .from('players')
+        .select('id, first_name, last_name, position')
+        .in('id', allFlaggedPlayerIds);
+      if (playersError) throw playersError;
+      for (const player of playerRows ?? []) {
+        playersById.set(player.id, player);
+      }
+    }
+
+    const flags = flaggedGames.map((entry) => ({
+      game_id: entry.flagState.gameId,
+      priority_score: entry.flagState.priorityScore,
+      reasons: entry.flagState.reasons.map((reason) => reason.type),
+      // Section 9 shape (Sprint 9 Phase 1): same `{ player_id, first_name, last_name, position }`
+      // shape as the WebSocket `flag_event` payload's `flagged_players`, so the client renders the
+      // same object from either channel. `flatMap` silently drops any id that has no matching row
+      // (shouldn't happen — every triggering id comes from this user's own lineup cache — but a
+      // dangling id is not a reason to 500 a cold-start response).
+      flagged_players: entry.flaggedPlayerIds.flatMap((playerId) => {
+        const player = playersById.get(playerId);
+        return player
+          ? [
+              {
+                player_id: player.id,
+                first_name: player.first_name,
+                last_name: player.last_name,
+                position: player.position,
+              },
+            ]
+          : [];
+      }),
+      game: buildGameSummary(entry.gameState, {
+        homeTeamAbbreviation: abbreviationByTeamId.get(entry.gameRow.home_team_id) ?? '',
+        awayTeamAbbreviation: abbreviationByTeamId.get(entry.gameRow.away_team_id) ?? '',
+        homeTeamName: nameByTeamId.get(entry.gameRow.home_team_id) ?? '',
+        awayTeamName: nameByTeamId.get(entry.gameRow.away_team_id) ?? '',
+        homeTeamPrimaryColor: primaryColorByTeamId.get(entry.gameRow.home_team_id) ?? '',
+        homeTeamSecondaryColor: secondaryColorByTeamId.get(entry.gameRow.home_team_id) ?? '',
+        awayTeamPrimaryColor: primaryColorByTeamId.get(entry.gameRow.away_team_id) ?? '',
+        awayTeamSecondaryColor: secondaryColorByTeamId.get(entry.gameRow.away_team_id) ?? '',
+      }),
+      recommended_action: entry.recommendedAction,
+    }));
 
     // Deterministic order (sprint instruction): priority descending, game_id ascending on ties.
     flags.sort((a, b) => b.priority_score - a.priority_score || a.game_id.localeCompare(b.game_id));

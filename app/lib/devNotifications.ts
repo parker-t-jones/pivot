@@ -22,6 +22,7 @@ function buildTestPayload(): FlagEventPayload {
       priorityScore: 60,
       reasons: [{ type: 'offense_active', triggeringPlayerIds: ['test-player'] }],
       computedAt: now,
+      possession_team: 'IND',
     },
     action: {
       type: 'prompt',
@@ -34,6 +35,10 @@ function buildTestPayload(): FlagEventPayload {
       away_team: 'DEN',
       home_team_name: 'Colts',
       away_team_name: 'Broncos',
+      home_team_primary_color: '#002C5F',
+      home_team_secondary_color: '#A2AAAD',
+      away_team_primary_color: '#FB4F14',
+      away_team_secondary_color: '#002244',
       score: { home: 10, away: 7 },
       quarter: 2,
       time_remaining_sec: 434,

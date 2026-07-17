@@ -1,5 +1,5 @@
 import { defaultClock, type Clock } from '@fantasy-focus/engine';
-import type { FlagEvent, GameState } from '@fantasy-focus/shared';
+import type { FlagEvent, FlagState, GameState } from '@fantasy-focus/shared';
 import { resolveLikelyBroadcastSource, type BroadcastCatalog } from './broadcastLag.js';
 import { preferredBroadcast, resolveBroadcasts } from './broadcastResolver.js';
 import type {
@@ -53,8 +53,13 @@ export interface FlagEventEnvelope {
     user_id: string;
     game_id: string;
     event_type: FlagEvent['type'];
-    old_state: FlagEvent['oldState'];
-    new_state: FlagEvent['newState'];
+    /** Sprint 9 Phase 1 addition — `possession_team` is an envelope-level enrichment layered on top
+     *  of the frozen Section 8 `FlagState` shape (spread onto it below), not a change to `FlagState`
+     *  itself, so `services/engine` stays untouched. See `resolvePossessionTeamAbbreviation` and the
+     *  `old_state` population note in `deliverFlagEvent` for why `old_state.possession_team` is
+     *  unconditionally `null` rather than best-effort. */
+    old_state: (FlagState & { possession_team: string | null }) | null;
+    new_state: FlagState & { possession_team: string | null };
     action: {
       type: string;
       cta: string | null;
@@ -91,6 +96,22 @@ function resolveNotificationTeamNames(
     possessionTeamName: (homePossessing ? info?.homeTeamName : info?.awayTeamName) ?? null,
     defenseTeamName: (homePossessing ? info?.awayTeamName : info?.homeTeamName) ?? null,
   };
+}
+
+/**
+ * Sprint 9 Phase 1 — resolves the Section 9 `new_state.possession_team` abbreviation: whichever team
+ * currently has the ball, by abbreviation, from the SAME `GameState` + `GameSummaryInfo` already
+ * fetched for `game_summary`/`resolveNotificationTeamNames`. `null` when there's no live game state
+ * or no possession is set (special teams / between plays / kickoff — matches `computeFlagState`'s
+ * own gate, Section 8).
+ */
+function resolvePossessionTeamAbbreviation(
+  gameState: GameState | null,
+  info: GameSummaryInfo | null,
+): string | null {
+  if (!gameState?.possessionTeamId) return null;
+  const homePossessing = gameState.possessionTeamId === gameState.homeTeamId;
+  return (homePossessing ? info?.homeTeamAbbreviation : info?.awayTeamAbbreviation) ?? null;
 }
 
 /**
@@ -198,6 +219,8 @@ export async function deliverFlagEvent(
   const players =
     triggeringPlayerIds.length > 0 ? await deps.playerCatalog.getPlayers(triggeringPlayerIds) : [];
 
+  const possessionTeam = resolvePossessionTeamAbbreviation(gameState, gameSummaryInfo);
+
   const envelope: FlagEventEnvelope = {
     id: event.id,
     type: 'flag_event',
@@ -207,8 +230,17 @@ export async function deliverFlagEvent(
       user_id: event.userId,
       game_id: event.gameId,
       event_type: event.type,
-      old_state: event.oldState,
-      new_state: event.newState,
+      // Ruling (Sprint 9 Phase 1 gate review): unconditionally `null`, NOT a best-effort snapshot.
+      // The dispatcher only ever reads CURRENT `GameState` — there's no historical possession as of
+      // when `oldState` was actually computed. Populating it from the same current snapshot used for
+      // `new_state` would make old_state.possession_team == new_state.possession_team on every event,
+      // which is a structured field silently lying about "possession before" vs "possession now"
+      // being distinct facts. Unlike `notificationContent.ts`'s `possessionTeamName` (human-readable
+      // copy, where "as of delivery time" reads fine), this is a field the client renders/compares
+      // against directly, so `null` ("we don't know") is the honest value. Do not re-derive a
+      // best-effort value here without revisiting this ruling.
+      old_state: event.oldState ? { ...event.oldState, possession_team: null } : null,
+      new_state: { ...event.newState, possession_team: possessionTeam },
       action: {
         type: action.type,
         cta: action.cta,

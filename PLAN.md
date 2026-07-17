@@ -954,8 +954,16 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
     game_id: string,
     priority_score: number,
     reasons: string[],
-    flagged_player_ids: string[],
-    game: { /* abbreviated game state */ },
+    // Sprint 9 Phase 1: full player objects, not just ids — same shape as the WebSocket flag_event
+    // payload's flagged_players (below), so the client renders identically from either channel.
+    // Populated via a batch `players` lookup over the flag's deduplicated triggeringPlayerIds.
+    flagged_players: Array<{
+      player_id: string,
+      first_name: string,
+      last_name: string,
+      position: string
+    }>,
+    game: { /* abbreviated game_summary shape — see WebSocket flag_event payload below */ },
     recommended_action: 'switch_primary' | 'add_to_split' | 'notify_only'
   }>,
   generated_at: string
@@ -1026,8 +1034,20 @@ check in the route handler, not an RLS policy) — the same service-role-plus-ch
     user_id: string,
     game_id: string,
     event_type: 'flag_added' | 'flag_removed' | 'priority_increased' | 'priority_decreased',
-    old_state: FlagState | null,
-    new_state: FlagState,
+    // Sprint 9 Phase 1: both carry `possession_team` — the team abbreviation with the ball, or null
+    // — layered onto the frozen Section 8 FlagState shape at the envelope level (NOT a FlagState
+    // field itself; services/engine and Section 8 are untouched). new_state.possession_team is
+    // resolved from the CURRENT GameState the dispatcher already reads (possessionTeamId -> the
+    // matching team's abbreviation; null with no possession — special teams/between plays/kickoff,
+    // or no live GameState). old_state.possession_team is UNCONDITIONALLY null, by deliberate
+    // choice, not a gap: the dispatcher has no historical GameState as of when old_state was
+    // actually computed, and populating it from the same current snapshot used for new_state would
+    // make old_state.possession_team == new_state.possession_team on every event — a structured
+    // field the client renders/compares against directly silently lying about "possession before"
+    // vs. "possession now" being distinct facts. Do not backfill old_state.possession_team with a
+    // best-effort current value without revisiting this ruling.
+    old_state: (FlagState & { possession_team: string | null }) | null,
+    new_state: FlagState & { possession_team: string | null },
     action: {
       type: 'prompt' | 'auto_switch' | 'in_app_indicator' | 'notify_only' | 'prompt_low_priority',
       cta: 'switch_primary' | 'add_to_split' | 'dismiss' | null,
@@ -1039,6 +1059,13 @@ check in the route handler, not an RLS policy) — the same service-role-plus-ch
       away_team: string,
       home_team_name: string,
       away_team_name: string,
+      // Sprint 9 Phase 1: teams.primary_color/secondary_color (Section 7, NOT NULL hex), closing the
+      // "team color flash not implemented" Known Issue (Section 13). Empty string, not null, when
+      // the game catalog has no entry — matches this shape's existing name/abbreviation fallback.
+      home_team_primary_color: string,
+      home_team_secondary_color: string,
+      away_team_primary_color: string,
+      away_team_secondary_color: string,
       score: { home: number, away: number },
       quarter: number,
       time_remaining_sec: number

@@ -29,7 +29,7 @@ function RootNavigator() {
     }
 
     if (shouldRedirectToAuth) {
-      router.replace('/(auth)/sign-in');
+      router.replace('/(auth)/welcome');
       return;
     }
 

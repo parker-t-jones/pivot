@@ -222,6 +222,10 @@ describe('deliverFlagEvent', () => {
       awayTeamAbbreviation: 'KC',
       homeTeamName: 'Raiders',
       awayTeamName: 'Chiefs',
+      homeTeamPrimaryColor: '#000000',
+      homeTeamSecondaryColor: '#A5ACAF',
+      awayTeamPrimaryColor: '#E31837',
+      awayTeamSecondaryColor: '#FFB81C',
     });
     const bus = new InMemoryRealtimeBus();
     const deps = buildDeps({ gameStateStore, gameCatalog, realtimeBus: bus });
@@ -234,6 +238,10 @@ describe('deliverFlagEvent', () => {
       away_team: 'KC',
       home_team_name: 'Raiders',
       away_team_name: 'Chiefs',
+      home_team_primary_color: '#000000',
+      home_team_secondary_color: '#A5ACAF',
+      away_team_primary_color: '#E31837',
+      away_team_secondary_color: '#FFB81C',
       score: { home: 14, away: 21 },
       quarter: 3,
       time_remaining_sec: 300,
@@ -264,6 +272,164 @@ describe('deliverFlagEvent', () => {
     const envelope = bus.published[0]?.message as FlagEventEnvelope;
     expect(envelope.payload.game_summary.home_team).toBe('team-lv');
     expect(envelope.payload.game_summary.away_team).toBe('team-kc');
+  });
+
+  describe('possession_team (Sprint 9 Phase 1)', () => {
+    it('populates new_state.possession_team with the abbreviation of the possessing team', async () => {
+      const gameStateStore = new InMemoryGameStateStore();
+      await gameStateStore.setGameState('g1', {
+        gameId: 'g1',
+        homeTeamId: 'team-lv',
+        awayTeamId: 'team-kc',
+        possessionTeamId: 'team-kc',
+        unitOnField: 'offense',
+        scoreHome: 14,
+        scoreAway: 21,
+        quarter: 3,
+        timeRemainingSec: 300,
+        inRedZone: false,
+        status: 'in_progress',
+        updatedAt: 0,
+      });
+      const gameCatalog = new InMemoryGameCatalog();
+      gameCatalog.setGame('g1', {
+        homeTeamAbbreviation: 'LV',
+        awayTeamAbbreviation: 'KC',
+        homeTeamName: 'Raiders',
+        awayTeamName: 'Chiefs',
+        homeTeamPrimaryColor: '#000000',
+        homeTeamSecondaryColor: '#A5ACAF',
+        awayTeamPrimaryColor: '#E31837',
+        awayTeamSecondaryColor: '#FFB81C',
+      });
+      const bus = new InMemoryRealtimeBus();
+      const deps = buildDeps({ gameStateStore, gameCatalog, realtimeBus: bus });
+
+      await deliverFlagEvent(deps, makeEvent(), freeUser);
+
+      const envelope = bus.published[0]?.message as FlagEventEnvelope;
+      expect(envelope.payload.new_state.possession_team).toBe('KC');
+    });
+
+    it('resolves the HOME team abbreviation when the home team has possession', async () => {
+      const gameStateStore = new InMemoryGameStateStore();
+      await gameStateStore.setGameState('g1', {
+        gameId: 'g1',
+        homeTeamId: 'team-lv',
+        awayTeamId: 'team-kc',
+        possessionTeamId: 'team-lv',
+        unitOnField: 'offense',
+        scoreHome: 14,
+        scoreAway: 21,
+        quarter: 3,
+        timeRemainingSec: 300,
+        inRedZone: false,
+        status: 'in_progress',
+        updatedAt: 0,
+      });
+      const gameCatalog = new InMemoryGameCatalog();
+      gameCatalog.setGame('g1', {
+        homeTeamAbbreviation: 'LV',
+        awayTeamAbbreviation: 'KC',
+        homeTeamName: 'Raiders',
+        awayTeamName: 'Chiefs',
+        homeTeamPrimaryColor: '#000000',
+        homeTeamSecondaryColor: '#A5ACAF',
+        awayTeamPrimaryColor: '#E31837',
+        awayTeamSecondaryColor: '#FFB81C',
+      });
+      const bus = new InMemoryRealtimeBus();
+      const deps = buildDeps({ gameStateStore, gameCatalog, realtimeBus: bus });
+
+      await deliverFlagEvent(deps, makeEvent(), freeUser);
+
+      const envelope = bus.published[0]?.message as FlagEventEnvelope;
+      expect(envelope.payload.new_state.possession_team).toBe('LV');
+    });
+
+    it('is null when the game has no possession set (special teams / between plays)', async () => {
+      const gameStateStore = new InMemoryGameStateStore();
+      await gameStateStore.setGameState('g1', {
+        gameId: 'g1',
+        homeTeamId: 'team-lv',
+        awayTeamId: 'team-kc',
+        possessionTeamId: null,
+        unitOnField: 'none',
+        scoreHome: 14,
+        scoreAway: 21,
+        quarter: 3,
+        timeRemainingSec: 300,
+        inRedZone: false,
+        status: 'in_progress',
+        updatedAt: 0,
+      });
+      const bus = new InMemoryRealtimeBus();
+      const deps = buildDeps({ gameStateStore, realtimeBus: bus });
+
+      await deliverFlagEvent(deps, makeEvent(), freeUser);
+
+      const envelope = bus.published[0]?.message as FlagEventEnvelope;
+      expect(envelope.payload.new_state.possession_team).toBeNull();
+    });
+
+    it('is null when there is no live GameState at all', async () => {
+      const bus = new InMemoryRealtimeBus();
+      const deps = buildDeps({ realtimeBus: bus }); // default InMemoryGameStateStore has no entry
+
+      await deliverFlagEvent(deps, makeEvent(), freeUser);
+
+      const envelope = bus.published[0]?.message as FlagEventEnvelope;
+      expect(envelope.payload.new_state.possession_team).toBeNull();
+    });
+
+    it('old_state.possession_team is unconditionally null, even when new_state resolves a possessing team (ruling: no best-effort snapshot)', async () => {
+      const gameStateStore = new InMemoryGameStateStore();
+      await gameStateStore.setGameState('g1', {
+        gameId: 'g1',
+        homeTeamId: 'team-lv',
+        awayTeamId: 'team-kc',
+        possessionTeamId: 'team-kc',
+        unitOnField: 'offense',
+        scoreHome: 14,
+        scoreAway: 21,
+        quarter: 3,
+        timeRemainingSec: 300,
+        inRedZone: false,
+        status: 'in_progress',
+        updatedAt: 0,
+      });
+      const gameCatalog = new InMemoryGameCatalog();
+      gameCatalog.setGame('g1', {
+        homeTeamAbbreviation: 'LV',
+        awayTeamAbbreviation: 'KC',
+        homeTeamName: 'Raiders',
+        awayTeamName: 'Chiefs',
+        homeTeamPrimaryColor: '#000000',
+        homeTeamSecondaryColor: '#A5ACAF',
+        awayTeamPrimaryColor: '#E31837',
+        awayTeamSecondaryColor: '#FFB81C',
+      });
+      const bus = new InMemoryRealtimeBus();
+      const deps = buildDeps({ gameStateStore, gameCatalog, realtimeBus: bus });
+      const event = makeEvent({ oldState: makeFlagState({ flagged: false, priorityScore: 0 }) });
+
+      await deliverFlagEvent(deps, event, freeUser);
+
+      const envelope = bus.published[0]?.message as FlagEventEnvelope;
+      expect(envelope.payload.new_state.possession_team).toBe('KC');
+      expect(envelope.payload.old_state?.possession_team).toBeNull();
+    });
+
+    it('old_state is null when the event has no oldState', async () => {
+      const bus = new InMemoryRealtimeBus();
+      const deps = buildDeps({ realtimeBus: bus });
+      const event = makeEvent({ oldState: null });
+
+      await deliverFlagEvent(deps, event, freeUser);
+
+      const envelope = bus.published[0]?.message as FlagEventEnvelope;
+      expect(envelope.payload.old_state).toBeNull();
+    });
   });
 
   it('resolves flagged_players from the deduplicated triggeringPlayerIds across all reasons', async () => {
@@ -335,6 +501,10 @@ describe('deliverFlagEvent', () => {
         awayTeamAbbreviation: 'DEN',
         homeTeamName: 'Colts',
         awayTeamName: 'Broncos',
+        homeTeamPrimaryColor: '#002C5F',
+        homeTeamSecondaryColor: '#A2AAAD',
+        awayTeamPrimaryColor: '#FB4F14',
+        awayTeamSecondaryColor: '#002244',
       });
       return catalog;
     }

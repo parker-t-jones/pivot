@@ -1,9 +1,10 @@
 import * as Notifications from 'expo-notifications';
-import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 
+import { useSwitching } from '../contexts/SwitchingContext';
 import { isFlagEventPayload } from '../lib/flagEventPayload';
 import { recordNotificationAction, type NotificationUserAction } from '../lib/notificationActions';
+import { resolvePossessingTeamDisplay } from '../lib/teamDisplay';
 
 /**
  * iOS action-button identifiers a `flag_event` push's category *would* declare, per PLAN.md Section
@@ -32,7 +33,7 @@ const ACTION_IDENTIFIER_TO_USER_ACTION: Record<string, NotificationUserAction> =
  * Mounted once alongside `NotificationBannerHost` in `(app)/_layout.tsx`.
  */
 export function NotificationResponseHandler() {
-  const router = useRouter();
+  const { switchToGame } = useSwitching();
 
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -46,16 +47,27 @@ export function NotificationResponseHandler() {
 
       void recordNotificationAction(action, data);
 
+      // Sprint 9 Phase 2 — closes the Sprint 7 TODO this handler carried since Phase 6: a tap on
+      // the OS notification itself now hands off through `PlaybackSource` the same way the
+      // foreground banner's "Switch" button does (`NotificationBannerHost`), instead of just
+      // opening Home and leaving the user to find the game themselves.
       if (action === 'switched') {
-        // TODO(Sprint 7): open the specific game (`data.game_id`) via PlaybackSource instead of
-        // Home. Sprint 6 stops at "opens Home" per the sprint's deep-link decision — this is meant
-        // to be a single-line swap once PlaybackSource lands.
-        router.replace('/(app)');
+        const { game_id, action: payloadAction, game_summary, new_state } = data;
+        const possessingTeam = resolvePossessingTeamDisplay(game_summary, new_state.possession_team);
+        switchToGame({
+          gameId: game_id,
+          deepLinkUrl: payloadAction.deep_link_url,
+          label: `${game_summary.away_team} @ ${game_summary.home_team}`,
+          teamName: possessingTeam?.name,
+          teamColors: possessingTeam
+            ? { primary: possessingTeam.primaryColor, secondary: possessingTeam.secondaryColor }
+            : null,
+        });
       }
     });
 
     return () => subscription.remove();
-  }, [router]);
+  }, [switchToGame]);
 
   return null;
 }

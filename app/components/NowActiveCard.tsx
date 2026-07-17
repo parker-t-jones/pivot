@@ -8,11 +8,16 @@ import {
   type CurrentFlag,
   type GameBroadcast,
 } from '../lib/gameDisplay';
+import { reasonChipCopy, resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../lib/teamDisplay';
 
 interface NowActiveCardProps {
   flag: CurrentFlag;
   /** The preferred broadcast to route to, or null when none resolved (deep-link degradation). */
   broadcast: GameBroadcast | null;
+  /** `player_id -> team` map built from the caller's own lineup fetch (see `lib/leagues.ts`) — the
+   *  only source of "which team does this flagged player play for" (see `teamDisplay.ts`'s
+   *  docstring on why `flagged_players` alone can't answer that). */
+  playerTeamMap: PlayerTeamMap;
   onSwitch: () => void;
 }
 
@@ -22,15 +27,24 @@ interface NowActiveCardProps {
  * no resolvable broadcast/deep link, matching Section 10's graceful-degradation intent rather than
  * offering a button that leads nowhere.
  *
- * Scope note (see report): the reason chip uses reason *types* from `/flags/current` (which carries
- * no player names), so it reads "Your offense is on the field" rather than Section 10's exact
- * "Jonathan Taylor active — RB — Colts offense". Possession indicator, "Also flagged" row, and the
- * other Home states are Sprint 9 polish.
+ * Sprint 9 Phase 2: the reason chip now renders the Section 10 fidelity target — player name(s),
+ * position, and team+unit ("Jonathan Taylor active — RB — Colts offense") — using Phase 1's
+ * `flagged_players` plus `playerTeamMap` for the team portion. Falls back to the plain reason-type
+ * label (`reasonLabel`) only if there are no flagged players on this flag at all (shouldn't happen
+ * in practice — every flag has at least one triggering player — but is a real possibility the type
+ * system allows for).
  */
-export function NowActiveCard({ flag, broadcast, onSwitch }: NowActiveCardProps) {
+export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowActiveCardProps) {
   const { game } = flag;
   const canSwitch = broadcast !== null && broadcast.deep_link_url.length > 0;
   const primaryReason = flag.reasons[0];
+  const flaggedTeam = resolveFlaggedTeamDisplay(game, flag.flagged_players, playerTeamMap);
+  const chipText =
+    primaryReason && flag.flagged_players.length > 0
+      ? reasonChipCopy(primaryReason, flag.flagged_players, flaggedTeam)
+      : primaryReason
+        ? reasonLabel(primaryReason)
+        : null;
 
   return (
     <View style={styles.card}>
@@ -49,9 +63,9 @@ export function NowActiveCard({ flag, broadcast, onSwitch }: NowActiveCardProps)
         {quarterLabel(game.quarter)} · {formatClock(game.time_remaining_sec)}
       </Text>
 
-      {primaryReason ? (
+      {chipText ? (
         <View style={styles.reasonChip}>
-          <Text style={styles.reasonChipText}>{reasonLabel(primaryReason)}</Text>
+          <Text style={styles.reasonChipText}>{chipText}</Text>
         </View>
       ) : null}
 

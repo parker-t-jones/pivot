@@ -5,6 +5,7 @@ import { FlagEventBanner, type FlagEventBannerData } from './FlagEventBanner';
 import { useSwitching } from '../contexts/SwitchingContext';
 import { isFlagEventPayload } from '../lib/flagEventPayload';
 import { recordNotificationAction, type NotificationUserAction } from '../lib/notificationActions';
+import { resolvePossessingTeamDisplay } from '../lib/teamDisplay';
 
 /**
  * Sprint 6 Phase 6 — suppresses the OS's own foreground presentation. `NotificationBannerHost`
@@ -76,11 +77,19 @@ export function NotificationBannerHost() {
       // Sprint 7 Phase 6 — a "Switch" now actually hands off to the game's deep link (Section 10),
       // using the recommended source the dispatcher already resolved into the flag payload.
       if (action === 'switched') {
-        const { game_id, action: payloadAction, game_summary } = banner.payload;
+        const { game_id, action: payloadAction, game_summary, new_state } = banner.payload;
+        // Sprint 9 Phase 2 — the realtime payload already carries `possession_team` (Phase 1), the
+        // most direct source for the overlay's team name/color-flash on this path (more direct than
+        // the cold-start path's lineup cross-reference — see `teamDisplay.ts`).
+        const possessingTeam = resolvePossessingTeamDisplay(game_summary, new_state.possession_team);
         switchToGame({
           gameId: game_id,
           deepLinkUrl: payloadAction.deep_link_url,
           label: `${game_summary.away_team} @ ${game_summary.home_team}`,
+          teamName: possessingTeam?.name,
+          teamColors: possessingTeam
+            ? { primary: possessingTeam.primaryColor, secondary: possessingTeam.secondaryColor }
+            : null,
         });
       }
     },

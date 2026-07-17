@@ -39,6 +39,15 @@ interface TeamRow {
   id: string;
   abbreviation: string;
   name: string;
+  primary_color: string;
+  secondary_color: string;
+}
+
+interface PlayerRow {
+  id: string;
+  first_name: string;
+  last_name: string;
+  position: string;
 }
 
 interface UsersFixture {
@@ -120,6 +129,7 @@ function makeSupabase(fixtures: {
   teams: TeamRow[];
   user: UsersFixture;
   flagEvents?: FlagEventRow[];
+  players?: PlayerRow[];
 }) {
   return {
     from: (table: string) => {
@@ -127,6 +137,7 @@ function makeSupabase(fixtures: {
       if (table === 'teams') return new FakeQuery(fixtures.teams);
       if (table === 'users') return new FakeQuery([fixtures.user]);
       if (table === 'flag_events') return new FakeFlagEventsQuery(fixtures.flagEvents ?? []);
+      if (table === 'players') return new FakeQuery(fixtures.players ?? []);
       throw new Error(`Unexpected table in test fixture: ${table}`);
     },
   } as unknown as SupabaseServiceClient;
@@ -161,6 +172,7 @@ async function buildTestApp(fixtures: {
   teams: TeamRow[];
   user: UsersFixture;
   flagEvents?: FlagEventRow[];
+  players?: PlayerRow[];
 }): Promise<TestApp> {
   const lineupCache = new InMemoryLineupCache();
   await lineupCache.setNflState({ season: '2026', week: WEEK, seasonType: 'regular' }, 300);
@@ -268,8 +280,8 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders' },
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });
@@ -289,8 +301,8 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders' },
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });
@@ -311,10 +323,13 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders' },
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
       ],
       user: { subscription_tier: 'free', preferences: {} },
+      players: [
+        { id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' },
+      ],
     });
     await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
     await app.gameStateStore.setGameState('game-1', makeGameState());
@@ -333,12 +348,22 @@ describe('GET /flags/current', () => {
     expect(flag.game_id).toBe('game-1');
     expect(flag.priority_score).toBeGreaterThan(0);
     expect(flag.reasons).toEqual(['offense_active']);
-    expect(flag.flagged_player_ids).toEqual(['player-1']);
+    // Section 9 (Sprint 9 Phase 1): full player objects, not just ids — same shape as the WebSocket
+    // flag_event payload's flagged_players, so the client renders identically from either channel.
+    expect(flag.flagged_players).toEqual([
+      { player_id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' },
+    ]);
+    expect(flag.flagged_player_ids).toBeUndefined();
     expect(flag.game).toEqual({
       home_team: 'KC',
       away_team: 'LV',
       home_team_name: 'Chiefs',
       away_team_name: 'Raiders',
+      // Sprint 9 Phase 1: team colors, closing the "team color flash not implemented" Known Issue.
+      home_team_primary_color: '#E31837',
+      home_team_secondary_color: '#FFB81C',
+      away_team_primary_color: '#000000',
+      away_team_secondary_color: '#A5ACAF',
       score: { home: 14, away: 7 },
       quarter: 2,
       time_remaining_sec: 500,
@@ -348,12 +373,55 @@ describe('GET /flags/current', () => {
     expect(flag.recommended_action).toBe('switch_primary');
   });
 
+  it('omits a triggering player id from flagged_players when the players table has no matching row', async () => {
+    app = await buildTestApp({
+      games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+      teams: [
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+      ],
+      user: { subscription_tier: 'free', preferences: {} },
+      players: [], // no matching row for player-1
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState('game-1', makeGameState());
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/flags/current',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.json().flags[0].flagged_players).toEqual([]);
+  });
+
+  it('returns an empty flagged_players array (and skips the players query) when no game is flagged', async () => {
+    app = await buildTestApp({
+      games: [],
+      teams: [],
+      user: { subscription_tier: 'free', preferences: {} },
+      // No `players` fixture set — if the route queried `players` unconditionally, makeSupabase would
+      // throw for an unmocked table only if it selected 'players' with no rows fixture; since it's
+      // optional here this just documents that an unflagged response never resolves player names.
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/flags/current',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.json().flags).toEqual([]);
+  });
+
   it('recommends notify_only when the user has autoSwitch enabled', async () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders' },
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
       ],
       user: { subscription_tier: 'free', preferences: { autoSwitch: true } },
     });
@@ -378,10 +446,10 @@ describe('GET /flags/current', () => {
         { id: 'game-a', home_team_id: 'team-a', away_team_id: 'team-a-opp' },
       ],
       teams: [
-        { id: 'team-a', abbreviation: 'AAA', name: 'Team A' },
-        { id: 'team-a-opp', abbreviation: 'AOP', name: 'Team A Opponents' },
-        { id: 'team-b', abbreviation: 'BBB', name: 'Team B' },
-        { id: 'team-b-opp', abbreviation: 'BOP', name: 'Team B Opponents' },
+        { id: 'team-a', abbreviation: 'AAA', name: 'Team A', primary_color: '#111111', secondary_color: '#222222' },
+        { id: 'team-a-opp', abbreviation: 'AOP', name: 'Team A Opponents', primary_color: '#333333', secondary_color: '#444444' },
+        { id: 'team-b', abbreviation: 'BBB', name: 'Team B', primary_color: '#555555', secondary_color: '#666666' },
+        { id: 'team-b-opp', abbreviation: 'BOP', name: 'Team B Opponents', primary_color: '#777777', secondary_color: '#888888' },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });

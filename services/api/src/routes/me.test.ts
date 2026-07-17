@@ -26,23 +26,71 @@ async function signToken(payload: Record<string, unknown>): Promise<string> {
 }
 
 interface UserRow {
+  id?: string;
+  email?: string;
+  subscription_tier?: string;
+  preferences?: unknown;
   expo_push_token: string | null;
 }
 
-/** Small stateful stand-in for `public.users` — enough to exercise the update-by-id chain this
- *  route depends on (mirrors `session.test.ts`'s `FakeSupabase`). */
+interface AppPresenceRow {
+  service: string;
+  has_subscription: boolean;
+}
+
+/** Small stateful stand-in for `public.users` / `public.user_app_presence` — enough to exercise the
+ *  update/select-by-id chains these routes depend on (mirrors `session.test.ts`'s `FakeSupabase`). */
 class FakeSupabase {
   readonly users: Map<string, UserRow>;
+  readonly appPresence: Map<string, AppPresenceRow[]>;
+  readonly deletedAuthUserIds: string[] = [];
+  authDeleteError: { message: string } | null = null;
 
-  constructor(seed: Record<string, string | null> = {}) {
+  readonly auth = {
+    admin: {
+      deleteUser: async (userId: string) => {
+        if (this.authDeleteError) return { data: null, error: this.authDeleteError };
+        this.deletedAuthUserIds.push(userId);
+        this.users.delete(userId);
+        return { data: {}, error: null };
+      },
+    },
+  };
+
+  constructor(
+    seed: Record<string, string | null> = {},
+    userRows: Record<string, Partial<UserRow>> = {},
+    appPresence: Record<string, AppPresenceRow[]> = {},
+  ) {
+    const ids = new Set([...Object.keys(seed), ...Object.keys(userRows)]);
     this.users = new Map(
-      Object.entries(seed).map(([id, token]) => [id, { expo_push_token: token }]),
+      [...ids].map((id) => [
+        id,
+        {
+          id,
+          email: `${id}@example.com`,
+          subscription_tier: 'free',
+          preferences: {},
+          expo_push_token: seed[id] ?? null,
+          ...userRows[id],
+        },
+      ]),
     );
+    this.appPresence = new Map(Object.entries(appPresence));
   }
 
   from(table: string) {
     if (table === 'users') {
       return {
+        select: (_cols: string) => ({
+          eq: (_col: string, userId: string) => ({
+            single: async () => {
+              const existing = this.users.get(userId);
+              if (!existing) return { data: null, error: { message: 'not found' } };
+              return { data: existing, error: null };
+            },
+          }),
+        }),
         update: (payload: Partial<UserRow>) => ({
           eq: (_col: string, userId: string) => ({
             select: (_cols: string) => ({
@@ -57,6 +105,30 @@ class FakeSupabase {
         }),
       };
     }
+    if (table === 'user_app_presence') {
+      return {
+        select: (_cols: string) => ({
+          eq: (_col: string, userId: string) => Promise.resolve({
+            data: this.appPresence.get(userId) ?? [],
+            error: null,
+          }),
+        }),
+        upsert: (
+          rows: { user_id: string; service: string; has_subscription: boolean }[],
+          _opts: { onConflict: string },
+        ) => {
+          for (const row of rows) {
+            const existing = this.appPresence.get(row.user_id) ?? [];
+            const withoutThisService = existing.filter((r) => r.service !== row.service);
+            this.appPresence.set(row.user_id, [
+              ...withoutThisService,
+              { service: row.service, has_subscription: row.has_subscription },
+            ]);
+          }
+          return Promise.resolve({ data: null, error: null });
+        },
+      };
+    }
     throw new Error(`Unexpected table in test fixture: ${table}`);
   }
 }
@@ -66,8 +138,12 @@ interface TestApp {
   supabase: FakeSupabase;
 }
 
-async function buildTestApp(seed: Record<string, string | null> = {}): Promise<TestApp> {
-  const supabase = new FakeSupabase(seed);
+async function buildTestApp(
+  seed: Record<string, string | null> = {},
+  userRows: Record<string, Partial<UserRow>> = {},
+  appPresence: Record<string, AppPresenceRow[]> = {},
+): Promise<TestApp> {
+  const supabase = new FakeSupabase(seed, userRows, appPresence);
 
   const fastify = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
   fastify.setValidatorCompiler(validatorCompiler);
@@ -274,6 +350,221 @@ describe('DELETE /me/push-token', () => {
   it('rejects an unauthenticated request', async () => {
     app = await buildTestApp();
     const response = await app.fastify.inject({ method: 'DELETE', url: '/me/push-token' });
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+describe('GET /me', () => {
+  let app: TestApp;
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  it('returns the user, defaulted preferences, and app presence rows', async () => {
+    app = await buildTestApp(
+      {},
+      { 'user-1': { email: 'a@b.com', subscription_tier: 'pro', preferences: {} } },
+      { 'user-1': [{ service: 'peacock', has_subscription: true }] },
+    );
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      user_id: 'user-1',
+      email: 'a@b.com',
+      subscription_tier: 'pro',
+      preferences: {
+        notificationMode: 'all',
+        quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
+        autoSwitch: false,
+      },
+      app_presence: [{ service: 'peacock', has_subscription: true }],
+    });
+  });
+
+  it('rejects an unauthenticated request', async () => {
+    app = await buildTestApp();
+    const response = await app.fastify.inject({ method: 'GET', url: '/me' });
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+describe('PATCH /me/preferences', () => {
+  let app: TestApp;
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  it('merges a partial update over existing preferences without resetting other fields', async () => {
+    app = await buildTestApp(
+      {},
+      {
+        'user-1': {
+          preferences: { notificationMode: 'all', autoSwitch: true },
+        },
+      },
+    );
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'PATCH',
+      url: '/me/preferences',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { notificationMode: 'high_leverage_only' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().preferences).toEqual({
+      notificationMode: 'high_leverage_only',
+      quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
+      autoSwitch: true, // untouched by this PATCH
+    });
+  });
+
+  it('merges a partial quietHours update without resetting its other sub-fields', async () => {
+    app = await buildTestApp(
+      {},
+      {
+        'user-1': {
+          preferences: { quietHours: { enabled: true, startHour: 23, endHour: 7 } },
+        },
+      },
+    );
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'PATCH',
+      url: '/me/preferences',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { quietHours: { enabled: false } },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().preferences.quietHours).toEqual({
+      enabled: false,
+      startHour: 23,
+      endHour: 7,
+      timezone: 'America/New_York',
+    });
+  });
+
+  it('rejects an unauthenticated request', async () => {
+    app = await buildTestApp();
+    const response = await app.fastify.inject({
+      method: 'PATCH',
+      url: '/me/preferences',
+      payload: { notificationMode: 'off' },
+    });
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+describe('POST /me/app-presence', () => {
+  let app: TestApp;
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  it('upserts services and returns the full merged list', async () => {
+    app = await buildTestApp({}, {}, { 'user-1': [{ service: 'peacock', has_subscription: false }] });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/app-presence',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        services: [
+          { service: 'peacock', has_subscription: true },
+          { service: 'espn_plus', has_subscription: true },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().app_presence).toEqual(
+      expect.arrayContaining([
+        { service: 'peacock', has_subscription: true },
+        { service: 'espn_plus', has_subscription: true },
+      ]),
+    );
+    expect(response.json().app_presence).toHaveLength(2);
+  });
+
+  it('rejects an unknown service with validation_error', async () => {
+    app = await buildTestApp();
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/app-presence',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { services: [{ service: 'not_a_real_service', has_subscription: true }] },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('validation_error');
+  });
+
+  it('rejects an unauthenticated request', async () => {
+    app = await buildTestApp();
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/app-presence',
+      payload: { services: [{ service: 'peacock', has_subscription: true }] },
+    });
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+describe('DELETE /me', () => {
+  let app: TestApp;
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  it('deletes the auth user (cascades cover the rest) and returns 204', async () => {
+    app = await buildTestApp({ 'user-1': null });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'DELETE',
+      url: '/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(app.supabase.deletedAuthUserIds).toEqual(['user-1']);
+  });
+
+  it('surfaces an admin API failure as account_deletion_failed rather than a generic 500', async () => {
+    app = await buildTestApp({ 'user-1': null });
+    app.supabase.authDeleteError = { message: 'admin API unreachable' };
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'DELETE',
+      url: '/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json().error.code).toBe('account_deletion_failed');
+  });
+
+  it('rejects an unauthenticated request', async () => {
+    app = await buildTestApp();
+    const response = await app.fastify.inject({ method: 'DELETE', url: '/me' });
     expect(response.statusCode).toBe(401);
   });
 });

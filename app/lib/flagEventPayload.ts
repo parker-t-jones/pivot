@@ -29,6 +29,12 @@ export interface GameSummary {
   away_team: string;
   home_team_name: string;
   away_team_name: string;
+  /** Sprint 9 Phase 1 addition — `teams.primary_color`/`secondary_color` (Section 7), hex strings.
+   *  Drives the Section 10 "team color flash" on the switching transition. */
+  home_team_primary_color: string;
+  home_team_secondary_color: string;
+  away_team_primary_color: string;
+  away_team_secondary_color: string;
   score: { home: number; away: number };
   quarter: number;
   time_remaining_sec: number;
@@ -61,8 +67,17 @@ export interface FlagEventPayload {
   user_id: string;
   game_id: string;
   event_type: 'flag_added' | 'flag_removed' | 'priority_increased' | 'priority_decreased';
-  old_state: FlagState | null;
-  new_state: FlagState;
+  /**
+   * Sprint 9 Phase 1 addition — the abbreviation of whichever team currently has the ball, or
+   * `null` with no possession (special teams / between plays / kickoff). `old_state.possession_team`
+   * is UNCONDITIONALLY `null` on the wire, by deliberate server-side ruling (see `delivery.ts`):
+   * it is never a delivery-time snapshot of "possession before," because populating both
+   * `old_state` and `new_state` from the same current read would make them always agree, silently
+   * encoding a lie about the field's meaning. Render `old_state?.possession_team` as "unknown," not
+   * as a real historical value.
+   */
+  old_state: (FlagState & { possession_team: string | null }) | null;
+  new_state: FlagState & { possession_team: string | null };
   action: FlagEventAction;
   game_summary: GameSummary;
   flagged_players: FlaggedPlayer[];

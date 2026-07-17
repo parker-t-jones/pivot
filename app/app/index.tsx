@@ -18,7 +18,7 @@ export default function IndexScreen() {
     return <Redirect href="/(app)" />;
   }
 
-  return <Redirect href="/(auth)/sign-in" />;
+  return <Redirect href="/(auth)/welcome" />;
 }
 
 const styles = StyleSheet.create({

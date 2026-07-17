@@ -70,6 +70,14 @@ export interface GameSummaryInfo {
    *  abbreviation fields (additive — see `gameSummary.ts`). */
   homeTeamName: string;
   awayTeamName: string;
+  /** `teams.primary_color`/`secondary_color` (Section 7, `NOT NULL text` hex) — Sprint 9 Phase 1
+   *  addition, closing the "team color flash not implemented" Known Issue (Section 13). Feeds the
+   *  `game_summary` builder (`gameSummary.ts`) so the client can drive the switching-transition
+   *  accent color; additive, same pattern as the Sprint 6 name fields above. */
+  homeTeamPrimaryColor: string;
+  homeTeamSecondaryColor: string;
+  awayTeamPrimaryColor: string;
+  awayTeamSecondaryColor: string;
 }
 
 export interface GameCatalog {

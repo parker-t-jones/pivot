@@ -14,6 +14,14 @@ export interface GameSummary {
    *  existing abbreviations, additive so no existing consumer's shape changes underneath it. */
   home_team_name: string;
   away_team_name: string;
+  /** Sprint 9 Phase 1 addition — closes the "team color flash not implemented" Known Issue
+   *  (Section 13). Hex strings from `teams.primary_color`/`secondary_color` (Section 7); empty
+   *  string when `info` is unavailable, matching the existing name/abbreviation fallback below
+   *  rather than `null`, since `GameSummary`'s other string fields never carry `null`. */
+  home_team_primary_color: string;
+  home_team_secondary_color: string;
+  away_team_primary_color: string;
+  away_team_secondary_color: string;
   score: { home: number; away: number };
   quarter: number;
   time_remaining_sec: number;
@@ -28,6 +36,10 @@ export function buildGameSummary(
     away_team: info?.awayTeamAbbreviation ?? gameState?.awayTeamId ?? '',
     home_team_name: info?.homeTeamName ?? gameState?.homeTeamId ?? '',
     away_team_name: info?.awayTeamName ?? gameState?.awayTeamId ?? '',
+    home_team_primary_color: info?.homeTeamPrimaryColor ?? '',
+    home_team_secondary_color: info?.homeTeamSecondaryColor ?? '',
+    away_team_primary_color: info?.awayTeamPrimaryColor ?? '',
+    away_team_secondary_color: info?.awayTeamSecondaryColor ?? '',
     score: { home: gameState?.scoreHome ?? 0, away: gameState?.scoreAway ?? 0 },
     quarter: gameState?.quarter ?? 0,
     time_remaining_sec: gameState?.timeRemainingSec ?? 0,
