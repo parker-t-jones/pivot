@@ -8,10 +8,12 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit && pnpm -r --parallel run typecheck",
+    "typecheck": "pnpm run build && tsc --noEmit && pnpm -r --parallel run typecheck",
+    "build": "tsc -b tsconfig.build.json",
     "test": "vitest run",
     "seed:players": "tsx scripts/seed-players.ts",
     "seed:broadcasts": "tsx scripts/seed-broadcasts.ts",
+    "seed:test-user": "tsx scripts/seed-test-user.ts",
     "db:types": "pnpm exec supabase gen types typescript --local > services/api/src/lib/database.types.ts"
   },
   "devDependencies": {

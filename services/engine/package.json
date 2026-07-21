@@ -7,7 +7,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc -b tsconfig.json"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

@@ -1291,12 +1291,21 @@ Deferred:
 - Goal: phone-as-remote experience works
 
 ### Sprint 9: Polish & shipping
-- All empty/loading/error states
-- Settings screen complete
-- Onboarding polish
-- Star player UI (data layer only)
-- Real-world testing on Sundays during preseason
-- App Store submission
+Shipped:
+- Server-side enrichment closing three Section 10 fidelity gaps (Section 9): `flagged_players` (full `{ player_id, first_name, last_name, position }` objects, replacing `flagged_player_ids`) on `GET /flags/current`; team colors (`home_team_primary_color`/`home_team_secondary_color`/`away_team_primary_color`/`away_team_secondary_color`) on `game_summary`, in both `GET /flags/current` and the `flag_event` payload; `possession_team` on the `flag_event` payload's `new_state` (`old_state.possession_team` is unconditionally `null` by design — see Section 9)
+- The four Section 10 fidelity fixes consuming the above: reason chip with player names (`app/lib/teamDisplay.ts`'s `reasonChipCopy`), the switching-transition team-color flash, the possessing-team overlay label, and a deep-link error state with an alternate-broadcast picker + "Get app" App Store links (see Known Issues for the multi-player reason chip copy convention this needed and didn't have a spec to follow)
+- `GET /me`, `PATCH /me/preferences`, `POST /me/app-presence`, `DELETE /me` — not originally scoped as Phase 2 "client-side" work, added as necessary infrastructure once Settings/onboarding needed them
+- Home State 5 (no connected league) and a consolidated idle state standing in for States 2–4 (see Known Issues — States 2–4 need a schedule endpoint that doesn't exist yet)
+- Settings screen: account, notifications (mode + quiet hours), streaming services, leagues, star players, about
+- Onboarding polish: Welcome screen, streaming-services step, all-set step, wired into sign-up and the `connect-team` flow
+- Star player UI, data layer only — real toggle wired to `POST /leagues/:id/stars`, flat list rather than Section 10's grid view (see Known Issues)
+- Empty/loading/error state pass across the app (`EmptyState`/`LoadingState`/`ErrorState` shared components)
+- Infra hygiene: `pnpm seed:test-user` fixture script, and the `services/dispatcher` → `services/api` `dist/` source-mode fix (TypeScript project references + `tsc -b` — see Known Issues, resolved)
+
+Deferred:
+- Home States 2–4 (live score/countdown) → Sprint 10, alongside a new schedule endpoint (`GET /games?week=`/`GET /games/live`) and the Home WebSocket subscription work
+- Star player grid view → a later sprint, alongside making star players functional in the switching engine's priority scoring (both currently stored/toggleable but not yet visually or functionally "real")
+- Real-world Sunday preseason testing and App Store submission → Sprint 10, pending Apple Developer Program enrollment
 
 ---
 
@@ -1403,15 +1412,15 @@ Issues that need resolution but don't block the build:
 
 **Fix:** any consumer needing the *current* priority score (e.g. `decideAction`'s primary-game comparison) must recompute from `(lineup, gameState)` fresh via `computeFlagState`, not read the stored `viewing_sessions.primary_priority_score`. Same class of staleness as Sprint 4 closeout #2 (`FlagState` is a change log, not ground truth) — this is the `viewing_sessions` analogue of that same rule.
 
-### `services/dispatcher` → `services/api` type propagation requires a manual `dist/` rebuild (Sprint 6 discovery) — fix in Sprint 9
+### `services/dispatcher` → `services/api` type propagation requires a manual `dist/` rebuild (Sprint 6 discovery) — RESOLVED Sprint 9 Phase 3
 
 **Symptom:** `services/api` consumes `@fantasy-focus/dispatcher` as a built workspace dependency (`main`/`types` point at `dist/`, per its `package.json`). When a Sprint 6 Phase 3 change added fields to `catalogs.ts`'s `GameSummaryInfo` (a dispatcher-side type `services/api/src/routes/flags.ts` constructs literals against), `pnpm --filter services/api typecheck` kept failing with a stale "does not exist in type" error until `services/dispatcher`'s own `pnpm run build` was run first to regenerate `dist/*.d.ts`. `pnpm -w run typecheck`/`pnpm -w run test` (which build nothing, just run `tsc --noEmit`/`vitest` per package) don't surface this — they happened to pass in CI order today, but any dispatcher-side type change consumed by the API is one dist rebuild away from a false-negative typecheck (stale dist silently type-checks against the *old* shape instead of failing) or a false-positive failure (stale dist hasn't caught up yet), depending on which package's task runs first.
 
 **Root cause:** the dispatcher-to-API relationship is build-mode (compiled `dist/` + `.d.ts`) rather than source-mode. Nothing in the workspace's typecheck/test scripts declares the dependency between "dispatcher's `dist/` is fresh" and "api's typecheck is meaningful," so it's silently on whoever last remembered to rebuild.
 
-**Fix (Sprint 9):** move the dispatcher-to-API relationship to source mode — either TypeScript project references (`composite`/`references` in `tsconfig.json`, so `tsc -b` rebuilds dependencies automatically and in the right order) or matching vitest source aliases across build/test paths (so tests resolve `@fantasy-focus/dispatcher` straight to `src/index.ts`, same as how `shared`/`engine` are already consumed — worth confirming those two don't have the same latent issue while fixing this). Either way, the goal is that a dispatcher-side type change is immediately visible to `services/api` without an intermediate build step anyone has to remember to run.
+**Resolution (Sprint 9 Phase 3):** moved every backend package (`shared`, `services/engine`, `services/dispatcher`, `services/api`, `services/ingestion`) to TypeScript project references — `composite: true` + a `references` array mirroring the real dependency graph in each `tsconfig.json`, each package's `typecheck` script changed from `tsc --noEmit` to `tsc -b tsconfig.json`, and a new root `tsconfig.build.json` solution file plus a `pnpm run build` (`tsc -b`) that the root `typecheck` script now runs first. `tsc -b` checks each referenced project's `.tsbuildinfo` against its inputs and transparently rebuilds anything stale, in dependency order, before checking the requesting project — that rebuild-on-demand behavior is what actually closes the gap, not `composite`/`references`/`declarationMap` alone (verified empirically: with only those three added and no `-b`, a plain `tsc --noEmit` in `services/api` still resolved `@fantasy-focus/dispatcher` against stale `dist/*.d.ts`, passing when it should have failed). Confirmed against the original repro exactly: renamed a field in `services/dispatcher/src/catalogs.ts` without rebuilding, and `pnpm --filter @fantasy-focus/api run typecheck` — run standalone, the same command named in the Symptom above — now fails immediately with the correct cross-package error instead of passing against stale types. `shared`/`engine` turned out not to have the equivalent latent issue on the Vitest path (their `vitest.config.ts` aliases already resolved straight to source); only the `tsc`/`tsx` consumers needed this fix.
 
-**Impact if unfixed:** cross-package type errors can go undetected (stale dist) or block on a rebuild step that isn't part of the documented workflow (`README.md` doesn't mention it) — a real footgun for the next several sprints, since Sprint 7+ (playback source swap) and beyond will keep touching dispatcher-side types the API consumes.
+**Impact while open:** cross-package type errors could go undetected (stale dist) or block on a rebuild step that wasn't part of the documented workflow (`README.md` doesn't mention it) — a real footgun through Sprint 7–9 as dispatcher-side types kept changing underneath the API. No longer reachable as of the resolution above.
 
 ### Native quick-action buttons on notifications are not registered (Sprint 6 Phase 7) — fix in v1.5
 
@@ -1494,6 +1503,59 @@ The recorded choice is authoritative because it reflects what the user is watchi
 **Fix (Sprint 9, or whenever the client realtime consumer lands):** subscribe Home to the `realtime:user:{id}` `flag_event` stream and update the "Now active" card (and future "Also flagged" row) in place, keeping the cold-start fetch as the initial/refresh path.
 
 **Impact if unfixed:** the Now Active card can be stale between manual refreshes — a flag that fires while Home is open won't move the card until the next pull-to-refresh. The push/banner path fires independently, so the user is still notified; only the passive dashboard view lags.
+
+### Unpaginated `players` fetches silently truncate at PostgREST's `max_rows` cap (Sprint 9 Phase 3 discovery)
+
+**Symptom:** the new `scripts/seed-test-user.ts`'s roster-assignment query (`select(...).in('position', [...])`, no pagination) returned exactly 1000 of the 1033 seeded `players` rows in local testing — silently dropping all 32 synthesized `DEF` rows, since `scripts/seed-players.ts` appends them last. The roster builder came up one spot short (whichever position ran out first) with no error surfaced.
+
+**Root cause:** `supabase/config.toml`'s `[api] max_rows = 1000` hard-caps every PostgREST response at 1000 rows, server-side. A client-side `.limit()` above that value is silently clamped back down rather than erroring — confirmed directly: requesting `.limit(5000)` still returned exactly 1000 rows. Any unpaginated `select()` against a table that can exceed 1000 rows is at risk the same way, with nothing in the response indicating truncation happened.
+
+**Fix:** `scripts/seed-test-user.ts` now paginates with `.range(offset, offset + 999)` in a loop until a page returns fewer than 1000 rows. Audited the rest of the codebase for other unpaginated `players` reads while fixing this: `services/api/src/routes/players.ts` (search) uses an explicit `.limit(20)`; `services/api/src/lib/lineup-sync.ts`, `services/api/src/routes/leagues.ts`, and `services/api/src/routes/flags.ts` all filter `players` via `.in('id'/'sleeper_id', [...])` against a caller-bounded id list (a single user's lineup or flagged players — never close to 1000 in practice). None of the current production call sites are affected; `scripts/seed-players.ts` itself only ever reads from `teams` (32 rows), not `players`.
+
+**Impact if unfixed elsewhere:** the currently-shipped call sites are all safe today, but this is a footgun for the next unpaginated (or loosely-filtered) table read someone adds — no test or lint rule catches it, only manual audit against `supabase/config.toml`'s `max_rows`.
+
+### Home States 2–4 (live score / countdown) have no backing endpoint (Sprint 9 Phase 2 discovery) — fix in Sprint 10
+
+**Symptom:** Section 10 specs Home States 2–4 (upcoming-game countdown, live score for games the user isn't flagged in, etc.) as part of the dashboard's cold-start view. Sprint 9 Phase 2 collapsed these into a single "no active flags" idle state that shows an honest lineup summary instead of live scores or countdowns.
+
+**Root cause:** States 2–4 need schedule/live-score data — "what's my next game and when," "what's the score of games I'm not flagged in right now" — that no existing endpoint provides. `GET /flags/current` only returns *flagged* games; there is no `GET /games?week=` (schedule) or `GET /games/live` (live scores) endpoint. Building either was out of Sprint 9 Phase 2's client-side scope, and fabricating countdown/score data client-side against a nonexistent endpoint was rejected in favor of shipping something true.
+
+**Fix (Sprint 10):** add a schedule endpoint (`GET /games?week=` and/or `GET /games/live`) — needed anyway for real-world Sunday preseason testing (kickoff times matter for actually exercising the app on Sundays) — and implement Home States 2–4 against it. Naturally clusters with the Home WebSocket subscription work (see "Home screen is not subscribed to the WebSocket flag stream" above), since both land on Home in the same pass.
+
+**Impact if unfixed:** Home has no representation of "upcoming game" or "live but not flagged" state — a user with no current flags sees only their lineup summary, not a countdown or score ticker. No functional impact on the core flag/switch flow, which doesn't depend on these states.
+
+### Star players ship as a flat toggle list, not Section 10's grid view (Sprint 9 Phase 2)
+
+**Symptom:** Section 10's Settings spec calls for star players as a "grid view with toggles." The shipped Settings screen (`app/app/(app)/settings.tsx`'s `StarPlayersSection`) is a flat list — one row per lineup slot across all connected leagues, each with a `Switch` — backed by the real `POST /leagues/:id/stars` (already implemented server-side, previously unused by the client).
+
+**Root cause:** Sprint 9 Phase 2's instructions scoped star players as "data layer only" — wiring the toggle to the real endpoint so the data model and API path are exercised — not a visual redesign to match Section 10's grid treatment.
+
+**Fix:** a later sprint should replace the flat list with the specified grid view once star players are functional in the switching engine's priority scoring (currently stored but not used — see Section 4's "Star player flagging (stored, not yet surfaced in switching)" and the `star_player_bonus` term in Section 8's priority formula) — the two are natural to land together rather than redesigning the visual treatment twice.
+
+**Impact if unfixed:** cosmetic only — the data is real and functional (toggling persists via `POST /leagues/:id/stars`), it just isn't presented as a grid.
+
+### Multi-player reason chip copy convention (Sprint 9 Phase 2) — undocumented in Section 10
+
+**Symptom:** Section 10's reason chip example only covers the single-player case ("Jonathan Taylor active — RB — Colts offense"). There's no spec'd copy for when more than one flagged player triggers the same flag.
+
+**Root cause:** the four Section 10 fidelity fixes shipped this sprint needed a rule for `reasonChipCopy` (`app/lib/teamDisplay.ts`) to render something for the multi-player case, and none existed to follow.
+
+**Convention chosen:** lead with the first flagged player's full name, append "+N more" for the remainder, and drop the position segment (which only makes sense for a single named player) — e.g. "Jonathan Taylor +2 more active — Colts offense." This is a *different* convention from the dispatcher's existing push-notification copy (`notificationContent.ts`'s `describeSubject`), which uses a count-only "3 of your players active" with no name at all for the multi-player case — the two weren't reconciled, since the chip (persistent, more screen space) and the push title (terse, glanceable) have different constraints. `flaggedPlayers` isn't ordered by relevance from either `/flags/current` or the WebSocket payload, so "first" is arbitrary but stable within a render.
+
+**Fix:** worth a real product decision on whether the chip and push-notification multi-player conventions should converge, and whether "first" should become "highest-priority player" once the payload carries per-player priority — neither exists as of Sprint 9. Not blocking; both conventions render correctly today, just inconsistently with each other.
+
+**Impact if unfixed:** cosmetic inconsistency between the in-app chip and push notification copy for the (currently rare) multi-player-per-flag case; no functional impact.
+
+### Settings is a modal stack push, not a tab (Sprint 9 Phase 2) — fix once a Lineup tab exists
+
+**Symptom:** Settings (`app/app/(app)/settings.tsx`) is reached via a header button on Home and rendered as a modal-presentation stack screen (`app/app/(app)/_layout.tsx`'s `<Stack.Screen name="settings" options={{ presentation: 'modal' }} />`), not a tab.
+
+**Root cause:** there is no tab bar in the app at all yet — Home is the only primary destination, reached directly off the root stack. A proper Settings tab implies a tab bar, which implies at least one sibling tab worth tabbing to; the v1.5 Roadmap's "Multi-league support (lineup tab gets league selector)" is the first planned candidate for that sibling, and it isn't built yet.
+
+**Fix:** once a Lineup tab (or equivalent second primary destination) exists, promote Settings from a modal stack push to a proper tab alongside it, and remove the Home header button in favor of the tab bar.
+
+**Impact if unfixed:** none functionally — modal presentation is a reasonable pattern for a single-destination app; it just isn't the tab-based IA a two-tab (or more) app would eventually want.
+
 ---
 
 ## 14. v1.5 Roadmap

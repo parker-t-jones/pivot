@@ -7,7 +7,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc -b tsconfig.json"
   },
   "devDependencies": {
     "typescript": "^5.7.2"
