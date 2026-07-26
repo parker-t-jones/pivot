@@ -1,11 +1,13 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
 import { NowActiveCard } from '../../components/NowActiveCard';
+import { IdleHomeCard } from '../../components/IdleHomeCard';
 import { useSwitching } from '../../contexts/SwitchingContext';
 import { ApiRequestError, apiClient } from '../../lib/apiClient';
 import {
@@ -42,6 +44,7 @@ const EMPTY_TEAM_MAP: PlayerTeamMap = new Map();
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { switchToGame } = useSwitching();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -149,7 +152,10 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.xl },
+      ]}
       refreshControl={
         <RefreshControl
           refreshing={isRefreshing}
@@ -171,7 +177,7 @@ export default function HomeScreen() {
       </View>
 
       {isLoading ? (
-        <LoadingState message="Pulling up today's games…" />
+        <LoadingState message="Loading…" />
       ) : loadError ? (
         <ErrorState message={loadError} onRetry={onRefresh} />
       ) : !homeData?.hasLeagues ? (
@@ -200,17 +206,7 @@ export default function HomeScreen() {
           onSwitch={onSwitch}
         />
       ) : (
-        <EmptyState
-          title="No games are flagged right now"
-          message="We'll surface one the moment your players get active."
-        >
-          {homeData.lineupPlayerCount > 0 ? (
-            <Text style={styles.lineupSummary}>
-              {homeData.lineupPlayerCount} player{homeData.lineupPlayerCount === 1 ? '' : 's'} in your
-              lineup this week.
-            </Text>
-          ) : null}
-        </EmptyState>
+        <IdleHomeCard lineupPlayerCount={homeData.lineupPlayerCount} />
       )}
     </ScrollView>
   );
@@ -226,11 +222,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: theme.spacing.sm,
-  },
-  lineupSummary: {
-    color: theme.colors.accent,
-    fontSize: theme.type.caption.size,
-    fontWeight: '600',
   },
   screen: {
     backgroundColor: theme.colors.background,
