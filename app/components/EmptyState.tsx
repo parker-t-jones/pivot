@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { theme } from '../lib/theme';
+
 interface EmptyStateAction {
   label: string;
   onPress: () => void;
@@ -47,40 +49,40 @@ export function EmptyState({ title, message, primaryAction, secondaryAction, chi
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 12,
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
     paddingVertical: 40,
   },
   message: {
-    color: '#8e8e93',
+    color: theme.colors.textSecondary,
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
   },
   primaryButton: {
     alignItems: 'center',
-    backgroundColor: '#1f6feb',
+    backgroundColor: theme.colors.accent,
     borderRadius: 10,
-    marginTop: 8,
+    marginTop: theme.spacing.sm,
     minWidth: 200,
     paddingVertical: 13,
   },
   primaryButtonText: {
-    color: '#fff',
-    fontSize: 15,
+    color: theme.colors.onAccent,
+    fontSize: theme.type.body.size,
     fontWeight: '700',
   },
   secondaryButtonText: {
-    color: '#8e8e93',
+    color: theme.colors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
     marginTop: 2,
     textDecorationLine: 'underline',
   },
   title: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.heading.size,
+    fontWeight: theme.type.heading.weight,
     textAlign: 'center',
   },
 });

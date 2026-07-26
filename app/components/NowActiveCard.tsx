@@ -9,6 +9,7 @@ import {
   type GameBroadcast,
 } from '../lib/gameDisplay';
 import { reasonChipCopy, resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../lib/teamDisplay';
+import { theme } from '../lib/theme';
 
 interface NowActiveCardProps {
   flag: CurrentFlag;
@@ -75,7 +76,7 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
         onPress={onSwitch}
         style={[styles.cta, !canSwitch && styles.ctaDisabled]}
       >
-        <Text style={styles.ctaText}>
+        <Text style={[styles.ctaText, !canSwitch && styles.ctaTextDisabled]}>
           {canSwitch && broadcast
             ? `Watch on ${serviceLabel(broadcast.service)}`
             : 'No broadcast available'}
@@ -87,7 +88,7 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#1c1c1e',
+    backgroundColor: theme.colors.surface,
     borderRadius: 20,
     gap: 10,
     padding: 20,
@@ -95,30 +96,33 @@ const styles = StyleSheet.create({
   },
   cta: {
     alignItems: 'center',
-    backgroundColor: '#1f6feb',
-    borderRadius: 12,
-    marginTop: 8,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.md,
+    marginTop: theme.spacing.sm,
     paddingVertical: 15,
   },
   ctaDisabled: {
-    backgroundColor: '#3a3a3c',
+    backgroundColor: theme.colors.border,
   },
   ctaText: {
-    color: '#fff',
+    color: theme.colors.onAccent,
     fontSize: 16,
     fontWeight: '700',
   },
+  ctaTextDisabled: {
+    color: theme.colors.textPrimary,
+  },
   eyebrow: {
-    color: '#8e8e93',
+    color: theme.colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   matchup: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.heading.size,
+    fontWeight: theme.type.heading.weight,
   },
   matchupRow: {
     alignItems: 'center',
@@ -127,23 +131,23 @@ const styles = StyleSheet.create({
   },
   reasonChip: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(31, 111, 235, 0.18)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 176, 32, 0.18)',
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: theme.spacing.md,
     paddingVertical: 6,
   },
   reasonChipText: {
-    color: '#5aa2ff',
-    fontSize: 13,
+    color: theme.colors.accent,
+    fontSize: theme.type.caption.size,
     fontWeight: '600',
   },
   score: {
-    color: '#fff',
+    color: theme.colors.textPrimary,
     fontSize: 22,
     fontWeight: '700',
   },
   stateStrip: {
-    color: '#c7c7cc',
-    fontSize: 15,
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.body.size,
   },
 });

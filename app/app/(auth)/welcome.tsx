@@ -1,6 +1,8 @@
 import { Link, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { theme } from '../../lib/theme';
+
 /** PLAN.md Section 10 onboarding step 1 ("Welcome — value prop, 'Get started' CTA"). Sprint 9 Phase
  *  2 addition — this codebase had no unauthenticated landing screen at all before now; `app/index.tsx`
  *  went straight to sign-in (see report). */
@@ -38,51 +40,53 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   body: {
-    color: '#555',
+    color: theme.colors.textSecondary,
     fontSize: 16,
     lineHeight: 23,
   },
   button: {
     alignItems: 'center',
-    backgroundColor: '#111',
-    borderRadius: 8,
-    marginTop: 8,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.sm,
+    marginTop: theme.spacing.sm,
     paddingVertical: 14,
   },
   buttonText: {
-    color: '#fff',
+    color: theme.colors.onAccent,
     fontSize: 16,
     fontWeight: '700',
   },
   card: {
-    gap: 16,
+    gap: theme.spacing.lg,
     width: '100%',
   },
   container: {
     alignItems: 'center',
+    backgroundColor: theme.colors.background,
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.xl,
   },
   eyebrow: {
-    color: '#0A66FF',
+    color: theme.colors.accent,
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   footerText: {
-    color: '#444',
+    color: theme.colors.textTertiary,
     fontSize: 14,
-    marginTop: 4,
+    marginTop: theme.spacing.xs,
     textAlign: 'center',
   },
   link: {
-    color: '#0A66FF',
+    color: theme.colors.accent,
     fontWeight: '600',
   },
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.title.size,
+    fontWeight: theme.type.title.weight,
   },
 });

@@ -22,6 +22,7 @@ import {
   type GameBroadcastsResponse,
 } from '../../lib/gameDisplay';
 import { resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../../lib/teamDisplay';
+import { theme } from '../../lib/theme';
 
 interface HomeData {
   /** Sprint 9 Phase 2 — Home State 5: no leagues connected yet. Checked before anything else, since
@@ -150,7 +151,11 @@ export default function HomeScreen() {
       style={styles.screen}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#fff" />
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={onRefresh}
+          tintColor={theme.colors.textPrimary}
+        />
       }
     >
       <View style={styles.headerRow}>
@@ -214,35 +219,35 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingVertical: theme.spacing.xl,
   },
   headerRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
   lineupSummary: {
-    color: '#5aa2ff',
-    fontSize: 13,
+    color: theme.colors.accent,
+    fontSize: theme.type.caption.size,
     fontWeight: '600',
   },
   screen: {
-    backgroundColor: '#000',
+    backgroundColor: theme.colors.background,
     flex: 1,
   },
   settingsButton: {
-    paddingHorizontal: 8,
+    paddingHorizontal: theme.spacing.sm,
     paddingVertical: 6,
   },
   settingsButtonText: {
-    color: '#5aa2ff',
-    fontSize: 15,
+    color: theme.colors.accent,
+    fontSize: theme.type.body.size,
     fontWeight: '600',
   },
   title: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.title.size,
+    fontWeight: theme.type.title.weight,
   },
 });

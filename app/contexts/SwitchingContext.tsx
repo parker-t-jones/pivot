@@ -15,6 +15,7 @@ import type { GameBroadcast, GameBroadcastsResponse } from '../lib/gameDisplay';
 import { serviceLabel } from '../lib/gameDisplay';
 import { streamingServiceAppStoreUrl } from '../lib/streamingServices';
 import { resolveSwitch } from '../lib/switching';
+import { theme } from '../lib/theme';
 
 export interface SwitchInput {
   gameId: string;
@@ -268,7 +269,7 @@ function SwitchingOverlay({
             <Text style={styles.errorMessage}>{phase.message}</Text>
 
             {phase.isLoadingBroadcasts ? (
-              <ActivityIndicator color="#fff" style={styles.broadcastLoading} />
+              <ActivityIndicator color={theme.colors.textPrimary} style={styles.broadcastLoading} />
             ) : phase.broadcasts && phase.broadcasts.length > 0 ? (
               <View style={styles.broadcastList}>
                 {phase.broadcasts
@@ -290,7 +291,7 @@ function SwitchingOverlay({
         ) : (
           <View style={styles.switchingCard}>
             {phase.teamColors ? <TeamColorFlash colors={phase.teamColors} /> : null}
-            <ActivityIndicator color="#fff" size="large" />
+            <ActivityIndicator color={theme.colors.textPrimary} size="large" />
             <Text style={styles.switchingText}>Switching to {phase.label}…</Text>
           </View>
         )}
@@ -326,7 +327,7 @@ function AlternateBroadcastRow({
           onPress={() => void Linking.openURL(appStoreUrl)}
           style={[styles.broadcastRowButton, styles.broadcastRowButtonSecondary]}
         >
-          <Text style={styles.broadcastRowButtonText}>Get app</Text>
+          <Text style={styles.broadcastRowButtonTextSecondary}>Get app</Text>
         </Pressable>
       ) : null}
     </View>
@@ -343,16 +344,16 @@ export function useSwitching(): SwitchingContextValue {
 
 const styles = StyleSheet.create({
   broadcastList: {
-    gap: 8,
-    marginTop: 16,
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
     width: '100%',
   },
   broadcastLoading: {
-    marginTop: 16,
+    marginTop: theme.spacing.lg,
   },
   broadcastRow: {
     alignItems: 'center',
-    backgroundColor: '#28282a',
+    backgroundColor: theme.colors.surface,
     borderRadius: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -360,78 +361,83 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   broadcastRowButton: {
-    backgroundColor: '#1f6feb',
-    borderRadius: 8,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.sm,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
   broadcastRowButtonSecondary: {
-    backgroundColor: '#3a3a3c',
+    backgroundColor: theme.colors.border,
   },
   broadcastRowButtonText: {
-    color: '#fff',
-    fontSize: 13,
+    color: theme.colors.onAccent,
+    fontSize: theme.type.caption.size,
+    fontWeight: '700',
+  },
+  broadcastRowButtonTextSecondary: {
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.caption.size,
     fontWeight: '700',
   },
   broadcastRowLabel: {
-    color: '#fff',
-    fontSize: 15,
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.body.size,
     fontWeight: '600',
   },
   colorFlash: {
-    borderRadius: 16,
+    borderRadius: theme.radii.lg,
     borderWidth: 2,
   },
   errorButton: {
     alignItems: 'center',
-    backgroundColor: '#1f6feb',
-    borderRadius: 8,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.sm,
     marginTop: 18,
-    paddingVertical: 12,
+    paddingVertical: theme.spacing.md,
     width: '100%',
   },
   errorButtonText: {
-    color: '#fff',
-    fontSize: 15,
+    color: theme.colors.onAccent,
+    fontSize: theme.type.body.size,
     fontWeight: '600',
   },
   errorCard: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 16,
-    marginHorizontal: 24,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
+    marginHorizontal: theme.spacing.xl,
     padding: 22,
     width: '100%',
     maxWidth: 380,
   },
   errorMessage: {
-    color: '#c7c7cc',
-    fontSize: 15,
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.body.size,
     lineHeight: 21,
   },
   errorTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.heading.size,
+    fontWeight: theme.type.heading.weight,
+    marginBottom: theme.spacing.sm,
   },
   overlay: {
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.72)',
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.lg,
   },
   switchingCard: {
     alignItems: 'center',
-    gap: 16,
+    gap: theme.spacing.lg,
     overflow: 'hidden',
-    paddingHorizontal: 32,
-    paddingVertical: 24,
+    paddingHorizontal: theme.spacing.xxl,
+    paddingVertical: theme.spacing.xl,
   },
   switchingText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.heading.size,
+    fontWeight: theme.type.heading.weight,
     textAlign: 'center',
   },
 });

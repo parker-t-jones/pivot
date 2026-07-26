@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { theme } from '../../lib/theme';
+
 /** PLAN.md Section 10 onboarding step 6 ("All set — confirmation, CTA into the app"). Last stop in
  *  the chain `connect-team.tsx` kicks off for a brand-new signup. */
 export default function OnboardingAllSetScreen() {
@@ -24,19 +26,20 @@ export default function OnboardingAllSetScreen() {
 
 const styles = StyleSheet.create({
   body: {
-    color: '#8e8e93',
-    fontSize: 15,
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.body.size,
+    fontWeight: theme.type.body.weight,
     lineHeight: 21,
   },
   button: {
     alignItems: 'center',
-    backgroundColor: '#1f6feb',
+    backgroundColor: theme.colors.accent,
     borderRadius: 10,
-    marginTop: 12,
+    marginTop: theme.spacing.md,
     paddingVertical: 14,
   },
   buttonText: {
-    color: '#fff',
+    color: theme.colors.onAccent,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -46,14 +49,14 @@ const styles = StyleSheet.create({
   },
   container: {
     alignItems: 'center',
-    backgroundColor: '#000',
+    backgroundColor: theme.colors.background,
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.xl,
   },
   title: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.title.size,
+    fontWeight: theme.type.title.weight,
   },
 });

@@ -31,6 +31,7 @@ import { deleteAccount, fetchMe, patchPreferences, setAppPresence, type MeRespon
 import { unregisterPushNotificationsAsync } from '../../lib/pushNotifications';
 import { STREAMING_SERVICES, streamingServiceLabel } from '../../lib/streamingServices';
 import { supabase } from '../../lib/supabase';
+import { theme } from '../../lib/theme';
 
 const NOTIFICATION_MODES: { value: MeResponse['preferences']['notificationMode']; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -227,7 +228,7 @@ function AccountSection({
 
       <Pressable disabled={isSigningOut} onPress={onSignOut} style={styles.secondaryButton}>
         {isSigningOut ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={theme.colors.textPrimary} />
         ) : (
           <Text style={styles.secondaryButtonText}>Sign out</Text>
         )}
@@ -235,7 +236,7 @@ function AccountSection({
 
       <Pressable disabled={isDeletingAccount} onPress={onDeleteAccount} style={styles.dangerButton}>
         {isDeletingAccount ? (
-          <ActivityIndicator color="#ff6b6b" />
+          <ActivityIndicator color={theme.colors.danger} />
         ) : (
           <Text style={styles.dangerButtonText}>Delete account</Text>
         )}
@@ -541,10 +542,10 @@ function AboutSection() {
 
 const styles = StyleSheet.create({
   backButton: {
-    paddingVertical: 4,
+    paddingVertical: theme.spacing.xs,
   },
   backButtonText: {
-    color: '#5aa2ff',
+    color: theme.colors.accent,
     fontSize: 16,
   },
   content: {
@@ -554,11 +555,11 @@ const styles = StyleSheet.create({
   },
   dangerButton: {
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: theme.spacing.sm,
     paddingVertical: 10,
   },
   dangerButtonText: {
-    color: '#ff6b6b',
+    color: theme.colors.danger,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -567,18 +568,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: theme.spacing.lg,
   },
   headerSpacer: {
     width: 48,
   },
   headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.heading.size,
+    fontWeight: theme.type.heading.weight,
   },
   leagueRow: {
-    borderTopColor: '#2c2c2e',
+    borderTopColor: theme.colors.surfaceRaised,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -586,112 +587,112 @@ const styles = StyleSheet.create({
   },
   leagueRowActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: theme.spacing.sm,
   },
   leagueRowInfo: {
     flex: 1,
     gap: 2,
   },
   linkText: {
-    color: '#5aa2ff',
+    color: theme.colors.accent,
     fontSize: 14,
     marginTop: 6,
   },
   rowLabel: {
-    color: '#fff',
-    fontSize: 15,
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.body.size,
     fontWeight: '600',
   },
   rowSubtext: {
-    color: '#8e8e93',
-    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.caption.size,
     marginTop: 2,
   },
   screen: {
-    backgroundColor: '#000',
+    backgroundColor: theme.colors.background,
     flex: 1,
   },
   section: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
     gap: 6,
-    padding: 16,
+    padding: theme.spacing.lg,
   },
   sectionHint: {
-    color: '#8e8e93',
+    color: theme.colors.textSecondary,
     fontSize: 12,
-    marginBottom: 4,
+    marginBottom: theme.spacing.xs,
   },
   sectionTitle: {
-    color: '#8e8e93',
+    color: theme.colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.6,
-    marginBottom: 4,
+    marginBottom: theme.spacing.xs,
     textTransform: 'uppercase',
   },
   secondaryButton: {
     alignItems: 'center',
-    backgroundColor: '#2c2c2e',
+    backgroundColor: theme.colors.surfaceRaised,
     borderRadius: 10,
     marginTop: 10,
-    paddingVertical: 12,
+    paddingVertical: theme.spacing.md,
   },
   secondaryButtonText: {
-    color: '#fff',
-    fontSize: 15,
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.body.size,
     fontWeight: '600',
   },
   segment: {
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: theme.radii.sm,
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: theme.spacing.sm,
   },
   segmentActive: {
-    backgroundColor: '#1f6feb',
+    backgroundColor: theme.colors.accent,
   },
   segmentText: {
-    color: '#8e8e93',
-    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.caption.size,
     fontWeight: '600',
   },
   segmentTextActive: {
-    color: '#fff',
+    color: theme.colors.onAccent,
   },
   segmentedControl: {
-    backgroundColor: '#000',
+    backgroundColor: theme.colors.background,
     borderRadius: 10,
     flexDirection: 'row',
-    gap: 4,
+    gap: theme.spacing.xs,
     marginBottom: 10,
-    padding: 4,
+    padding: theme.spacing.xs,
   },
   smallButton: {
     alignItems: 'center',
-    backgroundColor: '#2c2c2e',
-    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceRaised,
+    borderRadius: theme.radii.sm,
     justifyContent: 'center',
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   smallButtonDanger: {
-    backgroundColor: 'rgba(255, 107, 107, 0.14)',
+    backgroundColor: 'rgba(255, 90, 90, 0.14)',
   },
   smallButtonDangerText: {
-    color: '#ff6b6b',
-    fontSize: 13,
+    color: theme.colors.danger,
+    fontSize: theme.type.caption.size,
     fontWeight: '600',
   },
   smallButtonText: {
-    color: '#fff',
-    fontSize: 13,
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.caption.size,
     fontWeight: '600',
   },
   toggleRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: theme.spacing.sm,
   },
 });

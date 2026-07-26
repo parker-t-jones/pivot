@@ -23,6 +23,7 @@ import {
 } from '../../lib/leagues';
 import { searchPlayers, type PlayerSearchResult } from '../../lib/players';
 import { apiClient } from '../../lib/apiClient';
+import { theme } from '../../lib/theme';
 
 type Mode = 'choose' | 'sleeper' | 'manual';
 
@@ -99,7 +100,10 @@ function ConnectSleeper({ onConnected }: { onConnected: () => void }) {
       const result = await fetchSleeperLeagues(username.trim());
       setLeagues(result);
       if (result.length === 0) {
-        setErrorMessage('No leagues found for that Sleeper username.');
+        setErrorMessage(
+          'We found your Sleeper account, but it has no leagues yet for the upcoming season. ' +
+            'Leagues usually appear once your commissioner renews them before the draft.',
+        );
       }
     } catch (error) {
       setErrorMessage(error instanceof ApiRequestError ? error.message : 'Could not find leagues.');
@@ -132,14 +136,14 @@ function ConnectSleeper({ onConnected }: { onConnected: () => void }) {
         autoCapitalize="none"
         onChangeText={setUsername}
         placeholder="Sleeper username"
-        placeholderTextColor="#8e8e93"
+        placeholderTextColor={theme.colors.textSecondary}
         style={styles.input}
         value={username}
       />
 
       <Pressable disabled={isSearching} onPress={onFindLeagues} style={styles.primaryButton}>
         {isSearching ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={theme.colors.onAccent} />
         ) : (
           <Text style={styles.primaryButtonText}>Find leagues</Text>
         )}
@@ -161,7 +165,9 @@ function ConnectSleeper({ onConnected }: { onConnected: () => void }) {
                 <Text style={styles.leagueOptionTitle}>{item.name}</Text>
                 <Text style={styles.leagueOptionSubtitle}>{item.season} season</Text>
               </View>
-              {connectingLeagueId === item.league_id ? <ActivityIndicator color="#fff" /> : null}
+              {connectingLeagueId === item.league_id ? (
+                <ActivityIndicator color={theme.colors.textPrimary} />
+              ) : null}
             </Pressable>
           )}
         />
@@ -225,13 +231,13 @@ function ConnectManual({ onConnected }: { onConnected: () => void }) {
         <TextInput
           onChangeText={setName}
           placeholder="League name"
-          placeholderTextColor="#8e8e93"
+          placeholderTextColor={theme.colors.textSecondary}
           style={styles.input}
           value={name}
         />
         <Pressable disabled={isCreating} onPress={onCreateLeague} style={styles.primaryButton}>
           {isCreating ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={theme.colors.onAccent} />
           ) : (
             <Text style={styles.primaryButtonText}>Continue</Text>
           )}
@@ -297,11 +303,11 @@ function PlayerPicker({
       <TextInput
         onChangeText={onSearch}
         placeholder="Search players"
-        placeholderTextColor="#8e8e93"
+        placeholderTextColor={theme.colors.textSecondary}
         style={styles.input}
         value={query}
       />
-      {isSearching ? <ActivityIndicator color="#fff" /> : null}
+      {isSearching ? <ActivityIndicator color={theme.colors.textPrimary} /> : null}
 
       <FlatList
         data={results.filter((p) => !rosteredIds.has(p.player_id))}
@@ -343,7 +349,7 @@ function PlayerPicker({
         style={[styles.primaryButton, roster.length === 0 && styles.primaryButtonDisabled]}
       >
         {isSaving ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={theme.colors.onAccent} />
         ) : (
           <Text style={styles.primaryButtonText}>Save lineup</Text>
         )}
@@ -354,48 +360,48 @@ function PlayerPicker({
 
 const styles = StyleSheet.create({
   backText: {
-    color: '#5aa2ff',
+    color: theme.colors.accent,
     fontSize: 16,
   },
   content: {
     flex: 1,
-    gap: 12,
+    gap: theme.spacing.md,
     paddingHorizontal: 20,
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: theme.spacing.lg,
   },
   input: {
-    backgroundColor: '#1c1c1e',
+    backgroundColor: theme.colors.surface,
     borderRadius: 10,
-    color: '#fff',
+    color: theme.colors.textPrimary,
     fontSize: 16,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: theme.spacing.md,
   },
   leagueOption: {
     alignItems: 'center',
-    backgroundColor: '#1c1c1e',
+    backgroundColor: theme.colors.surface,
     borderRadius: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: theme.spacing.md,
   },
   leagueOptionSubtitle: {
-    color: '#8e8e93',
-    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.caption.size,
   },
   leagueOptionTitle: {
-    color: '#fff',
-    fontSize: 15,
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.body.size,
     fontWeight: '600',
   },
   primaryButton: {
     alignItems: 'center',
-    backgroundColor: '#1f6feb',
+    backgroundColor: theme.colors.accent,
     borderRadius: 10,
     paddingVertical: 14,
   },
@@ -403,55 +409,55 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   primaryButtonText: {
-    color: '#fff',
+    color: theme.colors.onAccent,
     fontSize: 16,
     fontWeight: '700',
   },
   removeText: {
-    color: '#ff6b6b',
-    fontSize: 13,
+    color: theme.colors.danger,
+    fontSize: theme.type.caption.size,
     fontWeight: '600',
   },
   resultsList: {
     maxHeight: 180,
   },
   rosterHeading: {
-    color: '#8e8e93',
+    color: theme.colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
-    marginTop: 8,
+    marginTop: theme.spacing.sm,
     textTransform: 'uppercase',
   },
   rosterRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: theme.spacing.sm,
   },
   screen: {
-    backgroundColor: '#000',
+    backgroundColor: theme.colors.background,
     flex: 1,
   },
   secondaryButton: {
     alignItems: 'center',
-    backgroundColor: '#1c1c1e',
+    backgroundColor: theme.colors.surface,
     borderRadius: 10,
     paddingVertical: 14,
   },
   secondaryButtonText: {
-    color: '#fff',
+    color: theme.colors.textPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
   subtitle: {
-    color: '#8e8e93',
+    color: theme.colors.textSecondary,
     fontSize: 14,
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
   title: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '700',
-    marginTop: 12,
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.title.size,
+    fontWeight: theme.type.title.weight,
+    marginTop: theme.spacing.md,
   },
 });

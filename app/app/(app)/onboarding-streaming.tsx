@@ -6,6 +6,7 @@ import { ErrorState } from '../../components/ErrorState';
 import { ApiRequestError } from '../../lib/apiClient';
 import { setAppPresence } from '../../lib/me';
 import { STREAMING_SERVICES, streamingServiceLabel, type StreamingService } from '../../lib/streamingServices';
+import { theme } from '../../lib/theme';
 
 /** PLAN.md Section 10 onboarding step 4 ("Streaming services — multi-select grid, persists to
  *  `user_app_presence`"). Reached only from `connect-team.tsx`'s onboarding chain (see that file's
@@ -73,7 +74,7 @@ export default function OnboardingStreamingScreen() {
 
       <Pressable disabled={isSaving} onPress={onContinue} style={styles.primaryButton}>
         {isSaving ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={theme.colors.onAccent} />
         ) : (
           <Text style={styles.primaryButtonText}>Continue</Text>
         )}
@@ -87,25 +88,25 @@ export default function OnboardingStreamingScreen() {
 
 const styles = StyleSheet.create({
   chip: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 999,
-    paddingHorizontal: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: theme.spacing.lg,
     paddingVertical: 10,
   },
   chipSelected: {
-    backgroundColor: '#1f6feb',
+    backgroundColor: theme.colors.accent,
   },
   chipText: {
-    color: '#c7c7cc',
+    color: theme.colors.textTertiary,
     fontSize: 14,
     fontWeight: '600',
   },
   chipTextSelected: {
-    color: '#fff',
+    color: theme.colors.onAccent,
   },
   content: {
-    gap: 16,
-    paddingHorizontal: 24,
+    gap: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.xl,
     paddingVertical: 48,
   },
   grid: {
@@ -115,35 +116,35 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: 'center',
-    backgroundColor: '#1f6feb',
+    backgroundColor: theme.colors.accent,
     borderRadius: 10,
-    marginTop: 12,
+    marginTop: theme.spacing.md,
     paddingVertical: 14,
   },
   primaryButtonText: {
-    color: '#fff',
+    color: theme.colors.onAccent,
     fontSize: 16,
     fontWeight: '700',
   },
   screen: {
-    backgroundColor: '#000',
+    backgroundColor: theme.colors.background,
     flex: 1,
   },
   skipText: {
-    color: '#8e8e93',
+    color: theme.colors.textSecondary,
     fontSize: 14,
-    marginTop: 4,
+    marginTop: theme.spacing.xs,
     textAlign: 'center',
     textDecorationLine: 'underline',
   },
   subtitle: {
-    color: '#8e8e93',
+    color: theme.colors.textSecondary,
     fontSize: 14,
     lineHeight: 20,
   },
   title: {
-    color: '#fff',
-    fontSize: 26,
-    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.title.size,
+    fontWeight: theme.type.title.weight,
   },
 });

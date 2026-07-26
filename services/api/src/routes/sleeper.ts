@@ -26,7 +26,18 @@ const sleeperRoutes: FastifyPluginAsyncZod = async (fastify) => {
       }
 
       const nflState = await sleeperClient.getNflState();
-      const leagues = await sleeperClient.getUserLeagues(user.user_id, nflState.season);
+      let leagues = await sleeperClient.getUserLeagues(user.user_id, nflState.season);
+
+      // Offseason fallback: before leagues are renewed for the upcoming season, Sleeper returns
+      // an empty list for the current season even though the user's leagues exist. Fall back to
+      // the previous season's leagues so the picker isn't empty. A non-empty current-season
+      // result always wins; each league carries its own `season` string, so the shape is unchanged.
+      if (
+        leagues.length === 0 &&
+        (nflState.season_type === 'off' || nflState.season_type === 'pre')
+      ) {
+        leagues = await sleeperClient.getUserLeagues(user.user_id, nflState.previous_season);
+      }
 
       return {
         leagues: leagues.map((league) => ({

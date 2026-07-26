@@ -6,6 +6,7 @@ import { NotificationBannerHost } from '../../components/NotificationBannerHost'
 import { NotificationResponseHandler } from '../../components/NotificationResponseHandler';
 import { PushPermissionProvider, usePushPermission } from '../../contexts/PushPermissionContext';
 import { SwitchingProvider } from '../../contexts/SwitchingContext';
+import { theme } from '../../lib/theme';
 
 function LoadingState({ message }: { message: string }) {
   return (
@@ -85,13 +86,14 @@ export default function AppGroupLayout() {
 const styles = StyleSheet.create({
   loadingContainer: {
     alignItems: 'center',
+    backgroundColor: theme.colors.background,
     flex: 1,
-    gap: 12,
+    gap: theme.spacing.md,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.xl,
   },
   loadingText: {
-    color: '#444',
+    color: theme.colors.textTertiary,
     fontSize: 16,
   },
 });

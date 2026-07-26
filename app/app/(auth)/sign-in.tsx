@@ -13,6 +13,7 @@ import {
 
 import { isValidEmail } from '../../lib/email';
 import { supabase } from '../../lib/supabase';
+import { theme } from '../../lib/theme';
 
 export default function SignInScreen() {
   const [email, setEmail] = useState('');
@@ -63,6 +64,7 @@ export default function SignInScreen() {
           keyboardType="email-address"
           onChangeText={setEmail}
           placeholder="Email"
+          placeholderTextColor={theme.colors.textTertiary}
           style={styles.input}
           value={email}
         />
@@ -72,6 +74,7 @@ export default function SignInScreen() {
           autoComplete="password"
           onChangeText={setPassword}
           placeholder="Password"
+          placeholderTextColor={theme.colors.textTertiary}
           secureTextEntry
           style={styles.input}
           value={password}
@@ -81,7 +84,7 @@ export default function SignInScreen() {
 
         <Pressable disabled={isSubmitting} onPress={onSignIn} style={styles.button}>
           {isSubmitting ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={theme.colors.onAccent} />
           ) : (
             <Text style={styles.buttonText}>Sign in</Text>
           )}
@@ -101,54 +104,58 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
-    backgroundColor: '#111',
-    borderRadius: 8,
-    paddingVertical: 12,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.sm,
+    paddingVertical: theme.spacing.md,
   },
   buttonText: {
-    color: '#fff',
+    color: theme.colors.onAccent,
     fontSize: 16,
     fontWeight: '600',
   },
   card: {
-    gap: 12,
+    gap: theme.spacing.md,
     width: '100%',
   },
   container: {
     alignItems: 'center',
+    backgroundColor: theme.colors.background,
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   error: {
-    color: '#B00020',
+    color: theme.colors.danger,
     fontSize: 14,
   },
   footerText: {
-    color: '#444',
+    color: theme.colors.textTertiary,
     fontSize: 14,
-    marginTop: 4,
+    marginTop: theme.spacing.xs,
     textAlign: 'center',
   },
   input: {
-    borderColor: '#CCC',
-    borderRadius: 8,
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.sm,
     borderWidth: 1,
+    color: theme.colors.textPrimary,
     fontSize: 16,
-    paddingHorizontal: 12,
+    paddingHorizontal: theme.spacing.md,
     paddingVertical: 10,
   },
   link: {
-    color: '#0A66FF',
+    color: theme.colors.accent,
     fontWeight: '600',
   },
   subtitle: {
-    color: '#555',
+    color: theme.colors.textSecondary,
     fontSize: 15,
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.title.size,
+    fontWeight: theme.type.title.weight,
   },
 });

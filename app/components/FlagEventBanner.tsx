@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { FlagEventPayload } from '../lib/flagEventPayload';
 import type { NotificationUserAction } from '../lib/notificationActions';
+import { theme } from '../lib/theme';
 
 export interface FlagEventBannerData {
   /** Stable identity for the banner currently being shown — a new value on every arrival is what
@@ -98,49 +99,49 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
   body: {
-    color: '#333',
+    color: theme.colors.textSecondary,
     fontSize: 14,
-    marginTop: 4,
+    marginTop: theme.spacing.xs,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
     elevation: 8,
-    marginHorizontal: 12,
-    marginTop: 8,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    shadowColor: '#000',
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    shadowColor: theme.colors.background,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 10,
   },
   dismissButton: {
     alignItems: 'center',
-    backgroundColor: '#EDEDED',
-    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceRaised,
+    borderRadius: theme.radii.sm,
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: theme.spacing.md,
   },
   dismissButtonText: {
-    color: '#111',
-    fontSize: 15,
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.body.size,
     fontWeight: '600',
   },
   switchButton: {
     alignItems: 'center',
-    backgroundColor: '#111',
-    borderRadius: 8,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.sm,
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: theme.spacing.md,
   },
   switchButtonText: {
-    color: '#fff',
-    fontSize: 15,
+    color: theme.colors.onAccent,
+    fontSize: theme.type.body.size,
     fontWeight: '600',
   },
   title: {
-    color: '#111',
+    color: theme.colors.textPrimary,
     fontSize: 16,
     fontWeight: '700',
   },

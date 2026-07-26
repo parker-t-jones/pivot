@@ -31,6 +31,7 @@ export type SleeperSeasonType = 'pre' | 'regular' | 'post' | 'off';
 export interface SleeperNflState {
   week: number;
   season: string;
+  previous_season: string;
   season_type: SleeperSeasonType;
 }
 

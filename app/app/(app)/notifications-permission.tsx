@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { usePushPermission } from '../../contexts/PushPermissionContext';
+import { theme } from '../../lib/theme';
 
 /**
  * PLAN.md Section 10 onboarding step 5 ("Notifications. Pre-permission screen explaining why
@@ -36,7 +37,7 @@ export default function NotificationsPermissionScreen() {
 
         <Pressable disabled={isRequesting} onPress={onEnable} style={styles.button}>
           {isRequesting ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={theme.colors.onAccent} />
           ) : (
             <Text style={styles.buttonText}>Enable notifications</Text>
           )}
@@ -48,19 +49,20 @@ export default function NotificationsPermissionScreen() {
 
 const styles = StyleSheet.create({
   body: {
-    color: '#444',
-    fontSize: 15,
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.body.size,
+    fontWeight: theme.type.body.weight,
     lineHeight: 21,
   },
   button: {
     alignItems: 'center',
-    backgroundColor: '#111',
-    borderRadius: 8,
-    marginTop: 12,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.sm,
+    marginTop: theme.spacing.md,
     paddingVertical: 14,
   },
   buttonText: {
-    color: '#fff',
+    color: theme.colors.onAccent,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -70,12 +72,14 @@ const styles = StyleSheet.create({
   },
   container: {
     alignItems: 'center',
+    backgroundColor: theme.colors.background,
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.xl,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.title.size,
+    fontWeight: theme.type.title.weight,
   },
 });

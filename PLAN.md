@@ -1143,6 +1143,9 @@ Top to bottom:
 - Mid: "Next game: Thursday 8:20pm ET — your players in it: 2"
 - Bottom: optional content area (v2)
 
+##### State 4a: Offseason variant.
+When the schedule source reports season_type: 'off', State 4 renders an offseason panel instead of "Next game: Thursday": season start date, connected-league status, and a note that lineups sync when leagues renew. Keyed on the GET /games?week= / schedule endpoint's season metadata (Sprint 10).
+
 #### State 5: No setup yet
 
 - Centered prompt: "Connect your fantasy team to get started"
@@ -1303,7 +1306,7 @@ Shipped:
 - Infra hygiene: `pnpm seed:test-user` fixture script, and the `services/dispatcher` → `services/api` `dist/` source-mode fix (TypeScript project references + `tsc -b` — see Known Issues, resolved)
 
 Deferred:
-- Home States 2–4 (live score/countdown) → Sprint 10, alongside a new schedule endpoint (`GET /games?week=`/`GET /games/live`) and the Home WebSocket subscription work
+- Home States 2–4 (live score/countdown) plus the State 4a offseason variant → Sprint 10, alongside a new schedule endpoint (`GET /games?week=`/`GET /games/live`) and the Home WebSocket subscription work
 - Star player grid view → a later sprint, alongside making star players functional in the switching engine's priority scoring (both currently stored/toggleable but not yet visually or functionally "real")
 - Real-world Sunday preseason testing and App Store submission → Sprint 10, pending Apple Developer Program enrollment
 
@@ -1555,6 +1558,16 @@ The recorded choice is authoritative because it reflects what the user is watchi
 **Fix:** once a Lineup tab (or equivalent second primary destination) exists, promote Settings from a modal stack push to a proper tab alongside it, and remove the Home header button in favor of the tab bar.
 
 **Impact if unfixed:** none functionally — modal presentation is a reasonable pattern for a single-destination app; it just isn't the tab-based IA a two-tab (or more) app would eventually want.
+
+### Offseason-connected Sleeper leagues go stale on renewal (pre-Sprint-10 discovery) — fix in Sprint 10 or v1.5
+
+**Symptom:** A Sleeper league connected during the offseason is pinned to the prior season's `league_id` and will silently never receive current-season lineups once the new season begins.
+
+**Root cause:** The `/sleeper/leagues` previous-season fallback (added pre-Sprint-10, `services/api/src/routes/sleeper.ts`) lets users discover and connect leagues in the offseason by returning the prior season's leagues when the current season is empty. But Sleeper issues a *new* `league_id` when a league renews for the new season — the prior-season league object is a different record, not the same league at an earlier point in time. `resolveLeagueConnection` (`services/api/src/providers/sleeper-provider.ts`) stores `seasonYear: Number(league.season)`, so the connection is permanently bound to the stale season and ID.
+
+**Fix (Sprint 10 or v1.5):** on a season transition (`season_type` → `'pre'`/`'regular'`), detect leagues whose stored `season_year` is behind the current NFL state and either (a) prompt the user to reconnect, or (b) auto-re-resolve via the user's Sleeper `user_id`, which is stable across seasons — `leagues` already stores `external_owner_id` (Sprint 3), so re-resolving by owner rather than league ID is viable without re-prompting for a username.
+
+**Impact if unfixed:** Every league connected between now and the new-season renewal window becomes stale in August and requires a manual disconnect/reconnect. Couples with the offseason sync bug above — both stem from offseason state being second-class, and a `season_year`-behind-current-state check could serve both fixes.
 
 ---
 

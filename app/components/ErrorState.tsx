@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { theme } from '../lib/theme';
+
 interface ErrorStateProps {
   message: string;
   onRetry?: () => void;
@@ -24,23 +26,23 @@ export function ErrorState({ message, onRetry, retryLabel = 'Retry' }: ErrorStat
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: '#1f6feb',
-    borderRadius: 8,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.sm,
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 15,
+    color: theme.colors.onAccent,
+    fontSize: theme.type.body.size,
     fontWeight: '600',
   },
   container: {
     alignItems: 'center',
-    gap: 12,
+    gap: theme.spacing.md,
     paddingVertical: 40,
   },
   message: {
-    color: '#ff6b6b',
+    color: theme.colors.danger,
     fontSize: 14,
     textAlign: 'center',
   },
