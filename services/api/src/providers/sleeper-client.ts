@@ -18,6 +18,9 @@ export interface SleeperLeague {
 export interface SleeperRoster {
   roster_id: number;
   owner_id: string | null;
+  /** Present on `/rosters` — same shape as matchup starters/players; used for offseason fallback. */
+  starters: string[];
+  players: string[];
 }
 
 export interface SleeperMatchup {
