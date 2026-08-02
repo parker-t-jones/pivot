@@ -1144,7 +1144,10 @@ Top to bottom:
 - Bottom: optional content area (v2)
 
 ##### State 4a: Offseason variant.
-When the schedule source reports season_type: 'off', State 4 renders an offseason panel instead of "Next game: Thursday": season start date, connected-league status, and a note that lineups sync when leagues renew. Keyed on the GET /games?week= / schedule endpoint's season metadata (Sprint 10).
+When the schedule source reports season_type: 'off', State 4 renders an offseason panel instead of "Next game: Thursday": season start date, connected-league status, and a note that lineups sync when leagues renew. Keyed on the GET /games?week= / schedule endpoint's season metadata (Sprint 10). NOTE for Section 11 /
+   Sprint 10 scope: the new schedule endpoints must expose season_type so this
+   variant and the Home idle state can distinguish offseason from an in-season
+   off-day.
 
 #### State 5: No setup yet
 
@@ -1568,6 +1571,14 @@ The recorded choice is authoritative because it reflects what the user is watchi
 **Fix (Sprint 10 or v1.5):** on a season transition (`season_type` → `'pre'`/`'regular'`), detect leagues whose stored `season_year` is behind the current NFL state and either (a) prompt the user to reconnect, or (b) auto-re-resolve via the user's Sleeper `user_id`, which is stable across seasons — `leagues` already stores `external_owner_id` (Sprint 3), so re-resolving by owner rather than league ID is viable without re-prompting for a username.
 
 **Impact if unfixed:** Every league connected between now and the new-season renewal window becomes stale in August and requires a manual disconnect/reconnect. Couples with the offseason sync bug above — both stem from offseason state being second-class, and a `season_year`-behind-current-state check could serve both fixes.
+
+ ### App had competing accent colors and unthemed auth screens — RESOLVED (pre-Sprint-10, Phases 2a/2b)
+ 
+ **Symptom:** The (auth) screens rendered on a white background with dark text while the (app) screens were hand-rolled dark mode, causing a jarring white flash on sign-in → Home. Three different blues (#1f6feb, #5aa2ff, #0A66FF) were all used as "the" accent across 20 files, with no shared theme layer.
+ 
+ **Root cause:** No design-token module existed; each screen hardcoded its own hex literals (~134 across the app).
+ 
+ **Fix (RESOLVED):** Introduced app/lib/theme.ts — a single dark-only token layer (colors, spacing, radii, type scale) with one amber accent (#FFB020) that no NFL team owns as a primary. Migrated every (auth), (app), component, and context file onto the tokens; the only remaining hex literals are team colors flowing from server data. Auth screens now share the dark base (no white flash) and the type scale is honest across all screens.
 
 ---
 

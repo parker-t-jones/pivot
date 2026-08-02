@@ -104,22 +104,70 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
     async (request, reply) => {
       const { sleeper_username, league_id } = request.body;
       const connection = await sleeperProvider.resolveLeagueConnection(sleeper_username, league_id);
+      const userId = requireUser(request).id;
 
-      const { data: league, error } = await fastify.supabase
+      // Select-then-update/insert — not upsert/onConflict. The uniqueness backstop is a
+      // *partial* unique index (WHERE external_league_id IS NOT NULL), which Postgres cannot
+      // match via supabase-js's column-only onConflict string (42P10).
+      const { data: existing, error: existingError } = await fastify.supabase
         .from('leagues')
-        .insert({
-          user_id: requireUser(request).id,
-          platform: 'sleeper',
-          external_league_id: connection.externalLeagueId,
-          external_owner_id: connection.externalOwnerId,
-          external_roster_id: connection.externalRosterId,
-          name: connection.name,
-          sport: 'nfl',
-          season_year: connection.seasonYear,
-        })
         .select('*')
-        .single();
-      if (error) throw error;
+        .eq('user_id', userId)
+        .eq('platform', 'sleeper')
+        .eq('external_league_id', connection.externalLeagueId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      let league = existing;
+      if (league) {
+        const { data: updated, error: updateError } = await fastify.supabase
+          .from('leagues')
+          .update({
+            name: connection.name,
+            season_year: connection.seasonYear,
+            external_owner_id: connection.externalOwnerId,
+            external_roster_id: connection.externalRosterId,
+          })
+          .eq('id', league.id)
+          .select('*')
+          .single();
+        if (updateError) throw updateError;
+        league = updated;
+      } else {
+        const { data: inserted, error: insertError } = await fastify.supabase
+          .from('leagues')
+          .insert({
+            user_id: userId,
+            platform: 'sleeper',
+            external_league_id: connection.externalLeagueId,
+            external_owner_id: connection.externalOwnerId,
+            external_roster_id: connection.externalRosterId,
+            name: connection.name,
+            sport: 'nfl',
+            season_year: connection.seasonYear,
+          })
+          .select('*')
+          .single();
+
+        if (insertError) {
+          // Race: concurrent connect slipped past the SELECT and hit the partial unique index.
+          if (insertError.code === '23505') {
+            const { data: raced, error: racedError } = await fastify.supabase
+              .from('leagues')
+              .select('*')
+              .eq('user_id', userId)
+              .eq('platform', 'sleeper')
+              .eq('external_league_id', connection.externalLeagueId)
+              .single();
+            if (racedError) throw racedError;
+            league = raced;
+          } else {
+            throw insertError;
+          }
+        } else {
+          league = inserted;
+        }
+      }
 
       // Best-effort initial sync — connect should succeed even if the current week has no
       // matchup data yet (e.g. before the season starts). The worker/`/sync` retry later.

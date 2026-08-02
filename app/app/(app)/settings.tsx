@@ -170,6 +170,9 @@ export default function SettingsScreen() {
         }}
         onDisconnect={async (leagueId) => {
           await disconnectLeague(leagueId);
+          // Drop the row locally so the list updates even if a subsequent refetch is slow;
+          // load() remains the source of truth for me/lineups after disconnect.
+          setLeagues((current) => current.filter((league) => league.league_id !== leagueId));
           await load();
         }}
       />

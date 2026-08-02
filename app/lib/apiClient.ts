@@ -22,6 +22,19 @@ interface RequestOptions {
   body?: unknown;
 }
 
+function throwIfErrorResponse(status: number, parsedBody: unknown): void {
+  const errorBody =
+    parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody
+      ? (parsedBody as { error: { code?: string; message?: string; details?: unknown } }).error
+      : null;
+  throw new ApiRequestError(
+    status,
+    errorBody?.code ?? 'unknown_error',
+    errorBody?.message ?? `Request failed with status ${status}.`,
+    errorBody?.details,
+  );
+}
+
 /**
  * Sprint 6 Phase 5 — the one place every authenticated request goes through, per decision #1
  * ("do not scatter fetch calls with manual header construction"). Reads the JWT fresh from the
@@ -50,20 +63,35 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
+  // 204/205 must not be JSON-parsed — empty bodies (and RN quirks around reading them) previously
+  // surfaced disconnect/delete as false failures even when the server succeeded.
+  if (response.status === 204 || response.status === 205) {
+    if (!response.ok) {
+      throwIfErrorResponse(response.status, null);
+    }
+    return undefined as T;
+  }
+
   const rawBody = await response.text();
-  const parsedBody: unknown = rawBody.length > 0 ? JSON.parse(rawBody) : null;
+  const trimmed = rawBody.trim();
+  let parsedBody: unknown = null;
+  if (trimmed.length > 0) {
+    try {
+      parsedBody = JSON.parse(trimmed) as unknown;
+    } catch {
+      if (!response.ok) {
+        throwIfErrorResponse(response.status, null);
+      }
+      throw new ApiRequestError(
+        response.status,
+        'invalid_json',
+        'Response was not valid JSON.',
+      );
+    }
+  }
 
   if (!response.ok) {
-    const errorBody =
-      parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody
-        ? (parsedBody as { error: { code?: string; message?: string; details?: unknown } }).error
-        : null;
-    throw new ApiRequestError(
-      response.status,
-      errorBody?.code ?? 'unknown_error',
-      errorBody?.message ?? `Request failed with status ${response.status}.`,
-      errorBody?.details,
-    );
+    throwIfErrorResponse(response.status, parsedBody);
   }
 
   return parsedBody as T;
