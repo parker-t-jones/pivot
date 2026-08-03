@@ -12,6 +12,7 @@ import { IdleHomeCard } from '../../components/IdleHomeCard';
 import { LoadingState } from '../../components/LoadingState';
 import { NowActiveCard } from '../../components/NowActiveCard';
 import { useSwitching } from '../../contexts/SwitchingContext';
+import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
 import { ApiRequestError, apiClient } from '../../lib/apiClient';
 import type { FlagEventPayload } from '../../lib/flagEventPayload';
 import {
@@ -40,7 +41,6 @@ import {
 import {
   buildPlayerTeamMap,
   fetchAllLineups,
-  fetchLeagues,
   type LeagueSummary,
   type LineupResponse,
 } from '../../lib/leagues';
@@ -112,6 +112,12 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { switchToGame } = useSwitching();
+  const {
+    status: leaguesStatus,
+    leagues,
+    leaguesRevision,
+    refreshLeagues,
+  } = useLeaguesGate();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -176,18 +182,17 @@ export default function HomeScreen() {
 
   /**
    * Section 10 Home cold-start (Sprint 10 Phase 2). Order matters:
-   * 1. leagues → State 5 short-circuit
+   * 1. leagues from LeaguesGateContext (single SoT) → State 5 short-circuit
    * 2. GET /state/nfl → display_phase branch (off/pre idle vs regular/post live machine)
    * 3. off/pre: skip /games and /flags/current entirely
    * 4. regular/post: flags + live + week schedule → States 1–4
    *
-   * Phase 3: WebSocket deltas update State 1 in place; this path stays initial/refresh + reconcile.
+   * Re-runs when `leaguesRevision` changes (connect / disconnect) — does not re-fetch `/leagues`.
    */
-  const loadHome = useCallback(async () => {
+  const loadHome = useCallback(async (leagueRows: LeagueSummary[]) => {
     setLoadError(null);
     try {
-      const leagues: LeagueSummary[] = await fetchLeagues();
-      if (leagues.length === 0) {
+      if (leagueRows.length === 0) {
         setHomeData(
           emptyHome({
             hasLeagues: false,
@@ -212,7 +217,7 @@ export default function HomeScreen() {
         setHomeData(
           emptyHome({
             hasLeagues: true,
-            leagueCount: leagues.length,
+            leagueCount: leagueRows.length,
             nflState,
             branch: idleBranch,
           }),
@@ -221,7 +226,7 @@ export default function HomeScreen() {
       }
 
       const [lineups, flagsResponse, liveResponse, weekResponse] = await Promise.all([
-        fetchAllLineups(leagues),
+        fetchAllLineups(leagueRows),
         apiClient.get<FlagsCurrentResponse>('/flags/current'),
         fetchGamesLive(),
         fetchGamesWeek(nflState.week),
@@ -266,7 +271,7 @@ export default function HomeScreen() {
 
       setHomeData({
         hasLeagues: true,
-        leagueCount: leagues.length,
+        leagueCount: leagueRows.length,
         nflState,
         branch,
         playerTeamMap,
@@ -289,21 +294,31 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
+    if (leaguesStatus !== 'ready') {
+      return;
+    }
     let active = true;
     setIsLoading(true);
-    void loadHome().finally(() => {
+    void loadHome(leagues).finally(() => {
       if (active) setIsLoading(false);
     });
     return () => {
       active = false;
     };
-  }, [loadHome]);
+    // leaguesRevision is the intentional invalidation signal when the shared list changes.
+  }, [leaguesStatus, leaguesRevision, leagues, loadHome]);
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await loadHome();
-    setIsRefreshing(false);
-  }, [loadHome]);
+    try {
+      const rows = await refreshLeagues();
+      await loadHome(rows);
+    } catch {
+      // refreshLeagues sets gate error; loadHome may also set loadError
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refreshLeagues, loadHome]);
 
   const onSwitch = useCallback(() => {
     if (!homeData?.flag) return;

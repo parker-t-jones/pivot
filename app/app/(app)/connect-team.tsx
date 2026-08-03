@@ -38,15 +38,16 @@ export default function ConnectTeamScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ provider?: string; onboarding?: string }>();
-  const { deferConnect, notifyLeagueConnected } = useLeaguesGate();
+  const { deferConnect, refreshLeagues } = useLeaguesGate();
   const [mode, setMode] = useState<Mode>(
     params.provider === 'sleeper' || params.provider === 'manual' ? params.provider : 'choose',
   );
 
   const onboarding = params.onboarding === '1';
 
-  const onConnected = () => {
-    notifyLeagueConnected();
+  const onConnected = async () => {
+    // Await server list before navigate — no optimistic count bump (avoids count/list divergence).
+    await refreshLeagues();
     navigateAfterConnect(router, { onboarding });
   };
 
@@ -96,7 +97,7 @@ function ChooseProvider({ onChoose }: { onChoose: (mode: Mode) => void }) {
   );
 }
 
-function ConnectSleeper({ onConnected }: { onConnected: () => void }) {
+function ConnectSleeper({ onConnected }: { onConnected: () => void | Promise<void> }) {
   const [username, setUsername] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [leagues, setLeagues] = useState<SleeperLeagueOption[] | null>(null);
@@ -128,7 +129,7 @@ function ConnectSleeper({ onConnected }: { onConnected: () => void }) {
     setErrorMessage(null);
     try {
       await connectSleeperLeague(username.trim(), league.league_id);
-      onConnected();
+      await onConnected();
     } catch (error) {
       setErrorMessage(error instanceof ApiRequestError ? error.message : 'Could not connect league.');
       setConnectingLeagueId(null);
@@ -187,7 +188,7 @@ function ConnectSleeper({ onConnected }: { onConnected: () => void }) {
   );
 }
 
-function ConnectManual({ onConnected }: { onConnected: () => void }) {
+function ConnectManual({ onConnected }: { onConnected: () => void | Promise<void> }) {
   const [name, setName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -223,7 +224,7 @@ function ConnectManual({ onConnected }: { onConnected: () => void }) {
           position_in_lineup: player.position,
         })),
       });
-      onConnected();
+      await onConnected();
     } catch (error) {
       setErrorMessage(error instanceof ApiRequestError ? error.message : 'Could not save lineup.');
     } finally {

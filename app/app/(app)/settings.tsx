@@ -16,13 +16,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
+import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
 import { useSession } from '../../contexts/SessionContext';
 import { ApiRequestError } from '../../lib/apiClient';
 import { scheduleTestFlagNotificationAsync } from '../../lib/devNotifications';
 import {
   disconnectLeague,
   fetchAllLineups,
-  fetchLeagues,
   setStarPlayer,
   syncLeague,
   type LeagueSummary,
@@ -53,22 +53,21 @@ const NOTIFICATION_MODES: { value: MeResponse['preferences']['notificationMode']
 export default function SettingsScreen() {
   const router = useRouter();
   const { user } = useSession();
+  const { leagues, leaguesRevision, refreshLeagues, deferConnect } = useLeaguesGate();
 
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
-  const [leagues, setLeagues] = useState<LeagueSummary[]>([]);
   const [lineups, setLineups] = useState<LineupResponse[]>([]);
 
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (leagueRows: LeagueSummary[]) => {
     setLoadError(null);
     try {
-      const [meResponse, leagueRows] = await Promise.all([fetchMe(), fetchLeagues()]);
+      const meResponse = await fetchMe();
       setMe(meResponse);
-      setLeagues(leagueRows);
       setLineups(await fetchAllLineups(leagueRows));
     } catch (error) {
       setLoadError(error instanceof ApiRequestError ? error.message : 'Could not load settings.');
@@ -77,8 +76,10 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     setIsLoading(true);
-    void load().finally(() => setIsLoading(false));
-  }, [load]);
+    void load(leagues).finally(() => setIsLoading(false));
+    // Intentionally keyed on leaguesRevision — leagues from this render match that revision.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- leagues paired with revision
+  }, [load, leaguesRevision]);
 
   const onSignOut = async () => {
     setIsSigningOut(true);
@@ -126,7 +127,14 @@ export default function SettingsScreen() {
     return (
       <View style={styles.screen}>
         <SettingsHeader onBack={() => router.back()} />
-        <ErrorState message={loadError ?? 'Could not load settings.'} onRetry={load} />
+        <ErrorState
+          message={loadError ?? 'Could not load settings.'}
+          onRetry={() => {
+            void refreshLeagues()
+              .then((rows) => load(rows))
+              .catch(() => undefined);
+          }}
+        />
       </View>
     );
   }
@@ -167,18 +175,26 @@ export default function SettingsScreen() {
         onConnectAnother={() => router.push('/(app)/connect-team')}
         onSync={async (leagueId) => {
           await syncLeague(leagueId);
-          await load();
+          const rows = await refreshLeagues();
+          await load(rows);
         }}
         onDisconnect={async (leagueId) => {
           await disconnectLeague(leagueId);
-          // Drop the row locally so the list updates even if a subsequent refetch is slow;
-          // load() remains the source of truth for me/lineups after disconnect.
-          setLeagues((current) => current.filter((league) => league.league_id !== leagueId));
-          await load();
+          const rows = await refreshLeagues();
+          // Last league removed: land on Home State 5, do not immediately force connect-team.
+          if (rows.length === 0) {
+            deferConnect();
+          }
+          await load(rows);
         }}
       />
 
-      <StarPlayersSection lineups={lineups} onToggleStar={load} />
+      <StarPlayersSection
+        lineups={lineups}
+        onToggleStar={async () => {
+          await load(leagues);
+        }}
+      />
 
       <AboutSection />
     </ScrollView>

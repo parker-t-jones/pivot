@@ -1,7 +1,9 @@
 /**
- * Sprint 10 Phase 4 — server-truth league count + session-scoped connectDeferred for the zero-leagues gate.
- * Deferred is backed by `connectDeferredSession` (sync + survives provider remount); React state
- * mirrors it so consumers re-render.
+ * Sprint 10 Phase 4+ — single owner of `GET /leagues` for the app group.
+ * Home and Settings consume this list; they must not keep a competing copy.
+ *
+ * `leagueCount` is always `leagues.length` — never updated independently (no optimistic count bump).
+ * `leaguesRevision` bumps on every successful refresh so Home can reload its rich display pipeline.
  */
 import {
   createContext,
@@ -18,55 +20,63 @@ import {
   deferConnectForSession,
   isConnectDeferredForSession,
 } from '../lib/connectDeferredSession';
-import { fetchLeagues } from '../lib/leagues';
+import { fetchLeagues, type LeagueSummary } from '../lib/leagues';
 import type { LeaguesLoadStatus } from '../lib/navigationGates';
 
 interface LeaguesGateContextValue {
   status: LeaguesLoadStatus;
+  /** Server list — single source of truth. */
+  leagues: LeagueSummary[];
+  /** Always `leagues.length`. */
   leagueCount: number;
+  /** Increments on every successful refresh — Home reloads when this changes. */
+  leaguesRevision: number;
   errorMessage: string | null;
-  /**
-   * Always reads the session module (sync truth), not a possibly-stale render snapshot alone.
-   * `deferConnect` also bumps React state so subscribers re-render.
-   */
   connectDeferred: boolean;
   deferConnect: () => void;
-  /** Re-fetch `/leagues`. Safe during retry: sets status to `checking` so gates wait (no mid-flight redirect). */
-  refreshLeagues: () => Promise<void>;
-  /** After a successful connect — bump count optimistically and clear deferred before navigating. */
-  notifyLeagueConnected: () => void;
+  /**
+   * Re-fetch `/leagues`, replace list+count together, bump revision.
+   * Sets status to `checking` while in flight so gates wait (no mid-flight redirect).
+   * Returns the fresh list so callers can await before navigate / lineup loads.
+   */
+  refreshLeagues: () => Promise<LeagueSummary[]>;
 }
 
 const LeaguesGateContext = createContext<LeaguesGateContextValue | undefined>(undefined);
 
 export function LeaguesGateProvider({ children }: PropsWithChildren) {
   const [status, setStatus] = useState<LeaguesLoadStatus>('checking');
-  const [leagueCount, setLeagueCount] = useState(0);
+  const [leagues, setLeagues] = useState<LeagueSummary[]>([]);
+  const [leaguesRevision, setLeaguesRevision] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  /** Mirror tick — forces re-render after defer/clear; gate reads `isConnectDeferredForSession()`. */
   const [deferredEpoch, setDeferredEpoch] = useState(0);
 
-  const refreshLeagues = useCallback(async () => {
+  const refreshLeagues = useCallback(async (): Promise<LeagueSummary[]> => {
     setStatus('checking');
     setErrorMessage(null);
     try {
-      const leagues = await fetchLeagues();
-      setLeagueCount(leagues.length);
-      if (leagues.length > 0) {
+      const next = await fetchLeagues();
+      setLeagues(next);
+      setLeaguesRevision((n) => n + 1);
+      if (next.length > 0) {
         clearConnectDeferredForSession();
         setDeferredEpoch((n) => n + 1);
       }
       setStatus('ready');
+      return next;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Could not load your leagues.';
       setErrorMessage(message);
       setStatus('error');
+      throw error instanceof Error ? error : new Error(message);
     }
   }, []);
 
   useEffect(() => {
-    void refreshLeagues();
+    void refreshLeagues().catch(() => {
+      // status/error already set inside refreshLeagues
+    });
   }, [refreshLeagues]);
 
   const deferConnect = useCallback(() => {
@@ -74,35 +84,30 @@ export function LeaguesGateProvider({ children }: PropsWithChildren) {
     setDeferredEpoch((n) => n + 1);
   }, []);
 
-  const notifyLeagueConnected = useCallback(() => {
-    clearConnectDeferredForSession();
-    setLeagueCount((count) => Math.max(count, 1));
-    setDeferredEpoch((n) => n + 1);
-    setStatus('ready');
-    setErrorMessage(null);
-  }, []);
-
   const connectDeferred = isConnectDeferredForSession();
+  const leagueCount = leagues.length;
 
   const value = useMemo<LeaguesGateContextValue>(
     () => ({
       status,
+      leagues,
       leagueCount,
+      leaguesRevision,
       errorMessage,
       connectDeferred,
       deferConnect,
       refreshLeagues,
-      notifyLeagueConnected,
     }),
     [
       status,
+      leagues,
       leagueCount,
+      leaguesRevision,
       errorMessage,
       connectDeferred,
       deferredEpoch,
       deferConnect,
       refreshLeagues,
-      notifyLeagueConnected,
     ],
   );
 
