@@ -5,6 +5,12 @@ export interface NflState {
   season: string;
   week: number;
   seasonType: 'pre' | 'regular' | 'post' | 'off';
+  /**
+   * ISO date `YYYY-MM-DD` from Sleeper when present. Phase-relative (preseason opener during
+   * `'pre'`, often null during `'off'`) — NOT the regular-season opener. Passed through on
+   * `GET /state/nfl`; State 4a must not assert a season-start claim from it (see PLAN Known Issues).
+   */
+  seasonStartDate: string | null;
 }
 
 /**

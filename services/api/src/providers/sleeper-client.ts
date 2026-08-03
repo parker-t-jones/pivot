@@ -36,6 +36,8 @@ export interface SleeperNflState {
   season: string;
   previous_season: string;
   season_type: SleeperSeasonType;
+  /** Present when Sleeper publishes it; often missing/unreliable in the offseason. */
+  season_start_date?: string | null;
 }
 
 async function getJson<T>(path: string): Promise<T> {

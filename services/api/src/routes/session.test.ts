@@ -134,7 +134,10 @@ interface TestApp {
 
 async function buildTestApp(gameIds: string[] = []): Promise<TestApp> {
   const lineupCache = new InMemoryLineupCache();
-  await lineupCache.setNflState({ season: '2026', week: WEEK, seasonType: 'regular' }, 300);
+  await lineupCache.setNflState(
+    { season: '2026', week: WEEK, seasonType: 'regular', seasonStartDate: null },
+    300,
+  );
   const gameStateStore = new InMemoryGameStateStore();
 
   const fastify = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();

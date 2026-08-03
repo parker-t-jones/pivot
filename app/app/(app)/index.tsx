@@ -5,17 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
+import { HomeLiveIdleCard } from '../../components/HomeLiveIdleCard';
+import { HomeOffDayCard } from '../../components/HomeOffDayCard';
+import { HomePregameCard } from '../../components/HomePregameCard';
+import { IdleHomeCard } from '../../components/IdleHomeCard';
 import { LoadingState } from '../../components/LoadingState';
 import { NowActiveCard } from '../../components/NowActiveCard';
-import { IdleHomeCard } from '../../components/IdleHomeCard';
 import { useSwitching } from '../../contexts/SwitchingContext';
 import { ApiRequestError, apiClient } from '../../lib/apiClient';
-import {
-  buildPlayerTeamMap,
-  fetchAllLineups,
-  fetchLeagues,
-  type LeagueSummary,
-} from '../../lib/leagues';
 import {
   pickPreferredBroadcast,
   type CurrentFlag,
@@ -23,24 +20,67 @@ import {
   type GameBroadcast,
   type GameBroadcastsResponse,
 } from '../../lib/gameDisplay';
+import {
+  countStakePlayersInGame,
+  filterLiveStakeGames,
+  findNextStakeGame,
+  groupLineupByGame,
+  nextStakeKickoff,
+  resolveHomeBranch,
+  stakeTeamAbbreviations,
+  type HomeBranch,
+  type LineupGameGroup,
+} from '../../lib/homeState';
+import {
+  buildPlayerTeamMap,
+  fetchAllLineups,
+  fetchLeagues,
+  type LeagueSummary,
+  type LineupResponse,
+} from '../../lib/leagues';
+import { fetchNflState, type NflStateResponse } from '../../lib/nflState';
+import { fetchGamesLive, fetchGamesWeek, type LiveGame, type ScheduleGame } from '../../lib/schedule';
 import { resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../../lib/teamDisplay';
 import { theme } from '../../lib/theme';
 
 interface HomeData {
-  /** Sprint 9 Phase 2 — Home State 5: no leagues connected yet. Checked before anything else, since
-   *  an empty lineup means `/flags/current` can never return anything for this user (see `flags.ts`'s
-   *  own early return on an empty lineup cache) — no point fetching it. */
   hasLeagues: boolean;
-  lineupPlayerCount: number;
+  leagueCount: number;
+  nflState: NflStateResponse | null;
+  branch: HomeBranch;
   playerTeamMap: PlayerTeamMap;
+  lineups: LineupResponse[];
   flag: CurrentFlag | null;
   broadcast: GameBroadcast | null;
-  /** Full ranked list (not just the preferred pick) — handed to `switchToGame` so the Section 10
-   *  deep-link error state's alternate-broadcast picker doesn't need to refetch it. */
   broadcasts: GameBroadcast[];
+  liveStakeGames: LiveGame[];
+  weekGames: ScheduleGame[];
+  lineupGroups: LineupGameGroup[];
+  nextGame: ScheduleGame | null;
+  nextGamePlayerCount: number;
+  countdownMs: number;
 }
 
 const EMPTY_TEAM_MAP: PlayerTeamMap = new Map();
+
+function emptyHome(partial: Partial<HomeData> & Pick<HomeData, 'hasLeagues' | 'branch'>): HomeData {
+  return {
+    leagueCount: 0,
+    nflState: null,
+    playerTeamMap: EMPTY_TEAM_MAP,
+    lineups: [],
+    flag: null,
+    broadcast: null,
+    broadcasts: [],
+    liveStakeGames: [],
+    weekGames: [],
+    lineupGroups: [],
+    nextGame: null,
+    nextGamePlayerCount: 0,
+    countdownMs: 0,
+    ...partial,
+  };
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -53,37 +93,74 @@ export default function HomeScreen() {
   const [homeData, setHomeData] = useState<HomeData | null>(null);
 
   /**
-   * Section 10 Home states 1/5/"idle" data path (see report for why states 2–4's live-score/
-   * kickoff-countdown fidelity is deliberately out of scope this phase — no `GET /games?week=` or
-   * `GET /games/live` endpoint exists to back them). `/flags/current` gives the top-priority flagged
-   * game; `GET /leagues` + `GET /leagues/:id/lineup` give State 5's "do you have a team connected"
-   * check and the player->team map the reason chip / color flash need (Sprint 9 Phase 2 — see
-   * `teamDisplay.ts`). All cold-start reads — live deltas over WebSocket are a later concern (no
-   * client socket yet).
+   * Section 10 Home cold-start (Sprint 10 Phase 2). Order matters:
+   * 1. leagues → State 5 short-circuit
+   * 2. GET /state/nfl → season_type branch (off/pre idle vs regular/post live machine)
+   * 3. off/pre: skip /games and /flags/current entirely
+   * 4. regular/post: flags + live + week schedule → States 1–4
+   *
+   * Phase 3 seam: a WebSocket `flag_event` subscription will update State 1/2 in place; this path
+   * stays the initial/refresh read only — do not build the WS client here.
    */
   const loadHome = useCallback(async () => {
     setLoadError(null);
     try {
       const leagues: LeagueSummary[] = await fetchLeagues();
       if (leagues.length === 0) {
-        setHomeData({
-          hasLeagues: false,
-          lineupPlayerCount: 0,
-          playerTeamMap: EMPTY_TEAM_MAP,
-          flag: null,
-          broadcast: null,
-          broadcasts: [],
-        });
+        setHomeData(
+          emptyHome({
+            hasLeagues: false,
+            branch: { branch: 'no_leagues' },
+          }),
+        );
         return;
       }
 
-      const lineups = await fetchAllLineups(leagues);
-      const playerTeamMap = buildPlayerTeamMap(lineups);
-      const lineupPlayerCount = new Set(lineups.flatMap((l) => l.slots.map((s) => s.player.player_id)))
-        .size;
+      // FIRST calendar call — decides the season_type branch before any games/flags fetch.
+      const nflState = await fetchNflState();
+      const idleBranch = resolveHomeBranch({
+        hasLeagues: true,
+        seasonType: nflState.season_type,
+        hasFlags: false,
+        hasLiveStakeGames: false,
+        nextStakeKickoff: null,
+        now: new Date(),
+      });
 
-      const { flags } = await apiClient.get<FlagsCurrentResponse>('/flags/current');
-      const topFlag = flags[0] ?? null;
+      if (idleBranch.branch === 'season_idle') {
+        setHomeData(
+          emptyHome({
+            hasLeagues: true,
+            leagueCount: leagues.length,
+            nflState,
+            branch: idleBranch,
+          }),
+        );
+        return;
+      }
+
+      const [lineups, flagsResponse, liveResponse, weekResponse] = await Promise.all([
+        fetchAllLineups(leagues),
+        apiClient.get<FlagsCurrentResponse>('/flags/current'),
+        fetchGamesLive(),
+        fetchGamesWeek(nflState.week),
+      ]);
+
+      const playerTeamMap = buildPlayerTeamMap(lineups);
+      const stakeTeams = stakeTeamAbbreviations(playerTeamMap);
+      const topFlag = flagsResponse.flags[0] ?? null;
+      const liveStakeGames = filterLiveStakeGames(liveResponse.games, stakeTeams);
+      const weekGames = weekResponse.games;
+      const now = new Date();
+      const kickoff = nextStakeKickoff(weekGames, stakeTeams, now);
+      const branch = resolveHomeBranch({
+        hasLeagues: true,
+        seasonType: nflState.season_type,
+        hasFlags: topFlag !== null,
+        hasLiveStakeGames: liveStakeGames.length > 0,
+        nextStakeKickoff: kickoff,
+        now,
+      });
 
       let broadcast: GameBroadcast | null = null;
       let broadcasts: GameBroadcast[] = [];
@@ -95,19 +172,33 @@ export default function HomeScreen() {
           broadcasts = response.broadcasts;
           broadcast = pickPreferredBroadcast(broadcasts);
         } catch (error) {
-          // A broadcast-lookup failure shouldn't hide the flagged game — render the card with a
-          // disabled CTA (Section 10 graceful degradation) rather than an error screen.
           console.warn('[home] failed to load broadcasts', error);
         }
       }
 
+      const nextGame = findNextStakeGame(weekGames, stakeTeams, now);
+      const nextGamePlayerCount = nextGame
+        ? countStakePlayersInGame(lineups, nextGame.home_team, nextGame.away_team)
+        : 0;
+      const lineupGroups = groupLineupByGame(weekGames, lineups, stakeTeams);
+      const countdownMs = kickoff ? Math.max(0, kickoff.getTime() - now.getTime()) : 0;
+
       setHomeData({
         hasLeagues: true,
-        lineupPlayerCount,
+        leagueCount: leagues.length,
+        nflState,
+        branch,
         playerTeamMap,
+        lineups,
         flag: topFlag,
         broadcast,
         broadcasts,
+        liveStakeGames,
+        weekGames,
+        lineupGroups,
+        nextGame,
+        nextGamePlayerCount,
+        countdownMs,
       });
     } catch (error) {
       const message =
@@ -136,7 +227,11 @@ export default function HomeScreen() {
   const onSwitch = useCallback(() => {
     if (!homeData?.flag) return;
     const { flag, broadcast } = homeData;
-    const flaggedTeam = resolveFlaggedTeamDisplay(flag.game, flag.flagged_players, homeData.playerTeamMap);
+    const flaggedTeam = resolveFlaggedTeamDisplay(
+      flag.game,
+      flag.flagged_players,
+      homeData.playerTeamMap,
+    );
     switchToGame({
       gameId: flag.game_id,
       deepLinkUrl: broadcast?.deep_link_url ?? null,
@@ -149,13 +244,63 @@ export default function HomeScreen() {
     });
   }, [homeData, switchToGame]);
 
+  function renderBody() {
+    if (!homeData) return null;
+
+    switch (homeData.branch.branch) {
+      case 'no_leagues':
+        return (
+          <EmptyState
+            title="Connect your fantasy team to get started"
+            message="We'll watch every game your players are in and tell you the moment to switch over."
+            primaryAction={{
+              label: 'Connect Sleeper',
+              onPress: () => router.push('/(app)/connect-team?provider=sleeper&onboarding=1'),
+            }}
+            secondaryAction={{
+              label: 'Add manually',
+              onPress: () => router.push('/(app)/connect-team?provider=manual&onboarding=1'),
+            }}
+          />
+        );
+      case 'season_idle':
+        return (
+          <IdleHomeCard
+            variant={homeData.branch.variant}
+            season={homeData.nflState?.season ?? ''}
+            leagueCount={homeData.leagueCount}
+          />
+        );
+      case 'state1':
+        return homeData.flag ? (
+          <NowActiveCard
+            flag={homeData.flag}
+            broadcast={homeData.broadcast}
+            playerTeamMap={homeData.playerTeamMap}
+            onSwitch={onSwitch}
+          />
+        ) : null;
+      case 'state2':
+        return <HomeLiveIdleCard liveGames={homeData.liveStakeGames} />;
+      case 'state3':
+        return (
+          <HomePregameCard countdownMs={homeData.countdownMs} groups={homeData.lineupGroups} />
+        );
+      case 'state4':
+        return (
+          <HomeOffDayCard
+            nextGame={homeData.nextGame}
+            playerCount={homeData.nextGamePlayerCount}
+            week={homeData.nflState?.week ?? 0}
+          />
+        );
+    }
+  }
+
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + theme.spacing.xl },
-      ]}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + theme.spacing.xl }]}
       refreshControl={
         <RefreshControl
           refreshing={isRefreshing}
@@ -180,33 +325,8 @@ export default function HomeScreen() {
         <LoadingState message="Loading…" />
       ) : loadError ? (
         <ErrorState message={loadError} onRetry={onRefresh} />
-      ) : !homeData?.hasLeagues ? (
-        <EmptyState
-          title="Connect your fantasy team to get started"
-          message="We'll watch every game your players are in and tell you the moment to switch over."
-          primaryAction={{
-            label: 'Connect Sleeper',
-            // `onboarding=1` continues into the streaming-services/all-set steps on success —
-            // deliberately unconditional (not just for a *just-signed-up* user) so "connect your
-            // first team" is what triggers the rest of setup, not a timing signal that's fragile to
-            // detect (see report on why this is cleaner than trying to distinguish "just signed up"
-            // from "signed in a while ago but never connected a team").
-            onPress: () => router.push('/(app)/connect-team?provider=sleeper&onboarding=1'),
-          }}
-          secondaryAction={{
-            label: 'Add manually',
-            onPress: () => router.push('/(app)/connect-team?provider=manual&onboarding=1'),
-          }}
-        />
-      ) : homeData.flag ? (
-        <NowActiveCard
-          flag={homeData.flag}
-          broadcast={homeData.broadcast}
-          playerTeamMap={homeData.playerTeamMap}
-          onSwitch={onSwitch}
-        />
       ) : (
-        <IdleHomeCard lineupPlayerCount={homeData.lineupPlayerCount} />
+        renderBody()
       )}
     </ScrollView>
   );

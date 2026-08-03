@@ -57,7 +57,12 @@ describe('InMemoryLineupCache', () => {
   it('expires NFL state after its TTL', async () => {
     vi.useFakeTimers();
     const cache = new InMemoryLineupCache();
-    const state = { season: '2026', week: 5, seasonType: 'regular' as const };
+    const state = {
+      season: '2026',
+      week: 5,
+      seasonType: 'regular' as const,
+      seasonStartDate: null,
+    };
     await cache.setNflState(state, 300);
 
     expect(await cache.getNflState()).toEqual(state);

@@ -67,7 +67,7 @@ NFL streaming rights are fragmented across YouTube/Sunday Ticket, ESPN, CBS, FOX
 Every external boundary in v1 is hidden behind an interface so Phase 2 swaps are local changes:
 
 - `PlaybackSource` interface — `DeepLinkPlaybackSource`, `AirPlayPlaybackSource`, `ChromecastPlaybackSource` in v1; `EmbeddedStreamPlaybackSource` added in Phase 2.
-- `FantasyProvider` interface — `SleeperProvider` and `ManualProvider` in v1; ESPN, Yahoo, NFL Fantasy added later.
+- `FantasyProvider` interface — `SleeperProvider` and `ManualProvider` in v1; ESPN, Yahoo, NFL Fantasy added later (see Section 14 → Multi-platform fantasy for per-provider integration feasibility).
 - `BroadcastResolver` interface — which streaming service is airing a given game.
 
 When new implementations are added, the rest of the codebase doesn't change.
@@ -901,10 +901,89 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 
 | Method | Path | Purpose |
 |---|---|---|
+| `GET` | `/state/nfl` | Current NFL calendar (season / week / season_type) |
 | `GET` | `/games?week={w}` | This week's schedule with broadcasts |
 | `GET` | `/games/:id` | One game with current state |
 | `GET` | `/games/live` | All games in progress |
 | `GET` | `/games/:id/broadcasts` | Broadcast sources filtered by user's app presence |
+
+**`GET /state/nfl` response (Sprint 10):**
+```typescript
+{
+  season: string,                              // e.g. "2026"
+  week: number,                                // 0 when season_type is 'off' (and often 'pre')
+  season_type: 'off' | 'pre' | 'regular' | 'post',
+  season_start_date: string | null             // ISO date "YYYY-MM-DD" from Sleeper when present.
+                                               // Phase-relative metadata (see Known Issues) — not
+                                               // rendered as a regular-season opener in State 4a.
+}
+```
+
+League/NFL-scoped calendar metadata for Home's state machine (especially State 4a). Deliberately
+separate from the `/games` endpoints so Home can short-circuit in the offseason without a games
+fetch. Sourced from Sleeper `/v1/state/nfl` via the existing `getCurrentNflState` cache
+(`current_nfl_state`). Home supplies `week` from this response into `GET /games?week=`.
+
+**`GET /games?week={w}` response (Sprint 10):**
+```typescript
+{
+  week: number,                                // echoed from the required query param
+  games: Array<{
+    game_id: string,
+    status: 'scheduled' | 'in_progress' | 'final' | 'postponed',
+    scheduled_start: string,                   // ISO timestamptz
+    home_team: string,                         // abbreviation
+    away_team: string,
+    home_team_name: string,
+    away_team_name: string,
+    home_team_primary_color: string,           // "" if missing — same convention as game_summary
+    home_team_secondary_color: string,
+    away_team_primary_color: string,
+    away_team_secondary_color: string,
+    broadcasts: Array<{                        // same entry shape as GET /games/:id/broadcasts
+      service: string,
+      deep_link_url: string,
+      requires_subscription: boolean,
+      user_has_subscription: boolean,
+      typical_lag_seconds: number,
+      preferred: boolean
+    }>
+  }>
+}
+```
+
+`week` is required; Home supplies it from `GET /state/nfl`. Schedule catalog only — no live
+score/clock (those live on `GET /games/live`). Broadcasts are ranked via eligibility-first
+`rankBroadcasts` (Section 2 `BroadcastResolver`), with **one** `user_app_presence` load reused
+across the whole slate — not `pickBroadcastSource` (timing / lag-only among subscribed services).
+
+**`GET /games/live` response (Sprint 10):**
+```typescript
+{
+  games: Array<{
+    game_id: string,
+    status: 'in_progress',
+    scheduled_start: string,
+    home_team: string,
+    away_team: string,
+    home_team_name: string,
+    away_team_name: string,
+    home_team_primary_color: string,
+    home_team_secondary_color: string,
+    away_team_primary_color: string,
+    away_team_secondary_color: string,
+    score: { home: number, away: number },
+    quarter: number,
+    time_remaining_sec: number,
+    possession_team: string | null             // abbreviation; null if none — same idea as flag_event
+  }>
+}
+```
+
+DB rows with `status = 'in_progress'` hydrated from Redis `game_state`. **Omit** (do not degrade to
+zeros) any in-progress row with no Redis live-state — a wrong score claim is worse than absence in a
+spoiler-safe app. No `broadcasts` list (use `GET /games/:id/broadcasts` when switching). No
+`season_type` — that lives on `GET /state/nfl`.
 
 **`GET /games/:id/broadcasts` response:**
 ```typescript
@@ -1143,11 +1222,24 @@ Top to bottom:
 - Mid: "Next game: Thursday 8:20pm ET — your players in it: 2"
 - Bottom: optional content area (v2)
 
-##### State 4a: Offseason variant.
-When the schedule source reports season_type: 'off', State 4 renders an offseason panel instead of "Next game: Thursday": season start date, connected-league status, and a note that lineups sync when leagues renew. Keyed on the GET /games?week= / schedule endpoint's season metadata (Sprint 10). NOTE for Section 11 /
-   Sprint 10 scope: the new schedule endpoints must expose season_type so this
-   variant and the Home idle state can distinguish offseason from an in-season
-   off-day.
+##### State 4a: Offseason / preseason idle (three-way season_type branch).
+Home branches on `GET /state/nfl`'s `season_type` — do **not** collapse `'pre'` into `'off'`:
+
+- `'off'` → Offseason panel: phase framing only (e.g. "The season hasn't started yet. We'll start
+  flagging your players when it does."), optional season-year caption, connected-league status.
+  No calendar-date claim; no sync-on-renewal / auto-reconnect promise.
+- `'pre'` → Preseason panel (same panel structure, distinct copy): honest that the app is idle-by-design
+  during preseason — Sleeper provides no preseason lineup and betting stakes are not built (Section 14).
+  Wording like: "Preseason is underway. We'll start flagging your players once the regular season
+  begins." Do **not** interpolate `season_start_date` as a regular-season opener (that field is
+  phase-relative — see Known Issues). Kept as a **distinct** branch from `'off'` so a future stake
+  source (betting slips) can promote `'pre'` into the live state machine without a Home rewrite.
+- `'regular'` | `'post'` → live state machine (States 1–4).
+
+Keyed on `GET /state/nfl` (Sprint 10). For `'off'`/`'pre'`, Home short-circuits — skips `/games` and
+`/flags/current`. `season_start_date` remains on the wire as metadata but is not rendered into 4a
+copy until schedule-derived openers exist.
+
 
 #### State 5: No setup yet
 
@@ -1309,7 +1401,7 @@ Shipped:
 - Infra hygiene: `pnpm seed:test-user` fixture script, and the `services/dispatcher` → `services/api` `dist/` source-mode fix (TypeScript project references + `tsc -b` — see Known Issues, resolved)
 
 Deferred:
-- Home States 2–4 (live score/countdown) plus the State 4a offseason variant → Sprint 10, alongside a new schedule endpoint (`GET /games?week=`/`GET /games/live`) and the Home WebSocket subscription work
+- Home States 2–4 (live score/countdown) plus the State 4a offseason variant → Sprint 10, alongside `GET /state/nfl`, schedule endpoints (`GET /games?week=`/`GET /games/live`), and the Home WebSocket subscription work
 - Star player grid view → a later sprint, alongside making star players functional in the switching engine's priority scoring (both currently stored/toggleable but not yet visually or functionally "real")
 - Real-world Sunday preseason testing and App Store submission → Sprint 10, pending Apple Developer Program enrollment
 
@@ -1526,7 +1618,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Root cause:** States 2–4 need schedule/live-score data — "what's my next game and when," "what's the score of games I'm not flagged in right now" — that no existing endpoint provides. `GET /flags/current` only returns *flagged* games; there is no `GET /games?week=` (schedule) or `GET /games/live` (live scores) endpoint. Building either was out of Sprint 9 Phase 2's client-side scope, and fabricating countdown/score data client-side against a nonexistent endpoint was rejected in favor of shipping something true.
 
-**Fix (Sprint 10):** add a schedule endpoint (`GET /games?week=` and/or `GET /games/live`) — needed anyway for real-world Sunday preseason testing (kickoff times matter for actually exercising the app on Sundays) — and implement Home States 2–4 against it. Naturally clusters with the Home WebSocket subscription work (see "Home screen is not subscribed to the WebSocket flag stream" above), since both land on Home in the same pass.
+**Fix (Sprint 10):** add `GET /state/nfl` (calendar / `season_type` for State 4a) plus schedule endpoints (`GET /games?week=` / `GET /games/live`) — needed anyway for real-world Sunday preseason testing (kickoff times matter for actually exercising the app on Sundays) — and implement Home States 2–4 against them. Naturally clusters with the Home WebSocket subscription work (see "Home screen is not subscribed to the WebSocket flag stream" above), since both land on Home in the same pass.
 
 **Impact if unfixed:** Home has no representation of "upcoming game" or "live but not flagged" state — a user with no current flags sees only their lineup summary, not a countdown or score ticker. No functional impact on the core flag/switch flow, which doesn't depend on these states.
 
@@ -1572,13 +1664,31 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Impact if unfixed:** Every league connected between now and the new-season renewal window becomes stale in August and requires a manual disconnect/reconnect. Couples with the offseason sync bug above — both stem from offseason state being second-class, and a `season_year`-behind-current-state check could serve both fixes.
 
- ### App had competing accent colors and unthemed auth screens — RESOLVED (pre-Sprint-10, Phases 2a/2b)
- 
- **Symptom:** The (auth) screens rendered on a white background with dark text while the (app) screens were hand-rolled dark mode, causing a jarring white flash on sign-in → Home. Three different blues (#1f6feb, #5aa2ff, #0A66FF) were all used as "the" accent across 20 files, with no shared theme layer.
- 
- **Root cause:** No design-token module existed; each screen hardcoded its own hex literals (~134 across the app).
- 
- **Fix (RESOLVED):** Introduced app/lib/theme.ts — a single dark-only token layer (colors, spacing, radii, type scale) with one amber accent (#FFB020) that no NFL team owns as a primary. Migrated every (auth), (app), component, and context file onto the tokens; the only remaining hex literals are team colors flowing from server data. Auth screens now share the dark base (no white flash) and the type scale is honest across all screens.
+### Sleeper `season_start_date` is phase-relative, not the regular-season opener (Sprint 10 Phase 2 discovery)
+
+**Symptom:** State 4a copy asserted the regular season begins on `season_start_date`; during `'pre'` that field returns the **preseason** opener (e.g. 2026-08-06 vs. the actual Sept 9 regular-season start), making the copy false.
+
+**Root cause:** Sleeper's `/state/nfl` `season_start_date` appears to track the current phase (null during `'off'`, preseason opener during `'pre'`), not the regular-season start. Both dates also change annually — nothing can be hardcoded.
+
+**Fix (when Sportradar ingestion lands, Sprint 2 / post-v1):** derive the real preseason and regular-season openers from actual schedule data rather than Sleeper's ambiguous field, then restore precise date copy in the off/pre panels. Until then, panels state the phase without asserting dates. `GET /state/nfl` still passes `season_start_date` through as metadata; Home does not render a regular-season claim from it.
+
+**Impact if unfixed:** users told the wrong "season starts" date during preseason (false product claim). Mitigated in Sprint 10 by removing date interpolation from State 4a copy.
+
+### App had competing accent colors and unthemed auth screens — RESOLVED (pre-Sprint-10, Phases 2a/2b)
+
+**Symptom:** The (auth) screens rendered on a white background with dark text while the (app) screens were hand-rolled dark mode, causing a jarring white flash on sign-in → Home. Three different blues (#1f6feb, #5aa2ff, #0A66FF) were all used as "the" accent across 20 files, with no shared theme layer.
+
+**Root cause:** No design-token module existed; each screen hardcoded its own hex literals (~134 across the app).
+
+**Fix (RESOLVED):** Introduced app/lib/theme.ts — a single dark-only token layer (colors, spacing, radii, type scale) with one amber accent (#FFB020) that no NFL team owns as a primary. Migrated every (auth), (app), component, and context file onto the tokens; the only remaining hex literals are team colors flowing from server data. Auth screens now share the dark base (no white flash) and the type scale is honest across all screens.
+
+### Connecting a league from Settings leaves the Settings screen mounted under Home — defer to Phase 3
+
+**Symptom:** Using "Connect another team" from Settings → connect → on success, the new Home renders on top of a still-mounted Settings screen (previous screen visible at top edge). Cosmetic; resolves on next navigation.
+
+**Root cause:** connect-team's onConnected does router.replace('/(app)'), which swaps only the current (pushed) connect-team screen for Home but does not dismiss the Settings screen beneath it on the stack.
+
+**Fix (Phase 3 navigation restructure):** on connect success, reset navigation to Home as root (dismiss the full Settings→connect stack) rather than replace() the top screen. Belongs with the deferred onboarding/routing work, not a standalone patch.
 
 ---
 
@@ -1591,6 +1701,10 @@ Target: 3 months after v1 ships (mid-season).
 - **Multi-stream split-screen view** (1 + 2 thumbnails on mobile)
 - **Subscription billing** (StoreKit integration, Pro tier)
 - **Multi-league support** (lineup tab gets league selector)
+- **Multi-platform fantasy providers** (Yahoo, ESPN, NFL Fantasy) — see the
+  new "### Multi-platform fantasy" subsection below for the per-provider
+  integration reality; these are NOT equal-difficulty and each is effectively
+  its own sprint, prioritized by v1 user demand.
 - **Auto-switch toggle** (functional in settings)
 - **Star players** (functional in switching engine, not just stored)
 - **Notification batching** (collapse multiple events in 10s window)
@@ -1605,6 +1719,69 @@ Target: 3 months after v1 ships (mid-season).
 - WebSocket message: `flag_batch` for combined events
 - Multi-league lineup cache: `user_lineup_cache:{user_id}:{week}:{league_id}`
 - Push receipt-polling worker + a persisted-ticket-id table (new state, `expo_push_token` cleared on confirmed `DeviceNotRegistered`)
+
+### Multi-platform fantasy
+
+v1 ships Sleeper + manual entry only. Sleeper was chosen first because its API
+is public, keyless, and username-addressable (`/v1/user/{username}/leagues/...`)
+— a new provider like that is trivial behind the existing `FantasyProvider`
+interface (Section 6). The other three platforms are NOT like Sleeper, and are
+listed here in rough order of integration feasibility:
+
+- **Yahoo Fantasy** — official API, but requires full OAuth 2.0 three-legged
+  auth (registered app credentials, per-user token storage + refresh). Real
+  infrastructure, but a sanctioned and stable path. Most likely first addition
+  post-v1.
+- **ESPN Fantasy** — no official public API. Integration relies on undocumented
+  endpoints and cookie-based auth (`espn_s2` / `SWID` cookies the user extracts
+  from their browser). Brittle (breaks on ESPN changes) and a rough onboarding
+  UX (asking users to paste browser cookies). Higher risk, higher maintenance.
+- **NFL Fantasy** — least certain. No clean, stable public integration path as
+  of v1 planning; requires investigation before committing.
+
+Sequencing rationale: these are deliberately deferred out of v1 (and out of the
+Sprint 10 shipping sprint) so v1 validates the core switching-engine thesis with
+real users on Sleeper first. Provider priority post-v1 should be driven by which
+platform v1 users actually ask for, not built speculatively. The
+`FantasyProvider` abstraction (Section 6) must stay clean so each slots in
+without touching the engine, dispatcher, or UI. Each provider is scoped as its
+own sprint when demand justifies it; Yahoo is the natural first candidate given
+it's the only one with a sanctioned auth flow.
+
+### Future stake sources (incl. sports betting) — post-v1, requires legal + partnership review
+
+Reframe: this app's core mechanic is not fantasy-specific — the engine flags
+live game moments a user has a STAKE in. Fantasy lineup is v1's only stake
+source; the same engine can be driven by other stake types. Multi-platform
+fantasy (Yahoo/ESPN/NFL, see previous subsection) is one axis. A second,
+higher-value-but-harder axis is **sports betting slips**:
+
+- **DraftKings / FanDuel / etc.** — link a user's placed bets so the app flags
+  games those bets are live in ("your same-game parlay is playing out now").
+  This is what makes PRESEASON meaningful: Sleeper has no preseason lineup, so
+  fantasy can't drive preseason flags, but betting stakes can (Sportradar does
+  cover preseason games).
+
+Hard constraints — why this is post-v1, not near-term:
+- **API access is closed/partner-gated.** DraftKings and FanDuel do not offer
+  open public read APIs for a user's bets; access likely requires a commercial
+  partnership or is unavailable. Categorically harder than Yahoo OAuth.
+- **Regulatory exposure.** Ingesting bets and pushing "your bet is live"
+  notifications moves the app into gambling-adjacent territory: state-by-state
+  gambling regs, responsible-gambling requirements, age verification, stricter
+  App Store review for real-money-gambling-adjacent apps. Requires legal review
+  BEFORE any build — this is not an engineering-only decision.
+
+Architecture note (do now, cheaply): the engine's input type should generalize
+so a betting stake isn't awkward to add later. Today `UserLineupCache`
+(Section 8) is fantasy-shaped (teamPositions / playerToTeam / starPlayerIds)
+and `FlagReasonType` enumerates fantasy reasons (offense_active, etc.). A
+betting stake ("parlay live in game Z", "player X to score") doesn't map onto
+position units. When betting is built, the engine's stake-input type and
+FlagReasonType must generalize beyond fantasy positions. No change required in
+v1 — this is a flagged seam, not a task. Keep the FantasyProvider boundary
+clean and avoid letting fantasy-specific assumptions leak deeper into the
+engine's core types than they already have.
 
 ---
 

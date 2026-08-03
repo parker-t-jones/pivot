@@ -26,6 +26,7 @@ import playersRoutes from './routes/players.js';
 import realtimeRoutes from './routes/realtime.js';
 import sessionRoutes from './routes/session.js';
 import sleeperRoutes from './routes/sleeper.js';
+import stateRoutes from './routes/state.js';
 
 export interface BuildServerDeps {
   supabase?: SupabaseServiceClient;
@@ -101,6 +102,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
   await fastify.register(leaguesRoutes);
   await fastify.register(playersRoutes);
   await fastify.register(flagsRoutes);
+  await fastify.register(stateRoutes);
   await fastify.register(gamesRoutes);
   await fastify.register(sessionRoutes);
   await fastify.register(meRoutes);
