@@ -127,6 +127,7 @@ export type Database = {
           id: string
           scheduled_start: string
           season_year: number
+          season_type: string
           sportradar_id: string | null
           status: string
           venue: string | null
@@ -138,6 +139,7 @@ export type Database = {
           id?: string
           scheduled_start: string
           season_year: number
+          season_type: string
           sportradar_id?: string | null
           status: string
           venue?: string | null
@@ -149,6 +151,7 @@ export type Database = {
           id?: string
           scheduled_start?: string
           season_year?: number
+          season_type?: string
           sportradar_id?: string | null
           status?: string
           venue?: string | null

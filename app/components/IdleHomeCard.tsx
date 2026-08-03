@@ -6,23 +6,32 @@ import { theme } from '../lib/theme';
 interface IdleHomeCardProps {
   /** State 4a variant — 'off' and 'pre' stay distinct (see `resolveHomeBranch`). */
   variant: 'off' | 'pre';
-  /** NFL season year string from `/state/nfl` (e.g. "2026") — never a calendar date. */
+  /** NFL season year string from `/state/nfl` (e.g. "2026"). */
   season: string;
   leagueCount: number;
+  /** Schedule-derived openers from `/state/nfl` — never Sleeper `season_start_date`. */
+  preseasonStart: string | null;
+  regularSeasonStart: string | null;
 }
 
 /**
  * Home State 4a — offseason / preseason idle panel (Sprint 10 Phase 2).
  *
- * Reconciled from the old consolidated "No flags right now" IdleHomeCard: regular-season idle
- * cases are now States 2–4, so this card is exclusively the season_type idle surface. Same
- * panel structure for 'off' and 'pre'; distinct copy via `seasonIdleCopy`.
- *
- * Deliberately does not render `season_start_date` — Sleeper's field is phase-relative, not the
- * regular-season opener (see PLAN Known Issues).
+ * Same panel structure for 'off' and 'pre'; distinct copy via `seasonIdleCopy`. Opener dates come
+ * from `preseason_start` / `regular_season_start` on `/state/nfl` (games rows, ET calendar day).
+ * Do not render Sleeper's `season_start_date` (phase-relative — see PLAN Known Issues).
  */
-export function IdleHomeCard({ variant, season, leagueCount }: IdleHomeCardProps) {
-  const copy = seasonIdleCopy(variant, season, leagueCount);
+export function IdleHomeCard({
+  variant,
+  season,
+  leagueCount,
+  preseasonStart,
+  regularSeasonStart,
+}: IdleHomeCardProps) {
+  const copy = seasonIdleCopy(variant, season, leagueCount, {
+    preseasonStart,
+    regularSeasonStart,
+  });
 
   return (
     <View style={styles.card}>

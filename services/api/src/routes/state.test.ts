@@ -6,7 +6,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { SignJWT } from 'jose';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
@@ -23,14 +23,50 @@ async function signToken(payload: Record<string, unknown>): Promise<string> {
     .sign(new TextEncoder().encode(JWT_SECRET));
 }
 
-async function buildTestApp(nflState: {
-  season: string;
-  week: number;
-  seasonType: 'pre' | 'regular' | 'post' | 'off';
-  seasonStartDate: string | null;
+class FakeGamesSupabase {
+  constructor(
+    private readonly earliestByType: Partial<Record<'pre' | 'regular', string | null>>,
+  ) {}
+
+  from(table: string) {
+    if (table !== 'games') {
+      throw new Error(`Unexpected table: ${table}`);
+    }
+    let seasonType: 'pre' | 'regular' | null = null;
+    const builder = {
+      select: () => builder,
+      eq: (col: string, value: string) => {
+        if (col === 'season_type') seasonType = value as 'pre' | 'regular';
+        return builder;
+      },
+      order: () => builder,
+      limit: () => builder,
+      maybeSingle: async () => {
+        const start =
+          seasonType === 'pre' || seasonType === 'regular'
+            ? this.earliestByType[seasonType]
+            : null;
+        return {
+          data: start ? { scheduled_start: start } : null,
+          error: null,
+        };
+      },
+    };
+    return builder;
+  }
+}
+
+async function buildTestApp(options: {
+  nflState: {
+    season: string;
+    week: number;
+    seasonType: 'pre' | 'regular' | 'post' | 'off';
+    seasonStartDate: string | null;
+  };
+  earliestByType?: Partial<Record<'pre' | 'regular', string | null>>;
 }) {
   const lineupCache = new InMemoryLineupCache();
-  await lineupCache.setNflState(nflState, 300);
+  await lineupCache.setNflState(options.nflState, 300);
 
   const fastify = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
   fastify.setValidatorCompiler(validatorCompiler);
@@ -38,9 +74,7 @@ async function buildTestApp(nflState: {
 
   await fastify.register(authPlugin, { jwtSecret: JWT_SECRET, supabaseUrl: 'http://127.0.0.1:54321' });
   await fastify.register(servicesPlugin, {
-    supabase: { from: () => {
-      throw new Error('GET /state/nfl must not hit Supabase');
-    } } as unknown as SupabaseServiceClient,
+    supabase: new FakeGamesSupabase(options.earliestByType ?? {}) as unknown as SupabaseServiceClient,
     lineupCache,
     gameStateStore: new InMemoryGameStateStore(),
     realtimeSubscriber: new InMemoryRealtimeBus(),
@@ -54,25 +88,21 @@ describe('GET /state/nfl', () => {
 
   afterEach(async () => {
     await app.close();
+    vi.useRealTimers();
   });
 
   it('rejects an unauthenticated request', async () => {
     app = await buildTestApp({
-      season: '2026',
-      week: 0,
-      seasonType: 'off',
-      seasonStartDate: null,
+      nflState: { season: '2026', week: 0, seasonType: 'off', seasonStartDate: null },
     });
     const response = await app.inject({ method: 'GET', url: '/state/nfl' });
     expect(response.statusCode).toBe(401);
   });
 
-  it('returns season metadata including a null season_start_date (expected offseason case)', async () => {
+  it('returns null openers and falls display_phase back to season_type', async () => {
     app = await buildTestApp({
-      season: '2026',
-      week: 0,
-      seasonType: 'off',
-      seasonStartDate: null,
+      nflState: { season: '2026', week: 0, seasonType: 'off', seasonStartDate: null },
+      earliestByType: {},
     });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
@@ -88,15 +118,28 @@ describe('GET /state/nfl', () => {
       week: 0,
       season_type: 'off',
       season_start_date: null,
+      preseason_start: null,
+      regular_season_start: null,
+      display_phase: 'off',
     });
   });
 
-  it('passes through a non-null season_start_date when cached', async () => {
+  it('on Aug 3 ET with openers Aug 6 / Sep 9: display_phase is off despite season_type pre', async () => {
+    // Fixed clock: 2026-08-03 15:00 UTC = still Aug 3 in ET.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-03T15:00:00.000Z'));
+
     app = await buildTestApp({
-      season: '2026',
-      week: 1,
-      seasonType: 'regular',
-      seasonStartDate: '2026-09-10',
+      nflState: {
+        season: '2026',
+        week: 0,
+        seasonType: 'pre', // Sleeper already ahead — must not drive display
+        seasonStartDate: '2026-08-06',
+      },
+      earliestByType: {
+        pre: '2026-08-07T00:00:00.000Z',
+        regular: '2026-09-10T00:20:00.000Z',
+      },
     });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
@@ -109,9 +152,12 @@ describe('GET /state/nfl', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       season: '2026',
-      week: 1,
-      season_type: 'regular',
-      season_start_date: '2026-09-10',
+      week: 0,
+      season_type: 'pre',
+      season_start_date: '2026-08-06',
+      preseason_start: '2026-08-06',
+      regular_season_start: '2026-09-09',
+      display_phase: 'off',
     });
   });
 });

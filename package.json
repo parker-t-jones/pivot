@@ -14,6 +14,8 @@
     "seed:players": "tsx scripts/seed-players.ts",
     "seed:broadcasts": "tsx scripts/seed-broadcasts.ts",
     "seed:test-user": "tsx scripts/seed-test-user.ts",
+    "seed:schedule": "tsx scripts/seed-schedule.ts",
+    "fetch:nfl-schedule": "tsx scripts/fetch-nfl-schedule.ts",
     "db:types": "pnpm exec supabase gen types typescript --local > services/api/src/lib/database.types.ts"
   },
   "devDependencies": {

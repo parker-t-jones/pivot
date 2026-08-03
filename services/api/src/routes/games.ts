@@ -3,6 +3,8 @@ import type { GameState } from '@fantasy-focus/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
+import { getCurrentNflState } from '../lib/nfl-state.js';
+import { deriveDisplayPhaseNow, derivePhaseOpeners } from '../lib/phase-openers.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
 
@@ -72,10 +74,22 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const user = requireUser(request);
       const { week } = request.query;
 
+      // Scope week slate by schedule-derived display_phase (not Sleeper season_type, which runs
+      // ahead of actual games). During 'off' there is no active phase slate — return empty.
+      const nflState = await getCurrentNflState(fastify.lineupCache);
+      const openers = await derivePhaseOpeners(fastify.supabase);
+      const displayPhase = deriveDisplayPhaseNow(openers, nflState.seasonType);
+      if (displayPhase === 'off') {
+        return { week, games: [] };
+      }
+      const seasonType =
+        displayPhase === 'post' ? 'post' : displayPhase === 'pre' ? 'pre' : 'regular';
+
       const { data: gameRows, error: gamesError } = await fastify.supabase
         .from('games')
         .select('id, status, scheduled_start, home_team_id, away_team_id')
         .eq('week', week)
+        .eq('season_type', seasonType)
         .order('scheduled_start', { ascending: true });
       if (gamesError) throw gamesError;
       const games = gameRows ?? [];

@@ -35,6 +35,7 @@ async function signToken(payload: Record<string, unknown>): Promise<string> {
 interface GameRow {
   id: string;
   week: number;
+  season_type?: string;
   status: string;
   scheduled_start: string;
   home_team_id: string;
@@ -123,11 +124,14 @@ class FakeSupabase {
 
   private gamesQuery() {
     const rows = this.tables.games;
-    const run = (filters: { week?: number; status?: string; id?: string }) => {
+    const run = (filters: { week?: number; status?: string; id?: string; season_type?: string }) => {
       let filtered = rows;
       if (filters.week !== undefined) filtered = filtered.filter((g) => g.week === filters.week);
       if (filters.status !== undefined) filtered = filtered.filter((g) => g.status === filters.status);
       if (filters.id !== undefined) filtered = filtered.filter((g) => g.id === filters.id);
+      if (filters.season_type !== undefined) {
+        filtered = filtered.filter((g) => g.season_type === filters.season_type);
+      }
       return filtered;
     };
 
@@ -145,18 +149,31 @@ class FakeSupabase {
           };
         }
 
-        const filters: { week?: number; status?: string } = {};
+        const filters: { week?: number; status?: string; season_type?: string } = {};
         const builder = {
           eq: (col: string, value: string | number) => {
             if (col === 'week') filters.week = Number(value);
             if (col === 'status') filters.status = String(value);
+            if (col === 'season_type') filters.season_type = String(value);
             return builder;
           },
-          order: async () => {
-            const data = run(filters).slice().sort((a, b) =>
-              a.scheduled_start.localeCompare(b.scheduled_start),
-            );
-            return { data, error: null };
+          order: () => {
+            const data = run(filters)
+              .slice()
+              .sort((a, b) => a.scheduled_start.localeCompare(b.scheduled_start));
+            // Thenable for week-slate list queries; limit/maybeSingle for opener derivation.
+            return {
+              then: (
+                onfulfilled?: (value: { data: GameRow[]; error: null }) => unknown,
+                onrejected?: (reason: unknown) => unknown,
+              ) => Promise.resolve({ data, error: null }).then(onfulfilled, onrejected),
+              limit: () => ({
+                maybeSingle: async () => ({
+                  data: data[0] ? { scheduled_start: data[0].scheduled_start } : null,
+                  error: null,
+                }),
+              }),
+            };
           },
         };
         return builder;
@@ -212,6 +229,12 @@ async function buildTestApp(options: FixtureOptions = {}) {
     presence: options.presence ?? new Map(),
   });
   const gameStateStore = options.gameStateStore ?? new InMemoryGameStateStore();
+  const lineupCache = new InMemoryLineupCache();
+  // Week slate scopes by current NFL phase — seed a regular-season state so tests don't hit Sleeper.
+  await lineupCache.setNflState(
+    { season: '2026', week: 1, seasonType: 'regular', seasonStartDate: null },
+    300,
+  );
 
   const fastify = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
   fastify.setValidatorCompiler(validatorCompiler);
@@ -235,7 +258,7 @@ async function buildTestApp(options: FixtureOptions = {}) {
   await fastify.register(authPlugin, { jwtSecret: JWT_SECRET, supabaseUrl: 'http://127.0.0.1:54321' });
   await fastify.register(servicesPlugin, {
     supabase: fake as unknown as SupabaseServiceClient,
-    lineupCache: new InMemoryLineupCache(),
+    lineupCache,
     gameStateStore,
     realtimeSubscriber: new InMemoryRealtimeBus(),
   });
@@ -413,6 +436,7 @@ describe('GET /games?week=', () => {
         {
           id: GAME_2,
           week: 1,
+          season_type: 'regular',
           status: 'scheduled',
           scheduled_start: '2026-09-14T17:00:00Z',
           home_team_id: TEAM_HOME_2,
@@ -421,6 +445,7 @@ describe('GET /games?week=', () => {
         {
           id: GAME_1,
           week: 1,
+          season_type: 'regular',
           status: 'scheduled',
           scheduled_start: '2026-09-10T20:20:00Z',
           home_team_id: TEAM_HOME,

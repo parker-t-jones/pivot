@@ -21,7 +21,10 @@ export type HomeBranch =
   | { branch: 'state4' };
 
 /**
- * Sprint 10 Phase 2 — three-way season_type branch (do NOT collapse 'pre' into 'off').
+ * Sprint 10 Phase 2 — three-way display_phase branch (do NOT collapse 'pre' into 'off').
+ *
+ * Home keys off `/state/nfl` `display_phase` (schedule-derived), NOT Sleeper `season_type`
+ * (which runs ahead of actual games).
  *
  * Rationale: 'off' and 'pre' both render the idle panel in v1 because neither has a usable stake
  * source (no fantasy preseason lineup from Sleeper; betting integration not built — PLAN Section 14).
@@ -31,7 +34,8 @@ export type HomeBranch =
  */
 export function resolveHomeBranch(input: {
   hasLeagues: boolean;
-  seasonType: NflSeasonType;
+  /** Schedule-derived phase from `/state/nfl` `display_phase` — not Sleeper `season_type`. */
+  displayPhase: NflSeasonType;
   hasFlags: boolean;
   hasLiveStakeGames: boolean;
   nextStakeKickoff: Date | null;
@@ -41,7 +45,7 @@ export function resolveHomeBranch(input: {
     return { branch: 'no_leagues' };
   }
 
-  switch (input.seasonType) {
+  switch (input.displayPhase) {
     case 'off':
       return { branch: 'season_idle', variant: 'off' };
     case 'pre':
@@ -232,43 +236,66 @@ export function groupLineupByGame(
 
 export interface SeasonIdleCopy {
   heading: string;
-  /** Optional season-year caption (e.g. "2026 season") — never a calendar date. */
+  /** Optional season-year caption (e.g. "2026 season"). */
   seasonLine: string | null;
   body: string;
   leagueLine: string;
 }
 
 /**
- * State 4a copy — phase framing only. Do NOT assert a regular-season (or any) start date from
- * Sleeper's `season_start_date`: that field is phase-relative (preseason opener during 'pre'),
- * not the regular-season opener (see PLAN Known Issues). No sync-on-renewal / auto-reconnect promises.
+ * Formats a date-only `YYYY-MM-DD` for display ("August 6") without `new Date(iso)` —
+ * that parses as UTC midnight and shifts the calendar day west of UTC (e.g. Aug 6 → Aug 5 ET).
+ */
+export function formatDateOnlyLabel(isoDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) return isoDate;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  // Local calendar components — not UTC.
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+}
+
+/**
+ * State 4a copy. Uses schedule-derived openers from `/state/nfl` (`preseason_start` /
+ * `regular_season_start`), never Sleeper's phase-relative `season_start_date`. When the relevant
+ * opener is null (empty games table / seed not run), fall back to date-free copy.
  */
 export function seasonIdleCopy(
   variant: 'off' | 'pre',
   season: string,
   leagueCount: number,
+  openers: { preseasonStart: string | null; regularSeasonStart: string | null } = {
+    preseasonStart: null,
+    regularSeasonStart: null,
+  },
 ): SeasonIdleCopy {
   const leagueLine =
     leagueCount === 1
       ? '1 league connected'
       : `${leagueCount} leagues connected`;
-  // Season YEAR is factual metadata from /state/nfl; calendar dates are not safe to claim.
   const seasonLine = season.length > 0 ? `${season} season` : null;
 
   if (variant === 'off') {
+    const opener = openers.preseasonStart;
     return {
       heading: 'Offseason',
       seasonLine,
-      body: "The season hasn't started yet. We'll start flagging your players when it does.",
+      body: opener
+        ? `Preseason begins ${formatDateOnlyLabel(opener)}.`
+        : "The season hasn't started yet. We'll start flagging your players when it does.",
       leagueLine,
     };
   }
 
-  // pre — idle-by-design; do not imply live flagging is active; no regular-season date claim.
+  const opener = openers.regularSeasonStart;
   return {
     heading: 'Preseason',
     seasonLine,
-    body: "Preseason is underway. We'll start flagging your players once the regular season begins.",
+    body: opener
+      ? `Regular season begins ${formatDateOnlyLabel(opener)}.`
+      : "Preseason is underway. We'll start flagging your players once the regular season begins.",
     leagueLine,
   };
 }

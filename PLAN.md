@@ -333,12 +333,15 @@ Composite index: `(team_id, position)`.
 | `id` | uuid | PK |
 | `sportradar_id` | text | unique, indexed |
 | `season_year` | int | |
+| `season_type` | text | `'pre' \| 'regular' \| 'post'` — disambiguates week N across phases (Sprint 10 Phase 2.5) |
 | `week` | int | indexed |
 | `scheduled_start` | timestamptz | indexed |
 | `home_team_id` | uuid | FK → teams |
 | `away_team_id` | uuid | FK → teams |
 | `status` | text | `'scheduled' \| 'in_progress' \| 'final' \| 'postponed'` |
 | `venue` | text | nullable |
+
+Composite index: `(season_type, scheduled_start)` — covers opener `MIN(scheduled_start)` queries per phase.
 
 #### `game_broadcasts`
 | Column | Type | Notes |
@@ -428,6 +431,7 @@ user_notifications:{user_id}      sorted set → { event_id : delivered_at_times
 - `lineup_slots(league_id, week)` composite
 - `games(sportradar_id)` unique
 - `games(week, scheduled_start)` composite
+- `games(season_type, scheduled_start)` composite
 - `game_broadcasts(game_id)`
 - `flag_events(user_id, fired_at DESC)` composite
 - `user_app_presence(user_id, service)` composite unique
@@ -912,17 +916,21 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 {
   season: string,                              // e.g. "2026"
   week: number,                                // 0 when season_type is 'off' (and often 'pre')
-  season_type: 'off' | 'pre' | 'regular' | 'post',
-  season_start_date: string | null             // ISO date "YYYY-MM-DD" from Sleeper when present.
-                                               // Phase-relative metadata (see Known Issues) — not
-                                               // rendered as a regular-season opener in State 4a.
+  season_type: 'off' | 'pre' | 'regular' | 'post', // Sleeper — NOT for Home display phase
+  season_start_date: string | null,            // Sleeper passthrough — UNTRUSTWORTHY FOR DISPLAY
+  preseason_start: string | null,              // date-only YYYY-MM-DD (America/New_York) from games
+  regular_season_start: string | null,         // date-only YYYY-MM-DD (America/New_York) from games
+  display_phase: 'off' | 'pre' | 'regular' | 'post'  // schedule-derived; Home keys off this
 }
 ```
 
 League/NFL-scoped calendar metadata for Home's state machine (especially State 4a). Deliberately
 separate from the `/games` endpoints so Home can short-circuit in the offseason without a games
-fetch. Sourced from Sleeper `/v1/state/nfl` via the existing `getCurrentNflState` cache
-(`current_nfl_state`). Home supplies `week` from this response into `GET /games?week=`.
+fetch. Sleeper fields via `getCurrentNflState` (`current_nfl_state`); phase openers derived as
+`MIN(scheduled_start)` per `games.season_type`, calendar day in **America/New_York** (not UTC).
+`display_phase` compares ET "today" to those openers (falls back to `season_type` if either opener
+is null). Home keys off `display_phase`, not `season_type`. No `postseason_start` — postseason is
+not seeded in v1. Home supplies `week` from this response into `GET /games?week=`.
 
 **`GET /games?week={w}` response (Sprint 10):**
 ```typescript
@@ -1222,23 +1230,21 @@ Top to bottom:
 - Mid: "Next game: Thursday 8:20pm ET — your players in it: 2"
 - Bottom: optional content area (v2)
 
-##### State 4a: Offseason / preseason idle (three-way season_type branch).
-Home branches on `GET /state/nfl`'s `season_type` — do **not** collapse `'pre'` into `'off'`:
+##### State 4a: Offseason / preseason idle (three-way `display_phase` branch).
+Home branches on `GET /state/nfl`'s `display_phase` (schedule-derived) — **not** Sleeper
+`season_type` (which runs ahead of actual games). Do **not** collapse `'pre'` into `'off'`:
 
-- `'off'` → Offseason panel: phase framing only (e.g. "The season hasn't started yet. We'll start
-  flagging your players when it does."), optional season-year caption, connected-league status.
-  No calendar-date claim; no sync-on-renewal / auto-reconnect promise.
-- `'pre'` → Preseason panel (same panel structure, distinct copy): honest that the app is idle-by-design
-  during preseason — Sleeper provides no preseason lineup and betting stakes are not built (Section 14).
-  Wording like: "Preseason is underway. We'll start flagging your players once the regular season
-  begins." Do **not** interpolate `season_start_date` as a regular-season opener (that field is
-  phase-relative — see Known Issues). Kept as a **distinct** branch from `'off'` so a future stake
-  source (betting slips) can promote `'pre'` into the live state machine without a Home rewrite.
+- `'off'` → Offseason panel: "Preseason begins {preseason_start}" when `preseason_start` is present;
+  otherwise date-free fallback. Connected-league status. No sync-on-renewal promise.
+- `'pre'` → Preseason panel (same structure, distinct copy): "Regular season begins
+  {regular_season_start}" when present; otherwise date-free fallback. Idle-by-design in v1 (no
+  fantasy preseason lineup / betting — Section 14). Distinct from `'off'` so a future stake source
+  can promote `'pre'` into the live machine without a Home rewrite.
 - `'regular'` | `'post'` → live state machine (States 1–4).
 
-Keyed on `GET /state/nfl` (Sprint 10). For `'off'`/`'pre'`, Home short-circuits — skips `/games` and
-`/flags/current`. `season_start_date` remains on the wire as metadata but is not rendered into 4a
-copy until schedule-derived openers exist.
+Opener dates are schedule-derived (`preseason_start` / `regular_season_start` on `/state/nfl`),
+formatted timezone-safely from date-only strings. Never render Sleeper's `season_start_date`.
+For `'off'`/`'pre'`, Home short-circuits — skips `/games` and `/flags/current`.
 
 
 #### State 5: No setup yet
@@ -1664,15 +1670,35 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Impact if unfixed:** Every league connected between now and the new-season renewal window becomes stale in August and requires a manual disconnect/reconnect. Couples with the offseason sync bug above — both stem from offseason state being second-class, and a `season_year`-behind-current-state check could serve both fixes.
 
-### Sleeper `season_start_date` is phase-relative, not the regular-season opener (Sprint 10 Phase 2 discovery)
+### Sleeper `season_start_date` / `season_type` are unreliable for display (Sprint 10 Phase 2 / 2.5)
 
-**Symptom:** State 4a copy asserted the regular season begins on `season_start_date`; during `'pre'` that field returns the **preseason** opener (e.g. 2026-08-06 vs. the actual Sept 9 regular-season start), making the copy false.
+**Symptom:** State 4a copy asserted the regular season begins on `season_start_date`; during `'pre'` that field returns the **preseason** opener (e.g. 2026-08-06 vs. the actual Sept 9 regular-season start), making the copy false. Separately, Sleeper's `season_type` runs **ahead of actual games** — e.g. on Aug 3 2026 it already reports `'pre'` while the first preseason kickoff is Aug 6 — so keying Home's eyebrow off `season_type` showed PRESEASON too early.
 
-**Root cause:** Sleeper's `/state/nfl` `season_start_date` appears to track the current phase (null during `'off'`, preseason opener during `'pre'`), not the regular-season start. Both dates also change annually — nothing can be hardcoded.
+**Root cause:** Sleeper's `/state/nfl` calendar fields track Sleeper's internal phase labels, not schedule ground truth. `season_start_date` appears phase-relative; `season_type` flips before the corresponding games begin. Both also change annually.
 
-**Fix (when Sportradar ingestion lands, Sprint 2 / post-v1):** derive the real preseason and regular-season openers from actual schedule data rather than Sleeper's ambiguous field, then restore precise date copy in the off/pre panels. Until then, panels state the phase without asserting dates. `GET /state/nfl` still passes `season_start_date` through as metadata; Home does not render a regular-season claim from it.
+**Fix:** Home keys off schedule-derived `display_phase` + `preseason_start` / `regular_season_start` on `GET /state/nfl` (MIN kickoffs from seeded `games`, ET calendar day). `season_type` and `season_start_date` remain as Sleeper passthrough for engine/ingestion / metadata — never for Home display. When Sportradar ingestion lands, openers (and eventually season end) come from that schedule source instead of the ESPN seed.
 
-**Impact if unfixed:** users told the wrong "season starts" date during preseason (false product claim). Mitigated in Sprint 10 by removing date interpolation from State 4a copy.
+**Impact if unfixed:** wrong phase eyebrow and false "season begins on {date}" copy.
+
+### display_phase has no season-end bound — 2027 offseason will render as 'regular'
+
+**Symptom:** `display_phase` is derived as `'regular'` whenever today >= `regular_season_start`, with no upper bound. After the 2026 season ends, the phase remains `'regular'` through the 2027 offseason, so Home runs the live state machine against an empty schedule instead of showing the offseason panel.
+
+**Root cause:** the derivation bounds the season's start (from seeded openers) but not its end.
+
+**Fix (with the annual reseed workflow / Sportradar ingestion):** derive a season end from schedule data — either the last seeded game's date, or the NEXT season's `preseason_start` once the schedule is reseeded — and treat today > season_end as `'off'`. Deferred because the correct fix depends on the annual reseed workflow, which doesn't exist yet.
+
+**Trigger date:** first surfaces after the 2026 season concludes (~Jan 2027).
+
+### NFL schedule seed must be refreshed each season (Sprint 10 Phase 2.5)
+
+**Symptom:** Phase openers and Home States 3–4 kickoffs come from `data/nfl-schedule-YYYY.json` seeded into `games`. A stale file silently serves last year's dates.
+
+**Root cause:** Until Sportradar ingestion (Sprint 2) owns the schedule, the committed ESPN-derived JSON + `pnpm seed:schedule` is the schedule source. Kickoffs and openers change annually.
+
+**Fix:** each season, run `pnpm fetch:nfl-schedule` (regenerates the JSON from ESPN's public scoreboard), commit the new `data/nfl-schedule-YYYY.json`, and re-run `pnpm seed:schedule`. Sportradar ingestion eventually replaces this seed as the schedule source.
+
+**Impact if unfixed:** State 4a shows wrong opener dates; States 3–4 show wrong kickoffs after the calendar rolls.
 
 ### App had competing accent colors and unthemed auth screens — RESOLVED (pre-Sprint-10, Phases 2a/2b)
 

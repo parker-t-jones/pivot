@@ -95,7 +95,7 @@ export default function HomeScreen() {
   /**
    * Section 10 Home cold-start (Sprint 10 Phase 2). Order matters:
    * 1. leagues → State 5 short-circuit
-   * 2. GET /state/nfl → season_type branch (off/pre idle vs regular/post live machine)
+   * 2. GET /state/nfl → display_phase branch (off/pre idle vs regular/post live machine)
    * 3. off/pre: skip /games and /flags/current entirely
    * 4. regular/post: flags + live + week schedule → States 1–4
    *
@@ -116,11 +116,11 @@ export default function HomeScreen() {
         return;
       }
 
-      // FIRST calendar call — decides the season_type branch before any games/flags fetch.
+      // FIRST calendar call — decides the display_phase branch before any games/flags fetch.
       const nflState = await fetchNflState();
       const idleBranch = resolveHomeBranch({
         hasLeagues: true,
-        seasonType: nflState.season_type,
+        displayPhase: nflState.display_phase,
         hasFlags: false,
         hasLiveStakeGames: false,
         nextStakeKickoff: null,
@@ -155,7 +155,7 @@ export default function HomeScreen() {
       const kickoff = nextStakeKickoff(weekGames, stakeTeams, now);
       const branch = resolveHomeBranch({
         hasLeagues: true,
-        seasonType: nflState.season_type,
+        displayPhase: nflState.display_phase,
         hasFlags: topFlag !== null,
         hasLiveStakeGames: liveStakeGames.length > 0,
         nextStakeKickoff: kickoff,
@@ -269,6 +269,8 @@ export default function HomeScreen() {
             variant={homeData.branch.variant}
             season={homeData.nflState?.season ?? ''}
             leagueCount={homeData.leagueCount}
+            preseasonStart={homeData.nflState?.preseason_start ?? null}
+            regularSeasonStart={homeData.nflState?.regular_season_start ?? null}
           />
         );
       case 'state1':

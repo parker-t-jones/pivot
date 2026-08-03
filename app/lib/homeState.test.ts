@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   filterLiveStakeGames,
   formatCountdown,
+  formatDateOnlyLabel,
   isPregameWindow,
   resolveHomeBranch,
   seasonIdleCopy,
@@ -15,11 +16,11 @@ function hoursFromNow(hours: number): Date {
 }
 
 describe('resolveHomeBranch', () => {
-  it('State 5: no leagues wins regardless of season_type', () => {
+  it('State 5: no leagues wins regardless of display_phase', () => {
     expect(
       resolveHomeBranch({
         hasLeagues: false,
-        seasonType: 'regular',
+        displayPhase: 'regular',
         hasFlags: true,
         hasLiveStakeGames: true,
         nextStakeKickoff: hoursFromNow(2),
@@ -32,7 +33,7 @@ describe('resolveHomeBranch', () => {
     expect(
       resolveHomeBranch({
         hasLeagues: true,
-        seasonType: 'off',
+        displayPhase: 'off',
         hasFlags: false,
         hasLiveStakeGames: false,
         nextStakeKickoff: null,
@@ -44,7 +45,7 @@ describe('resolveHomeBranch', () => {
   it('pre → season_idle variant pre (State 4a preseason) — distinct from off', () => {
     const result = resolveHomeBranch({
       hasLeagues: true,
-      seasonType: 'pre',
+      displayPhase: 'pre',
       hasFlags: false,
       hasLiveStakeGames: true, // even with "live" noise, pre stays idle in v1
       nextStakeKickoff: hoursFromNow(1),
@@ -58,7 +59,7 @@ describe('resolveHomeBranch', () => {
     expect(
       resolveHomeBranch({
         hasLeagues: true,
-        seasonType: 'regular',
+        displayPhase: 'regular',
         hasFlags: true,
         hasLiveStakeGames: true,
         nextStakeKickoff: hoursFromNow(2),
@@ -71,7 +72,7 @@ describe('resolveHomeBranch', () => {
     expect(
       resolveHomeBranch({
         hasLeagues: true,
-        seasonType: 'post',
+        displayPhase: 'post',
         hasFlags: true,
         hasLiveStakeGames: false,
         nextStakeKickoff: null,
@@ -84,7 +85,7 @@ describe('resolveHomeBranch', () => {
     expect(
       resolveHomeBranch({
         hasLeagues: true,
-        seasonType: 'regular',
+        displayPhase: 'regular',
         hasFlags: false,
         hasLiveStakeGames: true,
         nextStakeKickoff: hoursFromNow(2),
@@ -97,7 +98,7 @@ describe('resolveHomeBranch', () => {
     expect(
       resolveHomeBranch({
         hasLeagues: true,
-        seasonType: 'regular',
+        displayPhase: 'regular',
         hasFlags: false,
         hasLiveStakeGames: false,
         nextStakeKickoff: hoursFromNow(2),
@@ -110,7 +111,7 @@ describe('resolveHomeBranch', () => {
     expect(
       resolveHomeBranch({
         hasLeagues: true,
-        seasonType: 'regular',
+        displayPhase: 'regular',
         hasFlags: false,
         hasLiveStakeGames: false,
         nextStakeKickoff: hoursFromNow(48),
@@ -123,7 +124,7 @@ describe('resolveHomeBranch', () => {
     expect(
       resolveHomeBranch({
         hasLeagues: true,
-        seasonType: 'regular',
+        displayPhase: 'regular',
         hasFlags: false,
         hasLiveStakeGames: false,
         nextStakeKickoff: null,
@@ -133,38 +134,57 @@ describe('resolveHomeBranch', () => {
   });
 });
 
-describe('seasonIdleCopy — off vs pre distinct (no date claims)', () => {
-  it('offseason — phase copy only, no calendar date', () => {
-    const copy = seasonIdleCopy('off', '2026', 2);
+describe('seasonIdleCopy — off vs pre distinct (schedule openers)', () => {
+  it('offseason with preseason opener', () => {
+    const copy = seasonIdleCopy('off', '2026', 2, {
+      preseasonStart: '2026-08-06',
+      regularSeasonStart: '2026-09-09',
+    });
     expect(copy.heading).toBe('Offseason');
-    expect(copy.seasonLine).toBe('2026 season');
-    expect(copy.body).toBe(
-      "The season hasn't started yet. We'll start flagging your players when it does.",
-    );
-    expect(copy.body.toLowerCase()).not.toContain('sync');
-    expect(copy.body.toLowerCase()).not.toContain('renew');
-    expect(copy.body).not.toMatch(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i);
+    expect(copy.body).toBe('Preseason begins August 6.');
     expect(copy.leagueLine).toBe('2 leagues connected');
   });
 
-  it('preseason — idle-by-design, no regular-season date assertion', () => {
-    const copy = seasonIdleCopy('pre', '2026', 1);
+  it('offseason falls back to date-free copy when opener is null', () => {
+    const copy = seasonIdleCopy('off', '2026', 1, {
+      preseasonStart: null,
+      regularSeasonStart: null,
+    });
+    expect(copy.body).toBe(
+      "The season hasn't started yet. We'll start flagging your players when it does.",
+    );
+  });
+
+  it('preseason with regular opener', () => {
+    const copy = seasonIdleCopy('pre', '2026', 1, {
+      preseasonStart: '2026-08-06',
+      regularSeasonStart: '2026-09-09',
+    });
     expect(copy.heading).toBe('Preseason');
-    expect(copy.seasonLine).toBe('2026 season');
+    expect(copy.body).toBe('Regular season begins September 9.');
+  });
+
+  it('preseason falls back to date-free copy when opener is null', () => {
+    const copy = seasonIdleCopy('pre', '2026', 1);
     expect(copy.body).toBe(
       "Preseason is underway. We'll start flagging your players once the regular season begins.",
     );
-    // Must not interpolate Sleeper's phase-relative season_start_date (e.g. Aug 6 preseason opener).
-    expect(copy.body).not.toMatch(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i);
-    expect(copy.body).not.toContain('2026-08-06');
-    expect(copy.heading).not.toBe('Offseason');
   });
 
   it('off and pre headings/bodies differ', () => {
-    const off = seasonIdleCopy('off', '2026', 1);
-    const pre = seasonIdleCopy('pre', '2026', 1);
+    const openers = { preseasonStart: '2026-08-06' as string | null, regularSeasonStart: '2026-09-09' as string | null };
+    const off = seasonIdleCopy('off', '2026', 1, openers);
+    const pre = seasonIdleCopy('pre', '2026', 1, openers);
     expect(off.heading).not.toBe(pre.heading);
     expect(off.body).not.toBe(pre.body);
+  });
+});
+
+describe('formatDateOnlyLabel — timezone-safe', () => {
+  it('does not shift the calendar day west of UTC (unlike new Date("YYYY-MM-DD"))', () => {
+    // new Date('2026-08-06') is UTC midnight → Aug 5 in US timezones.
+    expect(formatDateOnlyLabel('2026-08-06')).toBe('August 6');
+    expect(formatDateOnlyLabel('2026-09-09')).toBe('September 9');
   });
 });
 
