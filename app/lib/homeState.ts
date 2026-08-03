@@ -21,6 +21,29 @@ export type HomeBranch =
   | { branch: 'state4' };
 
 /**
+ * Live Home machine + WebSocket gate (Sprint 10 Phase 2/3).
+ * `true` only for schedule-derived `display_phase` `'regular' | 'post'`.
+ * Home WS must use this — never `season_type`.
+ */
+export function isLiveDisplayPhase(phase: NflSeasonType): phase is 'regular' | 'post' {
+  return phase === 'regular' || phase === 'post';
+}
+
+/** Whether Home should hold a `/realtime` socket — same phase gate as `resolveHomeBranch`'s live machine. */
+export function shouldConnectHomeRealtime(input: {
+  homeReady: boolean;
+  hasLeagues: boolean;
+  displayPhase: NflSeasonType | null;
+}): boolean {
+  return (
+    input.homeReady &&
+    input.hasLeagues &&
+    input.displayPhase !== null &&
+    isLiveDisplayPhase(input.displayPhase)
+  );
+}
+
+/**
  * Sprint 10 Phase 2 — three-way display_phase branch (do NOT collapse 'pre' into 'off').
  *
  * Home keys off `/state/nfl` `display_phase` (schedule-derived), NOT Sleeper `season_type`
@@ -31,6 +54,9 @@ export type HomeBranch =
  * They stay DISTINCT branches — not merged — because a future stake source (betting slips) would
  * make 'pre' a LIVE state. Promoting 'pre' later should be a localized change in this switch
  * (route 'pre' into the live machine below), not a rewrite of Home.
+ *
+ * Phase 3 WebSocket connect/disconnect uses `isLiveDisplayPhase` — the same predicate as the
+ * live-machine cases below — so the phase gate is not re-implemented at the socket layer.
  */
 export function resolveHomeBranch(input: {
   hasLeagues: boolean;
@@ -45,15 +71,9 @@ export function resolveHomeBranch(input: {
     return { branch: 'no_leagues' };
   }
 
-  switch (input.displayPhase) {
-    case 'off':
-      return { branch: 'season_idle', variant: 'off' };
-    case 'pre':
-      // Distinct from 'off' — see docstring above. Do not merge these cases.
-      return { branch: 'season_idle', variant: 'pre' };
-    case 'regular':
-    case 'post':
-      break;
+  if (!isLiveDisplayPhase(input.displayPhase)) {
+    // 'off' and 'pre' stay distinct — see docstring above. Do not merge these cases.
+    return { branch: 'season_idle', variant: input.displayPhase };
   }
 
   // Live state machine (regular / post only).

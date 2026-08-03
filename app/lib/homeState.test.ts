@@ -3,6 +3,7 @@ import {
   filterLiveStakeGames,
   formatCountdown,
   formatDateOnlyLabel,
+  isLiveDisplayPhase,
   isPregameWindow,
   resolveHomeBranch,
   seasonIdleCopy,
@@ -16,6 +17,13 @@ function hoursFromNow(hours: number): Date {
 }
 
 describe('resolveHomeBranch', () => {
+  it('isLiveDisplayPhase matches the live-machine gate used by WebSocket connect', () => {
+    expect(isLiveDisplayPhase('off')).toBe(false);
+    expect(isLiveDisplayPhase('pre')).toBe(false);
+    expect(isLiveDisplayPhase('regular')).toBe(true);
+    expect(isLiveDisplayPhase('post')).toBe(true);
+  });
+
   it('State 5: no leagues wins regardless of display_phase', () => {
     expect(
       resolveHomeBranch({

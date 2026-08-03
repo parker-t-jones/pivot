@@ -13,6 +13,7 @@ import { LoadingState } from '../../components/LoadingState';
 import { NowActiveCard } from '../../components/NowActiveCard';
 import { useSwitching } from '../../contexts/SwitchingContext';
 import { ApiRequestError, apiClient } from '../../lib/apiClient';
+import type { FlagEventPayload } from '../../lib/flagEventPayload';
 import {
   pickPreferredBroadcast,
   type CurrentFlag,
@@ -20,6 +21,11 @@ import {
   type GameBroadcast,
   type GameBroadcastsResponse,
 } from '../../lib/gameDisplay';
+import {
+  applyFlagEventToHome,
+  reconcileHomeWithFlagsCurrent,
+  type HomeFlagSlice,
+} from '../../lib/homeFlagUpdates';
 import {
   countStakePlayersInGame,
   filterLiveStakeGames,
@@ -42,6 +48,7 @@ import { fetchNflState, type NflStateResponse } from '../../lib/nflState';
 import { fetchGamesLive, fetchGamesWeek, type LiveGame, type ScheduleGame } from '../../lib/schedule';
 import { resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../../lib/teamDisplay';
 import { theme } from '../../lib/theme';
+import { useHomeRealtime } from '../../lib/useHomeRealtime';
 
 interface HomeData {
   hasLeagues: boolean;
@@ -62,6 +69,25 @@ interface HomeData {
 }
 
 const EMPTY_TEAM_MAP: PlayerTeamMap = new Map();
+
+function toFlagSlice(data: HomeData): HomeFlagSlice {
+  return {
+    hasLeagues: data.hasLeagues,
+    nflState: data.nflState,
+    playerTeamMap: data.playerTeamMap,
+    lineups: data.lineups,
+    flag: data.flag,
+    broadcast: data.broadcast,
+    broadcasts: data.broadcasts,
+    liveStakeGames: data.liveStakeGames,
+    weekGames: data.weekGames,
+    lineupGroups: data.lineupGroups,
+    nextGame: data.nextGame,
+    nextGamePlayerCount: data.nextGamePlayerCount,
+    countdownMs: data.countdownMs,
+    branch: data.branch,
+  };
+}
 
 function emptyHome(partial: Partial<HomeData> & Pick<HomeData, 'hasLeagues' | 'branch'>): HomeData {
   return {
@@ -92,6 +118,62 @@ export default function HomeScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [homeData, setHomeData] = useState<HomeData | null>(null);
 
+  const applyBroadcasts = useCallback(async (gameId: string) => {
+    try {
+      const response = await apiClient.get<GameBroadcastsResponse>(
+        `/games/${gameId}/broadcasts`,
+      );
+      const broadcasts = response.broadcasts;
+      const broadcast = pickPreferredBroadcast(broadcasts);
+      setHomeData((prev) => {
+        if (!prev || prev.flag?.game_id !== gameId) return prev;
+        return { ...prev, broadcast, broadcasts };
+      });
+    } catch (error) {
+      console.warn('[home] failed to load broadcasts', error);
+    }
+  }, []);
+
+  const onFlagEvent = useCallback(
+    (payload: FlagEventPayload) => {
+      setHomeData((prev) => {
+        if (!prev || !prev.nflState) return prev;
+        const result = applyFlagEventToHome(toFlagSlice(prev), payload);
+        if (result.needsBroadcastFetch && result.broadcastGameId) {
+          void applyBroadcasts(result.broadcastGameId);
+        }
+        return { ...prev, ...result.slice };
+      });
+    },
+    [applyBroadcasts],
+  );
+
+  const onReconcileFlags = useCallback(async () => {
+    try {
+      const response = await apiClient.get<FlagsCurrentResponse>('/flags/current');
+      let broadcastGameId: string | null = null;
+      setHomeData((prev) => {
+        if (!prev || !prev.nflState) return prev;
+        const result = reconcileHomeWithFlagsCurrent(toFlagSlice(prev), response);
+        broadcastGameId = result.needsBroadcastFetch ? result.broadcastGameId : null;
+        return { ...prev, ...result.slice };
+      });
+      if (broadcastGameId) {
+        await applyBroadcasts(broadcastGameId);
+      }
+    } catch (error) {
+      console.warn('[home] flag reconcile failed', error);
+    }
+  }, [applyBroadcasts]);
+
+  useHomeRealtime({
+    displayPhase: homeData?.nflState?.display_phase ?? null,
+    hasLeagues: homeData?.hasLeagues ?? false,
+    homeReady: !isLoading && homeData !== null && loadError === null,
+    onFlagEvent,
+    onReconcile: onReconcileFlags,
+  });
+
   /**
    * Section 10 Home cold-start (Sprint 10 Phase 2). Order matters:
    * 1. leagues → State 5 short-circuit
@@ -99,8 +181,7 @@ export default function HomeScreen() {
    * 3. off/pre: skip /games and /flags/current entirely
    * 4. regular/post: flags + live + week schedule → States 1–4
    *
-   * Phase 3 seam: a WebSocket `flag_event` subscription will update State 1/2 in place; this path
-   * stays the initial/refresh read only — do not build the WS client here.
+   * Phase 3: WebSocket deltas update State 1 in place; this path stays initial/refresh + reconcile.
    */
   const loadHome = useCallback(async () => {
     setLoadError(null);
