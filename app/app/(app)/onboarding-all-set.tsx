@@ -1,10 +1,10 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { resetToHomeRoot } from '../../lib/navigateAfterConnect';
 import { theme } from '../../lib/theme';
 
-/** PLAN.md Section 10 onboarding step 6 ("All set — confirmation, CTA into the app"). Last stop in
- *  the chain `connect-team.tsx` kicks off for a brand-new signup. */
+/** PLAN.md Section 10 onboarding step 6 ("All set — confirmation, CTA into the app"). */
 export default function OnboardingAllSetScreen() {
   const router = useRouter();
 
@@ -16,7 +16,7 @@ export default function OnboardingAllSetScreen() {
           We&apos;re watching every game your players are in. We&apos;ll notify you the moment one
           of them takes the field in a big spot.
         </Text>
-        <Pressable onPress={() => router.replace('/(app)')} style={styles.button}>
+        <Pressable onPress={() => resetToHomeRoot(router)} style={styles.button}>
           <Text style={styles.buttonText}>Go to Home</Text>
         </Pressable>
       </View>

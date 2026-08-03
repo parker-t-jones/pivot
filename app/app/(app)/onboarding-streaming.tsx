@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../components/ErrorState';
 import { ApiRequestError } from '../../lib/apiClient';
@@ -9,11 +10,11 @@ import { STREAMING_SERVICES, streamingServiceLabel, type StreamingService } from
 import { theme } from '../../lib/theme';
 
 /** PLAN.md Section 10 onboarding step 4 ("Streaming services — multi-select grid, persists to
- *  `user_app_presence`"). Reached only from `connect-team.tsx`'s onboarding chain (see that file's
- *  docstring) — Settings' own "Streaming services" section is the same data, for whenever a user
- *  wants to revisit it later. */
+ *  `user_app_presence`"). Next: notifications-permission → all-set (Sprint 10 Phase 4). Settings'
+ *  own "Streaming services" section is the same data for later edits. */
 export default function OnboardingStreamingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<Set<StreamingService>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export default function OnboardingStreamingScreen() {
           })),
         );
       }
-      router.replace('/(app)/onboarding-all-set');
+      router.replace('/(app)/notifications-permission?onboarding=1');
     } catch (error) {
       setErrorMessage(error instanceof ApiRequestError ? error.message : 'Could not save.');
       setIsSaving(false);
@@ -47,8 +48,13 @@ export default function OnboardingStreamingScreen() {
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Which streaming services do you have?</Text>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + 48, paddingBottom: 48 },
+      ]}
+    >      <Text style={styles.title}>Which streaming services do you have?</Text>
       <Text style={styles.subtitle}>
         We&apos;ll recommend the service you already pay for, whenever there&apos;s a choice.
       </Text>
@@ -79,7 +85,10 @@ export default function OnboardingStreamingScreen() {
           <Text style={styles.primaryButtonText}>Continue</Text>
         )}
       </Pressable>
-      <Pressable disabled={isSaving} onPress={() => router.replace('/(app)/onboarding-all-set')}>
+      <Pressable
+        disabled={isSaving}
+        onPress={() => router.replace('/(app)/notifications-permission?onboarding=1')}
+      >
         <Text style={styles.skipText}>Skip for now</Text>
       </Pressable>
     </ScrollView>
@@ -107,7 +116,6 @@ const styles = StyleSheet.create({
   content: {
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.xl,
-    paddingVertical: 48,
   },
   grid: {
     flexDirection: 'row',

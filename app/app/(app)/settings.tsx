@@ -12,6 +12,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
@@ -189,8 +190,9 @@ function errorMessage(error: unknown): string {
 }
 
 function SettingsHeader({ onBack }: { onBack: () => void }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
       <Pressable accessibilityRole="button" onPress={onBack} style={styles.backButton}>
         <Text style={styles.backButtonText}>Close</Text>
       </Pressable>
@@ -571,7 +573,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: theme.spacing.lg,
   },
   headerSpacer: {
     width: 48,

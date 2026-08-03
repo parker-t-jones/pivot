@@ -11,9 +11,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../components/ErrorState';
-import { ApiRequestError } from '../../lib/apiClient';
+import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
+import { ApiRequestError, apiClient } from '../../lib/apiClient';
 import {
   connectManualLeague,
   connectSleeperLeague,
@@ -21,29 +23,38 @@ import {
   fetchSleeperLeagues,
   type SleeperLeagueOption,
 } from '../../lib/leagues';
+import { navigateAfterConnect } from '../../lib/navigateAfterConnect';
 import { searchPlayers, type PlayerSearchResult } from '../../lib/players';
-import { apiClient } from '../../lib/apiClient';
 import { theme } from '../../lib/theme';
 
 type Mode = 'choose' | 'sleeper' | 'manual';
 
 /**
- * PLAN.md Section 10 onboarding step 3 ("Connect fantasy team") — doubles as Home State 5's "get
- * started" destination (Sprint 9 Phase 2: see report on why these are the same screen rather than
- * two near-identical UIs). `?provider=sleeper|manual` preselects a path (Home's two State 5 buttons
- * link straight in); `?onboarding=1` (set only by the sign-up flow) continues to the streaming-
- * services/all-set steps on success instead of just returning to Home.
+ * PLAN.md Section 10 onboarding step 3 ("Connect fantasy team") — also Home State 5 / Settings.
+ * `?onboarding=1` continues connect → streaming → notifications → all-set.
+ * Close defers the zero-leagues gate for this session (State 5 fallback).
  */
 export default function ConnectTeamScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ provider?: string; onboarding?: string }>();
+  const { deferConnect, notifyLeagueConnected } = useLeaguesGate();
   const [mode, setMode] = useState<Mode>(
     params.provider === 'sleeper' || params.provider === 'manual' ? params.provider : 'choose',
   );
 
+  const onboarding = params.onboarding === '1';
+
   const onConnected = () => {
-    if (params.onboarding === '1') {
-      router.replace('/(app)/onboarding-streaming');
+    notifyLeagueConnected();
+    navigateAfterConnect(router, { onboarding });
+  };
+
+  const onClose = () => {
+    // Session flag is set synchronously before navigate — see connectDeferredSession.ts (Bug 1).
+    deferConnect();
+    if (router.canGoBack()) {
+      router.back();
     } else {
       router.replace('/(app)');
     }
@@ -51,8 +62,8 @@ export default function ConnectTeamScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
+        <Pressable accessibilityRole="button" onPress={onClose}>
           <Text style={styles.backText}>Close</Text>
         </Pressable>
       </View>
@@ -370,7 +381,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: theme.spacing.lg,
   },
   input: {
     backgroundColor: theme.colors.surface,

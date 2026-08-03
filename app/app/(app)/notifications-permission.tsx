@@ -6,10 +6,11 @@ import { theme } from '../../lib/theme';
 
 /**
  * PLAN.md Section 10 onboarding step 5 ("Notifications. Pre-permission screen explaining why
- * before triggering iOS prompt"). Sprint 6 Phase 5 decision #2: the iOS system prompt only fires
- * after the user taps this screen's CTA — never on cold start with no context, which makes the
- * system prompt itself more likely to be accepted. `(app)/_layout.tsx`'s redirect gate is what
- * routes here (only when permission is `'undetermined'`) and away again once it isn't.
+ * before triggering iOS prompt").
+ *
+ * Two entry paths (Sprint 10 Phase 4):
+ * - Onboarding chain: `?onboarding=1` from streaming; after the OS prompt, layout leaves to all-set.
+ * - Catch-all: `(app)/_layout` when Home + leagues >= 1 + still `'undetermined'`; leave → Home.
  */
 export default function NotificationsPermissionScreen() {
   const { requestAndRegister } = usePushPermission();
@@ -19,6 +20,7 @@ export default function NotificationsPermissionScreen() {
     setIsRequesting(true);
     try {
       await requestAndRegister();
+      // Layout `leave_notifications` navigates once status leaves `'undetermined'`.
     } finally {
       setIsRequesting(false);
     }
