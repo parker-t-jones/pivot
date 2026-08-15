@@ -1478,23 +1478,29 @@ Issues that need resolution but don't block the build:
 
 **Impact if unfixed:** Leagues are typically drafted in August, well before Week 1. A user connecting a Sleeper league during that window — a very common flow — sees an empty lineup screen with no path to a populated one until Sleeper publishes Week 1 matchup data.
 
-### Stale flag state when a user goes inactive mid-game (Sprint 4 discovery) — resolve in Sprint 5
+### Stale flag state when a user goes inactive mid-game (Sprint 4 discovery) — RESOLVED Sprint 5
 
 **Symptom:** `onPlayEvent` (`services/engine`) only recomputes flag state for users in `getActiveUsers()`. The Section 8 "game ends → fire `flag_removed` for every flagged user" behavior therefore fires only for users still active at the whistle. A user who was flagged but went inactive before the game ended keeps a `flagged: true` `FlagState` in the store and never receives the `flag_removed`.
 
 **Fix (Sprint 5):** the deferred-firing dispatcher's `isStillRelevant` re-validation must gate on liveness — drop/expire events for users who are no longer active, and don't trust a stored `flagged` state without confirming the user is live. Acceptable for v1 in isolation (an inactive user has no session to switch), but the dispatcher and cold-start resolver must not treat stale flagged state as truth.
 
-### Stored `FlagState` is not ground truth — `/flags/current` must recompute (Sprint 4 discovery)
+**Resolution (Sprint 5):** `isStillRelevant` (`services/dispatcher/src/isStillRelevant.ts`) requires both state freshness and `userIsActive`. Inactive users drop from the deferred queue; cold-start does not treat stored `flagged` as truth (see next entry).
+
+### Stored `FlagState` is not ground truth — `/flags/current` must recompute (Sprint 4 discovery) — RESOLVED Sprint 5
 
 **Symptom:** Per Section 8, `onPlayEvent` persists a user's `FlagState` only when a diff crosses the event threshold (flag added/removed, or priority delta ≥ ±3). Sub-threshold priority drift is intentionally *not* persisted, so the stored `priorityScore` can lag the true current value by up to ±2, and the stored `reasons` can be slightly stale.
 
 **Fix (Sprint 5+):** `GET /flags/current` (the cold-start endpoint) must recompute fresh from `(lineup, gameState)` via `computeFlagState` rather than reading the stored `FlagState`. Only the WebSocket delta stream should rely on the diff-persisted state. Don't let any consumer treat the stored score as authoritative.
 
-### `scheduledFireAt` is a placeholder (Sprint 4) — Sprint 5 dispatcher owns the real value
+**Resolution (Sprint 5):** `GET /flags/current` (`services/api/src/routes/flags.ts`) recomputes via `computeFlagState` and never reads `user_flag_state:{user}:{game}`.
+
+### `scheduledFireAt` is a placeholder (Sprint 4) — RESOLVED Sprint 5
 
 **Symptom:** The engine sets `FlagEvent.scheduledFireAt = newState.computedAt` as a placeholder. Real deferred firing (stream-lag calibration per `BROADCAST_LAG_SECONDS`, Section 8) is out of scope for Sprint 4.
 
 **Fix (Sprint 5):** the dispatcher's `scheduleFlagEvent` overwrites `scheduledFireAt` with `Date.now() + lag`. Nothing downstream should treat the engine-emitted value as authoritative timing.
+
+**Resolution (Sprint 5):** `QueueingEventDispatcher` (`scheduleFlagEvent.ts`) overwrites the engine placeholder with `clock() + lagSec * 1000` from `BROADCAST_LAG_SECONDS` / unresolved fallback.
 
 ### IDP support (v1.5+) requires per-player position categories in the lineup cache (Sprint 4 note)
 
@@ -1558,7 +1564,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Sprint 7 addendum:** the Home-screen "Now active" CTA resolves its target from `GET /games/:id/broadcasts`'s `preferred` (the eligibility-first `rankBroadcasts` ranker), while the notification banner's Switch uses the dispatcher's timing-consistent `action.deep_link_url` — so for a multi-broadcast game the two entry points can name different services; this is the same underlying guess surfacing in two code paths (presentation vs. timing-critical), not a separate defect, and it resolves with the recorded-choice fix above.
 
-### Home "Now active" reason chip lacks player-name fidelity (Sprint 7 Phase 5) — fix in Sprint 9
+### Home "Now active" reason chip lacks player-name fidelity (Sprint 7 Phase 5) — RESOLVED Sprint 9
 
 **Symptom:** Section 10's State 1 reason chip specs player-level copy ("Jonathan Taylor active — RB — Colts offense"). The shipped `NowActiveCard` chip instead shows a reason-*type* label ("Your offense is on the field") with no player name, position, or possessing-team detail.
 
@@ -1566,9 +1572,9 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Fix (Sprint 9):** either enrich `GET /flags/current`'s flag entries with resolved `flagged_players` (name/position) — a Section 9 response addition — or add a batch player-by-id read the client can call with `flagged_player_ids`; possessing-team context for the chip needs the same treatment.
 
-**Impact if unfixed:** the chip is less specific than Section 10 describes but still communicates why the game is flagged — no functional or correctness impact on the switch itself.
+**Resolution (Sprint 9):** `/flags/current` and `flag_event` carry full `flagged_players`; `NowActiveCard` uses `reasonChipCopy` (`app/lib/teamDisplay.ts`). Multi-player copy convention remains a separate open note below.
 
-### Switching-transition "team color flash" not implemented (Sprint 7 Phase 6) — fix in Sprint 9
+### Switching-transition "team color flash" not implemented (Sprint 7 Phase 6) — RESOLVED Sprint 9
 
 **Symptom:** Section 10's "Switching transition" specs a brief overlay with a "team color flash." The shipped overlay (`SwitchingContext`) is a neutral dark scrim with a spinner and "Switching to…" copy — no team-colored flash.
 
@@ -1576,9 +1582,9 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Fix (Sprint 9):** expose team colors (via the game-summary payloads or a small teams lookup) and drive an accent animation in the overlay from the possessing team's color.
 
-**Impact if unfixed:** purely cosmetic — the transition works and stays under Section 10's sub-1s budget; it just isn't team-colored.
+**Resolution (Sprint 9):** `game_summary` carries team primary/secondary colors; `SwitchingContext` renders `TeamColorFlash` from the resolved possessing/flagged team colors.
 
-### Switching overlay label uses the matchup, not the possessing team (Sprint 7 Phase 6) — fix in Sprint 9
+### Switching overlay label uses the matchup, not the possessing team (Sprint 7 Phase 6) — RESOLVED Sprint 9
 
 **Symptom:** Section 10's transition copy reads "Switching to [Team] game…" (the possessing team). The shipped overlay reads the matchup instead ("DEN @ IND").
 
@@ -1586,9 +1592,9 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Fix (Sprint 9):** add possessing-team identity to the relevant payload(s) (or derive it client-side once live game state is available to the app), then label the overlay with that team's name.
 
-**Impact if unfixed:** the overlay is slightly less specific than Section 10's wording; no functional impact.
+**Resolution (Sprint 9):** `flag_event` `new_state.possession_team` plus `resolvePossessingTeamDisplay` / `resolveFlaggedTeamDisplay` drive the overlay team name (and Home chip team context).
 
-### Deep-link error state is partial — no alternate-broadcast sheet or "Get app" link (Sprint 7 Phase 6) — fix in Sprint 9
+### Deep-link error state is partial — no alternate-broadcast sheet or "Get app" link (Sprint 7 Phase 6) — RESOLVED Sprint 9
 
 **Symptom:** Section 10's deep-link error spec is a "sheet with alternate broadcast or 'Get [app]' App Store link." The shipped error state (`SwitchingContext`) is a generic modal — a message ("that app doesn't seem to be installed — try another broadcast") plus a Close button — with no in-place alternate-broadcast picker and no App Store install link.
 
@@ -1596,9 +1602,9 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Fix (Sprint 9):** pass the full `GET /games/:id/broadcasts` ranked list into the overlay so the user can pick an alternate broadcast, and add a per-service App Store ID map for the "Get [app]" link. (Also depends on the deep-link audit — Open Question #2 — to know which schemes can even fail this way.)
 
-**Impact if unfixed:** on a failed deep link the user is told to try another broadcast but must return to Home to pick one manually; the switch still fails safe (no crash, no silent no-op).
+**Resolution (Sprint 9):** `SwitchingContext` error path shows the ranked alternate-broadcast picker and per-service "Get app" links (`app/lib/streamingServices.ts`).
 
-### Home screen is not subscribed to the WebSocket flag stream (Sprint 7 Phase 5) — fix in Sprint 9
+### Home screen is not subscribed to the WebSocket flag stream (Sprint 7 Phase 5) — RESOLVED Sprint 10 Phase 3
 
 **Symptom:** Section 10's State 1/State 2 describe the Home dashboard auto-updating "via WebSocket when the next flag fires." The shipped Home screen is cold-start only: it fetches `GET /flags/current` + `GET /games/:id/broadcasts` on mount and on pull-to-refresh, and does not update live as flag events arrive.
 
@@ -1606,7 +1612,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Fix (Sprint 9, or whenever the client realtime consumer lands):** subscribe Home to the `realtime:user:{id}` `flag_event` stream and update the "Now active" card (and future "Also flagged" row) in place, keeping the cold-start fetch as the initial/refresh path.
 
-**Impact if unfixed:** the Now Active card can be stale between manual refreshes — a flag that fires while Home is open won't move the card until the next pull-to-refresh. The push/banner path fires independently, so the user is still notified; only the passive dashboard view lags.
+**Resolution (Sprint 10 Phase 3):** Home binds via `useHomeRealtime` / `RealtimeClient` to `/v1/realtime`, gated on `display_phase` live phases; applies `flag_event` deltas and reconciles `/flags/current` after reconnect. Device-live flag traffic still awaits regular-season games.
 
 ### Unpaginated `players` fetches silently truncate at PostgREST's `max_rows` cap (Sprint 9 Phase 3 discovery)
 
@@ -1618,7 +1624,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Impact if unfixed elsewhere:** the currently-shipped call sites are all safe today, but this is a footgun for the next unpaginated (or loosely-filtered) table read someone adds — no test or lint rule catches it, only manual audit against `supabase/config.toml`'s `max_rows`.
 
-### Home States 2–4 (live score / countdown) have no backing endpoint (Sprint 9 Phase 2 discovery) — fix in Sprint 10
+### Home States 2–4 (live score / countdown) have no backing endpoint (Sprint 9 Phase 2 discovery) — RESOLVED Sprint 10
 
 **Symptom:** Section 10 specs Home States 2–4 (upcoming-game countdown, live score for games the user isn't flagged in, etc.) as part of the dashboard's cold-start view. Sprint 9 Phase 2 collapsed these into a single "no active flags" idle state that shows an honest lineup summary instead of live scores or countdowns.
 
@@ -1626,7 +1632,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Fix (Sprint 10):** add `GET /state/nfl` (calendar / `season_type` for State 4a) plus schedule endpoints (`GET /games?week=` / `GET /games/live`) — needed anyway for real-world Sunday preseason testing (kickoff times matter for actually exercising the app on Sundays) — and implement Home States 2–4 against them. Naturally clusters with the Home WebSocket subscription work (see "Home screen is not subscribed to the WebSocket flag stream" above), since both land on Home in the same pass.
 
-**Impact if unfixed:** Home has no representation of "upcoming game" or "live but not flagged" state — a user with no current flags sees only their lineup summary, not a countdown or score ticker. No functional impact on the core flag/switch flow, which doesn't depend on these states.
+**Resolution (Sprint 10):** `GET /state/nfl` (with schedule-derived `display_phase` / openers), `GET /games?week=`, `GET /games/live`, and Home States 2–4 plus State 4a (`HomeLiveIdleCard` / `HomePregameCard` / `HomeOffDayCard` / `IdleHomeCard`) are shipped.
 
 ### Star players ship as a flat toggle list, not Section 10's grid view (Sprint 9 Phase 2)
 
@@ -1670,7 +1676,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Impact if unfixed:** Every league connected between now and the new-season renewal window becomes stale in August and requires a manual disconnect/reconnect. Couples with the offseason sync bug above — both stem from offseason state being second-class, and a `season_year`-behind-current-state check could serve both fixes.
 
-### Sleeper `season_start_date` / `season_type` are unreliable for display (Sprint 10 Phase 2 / 2.5)
+### Sleeper `season_start_date` / `season_type` are unreliable for display (Sprint 10 Phase 2 / 2.5) — RESOLVED Sprint 10 Phase 2.5
 
 **Symptom:** State 4a copy asserted the regular season begins on `season_start_date`; during `'pre'` that field returns the **preseason** opener (e.g. 2026-08-06 vs. the actual Sept 9 regular-season start), making the copy false. Separately, Sleeper's `season_type` runs **ahead of actual games** — e.g. on Aug 3 2026 it already reports `'pre'` while the first preseason kickoff is Aug 6 — so keying Home's eyebrow off `season_type` showed PRESEASON too early.
 
@@ -1678,7 +1684,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Fix:** Home keys off schedule-derived `display_phase` + `preseason_start` / `regular_season_start` on `GET /state/nfl` (MIN kickoffs from seeded `games`, ET calendar day). `season_type` and `season_start_date` remain as Sleeper passthrough for engine/ingestion / metadata — never for Home display. When Sportradar ingestion lands, openers (and eventually season end) come from that schedule source instead of the ESPN seed.
 
-**Impact if unfixed:** wrong phase eyebrow and false "season begins on {date}" copy.
+**Resolution (Sprint 10 Phase 2.5):** Home and `/games?week=` key off `display_phase`; State 4a copy uses opener date-only fields. Remaining gap: `display_phase` has no season-end bound (separate open entry below).
 
 ### display_phase has no season-end bound — 2027 offseason will render as 'regular'
 
@@ -1708,7 +1714,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Fix (RESOLVED):** Introduced app/lib/theme.ts — a single dark-only token layer (colors, spacing, radii, type scale) with one amber accent (#FFB020) that no NFL team owns as a primary. Migrated every (auth), (app), component, and context file onto the tokens; the only remaining hex literals are team colors flowing from server data. Auth screens now share the dark base (no white flash) and the type scale is honest across all screens.
 
-### Connecting a league from Settings leaves the Settings screen mounted under Home — defer to Phase 3
+### Connecting a league from Settings leaves the Settings screen mounted under Home — RESOLVED Sprint 10 Phase 4
 
 **Symptom:** Using "Connect another team" from Settings → connect → on success, the new Home renders on top of a still-mounted Settings screen (previous screen visible at top edge). Cosmetic; resolves on next navigation.
 
@@ -1716,78 +1722,96 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Fix (Phase 3 navigation restructure):** on connect success, reset navigation to Home as root (dismiss the full Settings→connect stack) rather than replace() the top screen. Belongs with the deferred onboarding/routing work, not a standalone patch.
 
+**Resolution (Sprint 10 Phase 4):** non-onboarding connect uses `navigateAfterConnect` → `dismissTo('/(app)')`; onboarding continues the chain then `resetToHomeRoot` from all-set.
+
 ---
 
 ## 14. v1.5 Roadmap
 
 Target: 3 months after v1 ships (mid-season).
-
+ 
 ### Features
-
+ 
 - **Multi-stream split-screen view** (1 + 2 thumbnails on mobile)
 - **Subscription billing** (StoreKit integration, Pro tier)
 - **Multi-league support** (lineup tab gets league selector)
-- **Multi-platform fantasy providers** (Yahoo, ESPN, NFL Fantasy) — see the
-  new "### Multi-platform fantasy" subsection below for the per-provider
-  integration reality; these are NOT equal-difficulty and each is effectively
-  its own sprint, prioritized by v1 user demand.
+- **Multi-platform fantasy providers** (Yahoo, ESPN) — see the "Multi-platform
+  fantasy" subsection below for the per-provider integration reality and the
+  Yahoo-vs-ESPN priority discussion; these are NOT equal-difficulty and each
+  is effectively its own sprint, prioritized by v1 user demand.
 - **Auto-switch toggle** (functional in settings)
 - **Star players** (functional in switching engine, not just stored)
 - **Notification batching** (collapse multiple events in 10s window)
 - **Push receipt polling** (clears stale tokens automatically — see Known Issues)
 - **Android version** (same React Native codebase)
 - **Missed plays screen** (replay history of flag events)
-
 ### Architecture changes
-
+ 
 - New `PlaybackSource` modes for split-screen rendering
 - Billing integration via Supabase Edge Functions or RevenueCat
 - WebSocket message: `flag_batch` for combined events
 - Multi-league lineup cache: `user_lineup_cache:{user_id}:{week}:{league_id}`
 - Push receipt-polling worker + a persisted-ticket-id table (new state, `expo_push_token` cleared on confirmed `DeviceNotRegistered`)
-
 ### Multi-platform fantasy
-
+ 
 v1 ships Sleeper + manual entry only. Sleeper was chosen first because its API
 is public, keyless, and username-addressable (`/v1/user/{username}/leagues/...`)
 — a new provider like that is trivial behind the existing `FantasyProvider`
-interface (Section 6). The other three platforms are NOT like Sleeper, and are
+interface (Section 6). The other two platforms are NOT like Sleeper, and are
 listed here in rough order of integration feasibility:
-
+ 
 - **Yahoo Fantasy** — official API, but requires full OAuth 2.0 three-legged
   auth (registered app credentials, per-user token storage + refresh). Real
-  infrastructure, but a sanctioned and stable path. Most likely first addition
-  post-v1.
+  infrastructure, but a sanctioned and stable path.
 - **ESPN Fantasy** — no official public API. Integration relies on undocumented
-  endpoints and cookie-based auth (`espn_s2` / `SWID` cookies the user extracts
-  from their browser). Brittle (breaks on ESPN changes) and a rough onboarding
-  UX (asking users to paste browser cookies). Higher risk, higher maintenance.
-- **NFL Fantasy** — least certain. No clean, stable public integration path as
-  of v1 planning; requires investigation before committing.
-
-Sequencing rationale: these are deliberately deferred out of v1 (and out of the
-Sprint 10 shipping sprint) so v1 validates the core switching-engine thesis with
-real users on Sleeper first. Provider priority post-v1 should be driven by which
-platform v1 users actually ask for, not built speculatively. The
-`FantasyProvider` abstraction (Section 6) must stay clean so each slots in
-without touching the engine, dispatcher, or UI. Each provider is scoped as its
-own sprint when demand justifies it; Yahoo is the natural first candidate given
-it's the only one with a sanctioned auth flow.
-
+  endpoints (via the `cwendt94/espn-api` wrapper) and cookie-based auth
+  (`espn_s2` / `SWID` cookies the user extracts from their browser). Brittle
+  (breaks on ESPN changes without notice, has been observed deleting
+  historical league data) and a rough onboarding UX (asking users to paste
+  browser cookies). Higher risk, higher maintenance than Yahoo per-integration.
+  **Additional cost not shared with Yahoo/Sleeper:** the wrapper is Python-only
+  with no Node equivalent, so this provider can't be pure "another
+  `FantasyProvider` implementation" inside the existing Fastify/Node backend —
+  it requires standing up a second, ESPN-only runtime (Section 6's deployment
+  topology has no Python process today) that the Node backend calls into.
+**Priority reversal (flagged mid-2026, not yet acted on):** the original
+"Yahoo first, ESPN second" ordering above was ranked by integration quality
+(sanctioned auth beats cookie-scraping). That ordering predates ESPN Fantasy
+Football becoming the NFL's official fantasy game for the 2026 season
+(announced July 16, 2026) — the NFL retired NFL Fantasy entirely and migrated
+its user base to ESPN, making ESPN the largest platform by a wide margin.
+User-base size is a real argument for building ESPN first despite the worse
+integration path and the added Python-runtime cost above. This is captured
+here as an open decision, not resolved — see sequencing rationale below.
+ 
+NFL Fantasy is removed from this list: it no longer exists as a standalone
+platform (retired into ESPN, per above).
+ 
+Sequencing rationale: multi-platform fantasy is deliberately deferred out of
+v1 (and out of the Sprint 10 shipping sprint) so v1 validates the core
+switching-engine thesis with real users on Sleeper first. Provider priority
+post-v1 should still be driven by which platform v1 users actually ask for,
+not built speculatively — the user-base argument above is a prior, not a
+substitute for actual demand signal. Do not build either Yahoo or ESPN
+speculatively before v1 has users. The `FantasyProvider` abstraction
+(Section 6) must stay clean so each slots in without touching the engine,
+dispatcher, or UI. Each provider is scoped as its own sprint when demand
+justifies it; revisit the Yahoo-vs-ESPN ordering at that point with real
+usage data rather than deciding it now.
+ 
 ### Future stake sources (incl. sports betting) — post-v1, requires legal + partnership review
-
+ 
 Reframe: this app's core mechanic is not fantasy-specific — the engine flags
 live game moments a user has a STAKE in. Fantasy lineup is v1's only stake
 source; the same engine can be driven by other stake types. Multi-platform
 fantasy (Yahoo/ESPN/NFL, see previous subsection) is one axis. A second,
 higher-value-but-harder axis is **sports betting slips**:
-
+ 
 - **DraftKings / FanDuel / etc.** — link a user's placed bets so the app flags
   games those bets are live in ("your same-game parlay is playing out now").
   This is what makes PRESEASON meaningful: Sleeper has no preseason lineup, so
   fantasy can't drive preseason flags, but betting stakes can (Sportradar does
   cover preseason games).
-
 Hard constraints — why this is post-v1, not near-term:
 - **API access is closed/partner-gated.** DraftKings and FanDuel do not offer
   open public read APIs for a user's bets; access likely requires a commercial
@@ -1797,7 +1821,6 @@ Hard constraints — why this is post-v1, not near-term:
   gambling regs, responsible-gambling requirements, age verification, stricter
   App Store review for real-money-gambling-adjacent apps. Requires legal review
   BEFORE any build — this is not an engineering-only decision.
-
 Architecture note (do now, cheaply): the engine's input type should generalize
 so a betting stake isn't awkward to add later. Today `UserLineupCache`
 (Section 8) is fantasy-shaped (teamPositions / playerToTeam / starPlayerIds)
