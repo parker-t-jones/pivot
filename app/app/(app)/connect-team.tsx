@@ -14,17 +14,19 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../components/ErrorState';
+import { PlayerPicker } from '../../components/PlayerPicker';
 import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
-import { ApiRequestError, apiClient } from '../../lib/apiClient';
+import { ApiRequestError } from '../../lib/apiClient';
 import {
   connectManualLeague,
   connectSleeperLeague,
   fetchLineup,
   fetchSleeperLeagues,
+  putManualLineup,
   type SleeperLeagueOption,
 } from '../../lib/leagues';
 import { navigateAfterConnect } from '../../lib/navigateAfterConnect';
-import { searchPlayers, type PlayerSearchResult } from '../../lib/players';
+import type { PlayerSearchResult } from '../../lib/players';
 import { theme } from '../../lib/theme';
 
 type Mode = 'choose' | 'sleeper' | 'manual';
@@ -216,14 +218,7 @@ function ConnectManual({ onConnected }: { onConnected: () => void | Promise<void
     setIsSaving(true);
     setErrorMessage(null);
     try {
-      await apiClient.put(`/leagues/${league.league_id}/lineup`, {
-        week: league.week,
-        slots: roster.map((player) => ({
-          player_id: player.player_id,
-          slot_type: 'starter',
-          position_in_lineup: player.position,
-        })),
-      });
+      await putManualLineup(league.league_id, league.week, roster);
       await onConnected();
     } catch (error) {
       setErrorMessage(error instanceof ApiRequestError ? error.message : 'Could not save lineup.');
@@ -273,103 +268,6 @@ function ConnectManual({ onConnected }: { onConnected: () => void | Promise<void
   );
 }
 
-function PlayerPicker({
-  roster,
-  onAdd,
-  onRemove,
-  onSave,
-  isSaving,
-  errorMessage,
-}: {
-  roster: PlayerSearchResult[];
-  onAdd: (player: PlayerSearchResult) => void;
-  onRemove: (playerId: string) => void;
-  onSave: () => void;
-  isSaving: boolean;
-  errorMessage: string | null;
-}) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<PlayerSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const rosteredIds = new Set(roster.map((p) => p.player_id));
-
-  const onSearch = async (text: string) => {
-    setQuery(text);
-    if (text.trim().length < 2) {
-      setResults([]);
-      return;
-    }
-    setIsSearching(true);
-    try {
-      setResults(await searchPlayers(text));
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  return (
-    <View style={styles.content}>
-      <Text style={styles.title}>Add your players</Text>
-      <Text style={styles.subtitle}>Search for the players on your roster.</Text>
-
-      <TextInput
-        onChangeText={onSearch}
-        placeholder="Search players"
-        placeholderTextColor={theme.colors.textSecondary}
-        style={styles.input}
-        value={query}
-      />
-      {isSearching ? <ActivityIndicator color={theme.colors.textPrimary} /> : null}
-
-      <FlatList
-        data={results.filter((p) => !rosteredIds.has(p.player_id))}
-        keyExtractor={(item) => item.player_id}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => onAdd(item)} style={styles.leagueOption}>
-            <Text style={styles.leagueOptionTitle}>
-              {item.first_name} {item.last_name}
-            </Text>
-            <Text style={styles.leagueOptionSubtitle}>
-              {item.position} · {item.team?.abbreviation ?? 'FA'}
-            </Text>
-          </Pressable>
-        )}
-        style={styles.resultsList}
-      />
-
-      <Text style={styles.rosterHeading}>Your roster ({roster.length})</Text>
-      <FlatList
-        data={roster}
-        keyExtractor={(item) => item.player_id}
-        renderItem={({ item }) => (
-          <View style={styles.rosterRow}>
-            <Text style={styles.leagueOptionTitle}>
-              {item.first_name} {item.last_name} ({item.position})
-            </Text>
-            <Pressable onPress={() => onRemove(item.player_id)}>
-              <Text style={styles.removeText}>Remove</Text>
-            </Pressable>
-          </View>
-        )}
-      />
-
-      {errorMessage ? <ErrorState message={errorMessage} /> : null}
-
-      <Pressable
-        disabled={isSaving || roster.length === 0}
-        onPress={onSave}
-        style={[styles.primaryButton, roster.length === 0 && styles.primaryButtonDisabled]}
-      >
-        {isSaving ? (
-          <ActivityIndicator color={theme.colors.onAccent} />
-        ) : (
-          <Text style={styles.primaryButtonText}>Save lineup</Text>
-        )}
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   backText: {
     color: theme.colors.accent,
@@ -416,34 +314,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 14,
   },
-  primaryButtonDisabled: {
-    opacity: 0.5,
-  },
   primaryButtonText: {
     color: theme.colors.onAccent,
     fontSize: 16,
     fontWeight: '700',
-  },
-  removeText: {
-    color: theme.colors.danger,
-    fontSize: theme.type.caption.size,
-    fontWeight: '600',
-  },
-  resultsList: {
-    maxHeight: 180,
-  },
-  rosterHeading: {
-    color: theme.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: theme.spacing.sm,
-    textTransform: 'uppercase',
-  },
-  rosterRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: theme.spacing.sm,
   },
   screen: {
     backgroundColor: theme.colors.background,
