@@ -54,13 +54,21 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiRequestError(401, 'unauthenticated', 'No active Supabase session.');
   }
 
+  // Only set Content-Type when a body is sent. Fastify 5 rejects empty bodies with
+  // `Content-Type: application/json` (FST_ERR_CTP_EMPTY_JSON_BODY) — which is exactly
+  // what DELETE /leagues/:id (and other no-body calls) used to trigger.
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${data.session.access_token}`,
+  };
+  const hasBody = options.body !== undefined;
+  if (hasBody) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${data.session.access_token}`,
-    },
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    headers,
+    body: hasBody ? JSON.stringify(options.body) : undefined,
   });
 
   // 204/205 must not be JSON-parsed — empty bodies (and RN quirks around reading them) previously
