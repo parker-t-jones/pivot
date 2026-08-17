@@ -479,6 +479,18 @@ export type Database = {
       is_valid_slot_type: { Args: { s: string }; Returns: boolean }
       is_valid_streaming_service: { Args: { s: string }; Returns: boolean }
       is_valid_viewing_session_source: { Args: { s: string }; Returns: boolean }
+      search_players: {
+        Args: { q: string; filter_position?: string | null }
+        Returns: {
+          id: string
+          first_name: string
+          last_name: string
+          position: string
+          team_id: string
+          team_abbreviation: string
+          team_name: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
