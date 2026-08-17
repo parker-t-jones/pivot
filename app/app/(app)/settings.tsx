@@ -23,6 +23,7 @@ import { scheduleTestFlagNotificationAsync } from '../../lib/devNotifications';
 import {
   disconnectLeague,
   fetchAllLineups,
+  renameManualLeague,
   setStarPlayer,
   syncLeague,
   type LeagueSummary,
@@ -173,6 +174,14 @@ export default function SettingsScreen() {
       <LeaguesSection
         leagues={leagues}
         onConnectAnother={() => router.push('/(app)/connect-team')}
+        onEditLineup={(leagueId) =>
+          router.push(`/(app)/edit-manual-lineup?leagueId=${encodeURIComponent(leagueId)}`)
+        }
+        onRename={async (leagueId, name) => {
+          await renameManualLeague(leagueId, name);
+          const rows = await refreshLeagues();
+          await load(rows);
+        }}
         onSync={async (leagueId) => {
           await syncLeague(leagueId);
           const rows = await refreshLeagues();
@@ -383,15 +392,48 @@ function StreamingServicesSection({
 function LeaguesSection({
   leagues,
   onConnectAnother,
+  onEditLineup,
+  onRename,
   onSync,
   onDisconnect,
 }: {
   leagues: LeagueSummary[];
   onConnectAnother: () => void;
+  onEditLineup: (leagueId: string) => void;
+  onRename: (leagueId: string, name: string) => Promise<void>;
   onSync: (leagueId: string) => Promise<void>;
   onDisconnect: (leagueId: string) => Promise<void>;
 }) {
   const [busyLeagueId, setBusyLeagueId] = useState<string | null>(null);
+
+  const promptRename = (league: LeagueSummary) => {
+    Alert.prompt(
+      'Rename league',
+      undefined,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: (value?: string) => {
+            const next = value?.trim() ?? '';
+            if (next.length === 0 || next === league.name) return;
+            void (async () => {
+              setBusyLeagueId(league.league_id);
+              try {
+                await onRename(league.league_id, next);
+              } catch (error) {
+                Alert.alert('Could not rename', errorMessage(error));
+              } finally {
+                setBusyLeagueId(null);
+              }
+            })();
+          },
+        },
+      ],
+      'plain-text',
+      league.name,
+    );
+  };
 
   return (
     <SectionCard title="Leagues">
@@ -424,7 +466,24 @@ function LeaguesSection({
                 >
                   <Text style={styles.smallButtonText}>Sync</Text>
                 </Pressable>
-              ) : null}
+              ) : (
+                <>
+                  <Pressable
+                    disabled={busyLeagueId === league.league_id}
+                    onPress={() => onEditLineup(league.league_id)}
+                    style={styles.smallButton}
+                  >
+                    <Text style={styles.smallButtonText}>Edit lineup</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={busyLeagueId === league.league_id}
+                    onPress={() => promptRename(league)}
+                    style={styles.smallButton}
+                  >
+                    <Text style={styles.smallButtonText}>Rename</Text>
+                  </Pressable>
+                </>
+              )}
               <Pressable
                 disabled={busyLeagueId === league.league_id}
                 onPress={() =>
@@ -607,7 +666,10 @@ const styles = StyleSheet.create({
   },
   leagueRowActions: {
     flexDirection: 'row',
+    flexShrink: 1,
+    flexWrap: 'wrap',
     gap: theme.spacing.sm,
+    justifyContent: 'flex-end',
   },
   leagueRowInfo: {
     flex: 1,

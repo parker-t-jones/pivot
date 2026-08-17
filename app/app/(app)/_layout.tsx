@@ -112,6 +112,7 @@ function AppNavigator() {
       <Stack.Screen name="notifications-permission" />
       <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
       <Stack.Screen name="connect-team" />
+      <Stack.Screen name="edit-manual-lineup" />
       <Stack.Screen name="onboarding-streaming" />
       <Stack.Screen name="onboarding-all-set" />
     </Stack>
