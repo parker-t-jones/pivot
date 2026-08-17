@@ -20,19 +20,10 @@ const playersRoutes: FastifyPluginAsyncZod = async (fastify) => {
     async (request) => {
       const { q, position } = request.query;
 
-      let query = fastify.supabase
-        .from('players')
-        .select('id, first_name, last_name, position, team_id, teams(id, abbreviation, name)')
-        .eq('active', true)
-        .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
-        .order('last_name', { ascending: true })
-        .limit(20);
-
-      if (position) {
-        query = query.eq('position', position);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await fastify.supabase.rpc('search_players', {
+        q,
+        filter_position: position ?? null,
+      });
       if (error) throw error;
 
       return {
@@ -41,13 +32,11 @@ const playersRoutes: FastifyPluginAsyncZod = async (fastify) => {
           first_name: player.first_name,
           last_name: player.last_name,
           position: player.position,
-          team: player.teams
-            ? {
-                team_id: player.teams.id,
-                abbreviation: player.teams.abbreviation,
-                name: player.teams.name,
-              }
-            : null,
+          team: {
+            team_id: player.team_id,
+            abbreviation: player.team_abbreviation,
+            name: player.team_name,
+          },
         })),
       };
     },
