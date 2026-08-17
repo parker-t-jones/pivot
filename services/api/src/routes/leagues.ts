@@ -4,9 +4,12 @@ import '../plugins/services.js';
 import { requireUser } from '../plugins/auth.js';
 import { ApiError } from '../lib/errors.js';
 import { getOwnedLeagueOrThrow } from '../lib/get-owned-league.js';
-import { refreshLineupCache, syncLeagueLineup } from '../lib/lineup-sync.js';
-import { getCurrentNflState } from '../lib/nfl-state.js';
-import type { SupabaseServiceClient } from '../lib/supabase.js';
+import {
+  buildLineupResponse,
+  getLineupSyncContext,
+  refreshLineupCache,
+  syncLeagueLineup,
+} from '../lib/lineup-sync.js';
 import { sleeperProvider } from '../providers/index.js';
 
 const SLOT_TYPES = ['starter', 'bench', 'flex', 'idp'] as const;
@@ -26,54 +29,6 @@ function leagueSummary(league: {
     sport: league.sport,
     season_year: league.season_year,
     last_synced_at: league.last_synced_at,
-  };
-}
-
-/** Shared enrichment query behind both `GET` and `PUT /leagues/:id/lineup` (Section 9). */
-async function getLineupResponse(
-  supabase: SupabaseServiceClient,
-  league: { id: string; last_synced_at: string | null },
-  week: number,
-) {
-  const { data, error } = await supabase
-    .from('lineup_slots')
-    .select(
-      'id, slot_type, position_in_lineup, is_star, players(id, first_name, last_name, position, teams(id, abbreviation, name))',
-    )
-    .eq('league_id', league.id)
-    .eq('week', week)
-    .order('created_at', { ascending: true });
-  if (error) throw error;
-
-  return {
-    league_id: league.id,
-    week,
-    last_synced_at: league.last_synced_at,
-    slots: (data ?? []).flatMap((slot) => {
-      const player = slot.players;
-      if (!player) return [];
-      return [
-        {
-          slot_id: slot.id,
-          slot_type: slot.slot_type,
-          position_in_lineup: slot.position_in_lineup,
-          player: {
-            player_id: player.id,
-            first_name: player.first_name,
-            last_name: player.last_name,
-            position: player.position,
-            team: player.teams
-              ? {
-                  team_id: player.teams.id,
-                  abbreviation: player.teams.abbreviation,
-                  name: player.teams.name,
-                }
-              : null,
-          },
-          is_star: slot.is_star,
-        },
-      ];
-    }),
   };
 }
 
@@ -169,14 +124,17 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         }
       }
 
-      // Best-effort initial sync — connect should succeed even if the current week has no
-      // matchup data yet (e.g. before the season starts). The worker/`/sync` retry later.
+      // Same guarded sync as POST /leagues/:id/sync (roster fallback when display_phase is
+      // off/pre). Best-effort wrap so connect still 201s on transient provider failures.
       try {
-        const nflState = await getCurrentNflState(fastify.lineupCache);
+        const syncContext = await getLineupSyncContext({
+          supabase: fastify.supabase,
+          lineupCache: fastify.lineupCache,
+        });
         await syncLeagueLineup(
           { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
           league,
-          nflState.week,
+          { week: syncContext.week, displayPhase: syncContext.displayPhase },
         );
       } catch (syncError) {
         fastify.log.warn({ err: syncError, leagueId: league.id }, 'Initial Sleeper sync failed');
@@ -239,13 +197,21 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         requireUser(request).id,
         request.params.id,
       );
-      const nflState = await getCurrentNflState(fastify.lineupCache);
-      const { slotCount } = await syncLeagueLineup(
+      const syncContext = await getLineupSyncContext({
+        supabase: fastify.supabase,
+        lineupCache: fastify.lineupCache,
+      });
+      const result = await syncLeagueLineup(
         { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
         league,
-        nflState.week,
+        { week: syncContext.week, displayPhase: syncContext.displayPhase },
       );
-      return { league_id: league.id, week: nflState.week, slot_count: slotCount };
+      return {
+        league_id: league.id,
+        week: result.week,
+        slot_count: result.slotCount,
+        lineup_source: result.lineupSource,
+      };
     },
   );
 
@@ -263,8 +229,17 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         requireUser(request).id,
         request.params.id,
       );
-      const week = request.query.week ?? (await getCurrentNflState(fastify.lineupCache)).week;
-      return await getLineupResponse(fastify.supabase, league, week);
+      const syncContext = await getLineupSyncContext({
+        supabase: fastify.supabase,
+        lineupCache: fastify.lineupCache,
+      });
+      const week = request.query.week ?? syncContext.week;
+      return await buildLineupResponse(
+        fastify.supabase,
+        league,
+        week,
+        syncContext.regularSeasonStart,
+      );
     },
   );
 
@@ -356,9 +331,19 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
         league,
         week,
+        { lineupSource: 'matchup' },
       );
 
-      return await getLineupResponse(fastify.supabase, league, week);
+      const syncContext = await getLineupSyncContext({
+        supabase: fastify.supabase,
+        lineupCache: fastify.lineupCache,
+      });
+      return await buildLineupResponse(
+        fastify.supabase,
+        league,
+        week,
+        syncContext.regularSeasonStart,
+      );
     },
   );
 
