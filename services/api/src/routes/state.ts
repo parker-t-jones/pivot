@@ -18,6 +18,18 @@ const stateRoutes: FastifyPluginAsyncZod = async (fastify) => {
     requireUser(request);
     const nflState = await getCurrentNflState(fastify.lineupCache);
     const openers = await derivePhaseOpeners(fastify.supabase);
+    // Missing schedule seed → deriveDisplayPhase falls back to Sleeper season_type (unreliable
+    // for display). Keep the endpoint resilient for Home; surface the degraded path in logs.
+    if (!openers.preseasonStart || !openers.regularSeasonStart) {
+      fastify.log.warn(
+        {
+          preseason_start: openers.preseasonStart,
+          regular_season_start: openers.regularSeasonStart,
+          season_type: nflState.seasonType,
+        },
+        'GET /state/nfl: phase openers missing — display_phase falling back to Sleeper season_type. Run `pnpm seed:schedule`.',
+      );
+    }
     const displayPhase = deriveDisplayPhaseNow(openers, nflState.seasonType);
     return {
       season: nflState.season,

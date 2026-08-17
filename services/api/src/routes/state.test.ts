@@ -104,6 +104,7 @@ describe('GET /state/nfl', () => {
       nflState: { season: '2026', week: 0, seasonType: 'off', seasonStartDate: null },
       earliestByType: {},
     });
+    const warnSpy = vi.spyOn(app.log, 'warn');
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
     const response = await app.inject({
@@ -122,6 +123,14 @@ describe('GET /state/nfl', () => {
       regular_season_start: null,
       display_phase: 'off',
     });
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preseason_start: null,
+        regular_season_start: null,
+        season_type: 'off',
+      }),
+      expect.stringContaining('pnpm seed:schedule'),
+    );
   });
 
   it('on Aug 3 ET with openers Aug 6 / Sep 9: display_phase is off despite season_type pre', async () => {
@@ -142,6 +151,7 @@ describe('GET /state/nfl', () => {
       },
     });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    const warnSpy = vi.spyOn(app.log, 'warn');
 
     const response = await app.inject({
       method: 'GET',
@@ -159,5 +169,6 @@ describe('GET /state/nfl', () => {
       regular_season_start: '2026-09-09',
       display_phase: 'off',
     });
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

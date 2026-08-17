@@ -35,18 +35,26 @@ before starting the next.
    # Confirm it's up:
    supabase status
 
-3. API server (new tab)
+3. Seed reference data (required after first start, DB reset, or `supabase db reset`)
+   cd /Users/parkerjones/Developer/projects/fantasyfocus
+   pnpm seed:players    # Sleeper player dump → players (lineup sync resolves sleeper_id here)
+   pnpm seed:schedule   # ESPN slate → games (phase openers / display_phase for /state/nfl)
+   # Skip only if you already seeded this local DB and have not reset it.
+   # Without these: Sleeper sync returns players_not_seeded; /state/nfl openers stay null
+   # and display_phase falls back to unreliable Sleeper season_type (server warns in logs).
+
+4. API server (new tab)
    cd /Users/parkerjones/Developer/projects/fantasyfocus
    pnpm --filter @fantasy-focus/api dev
    # Wait for: "Server listening at http://127.0.0.1:3000"
 
-4. Metro / Expo (new tab)
+5. Metro / Expo (new tab)
    cd /Users/parkerjones/Developer/projects/fantasyfocus/app
    pnpm start
    # Once the QR/menu appears, press: i
    # This opens the iOS Simulator and installs/launches the app.
 
-5. Sign in on the simulator with your test account if prompted.
+6. Sign in on the simulator with your test account if prompted.
 
 
 VERIFY THE BACKEND IS REACHABLE (optional sanity check)
@@ -58,7 +66,14 @@ curl -s "http://127.0.0.1:3000/leagues" -H "Authorization: Bearer $JWT" | python
 COMMON FIXES
 ------------
 "Could not load your games" / red ErrorState on Home
-  -> API server or Supabase isn't running. Redo steps 1-3, then tap Retry.
+  -> API server or Supabase isn't running. Redo steps 1-2 and 4, then tap Retry.
+
+Sleeper sync / connect lineup empty, or `players_not_seeded` (503)
+  -> `players` table is empty. From repo root: `pnpm seed:players`, then POST /leagues/:id/sync.
+
+`preseason_start` / `regular_season_start` null on GET /state/nfl
+  -> `games` table is empty. From repo root: `pnpm seed:schedule`. Until then display_phase
+     falls back to Sleeper season_type (API logs a warning on each /state/nfl call).
 
 lsof -i :3000
   -> if empty, API server is down; if MULTIPLE pids, kill and restart clean:

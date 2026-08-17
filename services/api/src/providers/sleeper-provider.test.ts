@@ -183,4 +183,39 @@ describe('SleeperProvider', () => {
       ).rejects.toMatchObject({ statusCode: 404, code: 'sleeper_roster_not_found' });
     });
   });
+
+  describe('fetchRosterPlayers', () => {
+    it('returns static roster player ids without calling matchups', async () => {
+      const getLeagueMatchups = vi.spyOn(sleeperClient, 'getLeagueMatchups');
+      vi.spyOn(sleeperClient, 'getLeagueRosters').mockResolvedValue([
+        {
+          roster_id: 2,
+          owner_id: 'user-abc',
+          starters: ['qb1'],
+          players: ['qb1', 'bench1', '0'],
+        },
+      ]);
+
+      const ids = await new SleeperProvider().fetchRosterPlayers({
+        externalLeagueId: 'league-1',
+        externalRosterId: '2',
+      });
+
+      expect(ids).toEqual(['qb1', 'bench1']);
+      expect(getLeagueMatchups).not.toHaveBeenCalled();
+    });
+
+    it('throws sleeper_roster_not_found when the roster id is missing', async () => {
+      vi.spyOn(sleeperClient, 'getLeagueRosters').mockResolvedValue([
+        { roster_id: 1, owner_id: 'someone-else', starters: [], players: [] },
+      ]);
+
+      await expect(
+        new SleeperProvider().fetchRosterPlayers({
+          externalLeagueId: 'league-1',
+          externalRosterId: '2',
+        }),
+      ).rejects.toMatchObject({ statusCode: 404, code: 'sleeper_roster_not_found' });
+    });
+  });
 });

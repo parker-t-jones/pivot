@@ -3,6 +3,7 @@ import { ApiError } from '../lib/errors.js';
 import type {
   FantasyProvider,
   FetchLineupInput,
+  FetchRosterPlayersInput,
   NormalizedLineupSlot,
 } from './fantasy-provider.js';
 import { mapRosterToLineupSlots } from './roster-mapping.js';
@@ -15,6 +16,8 @@ export interface SleeperLeagueConnection {
   name: string;
   seasonYear: number;
 }
+
+const EMPTY_SLOT_PLAYER_ID = '0';
 
 /**
  * `SleeperProvider` (PLAN.md Section 2 swap-ready `FantasyProvider` boundary).
@@ -66,12 +69,14 @@ export class SleeperProvider implements FantasyProvider {
     };
   }
 
+  /**
+   * Week-scoped matchup lineup. Still opportunistically falls back to `/rosters` when matchups
+   * are empty/missing — safety net if `display_phase` and Sleeper briefly disagree during the
+   * active season. Off/pre sync must call `fetchRosterPlayers` instead (gated in lineup-sync).
+   */
   async fetchLineup(input: FetchLineupInput): Promise<NormalizedLineupSlot[]> {
     const league = await sleeperClient.getLeague(input.externalLeagueId);
 
-    // Primary path: week matchups (accurate during the season). When matchups are missing —
-    // offseason/preseason week 0, empty array, no matching roster, or a not-found-style error —
-    // fall through to the league roster, which carries the same starters/players fields.
     const matchupSlots = await tryLineupFromMatchups(
       input.externalLeagueId,
       input.externalRosterId,
@@ -82,22 +87,34 @@ export class SleeperProvider implements FantasyProvider {
       return matchupSlots;
     }
 
-    const rosters = await sleeperClient.getLeagueRosters(input.externalLeagueId);
-    const roster = rosters.find((r) => String(r.roster_id) === input.externalRosterId);
-    if (!roster) {
-      throw new ApiError(
-        404,
-        'sleeper_roster_not_found',
-        `No roster found for roster ${input.externalRosterId} in league ${input.externalLeagueId}.`,
-      );
-    }
-
+    const roster = await getOwnedRoster(input.externalLeagueId, input.externalRosterId);
     return mapRosterToLineupSlots(
       league.roster_positions,
       roster.starters ?? [],
       roster.players ?? [],
     );
   }
+
+  /** Static roster player IDs — no week / starter scoping (off/pre `display_phase`). */
+  async fetchRosterPlayers(input: FetchRosterPlayersInput): Promise<string[]> {
+    const roster = await getOwnedRoster(input.externalLeagueId, input.externalRosterId);
+    return (roster.players ?? []).filter(
+      (playerId) => playerId !== EMPTY_SLOT_PLAYER_ID && playerId.length > 0,
+    );
+  }
+}
+
+async function getOwnedRoster(externalLeagueId: string, externalRosterId: string) {
+  const rosters = await sleeperClient.getLeagueRosters(externalLeagueId);
+  const roster = rosters.find((r) => String(r.roster_id) === externalRosterId);
+  if (!roster) {
+    throw new ApiError(
+      404,
+      'sleeper_roster_not_found',
+      `No roster found for roster ${externalRosterId} in league ${externalLeagueId}.`,
+    );
+  }
+  return roster;
 }
 
 /**
