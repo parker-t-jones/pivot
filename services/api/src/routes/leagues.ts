@@ -188,6 +188,46 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
     },
   );
 
+  /** Rename a manual league (Settings). Sleeper names stay provider-owned. */
+  fastify.patch(
+    '/leagues/:id',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        body: z.object({ name: z.string().min(1) }),
+      },
+    },
+    async (request) => {
+      const league = await getOwnedLeagueOrThrow(
+        fastify.supabase,
+        requireUser(request).id,
+        request.params.id,
+      );
+      if (league.platform !== 'manual') {
+        throw new ApiError(
+          400,
+          'manual_league_only',
+          'Only manual leagues can be renamed — Sleeper league names come from Sleeper.',
+        );
+      }
+
+      const name = request.body.name.trim();
+      if (name.length === 0) {
+        throw new ApiError(400, 'validation_error', 'League name cannot be empty.');
+      }
+
+      const { data: updated, error } = await fastify.supabase
+        .from('leagues')
+        .update({ name })
+        .eq('id', league.id)
+        .select('*')
+        .single();
+      if (error) throw error;
+
+      return leagueSummary(updated);
+    },
+  );
+
   fastify.post(
     '/leagues/:id/sync',
     { schema: { params: z.object({ id: z.string().uuid() }) } },
