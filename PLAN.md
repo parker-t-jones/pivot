@@ -275,9 +275,13 @@ One row per user, upserted as session changes.
 | `sport` | text | `'nfl'` for v1 |
 | `season_year` | int | |
 | `last_synced_at` | timestamptz | nullable |
+| `lineup_source` | text | nullable; `'matchup' \| 'roster_fallback'` — which source `GET /leagues/:id/lineup` composes from |
+| `fallback_roster` | jsonb | nullable; UUID `player_id[]` when `lineup_source = 'roster_fallback'` (off/pre — not written to `lineup_slots`) |
 | `created_at` | timestamptz | |
 
 > **Sprint 3 divergence:** `external_owner_id` and `external_roster_id` were added during Sprint 3 implementation. They weren't in the original spec but are required to map a connected Sleeper account to the correct roster within a league (a league has many rosters; only one belongs to the connecting user). Both are `NULL` for `platform = 'manual'` leagues.
+
+> **Offseason roster fallback:** `lineup_source` / `fallback_roster` store a static roster when `display_phase` is `'off'`/`'pre'` so we never invent week-scoped starter/bench rows in `lineup_slots` before matchups exist. Cleared when sync flips to `'matchup'`.
 
 #### `lineup_slots`
 | Column | Type | Notes |
@@ -873,10 +877,11 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 | `POST` | `/leagues/sleeper` | Connect Sleeper league |
 | `POST` | `/leagues/manual` | Create manual league |
 | `DELETE` | `/leagues/:id` | Delete league |
+| `PATCH` | `/leagues/:id` | Rename manual league (`{ name }`; `manual_league_only` for Sleeper) |
 | `POST` | `/leagues/:id/sync` | Force refresh from Sleeper |
 | `GET` | `/leagues/:id/lineup?week={w}` | Get lineup for week |
 | `PUT` | `/leagues/:id/lineup` | Replace lineup for week |
-| `GET` | `/players/search?q={q}&position={p}` | Player autocomplete |
+| `GET` | `/players/search?q={q}&position={p}` | Player autocomplete via `search_players` RPC (word-prefix AND across tokens; team city/name/abbrev only on `DEF` rows) |
 | `POST` | `/leagues/:id/stars` | Set star players |
 
 **`GET /leagues/:id/lineup` response:**
@@ -884,10 +889,12 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 {
   league_id: string,
   week: number,
-  last_synced_at: string,
+  last_synced_at: string | null,
+  lineup_source: 'matchup' | 'roster_fallback' | null, // null for never-synced / manual with no source tag
+  regular_season_start: string | null,                 // date-only YYYY-MM-DD (ET); for fallback copy
   slots: Array<{
-    slot_id: string,
-    slot_type: 'starter' | 'bench' | 'flex' | 'idp',
+    slot_id: string,           // lineup_slots.id for matchup; player_id for roster_fallback (no slot row)
+    slot_type: 'starter' | 'bench' | 'flex' | 'idp', // roster_fallback: all 'starter' (startable, no bench signal)
     position_in_lineup: string,
     player: {
       player_id: string,
@@ -896,7 +903,7 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
       position: string,
       team: { team_id: string, abbreviation: string, name: string }
     },
-    is_star: boolean
+    is_star: boolean           // always false for roster_fallback (stars live on lineup_slots)
   }>
 }
 ```
@@ -1180,10 +1187,19 @@ check in the route handler, not an RLS policy) — the same service-role-plus-ch
 
 ### Navigation
 
-Three-tab bottom navigation:
+Three-tab bottom navigation (spec):
 1. **Home** — live games dashboard (opens here on launch)
 2. **Lineup** — fantasy team and live points
 3. **Settings** — preferences, leagues, account
+
+**Shipped Expo Router screens** (`app/app/(app)/`, headerless stack; Settings is modal):
+- `index` — Home
+- `settings` — Settings (modal)
+- `connect-team` — Connect Sleeper / Add manually (create). Manual create uses shared `PlayerPicker` (`app/components/PlayerPicker.tsx`) after `POST /leagues/manual`.
+- `edit-manual-lineup?leagueId=` — Edit lineup for an existing `platform: 'manual'` league (Settings entry). Same shared `PlayerPicker`, pre-filled from `GET /leagues/:id/lineup`; saves via `PUT /leagues/:id/lineup`. Not the create flow — does not `POST /leagues/manual`.
+- `onboarding-streaming`, `notifications-permission`, `onboarding-all-set` — post-connect onboarding chain
+
+`PlayerPicker` is create+edit shared, not create-only.
 
 ### Onboarding (6 screens, ~2 min total)
 
@@ -1193,7 +1209,7 @@ Three-tab bottom navigation:
 
 **3. Connect fantasy team.** Two options:
 - *Connect Sleeper* — username input → league picker → persist
-- *Add manually* — lineup builder with player search
+- *Add manually* — name league → `PlayerPicker` (shared with Settings edit-lineup) → `PUT` lineup
 
 **4. Streaming services.** Multi-select grid of services (Sunday Ticket, ESPN+, Paramount+, Peacock, Prime, NFL+, broadcast TV). Writes to `user_app_presence`.
 
@@ -1466,17 +1482,47 @@ Issues that need resolution but don't block the build:
 
 ## Known Issues
 
-### Sleeper sync fails during the offseason/preseason — must fix before v1 launch
+### Disconnect league returned 500 (empty JSON body + Content-Type) — RESOLVED Aug 16, 2026
 
-**Symptom:** Both the best-effort initial sync run by `POST /leagues/sleeper` (connect flow) and an explicit `POST /leagues/:id/sync` fail with a `sleeper_matchup_not_found` error whenever the NFL is in the offseason or preseason. In the connect flow this is caught and logged, so it fails silently — the league gets created but its lineup stays empty; via a direct `/sync` call it surfaces as a 404 to the client.
+**Symptom:** Settings → Disconnect on any league failed with a client-visible 500. Not FK-related (synced vs unsynced both failed before the delete handler ran).
 
-**Root cause:** Sync always targets the current week reported by Sleeper's `/v1/state/nfl` (`services/api/src/lib/nfl-state.ts`). When `season_type` is `'off'` or `'pre'`, that week is `0`. Sleeper's `/league/{id}/matchups/0` has no matchup data for week 0, so `SleeperProvider.fetchLineup` (`services/api/src/providers/sleeper-provider.ts`) can't find a matchup for the roster and throws `sleeper_matchup_not_found`.
+**Root cause:** `apiClient` always set `Content-Type: application/json`, including `DELETE` with no body. Fastify 5 rejects that with `FST_ERR_CTP_EMPTY_JSON_BODY` (400 on the error object). The API error handler only special-cased Zod + `ApiError`, so the FastifyError was flattened to opaque `500 internal_error`.
 
-**Fix options (pick one before regular season starts):**
-1. Guard `syncLeagueLineup` (`services/api/src/lib/lineup-sync.ts`) and the sync routes to no-op — or return a distinct `season_not_active`-style response — when `nflState.seasonType` is `'off'` or `'pre'`, instead of attempting a matchup fetch that can't succeed.
-2. Fall back to `GET /league/{id}/rosters` (the roster's static `players` list, with no `starters`/week-scoping) when there's no matchup data yet, so the app can show *something* — even if not yet slotted into starter/bench positions — before Week 1 matchups exist.
+**Resolution:** Omit `Content-Type` when no body is sent (`app/lib/apiClient.ts`). Shared `apiErrorHandler` honors FastifyError `statusCode` for 4xx instead of collapsing to 500 (`services/api/src/lib/errors.ts`). Same empty-body risk also covered for other no-body calls (`DELETE /me`, `DELETE /me/push-token`, `POST …/sync`, GETs).
 
-**Impact if unfixed:** Leagues are typically drafted in August, well before Week 1. A user connecting a Sleeper league during that window — a very common flow — sees an empty lineup screen with no path to a populated one until Sleeper publishes Week 1 matchup data.
+### Player search broke on multi-word queries; defenses only matched "Defense" — RESOLVED Aug 16, 2026
+
+**Symptom:** Typing "David" found David Montgomery; "David M" returned nothing. Searching "Lions" / "Detroit" / "DET" never found the Lions defense (only the literal last name "Defense" worked).
+
+**Root cause:** `GET /players/search` used `.or(first_name.ilike.%q%,last_name.ilike.%q%)` — whole-string substring against name columns only. No tokenization; team fields were joined for the response but not searched. DEF rows are seeded as `first_name: ''`, `last_name: 'Defense'` with team identity only on `teams`.
+
+**Resolution:** `search_players(q, filter_position)` RPC — combined search text, whitespace tokens, word-prefix match, AND across tokens. Route calls the RPC instead of the old `.or()` filter. (Team-field scoping refined in the next entry.)
+
+### Team-name search returned every player on that roster, not just the defense — RESOLVED Aug 16, 2026
+
+**Symptom:** After the search RPC landed, "Lions" / "Detroit" returned the DET defense **and** all DET skill players (e.g. Jared Goff).
+
+**Root cause:** Combined `search_text` included team city/name/abbreviation for every player, so skill players matched team tokens.
+
+**Resolution:** Append team city/name/abbreviation to `search_text` only when `position = 'DEF'`. Non-DEF rows stay name-only (multi-word "David M" unchanged). Literal "Defense" still matches via last_name.
+
+### Manual leagues had no edit/rename path after create — RESOLVED Aug 16, 2026
+
+**Symptom:** Fully manual leagues (`platform: 'manual'`) could only be disconnected after creation — no way to change the roster or rename. Not a regression; the create flow (`connect-team` → Add manually) never gained an edit entry point. PLAN Settings already listed rename as intended.
+
+**Root cause / gap:** Settings showed Sync (Sleeper) + Disconnect only. `ConnectManual` always `POST /leagues/manual` first (create-only). Backend already had `PUT /leagues/:id/lineup` for manual rosters; no rename endpoint yet.
+
+**Resolution:** Settings manual rows: Edit lineup / Rename / Disconnect. Dedicated `edit-manual-lineup?leagueId=` screen (shared `PlayerPicker`, pre-fill from GET lineup, save via PUT). `PATCH /leagues/:id` `{ name }` for manual-only rename (`manual_league_only` for Sleeper — reconnect would overwrite a local Sleeper name anyway). Section 9 API table updated; Settings "refresh/rename/disconnect" wording left as-is (now accurate for rename).
+
+### Sleeper sync fails during the offseason/preseason — must fix before v1 launch — RESOLVED
+
+**Symptom (historical):** Connect (`POST /leagues/sleeper`) and `POST /leagues/:id/sync` could not populate a usable lineup while matchups were unpublished (offseason/preseason). Early versions threw `sleeper_matchup_not_found` on `/matchups/0`; a later opportunistic matchup→roster fallback inside `SleeperProvider.fetchLineup` avoided the throw but still wrote week-scoped `lineup_slots` (including week `0`), left connect vs `/sync` inconsistent, and gave the client no signal that the data was a pre-season roster dump rather than real starters.
+
+**Root cause:** Sync treated Sleeper week/matchups as always available and keyed phase-sensitive behavior on raw `season_type` (unreliable for calendar truth — same class of bug as Home's pre–Sprint-10 State 4a). Roster lists are not week-scoped starter/bench data; stuffing them into `lineup_slots` created the week-0 landmine and broke `refreshLineupCache`'s starter/flex-only assumption.
+
+**Resolution:** Gate sync + the lineup worker on schedule-derived `display_phase` (not `season_type`). When `display_phase` is `'off'` or `'pre'`: skip matchups; fetch `GET /league/{id}/rosters`; persist league-level `leagues.fallback_roster` (player UUID list) + `leagues.lineup_source = 'roster_fallback'`; do **not** write `lineup_slots`. When `'regular'`/`'post'`: sync via matchups into `lineup_slots`, set `lineup_source = 'matchup'`, clear `fallback_roster`. `GET /leagues/:id/lineup` composes from the active source and returns `lineup_source` + `regular_season_start` for clients. `refreshLineupCache` treats every fallback player as startable. Connect and `/sync` share this path (success-with-fallback). Once `display_phase` flips to `'regular'`, the 5-min worker re-syncs via matchups and overwrites the fallback (it does not gate on stored `lineup_source`). Opportunistic matchup→roster fallback inside `fetchLineup` remains only as a safety net if Sleeper and `display_phase` briefly disagree during the active season.
+
+**Out of scope / related:** offseason-connected leagues going stale on Sleeper season renewal (new `league_id`) — separate Known Issue below; do not conflate.
 
 ### Stale flag state when a user goes inactive mid-game (Sprint 4 discovery) — RESOLVED Sprint 5
 
@@ -1674,7 +1720,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Fix (Sprint 10 or v1.5):** on a season transition (`season_type` → `'pre'`/`'regular'`), detect leagues whose stored `season_year` is behind the current NFL state and either (a) prompt the user to reconnect, or (b) auto-re-resolve via the user's Sleeper `user_id`, which is stable across seasons — `leagues` already stores `external_owner_id` (Sprint 3), so re-resolving by owner rather than league ID is viable without re-prompting for a username.
 
-**Impact if unfixed:** Every league connected between now and the new-season renewal window becomes stale in August and requires a manual disconnect/reconnect. Couples with the offseason sync bug above — both stem from offseason state being second-class, and a `season_year`-behind-current-state check could serve both fixes.
+**Impact if unfixed:** Every league connected between now and the new-season renewal window becomes stale in August and requires a manual disconnect/reconnect. Related to (but distinct from) the resolved offseason roster-fallback sync issue — renewal is a different mechanism (`league_id` / `season_year`), not matchup availability.
 
 ### Sleeper `season_start_date` / `season_type` are unreliable for display (Sprint 10 Phase 2 / 2.5) — RESOLVED Sprint 10 Phase 2.5
 
