@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseServiceClient } from './supabase.js';
 
-const { getCurrentNflState } = vi.hoisted(() => ({ getCurrentNflState: vi.fn() }));
+const { getLineupSyncContext } = vi.hoisted(() => ({ getLineupSyncContext: vi.fn() }));
 const { syncLeagueLineup } = vi.hoisted(() => ({ syncLeagueLineup: vi.fn() }));
 
-vi.mock('./nfl-state.js', () => ({ getCurrentNflState }));
-vi.mock('./lineup-sync.js', () => ({ syncLeagueLineup }));
+vi.mock('./lineup-sync.js', () => ({ getLineupSyncContext, syncLeagueLineup }));
 
 const { runWorkerCycle } = await import('./worker-cycle.js');
 
@@ -40,18 +39,18 @@ describe('runWorkerCycle', () => {
   const lineupCache = {} as never;
 
   beforeEach(() => {
-    getCurrentNflState.mockReset();
+    getLineupSyncContext.mockReset();
     syncLeagueLineup.mockReset();
   });
 
-  it('syncs every tick during the regular season, regardless of lastDailySyncAt', async () => {
-    getCurrentNflState.mockResolvedValue({
-      season: '2026',
+  it('syncs every tick when display_phase is regular, regardless of lastDailySyncAt', async () => {
+    getLineupSyncContext.mockResolvedValue({
       week: 10,
+      displayPhase: 'regular',
+      regularSeasonStart: '2026-09-09',
       seasonType: 'regular',
-      seasonStartDate: null,
     });
-    syncLeagueLineup.mockResolvedValue({ slotCount: 9 });
+    syncLeagueLineup.mockResolvedValue({ slotCount: 9, lineupSource: 'matchup', week: 10 });
     const supabase = makeSupabase([league('a'), league('b')]);
 
     const result = await runWorkerCycle({ supabase, lineupCache }, { lastDailySyncAt: NOON }, NOON);
@@ -60,17 +59,22 @@ describe('runWorkerCycle', () => {
     expect(result.syncedLeagueCount).toBe(2);
     expect(result.failedLeagueCount).toBe(0);
     expect(syncLeagueLineup).toHaveBeenCalledTimes(2);
+    expect(syncLeagueLineup).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'a' }),
+      { week: 10, displayPhase: 'regular' },
+    );
     expect(result.nextState).toEqual({ lastDailySyncAt: NOON });
   });
 
-  it('syncs during the postseason too', async () => {
-    getCurrentNflState.mockResolvedValue({
-      season: '2026',
+  it('syncs when display_phase is post', async () => {
+    getLineupSyncContext.mockResolvedValue({
       week: 19,
+      displayPhase: 'post',
+      regularSeasonStart: '2026-09-09',
       seasonType: 'post',
-      seasonStartDate: null,
     });
-    syncLeagueLineup.mockResolvedValue({ slotCount: 9 });
+    syncLeagueLineup.mockResolvedValue({ slotCount: 9, lineupSource: 'matchup', week: 19 });
     const supabase = makeSupabase([league('a')]);
 
     const result = await runWorkerCycle({ supabase, lineupCache }, { lastDailySyncAt: null }, NOON);
@@ -80,27 +84,36 @@ describe('runWorkerCycle', () => {
   });
 
   it('runs the first off-season tick even with no prior sync recorded', async () => {
-    getCurrentNflState.mockResolvedValue({
-      season: '2026',
+    getLineupSyncContext.mockResolvedValue({
       week: 0,
+      displayPhase: 'off',
+      regularSeasonStart: '2026-09-09',
       seasonType: 'off',
-      seasonStartDate: null,
     });
-    syncLeagueLineup.mockResolvedValue({ slotCount: 0 });
+    syncLeagueLineup.mockResolvedValue({
+      slotCount: 12,
+      lineupSource: 'roster_fallback',
+      week: 0,
+    });
     const supabase = makeSupabase([league('a')]);
 
     const result = await runWorkerCycle({ supabase, lineupCache }, { lastDailySyncAt: null }, NOON);
 
     expect(result.ran).toBe(true);
     expect(result.nextState).toEqual({ lastDailySyncAt: NOON });
+    expect(syncLeagueLineup).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { week: 0, displayPhase: 'off' },
+    );
   });
 
   it('skips an off-season tick within 24h of the last daily sync', async () => {
-    getCurrentNflState.mockResolvedValue({
-      season: '2026',
+    getLineupSyncContext.mockResolvedValue({
       week: 0,
+      displayPhase: 'off',
+      regularSeasonStart: '2026-09-09',
       seasonType: 'off',
-      seasonStartDate: null,
     });
     const supabase = makeSupabase([league('a')]);
     const oneHourAgo = NOON - 60 * 60 * 1000;
@@ -118,13 +131,17 @@ describe('runWorkerCycle', () => {
   });
 
   it('runs an off-season tick again once 24h have elapsed', async () => {
-    getCurrentNflState.mockResolvedValue({
-      season: '2026',
+    getLineupSyncContext.mockResolvedValue({
       week: 0,
+      displayPhase: 'off',
+      regularSeasonStart: '2026-09-09',
       seasonType: 'off',
-      seasonStartDate: null,
     });
-    syncLeagueLineup.mockResolvedValue({ slotCount: 0 });
+    syncLeagueLineup.mockResolvedValue({
+      slotCount: 0,
+      lineupSource: 'roster_fallback',
+      week: 0,
+    });
     const supabase = makeSupabase([league('a')]);
     const twentyFiveHoursAgo = NOON - 25 * 60 * 60 * 1000;
 
@@ -138,12 +155,12 @@ describe('runWorkerCycle', () => {
     expect(result.nextState).toEqual({ lastDailySyncAt: NOON });
   });
 
-  it('treats preseason the same as off-season (sync at most daily)', async () => {
-    getCurrentNflState.mockResolvedValue({
-      season: '2026',
+  it('treats display_phase pre the same as off (sync at most daily)', async () => {
+    getLineupSyncContext.mockResolvedValue({
       week: 2,
+      displayPhase: 'pre',
+      regularSeasonStart: '2026-09-09',
       seasonType: 'pre',
-      seasonStartDate: null,
     });
     const supabase = makeSupabase([league('a')]);
     const oneHourAgo = NOON - 60 * 60 * 1000;
@@ -157,16 +174,37 @@ describe('runWorkerCycle', () => {
     expect(result.ran).toBe(false);
   });
 
-  it('continues syncing remaining leagues when one fails, and counts it', async () => {
-    getCurrentNflState.mockResolvedValue({
-      season: '2026',
-      week: 10,
+  it('keys cadence on display_phase even when Sleeper season_type already says regular', async () => {
+    // Sprint 10: Sleeper season_type can run ahead of schedule-derived display_phase.
+    getLineupSyncContext.mockResolvedValue({
+      week: 1,
+      displayPhase: 'pre',
+      regularSeasonStart: '2026-09-09',
       seasonType: 'regular',
-      seasonStartDate: null,
+    });
+    const supabase = makeSupabase([league('a')]);
+    const oneHourAgo = NOON - 60 * 60 * 1000;
+
+    const result = await runWorkerCycle(
+      { supabase, lineupCache },
+      { lastDailySyncAt: oneHourAgo },
+      NOON,
+    );
+
+    expect(result.ran).toBe(false);
+    expect(syncLeagueLineup).not.toHaveBeenCalled();
+  });
+
+  it('continues syncing remaining leagues when one fails, and counts it', async () => {
+    getLineupSyncContext.mockResolvedValue({
+      week: 10,
+      displayPhase: 'regular',
+      regularSeasonStart: '2026-09-09',
+      seasonType: 'regular',
     });
     syncLeagueLineup
       .mockRejectedValueOnce(new Error('sleeper is down'))
-      .mockResolvedValueOnce({ slotCount: 9 });
+      .mockResolvedValueOnce({ slotCount: 9, lineupSource: 'matchup', week: 10 });
     const supabase = makeSupabase([league('a'), league('b')]);
 
     const result = await runWorkerCycle({ supabase, lineupCache }, { lastDailySyncAt: null }, NOON);

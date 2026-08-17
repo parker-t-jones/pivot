@@ -3,6 +3,7 @@ import { ApiError } from '../lib/errors.js';
 import type {
   FantasyProvider,
   FetchLineupInput,
+  FetchRosterPlayersInput,
   NormalizedLineupSlot,
 } from './fantasy-provider.js';
 
@@ -19,6 +20,14 @@ export class ManualProvider implements FantasyProvider {
   }
 
   async fetchLineup(_input: FetchLineupInput): Promise<NormalizedLineupSlot[]> {
+    throw new ApiError(
+      400,
+      'sync_not_supported',
+      'Manual leagues have no external source to sync from.',
+    );
+  }
+
+  async fetchRosterPlayers(_input: FetchRosterPlayersInput): Promise<string[]> {
     throw new ApiError(
       400,
       'sync_not_supported',

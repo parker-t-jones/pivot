@@ -25,6 +25,7 @@ export { sleeperProvider, manualProvider };
 export type {
   FantasyProvider,
   FetchLineupInput,
+  FetchRosterPlayersInput,
   NormalizedLineupSlot,
 } from './fantasy-provider.js';
 export type { SleeperLeagueConnection } from './sleeper-provider.js';

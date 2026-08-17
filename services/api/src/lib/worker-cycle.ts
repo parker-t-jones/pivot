@@ -1,6 +1,9 @@
 import type { LineupCacheProvider } from '../cache/index.js';
-import { getCurrentNflState } from './nfl-state.js';
-import { syncLeagueLineup, type SyncLeagueLineupDeps } from './lineup-sync.js';
+import {
+  getLineupSyncContext,
+  syncLeagueLineup,
+  type SyncLeagueLineupDeps,
+} from './lineup-sync.js';
 import type { SupabaseServiceClient } from './supabase.js';
 
 const DAILY_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -22,20 +25,21 @@ export interface WorkerCycleResult {
 }
 
 /**
- * One polling tick of the lineup sync worker (PLAN.md Section 11 Sprint 3 note; instruction
- * #9/#10 in the sprint kickoff). Sourced from Sleeper's `/v1/state/nfl` rather than Sportradar
- * game windows, since Sportradar access (Sprint 2) is deferred:
+ * One polling tick of the lineup sync worker (PLAN.md Section 11 Sprint 3 note).
+ * Cadence keys off schedule-derived `display_phase` (same as the fetch guard) — not Sleeper
+ * `season_type`:
  *
- * - `season_type` `'regular'` or `'post'`: sync every tick (the caller polls every 5 minutes).
- * - `'off'` (and `'pre'`, treated the same — no games count yet): sync at most once a day.
+ * - `display_phase` `'regular'` or `'post'`: sync every tick (caller polls every 5 minutes).
+ * - `'off'` / `'pre'`: sync at most once a day (roster fallback path).
  */
 export async function runWorkerCycle(
   deps: WorkerCycleDeps,
   state: WorkerCycleState,
   now: number = Date.now(),
 ): Promise<WorkerCycleResult> {
-  const nflState = await getCurrentNflState(deps.lineupCache);
-  const isActiveSeason = nflState.seasonType === 'regular' || nflState.seasonType === 'post';
+  const syncContext = await getLineupSyncContext(deps);
+  const isActiveSeason =
+    syncContext.displayPhase === 'regular' || syncContext.displayPhase === 'post';
   const dueForDailySync =
     state.lastDailySyncAt === null || now - state.lastDailySyncAt >= DAILY_SYNC_INTERVAL_MS;
 
@@ -54,7 +58,10 @@ export async function runWorkerCycle(
   let failedLeagueCount = 0;
   for (const league of leagues ?? []) {
     try {
-      await syncLeagueLineup(syncDeps, league, nflState.week);
+      await syncLeagueLineup(syncDeps, league, {
+        week: syncContext.week,
+        displayPhase: syncContext.displayPhase,
+      });
       syncedLeagueCount++;
     } catch (error_) {
       failedLeagueCount++;

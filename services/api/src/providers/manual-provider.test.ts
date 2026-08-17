@@ -12,4 +12,11 @@ describe('ManualProvider', () => {
       provider.fetchLineup({ externalLeagueId: 'x', externalRosterId: '1', week: 1 }),
     ).rejects.toMatchObject({ statusCode: 400, code: 'sync_not_supported' });
   });
+
+  it('throws when asked to fetch roster players', async () => {
+    const provider = new ManualProvider();
+    await expect(
+      provider.fetchRosterPlayers({ externalLeagueId: 'x', externalRosterId: '1' }),
+    ).rejects.toMatchObject({ statusCode: 400, code: 'sync_not_supported' });
+  });
 });

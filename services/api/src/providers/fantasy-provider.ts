@@ -10,6 +10,11 @@ export interface FetchLineupInput {
   week: number;
 }
 
+export interface FetchRosterPlayersInput {
+  externalLeagueId: string;
+  externalRosterId: string;
+}
+
 /**
  * Swap-ready boundary for fantasy platforms (PLAN.md Section 2). `SleeperProvider` and
  * `ManualProvider` implement this in v1; ESPN/Yahoo/NFL Fantasy providers slot in later
@@ -21,6 +26,12 @@ export interface FantasyProvider {
   /** False for platforms with no external source to sync from (e.g. manual leagues). */
   supportsSync(): boolean;
 
-  /** Fetches and normalizes a league roster's lineup for a given week. */
+  /** Fetches and normalizes a league roster's lineup for a given week (matchup-scoped). */
   fetchLineup(input: FetchLineupInput): Promise<NormalizedLineupSlot[]>;
+
+  /**
+   * Static roster external player IDs (no week / starter scoping). Used when
+   * `display_phase` is `'off'`/`'pre'` — matchups don't exist yet.
+   */
+  fetchRosterPlayers(input: FetchRosterPlayersInput): Promise<string[]>;
 }
