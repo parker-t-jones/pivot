@@ -131,3 +131,24 @@ export async function connectSleeperLeague(
 export async function connectManualLeague(name: string, seasonYear: number): Promise<LeagueSummary> {
   return await apiClient.post('/leagues/manual', { name, season_year: seasonYear });
 }
+
+/** `PATCH /leagues/:id` — rename a manual league only (`manual_league_only` if Sleeper). */
+export async function renameManualLeague(leagueId: string, name: string): Promise<LeagueSummary> {
+  return await apiClient.patch(`/leagues/${leagueId}`, { name });
+}
+
+/** `PUT /leagues/:id/lineup` — replace the week’s slots for a manual league. */
+export async function putManualLineup(
+  leagueId: string,
+  week: number,
+  players: Array<{ player_id: string; position: string }>,
+): Promise<LineupResponse> {
+  return await apiClient.put(`/leagues/${leagueId}/lineup`, {
+    week,
+    slots: players.map((player) => ({
+      player_id: player.player_id,
+      slot_type: 'starter' as const,
+      position_in_lineup: player.position,
+    })),
+  });
+}
