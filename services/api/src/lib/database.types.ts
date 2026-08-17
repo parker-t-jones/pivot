@@ -180,8 +180,10 @@ export type Database = {
           external_league_id: string | null
           external_owner_id: string | null
           external_roster_id: string | null
+          fallback_roster: Json | null
           id: string
           last_synced_at: string | null
+          lineup_source: string | null
           name: string
           platform: string
           season_year: number
@@ -193,8 +195,10 @@ export type Database = {
           external_league_id?: string | null
           external_owner_id?: string | null
           external_roster_id?: string | null
+          fallback_roster?: Json | null
           id?: string
           last_synced_at?: string | null
+          lineup_source?: string | null
           name: string
           platform: string
           season_year: number
@@ -206,8 +210,10 @@ export type Database = {
           external_league_id?: string | null
           external_owner_id?: string | null
           external_roster_id?: string | null
+          fallback_roster?: Json | null
           id?: string
           last_synced_at?: string | null
+          lineup_source?: string | null
           name?: string
           platform?: string
           season_year?: number
