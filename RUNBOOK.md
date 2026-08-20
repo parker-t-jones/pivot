@@ -181,3 +181,41 @@ COMMON DEVICE FIXES
 
 Signing identity exists but "0 valid identities found"
   -> Install AppleWWDRCAG3.cer (ONE-TIME step 3).
+
+
+PUSH NOTIFICATIONS ON DEVICE (APNs via Expo) — Sprint 10 Track B / B1
+====================================================================
+Architecture: device → Expo push token → `POST /me/push-token` → (later)
+dispatcher `ExpoPushNotifier` → Expo Push API → APNs. There is no raw APNs
+driver in v1. Local dispatcher defaults to `PUSH_DRIVER=none` (noop); proving
+the pipe does not require flipping that for a one-shot test.
+
+ONE-TIME — APNs key on the Expo project
+---------------------------------------
+Without this, Expo returns `InvalidCredentials` / "Could not find APNs
+credentials for com.fantasyfocus.app":
+
+  cd app
+  npx eas credentials -p ios
+  # build profile: production (or any profile for this bundle id)
+  # → Push Notifications: Manage your Apple Push Notifications Key
+  # → Add a new push key → Generate → assign to fantasy-focus
+
+Verified key: Developer Portal ID 82JW379P4C, team LY2XMRG6VY, assigned to
+@parkertjones/fantasy-focus / com.fantasyfocus.app.
+
+VERIFY A REAL PUSH (hardware)
+-----------------------------
+1. Device signed in; Metro shows `[push] registering token via POST /me/push-token`
+   and API returns 200. Token is also in `users.expo_push_token`.
+2. Background or lock the phone (system banner — not only the in-app path).
+3. Send via Expo (same transport `ExpoPushNotifier` uses):
+
+     curl -s -X POST 'https://exp.host/--/api/v2/push/send' \
+       -H 'Content-Type: application/json' \
+       -d '{"to":"<ExponentPushToken[…]>","title":"B1 APNs check",
+            "body":"If you see this on the iPhone, real-device push works.",
+            "sound":"default","priority":"high"}'
+
+4. Ticket and receipt should be `status: ok`. Confirm the notification
+   actually appears on the phone — receipt ok alone is not enough.

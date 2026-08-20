@@ -1586,7 +1586,7 @@ Issues that need resolution but don't block the build:
 
 **Impact if unfixed:** users must open the notification (tap the body) to interact with it at all — there's no shortcut from the pull-down notification tray or lock screen the way Section 10's push format spec ("Action buttons: Switch and Dismiss") implies. Deferred to v1.5 pending actual usage data on how often users interact from the tray vs. the in-app banner, which already covers the foregrounded case.
 
-### Push notification hardware verification deferred (Sprint 6) — fix in Sprint 8
+### Push notification hardware verification deferred (Sprint 6) — RESOLVED Sprint 10 Track B (B1)
 
 **Symptom:** The full push pipeline (dispatcher → Expo → client) is verified end-to-end in iOS Simulator only — the foreground banner, backgrounded notification delivery, and the `POST /flags/:event_id/action` endpoint wiring all check out there. A real APNs round-trip and real device token registration (`POST /me/push-token` populated from an actual `Notifications.getExpoPushTokenAsync()` call) are not yet verified.
 
@@ -1595,6 +1595,8 @@ Issues that need resolution but don't block the build:
 **Fix:** defer real-device push verification to Sprint 8 — a physical device is already required by then for AirPlay/Chromecast testing, so it's a natural point to also confirm the push pipeline against real hardware. Enroll in the Apple Developer Program earlier than Sprint 8 if device verification is needed sooner.
 
 **Impact if unfixed:** the push pipeline's Simulator-verified behavior (banner rendering, action recording, endpoint wiring) is a strong signal but not proof the real APNs path works — token format, delivery latency, and background wake behavior on a real device remain unverified until Sprint 8 or an earlier enrollment.
+
+**Resolution (Sprint 10 Track B / B1):** Paid team + device build with `aps-environment: development`; real `ExponentPushToken[…]` registered via `POST /me/push-token` from hardware; Apple Push Key (Developer Portal ID `82JW379P4C`) created via `eas credentials -p ios` and assigned to `@parkertjones/fantasy-focus` / `com.fantasyfocus.app`. Manual Expo Push send returned ticket + receipt `ok`; notification confirmed visible on the physical iPhone. Still Expo-indirected (not a raw APNs driver); receipt-polling worker and native Switch/Dismiss categories remain v1.5 Known Issues.
 
 ### Broadcast timing source is a guess, not knowledge — spoiler-safety only holds for exclusive-window games (Sprint 5/7 discovery) — fix in v1.5
 
