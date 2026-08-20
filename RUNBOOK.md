@@ -1,5 +1,6 @@
-FANTASYFOCUS — LOCAL DEV STARTUP (iOS Simulator)
-=================================================
+FANTASYFOCUS — LOCAL DEV STARTUP
+================================
+Simulator path below. Physical iPhone: see "PHYSICAL DEVICE (iOS)" after Common Fixes.
 
 ONE-TIME SETUP (skip if already done)
 --------------------------------------
@@ -98,3 +99,85 @@ Full native rebuild needed (dev client missing / after Erase All Content)
   pnpm expo run:ios
   # slow (several minutes) — only needed if the dev client itself is gone,
   # not for ordinary JS changes.
+
+
+PHYSICAL DEVICE (iOS)
+=====================
+`app/ios/` is generated / gitignored — do not commit it. Re-run signing via
+automatic provisioning when Xcode asks; the durable record of how is this section.
+
+ONE-TIME (Mac + Apple Developer Program)
+----------------------------------------
+1. Xcode → Settings → Accounts → add Apple ID (paid team, not free Personal Team).
+2. Manage Certificates → + → Apple Development.
+3. If `security find-identity -v -p codesigning` shows the cert but "0 valid
+   identities", the WWDR G3 intermediate is missing. Install:
+     curl -fsSL -o /tmp/AppleWWDRCAG3.cer \
+       https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+     security add-certificates -k ~/Library/Keychains/login.keychain-db \
+       /tmp/AppleWWDRCAG3.cer
+4. Connect the iPhone by USB, Trust this computer, then:
+   Settings → Privacy & Security → Developer Mode → On (restart + confirm).
+5. First device build needs a provisioning profile with Push Notifications
+   (`aps-environment`). Create it once with:
+     cd app/ios
+     xcodebuild -workspace FantasyFocus.xcworkspace -scheme FantasyFocus \
+       -configuration Debug -destination 'id=<DEVICE_UDID>' \
+       -allowProvisioningUpdates -allowProvisioningDeviceRegistration build
+   After that, `pnpm expo run:ios --device` can reuse the profile.
+   Bundle ID: com.fantasyfocus.app  Team: LY2XMRG6VY (Parker Jones).
+
+EVERY SESSION — DEVICE REACHABILITY
+-----------------------------------
+The phone cannot use 127.0.0.1. Point BOTH URLs in `app/.env` at a Mac address
+the phone can route to, then restart Metro (`EXPO_PUBLIC_*` are inlined at
+bundle time — a running Metro keeps the old values).
+
+Prefer same Wi-Fi as the Mac:
+  ipconfig getifaddr en0          # e.g. 192.168.12.24
+  EXPO_PUBLIC_SUPABASE_URL=http://<en0-ip>:54321
+  EXPO_PUBLIC_API_BASE_URL=http://<en0-ip>:3000
+  Allow Local Network for FantasyFocus when iOS prompts.
+
+If the phone is USB-only for development (`devicectl` transportType: wired)
+and Wi-Fi times out, use the Mac's USB link-local IP (en8, 169.254.x.x) instead:
+  ifconfig en8 | grep 'inet '
+  REACT_NATIVE_PACKAGER_HOSTNAME=<en8-ip> pnpm expo start --dev-client
+  # and set both EXPO_PUBLIC_* URLs to http://<en8-ip>:…
+  Link-local addresses change when you unplug — switch back to Wi-Fi when you can.
+
+BUILD / LAUNCH
+--------------
+  # UDID: xcrun xctrace list devices
+  cd app
+  pnpm expo run:ios --device <DEVICE_UDID>
+  # or, after the native client is installed:
+  REACT_NATIVE_PACKAGER_HOSTNAME=<mac-ip> pnpm expo start --dev-client
+
+VERIFY (objective — not just "it opened")
+----------------------------------------
+- App process on device: FantasyFocus / com.fantasyfocus.app
+- API log shows requests with remoteAddress = the phone (not 127.0.0.1 /
+  the Mac's own IP). Over USB that is typically the 169.254 peer.
+- Sign-in works; GET /leagues and GET /state/nfl return 200 from that address.
+- On a real device after notification permission, Metro may log
+  `[push] registering token via POST /me/push-token` and the API a 200 —
+  that is B1 evidence, not required to call the B0 build gate green.
+
+COMMON DEVICE FIXES
+-------------------
+"fetch failed: The request timed out" on sign-in
+  -> Phone can't reach Supabase. Wrong .env host (still 127.0.0.1), Wi-Fi
+     mismatch / client isolation, Local Network denied, or stale Metro still
+     holding old EXPO_PUBLIC_* values. Fix .env, kill Metro on :8081, restart
+     with --clear, relaunch the app.
+
+"Developer Mode disabled" / destination unavailable
+  -> Settings → Privacy & Security → Developer Mode. Restart is required.
+
+"No profiles for 'com.fantasyfocus.app'"
+  -> Expo omitted -allowProvisioningUpdates. Re-run the xcodebuild command
+     in ONE-TIME step 5, then retry `pnpm expo run:ios --device`.
+
+Signing identity exists but "0 valid identities found"
+  -> Install AppleWWDRCAG3.cer (ONE-TIME step 3).
