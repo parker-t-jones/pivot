@@ -6,5 +6,7 @@ dist
 *.log
 .DS_Store
 coverage
-android
-ios
+# Expo-generated native projects only. Anchored: a bare `android`/`ios` also matched
+# `app/modules/*/ios`, silently excluding local native module source that must be committed.
+/app/android/
+/app/ios/
