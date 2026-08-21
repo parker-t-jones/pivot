@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { AirPlayRouteController } from './airPlayRoute';
 import {
   AirPlayPlaybackSource,
   ChromecastPlaybackSource,
@@ -15,8 +16,25 @@ const userContext: UserContext = { subscribedServices: [] };
 const gameWithLink: Game = { id: 'game-1', deepLinkUrl: 'https://example.com/watch/game-1' };
 const gameWithoutLink: Game = { id: 'game-2' };
 
-/** Minimal stand-in so ordering can be tested with more than one *eligible* source (the only real
- *  eligible source this phase is `DeepLinkPlaybackSource`; the Sprint 8 sources are `canPlay: false`). */
+/** Stands in for the native AirPlay boundary so `AirPlayPlaybackSource` is testable off-device, and
+ *  counts picker presentations — the one side effect `createSession` has. */
+function fakeRoute({ available }: { available: boolean }): AirPlayRouteController & { presentCount: number } {
+  return {
+    presentCount: 0,
+    isTargetAvailable: () => available,
+    activeRouteName: () => (available ? 'Living Room' : null),
+    subscribe: () => () => {
+      // Availability is fixed per fake, so there is nothing to detach.
+    },
+    async presentRoutePicker() {
+      this.presentCount += 1;
+      return available;
+    },
+  };
+}
+
+/** Minimal stand-in so ordering can be tested with more than one *eligible* source (`DeepLinkPlaybackSource`
+ *  plus, on device, AirPlay; Chromecast remains `canPlay: false`). */
 function fakeSource(id: PlaybackSource['id'], canPlay: boolean): PlaybackSource {
   return {
     id,
@@ -104,9 +122,55 @@ describe('DeepLinkPlaybackSource', () => {
   });
 });
 
-describe('Sprint 8 source stubs', () => {
-  it('never claim they can play in this phase', () => {
+describe('AirPlayPlaybackSource', () => {
+  it('cannot play when no AirPlay target is discoverable', () => {
+    const source = new AirPlayPlaybackSource(fakeRoute({ available: false }));
+
+    expect(source.canPlay(gameWithLink, userContext)).toBe(false);
+  });
+
+  it('defaults to unavailable when no route controller is injected', () => {
+    // Guards the off-device/JS-test path: constructing without a controller must never claim AirPlay.
     expect(new AirPlayPlaybackSource().canPlay(gameWithLink, userContext)).toBe(false);
+  });
+
+  it('can play when a target is discoverable and the game has a deep link', () => {
+    const source = new AirPlayPlaybackSource(fakeRoute({ available: true }));
+
+    expect(source.canPlay(gameWithLink, userContext)).toBe(true);
+  });
+
+  it('cannot play a game with no deep link even with a target present', () => {
+    // Bridge model: the deep link is what actually starts playback, so a target alone is not enough.
+    const source = new AirPlayPlaybackSource(fakeRoute({ available: true }));
+
+    expect(source.canPlay(gameWithoutLink, userContext)).toBe(false);
+  });
+
+  it('presents the route picker and carries the deep link into the session', async () => {
+    const route = fakeRoute({ available: true });
+    const source = new AirPlayPlaybackSource(route);
+
+    const session = await source.createSession(gameWithLink);
+
+    expect(route.presentCount).toBe(1);
+    expect(session.source).toBe('airplay');
+    expect(session.gameId).toBe(gameWithLink.id);
+    expect(session.deepLinkUrl).toBe(gameWithLink.deepLinkUrl);
+    expect(Number.isNaN(Date.parse(session.startedAt))).toBe(false);
+  });
+
+  it('refuses to create a session without a deep link, without presenting the picker', async () => {
+    const route = fakeRoute({ available: true });
+    const source = new AirPlayPlaybackSource(route);
+
+    await expect(source.createSession(gameWithoutLink)).rejects.toThrow();
+    expect(route.presentCount).toBe(0);
+  });
+});
+
+describe('ChromecastPlaybackSource stub', () => {
+  it('never claims it can play', () => {
     expect(new ChromecastPlaybackSource().canPlay(gameWithLink, userContext)).toBe(false);
   });
 });
