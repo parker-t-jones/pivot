@@ -1,5 +1,5 @@
 {
-  "name": "@fantasy-focus/dispatcher",
+  "name": "@roster-remote/dispatcher",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,8 +16,8 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@fantasy-focus/engine": "workspace:^",
-    "@fantasy-focus/shared": "workspace:^",
+    "@roster-remote/engine": "workspace:^",
+    "@roster-remote/shared": "workspace:^",
     "@upstash/redis": "^1.38.0",
     "expo-server-sdk": "^6.1.0",
     "ioredis": "^5.11.1"

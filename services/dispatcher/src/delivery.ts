@@ -1,5 +1,5 @@
-import { defaultClock, type Clock } from '@fantasy-focus/engine';
-import type { FlagEvent, FlagState, GameState } from '@fantasy-focus/shared';
+import { defaultClock, type Clock } from '@roster-remote/engine';
+import type { FlagEvent, FlagState, GameState } from '@roster-remote/shared';
 import { resolveLikelyBroadcastSource, type BroadcastCatalog } from './broadcastLag.js';
 import { preferredBroadcast, resolveBroadcasts } from './broadcastResolver.js';
 import type {

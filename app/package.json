@@ -1,5 +1,5 @@
 {
-  "name": "@fantasy-focus/app",
+  "name": "@roster-remote/app",
   "version": "0.0.0",
   "private": true,
   "main": "expo-router/entry",

@@ -1,4 +1,4 @@
-import type { Position, UserLineupCache } from '@fantasy-focus/shared';
+import type { Position, UserLineupCache } from '@roster-remote/shared';
 import type { LineupCacheProvider } from '../cache/index.js';
 import { getFantasyProvider } from '../providers/index.js';
 import { ApiError } from './errors.js';

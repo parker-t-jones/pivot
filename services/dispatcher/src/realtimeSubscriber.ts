@@ -80,7 +80,7 @@ export class RedisRealtimeSubscriber implements RealtimeSubscriber {
   }
 }
 
-/** Config for `createRealtimeChannels`. Kept structural (not imported from `@fantasy-focus/api`'s
+/** Config for `createRealtimeChannels`. Kept structural (not imported from `@roster-remote/api`'s
  *  `env.ts`) for the same reason as `RedisProviderConfig` (sprint decision #9) — dependencies run
  *  api -> dispatcher, never the reverse. */
 export interface RealtimeChannelsConfig {

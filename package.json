@@ -1,5 +1,5 @@
 {
-  "name": "fantasy-focus",
+  "name": "roster-remote",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.0",
@@ -30,7 +30,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@fantasy-focus/shared": "workspace:^",
+    "@roster-remote/shared": "workspace:^",
     "@supabase/supabase-js": "^2.108.2",
     "dotenv": "^17.4.2"
   }

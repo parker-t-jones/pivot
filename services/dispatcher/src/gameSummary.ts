@@ -1,4 +1,4 @@
-import type { GameState } from '@fantasy-focus/shared';
+import type { GameState } from '@roster-remote/shared';
 import type { GameSummaryInfo } from './catalogs.js';
 
 /**

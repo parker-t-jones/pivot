@@ -1,4 +1,4 @@
-import type { FlagEvent, FlagReasonType, Preferences } from '@fantasy-focus/shared';
+import type { FlagEvent, FlagReasonType, Preferences } from '@roster-remote/shared';
 
 /** Section 3 "Rate limiting" / Section 8 `shouldRateLimit`: max 3 per 60s sliding window. */
 const WINDOW_MS = 60_000;

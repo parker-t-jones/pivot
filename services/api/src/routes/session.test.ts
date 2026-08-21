@@ -1,5 +1,5 @@
-import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@fantasy-focus/dispatcher';
-import type { GameState, UserLineupCache } from '@fantasy-focus/shared';
+import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@roster-remote/dispatcher';
+import type { GameState, UserLineupCache } from '@roster-remote/shared';
 import Fastify from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,

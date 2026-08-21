@@ -1,4 +1,4 @@
-import type { FlagEvent, FlagReason, FlagState } from '@fantasy-focus/shared';
+import type { FlagEvent, FlagReason, FlagState } from '@roster-remote/shared';
 import { describe, expect, it } from 'vitest';
 import type { PlayerInfo } from './catalogs.js';
 import {

@@ -8,7 +8,7 @@ importers:
 
   .:
     dependencies:
-      '@fantasy-focus/shared':
+      '@roster-remote/shared':
         specifier: workspace:^
         version: link:shared
       '@supabase/supabase-js':
@@ -118,18 +118,18 @@ importers:
 
   services/api:
     dependencies:
-      '@fantasy-focus/dispatcher':
-        specifier: workspace:^
-        version: link:../dispatcher
-      '@fantasy-focus/engine':
-        specifier: workspace:^
-        version: link:../engine
-      '@fantasy-focus/shared':
-        specifier: workspace:^
-        version: link:../../shared
       '@fastify/websocket':
         specifier: ^11.3.0
         version: 11.3.0
+      '@roster-remote/dispatcher':
+        specifier: workspace:^
+        version: link:../dispatcher
+      '@roster-remote/engine':
+        specifier: workspace:^
+        version: link:../engine
+      '@roster-remote/shared':
+        specifier: workspace:^
+        version: link:../../shared
       '@supabase/supabase-js':
         specifier: ^2.108.2
         version: 2.108.2
@@ -176,10 +176,10 @@ importers:
 
   services/dispatcher:
     dependencies:
-      '@fantasy-focus/engine':
+      '@roster-remote/engine':
         specifier: workspace:^
         version: link:../engine
-      '@fantasy-focus/shared':
+      '@roster-remote/shared':
         specifier: workspace:^
         version: link:../../shared
       '@upstash/redis':
@@ -207,7 +207,7 @@ importers:
 
   services/engine:
     dependencies:
-      '@fantasy-focus/shared':
+      '@roster-remote/shared':
         specifier: workspace:^
         version: link:../../shared
       csv-parse:

@@ -1,16 +1,16 @@
-import { computeFlagState } from '@fantasy-focus/engine';
+import { computeFlagState } from '@roster-remote/engine';
 import {
   buildGameSummary,
   decideAction,
   type Action,
   type ViewingSessionSnapshot,
-} from '@fantasy-focus/dispatcher';
+} from '@roster-remote/dispatcher';
 import {
   parsePreferences,
   type FlagEvent,
   type FlagState,
   type GameState,
-} from '@fantasy-focus/shared';
+} from '@roster-remote/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';

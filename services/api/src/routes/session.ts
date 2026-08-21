@@ -1,5 +1,5 @@
-import { ACTIVE_USER_TTL_MS } from '@fantasy-focus/dispatcher';
-import { computeFlagState } from '@fantasy-focus/engine';
+import { ACTIVE_USER_TTL_MS } from '@roster-remote/dispatcher';
+import { computeFlagState } from '@roster-remote/engine';
 import type { FastifyInstance } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';

@@ -3,8 +3,8 @@ import {
   type LineupCacheReader,
   type OnPlayEventDeps,
   type PlayEvent,
-} from '@fantasy-focus/engine';
-import type { UserLineupCache } from '@fantasy-focus/shared';
+} from '@roster-remote/engine';
+import type { UserLineupCache } from '@roster-remote/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryBroadcastCatalog } from './broadcastLag.js';
 import {

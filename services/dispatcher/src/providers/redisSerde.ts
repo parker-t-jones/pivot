@@ -1,4 +1,4 @@
-import type { FlagReason, FlagState, GameState, UnitOnField } from '@fantasy-focus/shared';
+import type { FlagReason, FlagState, GameState, UnitOnField } from '@roster-remote/shared';
 
 /**
  * Serialization for the Section 7 Redis hashes. `@upstash/redis` JSON-parses hash values on read

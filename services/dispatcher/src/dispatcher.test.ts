@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FlagEvent, FlagState } from '@fantasy-focus/shared';
+import type { FlagEvent, FlagState } from '@roster-remote/shared';
 import { InMemoryBroadcastCatalog } from './broadcastLag.js';
 import {
   InMemoryFlagEventPersistence,

@@ -1,4 +1,4 @@
-import type { FlagEvent, FlagState } from '@fantasy-focus/shared';
+import type { FlagEvent, FlagState } from '@roster-remote/shared';
 
 /**
  * Re-validation before firing (Section 8 `flagEventDispatcher`), extended per Sprint 4 closeout item

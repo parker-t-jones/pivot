@@ -1,4 +1,4 @@
-import type { FlagEvent } from '@fantasy-focus/shared';
+import type { FlagEvent } from '@roster-remote/shared';
 import type { Action } from './types.js';
 
 /**

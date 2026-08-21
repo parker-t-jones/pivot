@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { FlagEvent, FlagState } from '@fantasy-focus/shared';
+import type { FlagEvent, FlagState } from '@roster-remote/shared';
 
 type FlagEventType = FlagEvent['type'];
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FlagEvent, FlagState } from '@fantasy-focus/shared';
+import type { FlagEvent, FlagState } from '@roster-remote/shared';
 import { isEventStateFresh, isStillRelevant } from './isStillRelevant.js';
 
 function makeFlagState(overrides: Partial<FlagState> = {}): FlagState {

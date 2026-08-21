@@ -3,7 +3,7 @@ import {
   createRealtimeChannels,
   type GameStateStore,
   type RealtimeSubscriber,
-} from '@fantasy-focus/dispatcher';
+} from '@roster-remote/dispatcher';
 import websocketPlugin from '@fastify/websocket';
 import Fastify from 'fastify';
 import {

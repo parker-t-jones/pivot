@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { UserLineupCache } from '@fantasy-focus/shared';
+import type { UserLineupCache } from '@roster-remote/shared';
 import { InMemoryLineupCache } from './in-memory.js';
 
 function makeLineupCache(overrides: Partial<UserLineupCache> = {}): UserLineupCache {

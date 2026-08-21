@@ -1,4 +1,4 @@
-import type { GameState, UnitOnField } from '@fantasy-focus/shared';
+import type { GameState, UnitOnField } from '@roster-remote/shared';
 import { defaultClock, type Clock } from './clock.js';
 import type { PlayEvent, PlayType } from './playEvent.js';
 

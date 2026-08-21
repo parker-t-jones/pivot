@@ -1,5 +1,5 @@
 import type { Redis } from '@upstash/redis';
-import type { FlagState, GameState } from '@fantasy-focus/shared';
+import type { FlagState, GameState } from '@roster-remote/shared';
 import type { GameStateStore } from './gameStateStore.js';
 import {
   deserializeFlagState,

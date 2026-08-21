@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GameState } from '@fantasy-focus/shared';
+import type { GameState } from '@roster-remote/shared';
 import type { Clock } from './clock.js';
 import type { PlayEvent, PlayType } from './playEvent.js';
 import { applyPlayToState } from './applyPlayToState.js';

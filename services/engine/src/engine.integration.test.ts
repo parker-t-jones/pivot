@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { FlagReasonType, UserLineupCache } from '@fantasy-focus/shared';
+import type { FlagReasonType, UserLineupCache } from '@roster-remote/shared';
 import type { Clock } from './clock.js';
 import type { PlayEvent } from './playEvent.js';
 import { InMemoryGameStateProvider } from './gameStateProvider.js';

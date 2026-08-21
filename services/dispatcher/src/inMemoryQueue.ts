@@ -1,4 +1,4 @@
-import type { FlagEvent } from '@fantasy-focus/shared';
+import type { FlagEvent } from '@roster-remote/shared';
 import type { FlagEventQueue, QueuedFlagEvent } from './queue.js';
 
 /** In-memory `FlagEventQueue` for local dev and the standard test suite (decision #2). */

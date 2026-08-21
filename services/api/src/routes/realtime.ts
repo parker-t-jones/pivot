@@ -1,4 +1,4 @@
-import { ACTIVE_USER_TTL_MS } from '@fantasy-focus/dispatcher';
+import { ACTIVE_USER_TTL_MS } from '@roster-remote/dispatcher';
 import type { FastifyPluginAsync } from 'fastify';
 import { ApiError, toErrorBody } from '../lib/errors.js';
 import { requireUser } from '../plugins/auth.js';

@@ -1,4 +1,4 @@
-import type { GameStateStore, RealtimeSubscriber } from '@fantasy-focus/dispatcher';
+import type { GameStateStore, RealtimeSubscriber } from '@roster-remote/dispatcher';
 import fp from 'fastify-plugin';
 import type { LineupCacheProvider } from '../cache/index.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';

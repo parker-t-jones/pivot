@@ -172,7 +172,7 @@ export class ExpoPushNotifier implements PushNotifier {
 }
 
 /** Minimal config the factory needs, passed explicitly rather than importing an `env` module —
- *  same rationale as `RedisProviderConfig` (dispatcher stays free of an `@fantasy-focus/api`
+ *  same rationale as `RedisProviderConfig` (dispatcher stays free of an `@roster-remote/api`
  *  dependency; sprint decision #9 from Sprint 5). */
 export interface PushNotifierConfig {
   pushDriver: 'expo' | 'none';

@@ -1,5 +1,5 @@
-import { rankBroadcasts, type GameBroadcastOption } from '@fantasy-focus/dispatcher';
-import type { GameState } from '@fantasy-focus/shared';
+import { rankBroadcasts, type GameBroadcastOption } from '@roster-remote/dispatcher';
+import type { GameState } from '@roster-remote/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';

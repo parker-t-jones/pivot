@@ -1,5 +1,5 @@
 {
-  "name": "@fantasy-focus/ingestion",
+  "name": "@roster-remote/ingestion",
   "version": "0.0.0",
   "private": true,
   "type": "module",

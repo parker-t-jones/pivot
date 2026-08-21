@@ -1,4 +1,4 @@
-import type { UserLineupCache } from '@fantasy-focus/shared';
+import type { UserLineupCache } from '@roster-remote/shared';
 
 /** Current NFL week/season, sourced from Sleeper's `/v1/state/nfl` (Sprint 3 substitute for Sportradar). */
 export interface NflState {

@@ -1,4 +1,4 @@
-import type { GameState } from '@fantasy-focus/shared';
+import type { GameState } from '@roster-remote/shared';
 
 /**
  * Pure filter (PLAN.md Section 8 "Interesting state change filter"): true when a state transition

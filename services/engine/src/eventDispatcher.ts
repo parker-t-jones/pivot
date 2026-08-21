@@ -1,4 +1,4 @@
-import type { FlagEvent } from '@fantasy-focus/shared';
+import type { FlagEvent } from '@roster-remote/shared';
 
 /**
  * Where the engine hands off emitted flag events. In Sprint 4 the only implementation captures events

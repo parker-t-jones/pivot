@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assignRoster } from './seed-test-user.js';
-import type { Position, SlotType } from '@fantasy-focus/shared';
+import type { Position, SlotType } from '@roster-remote/shared';
 
 interface RosterSpec {
   positionInLineup: string;

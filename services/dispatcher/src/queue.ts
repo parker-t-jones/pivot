@@ -1,4 +1,4 @@
-import type { FlagEvent } from '@fantasy-focus/shared';
+import type { FlagEvent } from '@roster-remote/shared';
 
 /**
  * `flag_event_queue` (PLAN.md Section 7) — a sorted set of `{ event_json : fire_at_timestamp }`.

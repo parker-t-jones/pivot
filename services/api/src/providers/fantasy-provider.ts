@@ -1,4 +1,4 @@
-import type { LeaguePlatform } from '@fantasy-focus/shared';
+import type { LeaguePlatform } from '@roster-remote/shared';
 import type { RosterMappingSlot } from './roster-mapping.js';
 
 /** Normalized lineup slot, agnostic of which platform it came from. */

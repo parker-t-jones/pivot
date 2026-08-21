@@ -4,7 +4,7 @@ import {
   serializeUserLineupCache,
   type SerializedUserLineupCache,
   type UserLineupCache,
-} from '@fantasy-focus/shared';
+} from '@roster-remote/shared';
 import type { LineupCacheProvider, NflState } from './types.js';
 
 const NFL_STATE_KEY = 'current_nfl_state';

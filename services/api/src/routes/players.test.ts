@@ -1,4 +1,4 @@
-import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@fantasy-focus/dispatcher';
+import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@roster-remote/dispatcher';
 import Fastify from 'fastify';
 import {
   serializerCompiler,

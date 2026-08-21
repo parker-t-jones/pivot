@@ -1,4 +1,4 @@
-import { parsePreferences } from '@fantasy-focus/shared';
+import { parsePreferences } from '@roster-remote/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';

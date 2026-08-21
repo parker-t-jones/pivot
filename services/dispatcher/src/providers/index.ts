@@ -5,7 +5,7 @@ import type { GameStateStore } from './gameStateStore.js';
 
 /**
  * Minimal config the provider factory needs. Passed explicitly (rather than importing an `env`
- * module) so `@fantasy-focus/dispatcher` stays free of any `@fantasy-focus/api` dependency — the
+ * module) so `@roster-remote/dispatcher` stays free of any `@roster-remote/api` dependency — the
  * dependency runs the other way (sprint decision #9). The API/dispatcher entrypoints build this from
  * their own validated env.
  */

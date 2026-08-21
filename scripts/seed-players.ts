@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-import type { Position } from '@fantasy-focus/shared';
+import type { Position } from '@roster-remote/shared';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Service role key / URL live in services/api/.env (see services/api/.env.example).

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GameState } from '@fantasy-focus/shared';
+import type { GameState } from '@roster-remote/shared';
 import { isInterestingStateChange } from './isInterestingStateChange.js';
 
 function makeState(overrides: Partial<GameState> = {}): GameState {

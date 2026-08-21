@@ -1,4 +1,4 @@
-import type { GameStateProvider } from '@fantasy-focus/engine';
+import type { GameStateProvider } from '@roster-remote/engine';
 
 /**
  * The dispatcher/API-side hot-path store (PLAN.md Section 7 Redis schemas). Extends the engine's

@@ -1,4 +1,4 @@
-import type { FlagReason, FlagState, GameState, UserLineupCache } from '@fantasy-focus/shared';
+import type { FlagReason, FlagState, GameState, UserLineupCache } from '@roster-remote/shared';
 import { defaultClock, type Clock } from './clock.js';
 
 /**

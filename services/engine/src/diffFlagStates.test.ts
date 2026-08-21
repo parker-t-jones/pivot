@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FlagState } from '@fantasy-focus/shared';
+import type { FlagState } from '@roster-remote/shared';
 import { diffFlagStates } from './diffFlagStates.js';
 
 const COMPUTED_AT = 1_700_000_000_000;

@@ -1,4 +1,4 @@
-import type { FlagEvent, FlagReason, FlagReasonType } from '@fantasy-focus/shared';
+import type { FlagEvent, FlagReason, FlagReasonType } from '@roster-remote/shared';
 import type { PlayerInfo } from './catalogs.js';
 
 /**

@@ -1,5 +1,5 @@
-import { defaultClock, type Clock, type EventDispatcher } from '@fantasy-focus/engine';
-import type { FlagEvent } from '@fantasy-focus/shared';
+import { defaultClock, type Clock, type EventDispatcher } from '@roster-remote/engine';
+import type { FlagEvent } from '@roster-remote/shared';
 import {
   lagSecondsFor,
   resolveLikelyBroadcastSource,
