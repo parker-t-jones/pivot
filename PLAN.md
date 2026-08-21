@@ -50,13 +50,24 @@ This document is the source of truth for the build. Sections are organized so ea
 NFL streaming rights are fragmented across YouTube/Sunday Ticket, ESPN, CBS, FOX, NBC, Amazon Prime, and NFL Network. No startup acquires these directly. Four viable models exist:
 
 1. **Companion/overlay app** — pure data layer, doesn't touch video.
-2. **Aggregator with deep-linking** — routes users into existing apps. ← v1 fallback mode
-3. **Phone-as-remote** — controls TV streaming via AirPlay/Chromecast. ← v1 primary mode
+2. **Aggregator with deep-linking** — routes users into existing apps. ← **v1 shipping mode** (originally scoped as the fallback)
+3. **Phone-as-remote** — controls TV streaming via AirPlay/Chromecast. ← **not achievable in v1**, see below
 4. **Native streaming via partnership** — Phase 2 destination
+
+**Model 3 does not work without rights, and that is a consequence of this very
+section rather than an implementation gap.** AirPlay and Chromecast route video
+belonging to *the app doing the casting*. With no owned or licensed rights, v1
+has no video of its own, so there is nothing for it to route: iOS offers only an
+audio route, and a route selected in our app does not transfer into the separate
+streaming app we hand off to. Casting a third-party app's video is that app's
+decision, not ours. Verified on hardware in Sprint 10 Track B — see Section 11
+Sprint 8 and Known Issues. This makes model 2 the actual v1 mode and moves
+"phone-as-remote" from a v1 feature to a Phase 2 unlock that arrives with the
+rights, alongside `EmbeddedStreamPlaybackSource`.
 
 ### Three-phase roadmap
 
-**Phase 1 (Year 1) — bridge.** Ship v1 with phone-as-remote + deep-link fallback. Prove the engagement hypothesis.
+**Phase 1 (Year 1) — bridge.** Ship v1 with deep-link routing. (Originally scoped as phone-as-remote + deep-link fallback; see the rights constraint above — deep-link is the mode that survives without rights.) Prove the engagement hypothesis.
 
 **Phase 2 (Year 2) — unlock.** Land a partnership with a sportsbook, NFL+, or rights holder. Replace the deep-link/cast layer with native embedded streaming. Engine, lineup logic, notifications, and UI all unchanged.
 
@@ -66,7 +77,7 @@ NFL streaming rights are fragmented across YouTube/Sunday Ticket, ESPN, CBS, FOX
 
 Every external boundary in v1 is hidden behind an interface so Phase 2 swaps are local changes:
 
-- `PlaybackSource` interface — `DeepLinkPlaybackSource`, `AirPlayPlaybackSource`, `ChromecastPlaybackSource` in v1; `EmbeddedStreamPlaybackSource` added in Phase 2.
+- `PlaybackSource` interface — `DeepLinkPlaybackSource` is the only source registered in v1; `AirPlayPlaybackSource` is implemented but dormant and `ChromecastPlaybackSource` stays a stub (see the rights constraint above); `EmbeddedStreamPlaybackSource` added in Phase 2. The boundary still earned its keep: retiring a source turned out to be a one-line registry change.
 - `FantasyProvider` interface — `SleeperProvider` and `ManualProvider` in v1; ESPN, Yahoo, NFL Fantasy added later (see Section 14 → Multi-platform fantasy for per-provider integration feasibility).
 - `BroadcastResolver` interface — which streaming service is airing a given game.
 
@@ -133,8 +144,8 @@ priority = (active_players × 2)
 - Push notifications via Expo Push
 - In-app notification banners
 - Deep-link routing to streaming services (Sunday Ticket, ESPN+, Paramount+, Peacock, Prime, NFL+, broadcast TV)
-- AirPlay control to Apple TV
-- Chromecast control to Google/Android TV
+- ~~AirPlay control to Apple TV~~ — **cut**, not achievable without video rights (Section 2, Section 11 Sprint 8)
+- ~~Chromecast control to Google/Android TV~~ — **cut**, same root cause
 - Lineup management screen with live fantasy points
 - Settings (notification preferences, quiet hours, app presence)
 - Star player flagging (stored, not yet surfaced in switching)
@@ -172,7 +183,7 @@ priority = (active_players × 2)
 | Hosting | Fly.io | Strong WebSocket support, global edge presence |
 | Data | Sportradar NFL Real-Time API | Sub-second play-by-play push feed |
 | Fantasy | Sleeper API | Free, well-documented, no auth ceremony |
-| Cast | react-native-google-cast + native AirPlay | Standard libraries |
+| Cast | ~~react-native-google-cast~~ + native AirPlay (local Expo module) | Cast cut in v1 — no video rights (Section 2). `react-native-google-cast` was never added; the AirPlay module exists but is dormant |
 | Monitoring | Sentry + Axiom | Errors + structured logs |
 
 ---
@@ -1223,7 +1234,7 @@ Three-tab bottom navigation (spec):
 
 Top to bottom:
 
-- **"Now active" card** (large, dominant): teams + score, game state strip, possession indicator, reason chip ("Jonathan Taylor active — RB — Colts offense"), primary CTA button ("Watch on Sunday Ticket" or "Cast to Apple TV"), secondary "Or use..." link
+- **"Now active" card** (large, dominant): teams + score, game state strip, possession indicator, reason chip ("Jonathan Taylor active — RB — Colts offense"), primary CTA button ("Watch on Sunday Ticket" — the "Cast to Apple TV" variant is cut in v1, see Section 2), secondary "Or use..." link
 - **"Also flagged" row**: horizontal scroll of smaller cards for other flagged games, each with a "Switch" button
 - **"Other live games"**: list of live games with user stake but no current flag
 - **"Today's other games"** (collapsible): rest of the slate
@@ -1327,7 +1338,7 @@ iOS grouped list:
 - No internet: persistent top banner with retry, cached lineup visible
 - Sleeper sync failed: inline message with retry, last lineup preserved
 - Deep-link target not installed: sheet with alternate broadcast or "Get [app]" App Store link
-- Cast target unreachable: "Couldn't reach your Apple TV..." with retry
+- ~~Cast target unreachable: "Couldn't reach your Apple TV..." with retry~~ — moot in v1, no cast flow (Section 2)
 - Sportradar feed stale: grey indicator on game card + "Live data delayed"
 - Catastrophic backend: maintenance screen with "Try again"
 
@@ -1403,12 +1414,17 @@ Deferred:
 - Real AirPlay/Chromecast sources → Sprint 8
 - Section 10 fidelity gaps (reason-chip player names, team-color flash, possessing-team overlay label, alternate-broadcast/"Get app" error sheet, live Home WebSocket updates) → Sprint 9 polish (see Known Issues)
 
-### Sprint 8: AirPlay + Chromecast sources
-- `AirPlayPlaybackSource` via native iOS APIs
-- `ChromecastPlaybackSource` via react-native-google-cast
-- Cast target detection on app launch
-- "Cast to TV" CTA on Home when target detected
-- Goal: phone-as-remote experience works
+### Sprint 8: AirPlay + Chromecast sources — NOT ACHIEVABLE AS SCOPED (Sprint 10 Track B)
+
+Every bullet below assumed v1 could cast video it does not own. It cannot — the
+root cause is Section 2's rights constraint, not a missing implementation. See
+Known Issues for the hardware verification.
+
+- ~~`AirPlayPlaybackSource` via native iOS APIs~~ → **built, then made dormant.** The native module (`app/modules/airplay-route/`, `AVRouteDetector` + `AVRoutePickerView`) and the source both work and are tested; the source is deliberately left out of `createPlaybackSources()` rather than deleted, so it becomes useful the moment Phase 2 rights land.
+- ~~`ChromecastPlaybackSource` via react-native-google-cast~~ → **not built.** Same wall, so the `canPlay: false` stub stays and `react-native-google-cast` is not added as a dependency. No point proving the same constraint twice.
+- ~~Cast target detection on app launch~~ → works (this part was never the problem — a Mac AirPlay receiver was detected reliably on device).
+- ~~"Cast to TV" CTA on Home when target detected~~ → **not shipped.** The CTA would have been dishonest copy: the picker offers only an audio route, and nothing about that route follows the user into the streaming app.
+- ~~Goal: phone-as-remote experience works~~ → **goal retired for v1.** Phase 2 destination; see Section 14 for the Screen Mirroring reframe, which is a different product idea rather than this one rescheduled.
 
 ### Sprint 9: Polish & shipping
 Shipped:
@@ -1597,6 +1613,22 @@ Issues that need resolution but don't block the build:
 **Impact if unfixed:** the push pipeline's Simulator-verified behavior (banner rendering, action recording, endpoint wiring) is a strong signal but not proof the real APNs path works — token format, delivery latency, and background wake behavior on a real device remain unverified until Sprint 8 or an earlier enrollment.
 
 **Resolution (Sprint 10 Track B / B1):** Paid team + device build with `aps-environment: development`; real `ExponentPushToken[…]` registered via `POST /me/push-token` from hardware; Apple Push Key (Developer Portal ID `82JW379P4C`) created via `eas credentials -p ios` and assigned to `@parkertjones/fantasy-focus` / `com.fantasyfocus.app`. Manual Expo Push send returned ticket + receipt `ok`; notification confirmed visible on the physical iPhone. Still Expo-indirected (not a raw APNs driver); receipt-polling worker and native Switch/Dismiss categories remain v1.5 Known Issues.
+
+### Phone-as-remote (AirPlay/Chromecast) is not achievable without video rights (Sprint 10 Track B / B2a discovery) — Sprint 8 scope cut
+
+**Symptom:** On a physical iPhone with a Mac AirPlay Receiver as the target, the implemented `AirPlayPlaybackSource` behaved correctly by its own contract — the target was detected, the source won resolution over deep-link, `viewing_sessions.primary_source` recorded `airplay`, and the system route picker presented. But the picker offered only an **audio** output route, never a video or app-level route, and the selection had no effect on the YouTube TV app that the subsequent deep-link hand-off opened. There is no combination of these APIs that produces "the TV is now playing the game while the phone stays a remote."
+
+**Root cause:** Section 2's rights constraint, surfacing at the API layer. `AVRoutePickerView` routes media belonging to *the process presenting it*. v1 owns no video, so there is no `AVPlayer` in our process and iOS correctly offers only the audio session as routable. Routes are also per-app: a route chosen in our app does not transfer to a different app, and whether a third-party streaming app casts its own video is that app's decision. The only cross-app mechanism is system-wide Screen Mirroring, which the user invokes from Control Center and an app cannot trigger on the user's behalf. This was a specification error, not an implementation defect — the plan treated "phone-as-remote" as independent of rights when it is downstream of them.
+
+**Fix (applied):** Cut from v1 rather than worked around, because there is nothing to work around.
+1. `createPlaybackSources()` is deep-link only, so production behaviour matches what shipped before Sprint 8's sources existed.
+2. `AirPlayPlaybackSource` and its native module are kept implemented, tested and dormant — not deleted. They are correct code sitting behind a wrong assumption, and they become useful unchanged if Phase 2 lands rights. A test asserts a discoverable target cannot pull the source back into the default registry, and a second asserts re-adding it restores cast-first priority.
+3. Chromecast was not built. The Cast SDK would hit the identical wall, so the stub stays honest and `react-native-google-cast` is not added.
+4. No "Cast to TV" CTA shipped — with only an audio route available, that copy would promise something the app cannot do.
+
+**Impact:** v1 is a deep-link aggregator (Section 2 model 2), not a phone-as-remote app (model 3). This is a real product-scope reduction and it weakens the headline positioning, so it should be reflected in App Store copy and any pitch material rather than quietly dropped. Two things partly offset it: the `PlaybackSource` boundary meant retiring a source cost one line in the registry, and the deep-link path — the mode that actually ships — was already the better-tested one. Two genuine iOS bugs found while building it are fixed and committed independently of whether AirPlay ever ships (a route picker hosted at `alpha = 0` is treated by UIKit as not visible and its sheet is silently dropped; resolving `presentRoutePicker` before `routePickerViewDidEndPresentingRoutes` lets a deep-link hand-off race the sheet and dismiss it under the user).
+
+**Related but distinct:** Screen Mirroring as a deliberate, user-driven flow is a different product idea, not this one rescheduled — see Section 14. It is unbuilt and needs its own UX design.
 
 ### Broadcast timing source is a guess, not knowledge — spoiler-safety only holds for exclusive-window games (Sprint 5/7 discovery) — fix in v1.5
 
@@ -1793,6 +1825,38 @@ Target: 3 months after v1 ships (mid-season).
 - **Push receipt polling** (clears stale tokens automatically — see Known Issues)
 - **Android version** (same React Native codebase)
 - **Missed plays screen** (replay history of flag events)
+- **Screen Mirroring reframe** (idea only — not committed, needs UX design first).
+  See below.
+
+### Screen Mirroring reframe (unbuilt idea, needs its own UX design)
+
+Recorded so the Sprint 8 cast finding leaves behind an idea rather than just a
+cut. **This is not a scheduled v1.5 feature** — it is a sketch with an unproven
+premise, listed here to be designed or discarded on purpose rather than
+rediscovered.
+
+The Sprint 8 goal was for the *app* to cast, which requires rights we do not
+have (Section 2, Known Issues). The reframe inverts it: the **user** turns on
+Screen Mirroring from Control Center, and the phone becomes a mirrored surface
+we are then free to compose, since we are only ever routing our own UI. The app
+would stop trying to control the TV and instead be worth looking at on one.
+
+Why it is unproven, and what would need designing:
+- It rests on the user having already enabled mirroring. An app cannot start it,
+  so the whole flow depends on an instruction step outside our control — the
+  most likely place for it to fail as a product.
+- Mirroring shows our UI, so this only pays off if there is something worth
+  showing on a TV. That is a new screen design (a lean-back multi-game board?),
+  not a setting.
+- Interaction model is unresolved: mirrored means the phone shows exactly what
+  the TV shows, so the "remote" and the "display" are the same surface. Making
+  the phone a distinct controller needs a second output path, which is a
+  materially larger piece of work.
+- Deep-linking into a streaming app ends the mirrored experience — that app
+  takes over the screen. So this idea and the shipping deep-link flow may be
+  mutually exclusive modes rather than complementary, which is a product
+  decision before it is an engineering one.
+
 ### Architecture changes
  
 - New `PlaybackSource` modes for split-screen rendering
@@ -1947,7 +2011,7 @@ Aim for 30K+ WAU and 60%+ retention through the season to have a credible partne
 - Push: Expo Notifications
 - Host: Fly.io
 - Data: Sportradar (NFL play-by-play), Sleeper (fantasy)
-- Cast: react-native-google-cast + native AirPlay
+- Cast: cut in v1 (no video rights — Section 2); native AirPlay module present but dormant
 
 ### Key files / modules (expected)
 - `services/ingestion/` — Sportradar consumer
