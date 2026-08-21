@@ -1,6 +1,11 @@
-FANTASYFOCUS — LOCAL DEV STARTUP
+ROSTERREMOTE — LOCAL DEV STARTUP
 ================================
 Simulator path below. Physical iPhone: see "PHYSICAL DEVICE (iOS)" after Common Fixes.
+
+The old name survives on purpose in three places below — do not "tidy" them: the repo
+directory is still `.../projects/fantasyfocus`, the bundle ID is still
+`com.fantasyfocus.app` (kept so B1's APNs credentials stay valid), and the Expo project
+is still `@parkertjones/fantasy-focus`. See PLAN.md's rename note (Aug 21, 2026).
 
 ONE-TIME SETUP (skip if already done)
 --------------------------------------
@@ -46,7 +51,7 @@ before starting the next.
 
 4. API server (new tab)
    cd /Users/parkerjones/Developer/projects/fantasyfocus
-   pnpm --filter @fantasy-focus/api dev
+   pnpm --filter @roster-remote/api dev
    # Wait for: "Server listening at http://127.0.0.1:3000"
 
 5. Metro / Expo (new tab)
@@ -79,7 +84,7 @@ Sleeper sync / connect lineup empty, or `players_not_seeded` (503)
 lsof -i :3000
   -> if empty, API server is down; if MULTIPLE pids, kill and restart clean:
      lsof -ti :3000 | xargs kill -9
-     pnpm --filter @fantasy-focus/api dev
+     pnpm --filter @roster-remote/api dev
 
 "Missing Authorization bearer token" on any curl
   -> your $JWT is empty or expired (~1hr). Just run: jwt

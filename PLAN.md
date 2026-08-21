@@ -1,8 +1,51 @@
-# Fantasy Sports Command Center — Build Plan
+# RosterRemote — Build Plan
 
 A spec for building a fantasy-aware NFL viewing app. v1 ships as a fantasy command center that routes users to the right games (via deep-link or TV cast) based on real-time fantasy lineup activity. Architecture is designed to swap into native streaming when partnership deals are landed in Phase 2.
 
 This document is the source of truth for the build. Sections are organized so each can be referenced independently by Cursor when working on a given module.
+
+**Rename (Aug 21, 2026).** Product name changed from Fantasy Focus / FantasyFocus to
+**RosterRemote**. Rationale: the original name conflicted with ESPN's "Fantasy Focus"
+podcast/show branding; ESPN Fantasy Football becoming the NFL's official fantasy platform
+for 2026 raised the profile of that conflict. "RosterRemote" was chosen to reflect the
+app's actual function — the user's fantasy roster driving which broadcast to watch —
+rather than reusing "Focus," which is what caused the original conflict.
+
+**Code-level rename pass (Aug 21, 2026).** The rename ran as three gated commits after the
+documentation pass above: (1) pnpm workspace packages `@fantasy-focus/*` → `@roster-remote/*`
+plus the root package, (2) README / RUNBOOK / TRACK-B docs, (3) `app.json` `name` and
+`scheme`, the in-app UI strings, and the clean `expo prebuild` the `name` change forces.
+Commit 3 is last on purpose: it is the only one that invalidates a working device build.
+
+**Deliberately kept on the old name — do not "fix" these:**
+
+- **Bundle ID `com.fantasyfocus.app`.** Not user-visible (the name under the icon is
+  `CFBundleDisplayName`, from `app.json` `name`), and nothing in the repo derives behavior
+  from the string — the dispatcher reaches APNs through Expo's push service, so no APNs
+  topic is hardcoded anywhere. Changing it would mean a new Apple App ID, new provisioning,
+  reassigning the APNs key, and a new APNs device token — staling the `device_tokens` rows
+  B1 was verified against, for zero user-visible gain.
+- **Expo project slug `fantasy-focus` / `@parkertjones/fantasy-focus`.** The slug is the
+  identity EAS resolves against `extra.eas.projectId`, so renaming it requires a matching
+  rename on expo.dev — the only remote-state change in the whole rename, against the
+  project holding B1's verified push credentials. Deferred until after TestFlight is green.
+  Push is unaffected either way: tokens are issued against `projectId`, not the slug.
+- **`supabase/config.toml` `project_id = "FantasyFocusApp"`.** That string names the local
+  Docker containers. Renaming it makes `supabase start` build a fresh empty stack and orphan
+  the current volume — seeded players, the corrected deep-link URLs from the Open Question #2
+  audit, the test user, and the verified push token — silently, with no error.
+- **`scripts/seed-test-user.ts` defaults** (`test@fantasyfocus.dev`). Env-overridable;
+  renaming orphans the existing local auth user for no benefit.
+- **The repo directory** `.../projects/fantasyfocus` (the GitHub repo is `roster-remote`).
+
+Still outstanding: the `fantasyfocus.app` support/terms/privacy URLs in Settings — see Open
+Question #5, which is a B3 submission blocker independent of the rename. Historical Known
+Issues that cite these technical IDs as they existed at the time of the events are left
+unchanged on purpose.
+
+Trademark clearance on "RosterRemote" has **not** been formally done (e.g. USPTO TESS
+search or legal counsel). Informal web searches turned up nothing conflicting; that is
+not the same as clearance. See Open Question #4.
 
 ---
 
@@ -29,7 +72,7 @@ This document is the source of truth for the build. Sections are organized so ea
 
 ## 1. Executive Summary
 
-**Product.** A mobile app that monitors live NFL games and the user's fantasy football lineup, then surfaces real-time notifications when their fantasy players become active on the field. The user can switch their viewing (on phone or TV) to the relevant game in one tap.
+**Product.** RosterRemote — a mobile app that monitors live NFL games and the user's fantasy football lineup, then surfaces real-time notifications when their fantasy players become active on the field. The user can switch their viewing (on phone or TV) to the relevant game in one tap.
 
 **Core value proposition.** Stop missing your fantasy plays. The app does what NFL RedZone does (showing you the most important action) but personalized to *your* fantasy team.
 
@@ -1515,10 +1558,28 @@ Issues that need resolution but don't block the build:
    partnership problem, not a client-engineering one. Section 15's partnership work is the most
    plausible unlock; it would also make this moot for any partner whose video we embed directly.
 3. **v1.5 subscription price point.** Suggested range $9.99–14.99/month, defer to market research.
-4. **Launch marketing strategy.** Out of scope for this plan.
-5. **TestFlight beta cohort.** Likely 50–100 users for August preseason testing.
-6. **Terms of service & privacy policy.** Lawyer review needed before App Store submission.
-7. **Whether to soft-pitch a sportsbook partner pre-launch.** Could compress Phase 2 timeline.
+4. **RosterRemote trademark clearance.** Informal web searches turned up nothing conflicting with
+   the name, but that is not formal clearance. A real search (e.g. USPTO TESS) and/or legal counsel
+   review is still outstanding before App Store Connect listing and any trademark filing. Do not
+   treat the PLAN.md rename note (Aug 21, 2026) as having closed this.
+5. **Rename items still outstanding after the Aug 21, 2026 code-level pass.** The packages, docs,
+   `app.json` `name`/`scheme`, and in-app UI strings are done; see the rename note at the top for
+   what is deliberately kept on the old name. Three items remain:
+   - **A real domain with live `/terms` and `/privacy`.** Settings still links
+     `support@fantasyfocus.app`, `https://fantasyfocus.app/terms`, and `.../privacy`. This is a
+     **B3 submission blocker regardless of the rename** — App Store Connect requires a reachable
+     privacy policy URL — and it needs a registered domain serving two real pages, not a string
+     swap. Left pointing at the old name on purpose: an honestly-outdated URL is better than a
+     renamed one that 404s during review, which would fail silently until rejection. Overlaps
+     Open Question #8 (lawyer review of the policy text itself); this is the hosting half.
+   - **The EAS project slug** (`fantasy-focus` → `roster-remote`, plus the matching rename on
+     expo.dev). Deferred until after TestFlight is verified green — rationale in the rename note.
+     Low urgency, but record it rather than letting the mismatch become permanent by default.
+   - **Trademark clearance**, still open as Open Question #4 above.
+6. **Launch marketing strategy.** Out of scope for this plan.
+7. **TestFlight beta cohort.** Likely 50–100 users for August preseason testing.
+8. **Terms of service & privacy policy.** Lawyer review needed before App Store submission.
+9. **Whether to soft-pitch a sportsbook partner pre-launch.** Could compress Phase 2 timeline.
 
 ---
 
@@ -1691,6 +1752,18 @@ Issues that need resolution but don't block the build:
 **Fix (applied):** `NotificationResponseHandler` now consumes `Notifications.useLastNotificationResponse()`, which reads the native last-response on mount *and* listens for subsequent ones, then clears the slot via `clearLastNotificationResponse()` after handling so a remount cannot re-fire the same tap. Response application logic lives in `app/lib/notificationResponse.ts` so the cold-start / dismiss / switch paths are unit-tested without mounting Expo's emitter.
 
 **Resolution (Sprint 10 Track B):** Device-verified on a physical iPhone across all three app states — killed (force-quit), backgrounded, and foregrounded (OS notification tap, not the in-app banner). Each produced the switching overlay and deep-link hand-off to YouTube TV. The killed case is the one that previously failed silently.
+
+### 25 push-notification-content tests silently never ran (Sprint 6 regression) — RESOLVED Aug 21, 2026
+
+**Symptom:** `services/dispatcher/src/notificationContent.test.ts` failed to load with `Error: Vitest cannot be imported in a CommonJS module using require()`, collecting **0 tests**. Carried as "one pre-existing, unrelated test failure" in the Sprint 10 Track B handoff and diagnosed there as a CommonJS/ESM config issue, confirmed via `git stash` to predate Track A. It stayed open across all of B0–B2 as a known-but-not-blocking item.
+
+**Root cause:** Not an ESM/CJS configuration problem at all — a single corrupted import. An editor auto-import had rewritten line 2's `vitest` specifier into a path through pnpm's internal content-addressed store, pointing at the CJS build: `../../../node_modules/.pnpm/vitest@4.1.10_@types+node@26.1.1_.../node_modules/vitest/index.cjs`. Vitest rejects that entrypoint by design, so the suite threw during load. Because the failure happened at import time, the 25 cases inside were never collected, and the file reported as one red suite among sixty rather than as missing coverage. Introduced in Sprint 6 (`5259553`); verified isolated — no other file in the repo imports through the store path.
+
+**Impact:** `notificationTitle` / `notificationBody` — the user-visible text of every push this product sends — had **zero executing test coverage from Sprint 6 through Sprint 10 Track B**, including the entire B1 real-device APNs verification and the cold-start fix above. Nothing was silently broken (all 25 pass unmodified once collected), but the guarantee everyone assumed was in place was not.
+
+**Resolution:** Restored the bare `'vitest'` specifier, matching every sibling test in the package. Suite total went 565 → 590 tests, 62 → 63 files, all green. Committed standalone, ahead of the rename commits it was found by.
+
+**Process note — how it was found:** not by looking for it. It surfaced from running the full suite to capture an attributable baseline *before* starting the code-level rename, specifically so any post-rename failure could be told apart from a pre-existing one. The bug had been visible in every test run for four sprints and read as background noise. Two things generalize: a suite that fails to *load* hides an unbounded number of tests while looking like a single failure, and "pre-existing, unrelated" is a label that stops investigation — this one survived four sprints of being technically known and never examined. Establishing a clean baseline before mechanical work is what made it legible.
 
 ### Broadcast timing source is a guess, not knowledge — spoiler-safety only holds for exclusive-window games (Sprint 5/7 discovery) — fix in v1.5
 
@@ -2094,4 +2167,4 @@ Aim for 30K+ WAU and 60%+ retention through the season to have a credible partne
 
 ---
 
-*End of plan. This is the buildable specification for v1.*
+*End of plan. This is the buildable specification for RosterRemote v1.*
