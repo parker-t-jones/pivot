@@ -1,73 +1,48 @@
 import * as Notifications from 'expo-notifications';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { useSwitching } from '../contexts/SwitchingContext';
-import { isFlagEventPayload } from '../lib/flagEventPayload';
-import { recordNotificationAction, type NotificationUserAction } from '../lib/notificationActions';
-import { resolvePossessingTeamDisplay } from '../lib/teamDisplay';
+import { recordNotificationAction } from '../lib/notificationActions';
+import { applyNotificationResponse } from '../lib/notificationResponse';
 
 /**
- * iOS action-button identifiers a `flag_event` push's category *would* declare, per PLAN.md Section
- * 10's push format ("Action buttons: Switch and Dismiss"). Neither is wired up yet — that needs a
- * `Notifications.setNotificationCategoryAsync` call (client) plus a matching `categoryId` on the
- * outgoing Expo push message (`services/dispatcher/src/pushNotifier.ts`, currently doesn't set one)
- * — out of Sprint 6 Phase 7's scope (not one of the phase's five listed decisions). Mapped anyway so
- * this handler doesn't have to change if/when that lands: today, every interaction with a real push
- * surfaces as `Notifications.DEFAULT_ACTION_IDENTIFIER` (a tap on the notification body), handled
- * below the same way Section 10 describes it — "Tap → opens app to 'ready to launch' state" — which
- * this maps to the same outcome as an explicit "Switch".
- */
-const ACTION_IDENTIFIER_TO_USER_ACTION: Record<string, NotificationUserAction> = {
-  switch: 'switched',
-  dismiss: 'dismissed',
-};
-
-/**
- * Sprint 6 Phase 7 — the backgrounded half of the notification pipeline (`NotificationBannerHost`
- * is the foregrounded half). Fires when the user interacts with the actual OS notification — lock
- * screen, notification center, or a background/killed app's push banner — as opposed to
- * `NotificationBannerHost`'s custom in-app banner, whose buttons are plain React `Pressable`s and
- * never go through `expo-notifications` at all. The two are mutually exclusive: a given notification
- * is either interacted with in-app (banner buttons) or via the OS (this handler), never both.
+ * Sprint 6 Phase 7 — the OS-notification half of the notification pipeline
+ * (`NotificationBannerHost` is the foregrounded in-app half). Fires when the user interacts with
+ * the actual OS notification — lock screen, notification center, or a background/killed app's push
+ * banner — as opposed to `NotificationBannerHost`'s custom in-app banner, whose buttons are plain
+ * React `Pressable`s and never go through `expo-notifications` at all. The two are mutually
+ * exclusive: a given notification is either interacted with in-app (banner buttons) or via the OS
+ * (this handler), never both.
  *
  * Mounted once alongside `NotificationBannerHost` in `(app)/_layout.tsx`.
+ *
+ * Sprint 10 Track B — uses `useLastNotificationResponse` rather than
+ * `addNotificationResponseReceivedListener` alone. The listener only delivers responses that arrive
+ * *after* subscription; this component mounts behind auth restore, the leagues gate, and
+ * `SwitchingProvider`, so a tap that *launched* a killed app is delivered before the listener exists
+ * and was previously dropped (Known Issue). The hook reads the native last-response on mount *and*
+ * listens for subsequent ones, covering killed / backgrounded / foregrounded with one path. After
+ * handling we clear the slot so a remount cannot re-fire the same tap.
  */
 export function NotificationResponseHandler() {
   const { switchToGame } = useSwitching();
+  const lastResponse = Notifications.useLastNotificationResponse();
+  /** Guards React Strict Mode's double-effect and any remount before clear settles. */
+  const handledIdentifierRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const { data } = response.notification.request.content;
-      if (!isFlagEventPayload(data)) return;
+    // `undefined` = hook not yet sure; `null` = no response yet. Either way there is nothing to do.
+    if (lastResponse == null) return;
 
-      const action: NotificationUserAction =
-        response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER
-          ? 'switched'
-          : ACTION_IDENTIFIER_TO_USER_ACTION[response.actionIdentifier] ?? 'switched';
+    const identifier = lastResponse.notification.request.identifier;
+    if (handledIdentifierRef.current === identifier) return;
 
-      void recordNotificationAction(action, data);
-
-      // Sprint 9 Phase 2 — closes the Sprint 7 TODO this handler carried since Phase 6: a tap on
-      // the OS notification itself now hands off through `PlaybackSource` the same way the
-      // foreground banner's "Switch" button does (`NotificationBannerHost`), instead of just
-      // opening Home and leaving the user to find the game themselves.
-      if (action === 'switched') {
-        const { game_id, action: payloadAction, game_summary, new_state } = data;
-        const possessingTeam = resolvePossessingTeamDisplay(game_summary, new_state.possession_team);
-        switchToGame({
-          gameId: game_id,
-          deepLinkUrl: payloadAction.deep_link_url,
-          label: `${game_summary.away_team} @ ${game_summary.home_team}`,
-          teamName: possessingTeam?.name,
-          teamColors: possessingTeam
-            ? { primary: possessingTeam.primaryColor, secondary: possessingTeam.secondaryColor }
-            : null,
-        });
-      }
-    });
-
-    return () => subscription.remove();
-  }, [switchToGame]);
+    applyNotificationResponse(lastResponse, { switchToGame, recordNotificationAction });
+    handledIdentifierRef.current = identifier;
+    // Clear whether or not it was a flag_event — a stuck non-flag response would otherwise keep
+    // re-entering this effect on every remount of the handler.
+    Notifications.clearLastNotificationResponse();
+  }, [lastResponse, switchToGame]);
 
   return null;
 }

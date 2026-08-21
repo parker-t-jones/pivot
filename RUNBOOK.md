@@ -142,9 +142,30 @@ Prefer same Wi-Fi as the Mac:
 If the phone is USB-only for development (`devicectl` transportType: wired)
 and Wi-Fi times out, use the Mac's USB link-local IP (en8, 169.254.x.x) instead:
   ifconfig en8 | grep 'inet '
+  # or: ipconfig getifaddr en8
   REACT_NATIVE_PACKAGER_HOSTNAME=<en8-ip> pnpm expo start --dev-client
   # and set both EXPO_PUBLIC_* URLs to http://<en8-ip>:…
   Link-local addresses change when you unplug — switch back to Wi-Fi when you can.
+
+BACKLOG — auto-detect device IP into app/.env (do not hand-edit every replug)
+---------------------------------------------------------------------------
+Sprint 10 Track B hit this three separate times (B0 sign-in timeout, AirPlay
+rebuild, deep-link device test): USB link-local `en8` changes on every replug,
+`EXPO_PUBLIC_*` are inlined at Metro bundle time, and a stale `.env` looks like
+a mysterious "fetch failed: The request timed out" with no other clue.
+
+Cheap fix worth building once, not each session: a small `scripts/sync-device-env.ts`
+(or a `pnpm device:env` npm script) that:
+  1. Prefers `ipconfig getifaddr en0` when the phone is on the same Wi-Fi.
+  2. Else scans `ifconfig -l` / `ipconfig getifaddr` for a `169.254.*` address
+     (typically `en8` over USB).
+  3. Rewrites `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_API_BASE_URL` in
+     `app/.env` (untracked) to `http://<ip>:54321` / `:3000`.
+  4. Prints the chosen interface + IP and reminds you to restart Metro with
+     `--clear` and `REACT_NATIVE_PACKAGER_HOSTNAME=<ip>`.
+
+Do not commit the rewritten `.env`. Optional later: wire it as a pre-step of
+`pnpm expo run:ios --device` so device launches cannot silently use a stale host.
 
 BUILD / LAUNCH
 --------------
