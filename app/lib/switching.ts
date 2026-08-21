@@ -1,6 +1,4 @@
 import {
-  AirPlayPlaybackSource,
-  ChromecastPlaybackSource,
   DeepLinkPlaybackSource,
   resolvePlaybackSource,
   type Game,
@@ -10,13 +8,17 @@ import {
 } from '../playback/PlaybackSource';
 
 /**
- * The v1 playback registry, in priority order (PLAN.md Section 2 / Section 8: phone-as-remote is the
- * primary mode with deep-link as fallback). AirPlay and Chromecast come first so they win once
- * Sprint 8 implements them; today they're `canPlay: false` stubs, so `DeepLinkPlaybackSource` is the
- * only source that ever resolves. Constructed fresh per call — the sources are stateless.
+ * The v1 playback registry, in priority order — deep-link only.
+ *
+ * Sprint 8 planned cast-first priority (AirPlay, then Chromecast, then deep-link). Sprint 10 Track B
+ * established on hardware that neither can route a *third-party* streaming app's video to a TV, because
+ * v1 owns no video rights and so has no player of its own to route (PLAN.md Section 11, "AirPlay and
+ * Chromecast (not achievable as scoped)"). Both are therefore left out of this array rather than
+ * deleted: `AirPlayPlaybackSource` stays implemented and tested so it becomes useful immediately if
+ * this product ever owns or licenses video. Constructed fresh per call — the sources are stateless.
  */
 export function createPlaybackSources(): PlaybackSource[] {
-  return [new AirPlayPlaybackSource(), new ChromecastPlaybackSource(), new DeepLinkPlaybackSource()];
+  return [new DeepLinkPlaybackSource()];
 }
 
 export type SwitchResolution =

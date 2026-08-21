@@ -69,6 +69,16 @@ export class DeepLinkPlaybackSource implements PlaybackSource {
  * Sprint 8 (Section 11) — real AirPlay, driven through the `AirPlayRouteController` boundary
  * (`airPlayRoute.ts`) so this class stays free of native imports and unit-testable off-device.
  *
+ * DORMANT: deliberately absent from `createPlaybackSources()` (see `app/lib/switching.ts`). Sprint 10
+ * Track B verified on hardware that the bridge model below does not hold — with no owned video rights
+ * there is no player in this process, so the system picker offers only an *audio* route, and a route
+ * chosen here does not transfer to the separate streaming app we hand off to. Kept implemented and
+ * tested rather than deleted; it becomes correct once this product has video of its own to route.
+ *
+ * If it is re-enabled: `createSession` presents a UIKit sheet, so the caller must resolve the source
+ * *before* showing the switching overlay — UIKit cannot reliably present that sheet over the overlay's
+ * React Native `<Modal>`.
+ *
  * Bridge-model semantics (Section 2: v1 owns no video rights, so "phone-as-remote" means routing the
  * user's own streaming app to their TV rather than serving a stream ourselves): eligible only when iOS
  * reports a discovered AirPlay target AND the game still has a deep link, because the hand-off into the
