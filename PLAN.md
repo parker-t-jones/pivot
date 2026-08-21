@@ -1487,7 +1487,33 @@ Total managed services: ~$150/mo. Sportradar dominates the budget.
 Issues that need resolution but don't block the build:
 
 1. **Sportradar pricing tier.** Final contract determines real cost structure.
-2. **Deep-link availability per service.** Audit needed before Sprint 7.
+2. **Deep-link availability per service.** Partly answered in Sprint 10 Track B; the remaining
+   unknown is narrower and different in kind from what this question originally assumed. Two
+   sub-questions, and conflating them is what let broken links ship for three sprints:
+
+   **(a) Will a URL open the provider's app at all?** Audited for all 11 services against their live
+   `apple-app-site-association` files, matching production app IDs only (dev/QA builds claim paths the
+   shipping app does not). Nine work; `cbs` and `nbc` serve no usable AASA and can never open an app
+   (see Known Issues). Cheap to re-check — one `curl` per domain — and worth re-running periodically,
+   since providers change these files without notice.
+
+   **(b) Can we deep-link to a specific game, not just the app?** For YouTube TV: **yes, and it works
+   well** — verified on a physical iPhone in Track B. `https://tv.youtube.com/watch/<videoId>` opened
+   the YouTube TV app directly into the live game, already playing. The hand-off mechanism is not the
+   obstacle; it is genuinely excellent, and it means the deep-link mode this product actually ships
+   (see Section 2) has a strong best case rather than a compromised one.
+
+   The obstacle is purely **content-ID acquisition**. That `videoId` is an opaque 11-character
+   YouTube identifier, unique per broadcast, and is not derivable from a matchup, team, date, or
+   anything else in our schema. Getting it requires a provider-side source — a partner API, an
+   authenticated listing endpoint, or scraping — per service, and scraping in particular is fragile
+   and legally uncertain. Until then `game_broadcasts.deep_link_url` stays app-level, which lands the
+   user in the right app on a generic screen and leaves them to find the game.
+
+   So the real open question is no longer "is game-level deep linking possible?" but "how do we
+   obtain per-broadcast content IDs at scale, per provider?" — a data-sourcing and possibly
+   partnership problem, not a client-engineering one. Section 15's partnership work is the most
+   plausible unlock; it would also make this moot for any partner whose video we embed directly.
 3. **v1.5 subscription price point.** Suggested range $9.99–14.99/month, defer to market research.
 4. **Launch marketing strategy.** Out of scope for this plan.
 5. **TestFlight beta cohort.** Likely 50–100 users for August preseason testing.
