@@ -57,5 +57,18 @@ log "Seeding schedule..."; pnpm seed:schedule || log "WARN: seed:schedule failed
 log "Seeding players (Sleeper)..."; pnpm seed:players || log "WARN: seed:players failed (network?)"
 log "Seeding test user..."; pnpm seed:test-user || log "WARN: seed:test-user failed (network?)"
 
-log "Ready. Supabase API: http://127.0.0.1:54321  Studio: http://127.0.0.1:54323"
-log "The API server runs in the 'api' terminal. Test user: test@fantasyfocus.dev / FantasyFocusTest123!"
+# 5. Launch the API dev server detached (idempotent: skip if :3000 is already serving).
+if curl -sf -o /dev/null http://127.0.0.1:3000/state/nfl 2>/dev/null \
+  || (exec 3<>/dev/tcp/127.0.0.1/3000) 2>/dev/null; then
+  log "API server already running on :3000"
+else
+  log "Starting API server (pnpm --filter @fantasy-focus/api dev)..."
+  nohup pnpm --filter @fantasy-focus/api dev >/tmp/api.log 2>&1 &
+  for _ in $(seq 1 30); do
+    (exec 3<>/dev/tcp/127.0.0.1/3000) 2>/dev/null && break
+    sleep 1
+  done
+fi
+
+log "Ready. Supabase API: http://127.0.0.1:54321  Studio: http://127.0.0.1:54323  App API: http://127.0.0.1:3000"
+log "Test user: test@fantasyfocus.dev / FantasyFocusTest123!"
