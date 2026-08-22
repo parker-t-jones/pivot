@@ -1,5 +1,5 @@
 /**
- * Dark-mode-only design tokens for the Fantasy Focus client.
+ * Dark-mode-only design tokens for the RosterRemote client.
  * Screens import `theme` directly — no React context / light variant yet.
  */
 export const theme = {

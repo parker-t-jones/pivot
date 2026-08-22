@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "FantasyFocus",
+    "name": "RosterRemote",
     "slug": "fantasy-focus",
     "version": "0.0.0",
     "orientation": "portrait",
-    "scheme": "fantasyfocus",
+    "scheme": "rosterremote",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.fantasyfocus.app",

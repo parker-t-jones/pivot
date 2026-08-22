@@ -89,6 +89,11 @@ lsof -i :3000
 "Missing Authorization bearer token" on any curl
   -> your $JWT is empty or expired (~1hr). Just run: jwt
 
+ERR_MODULE_NOT_FOUND: Cannot find package '@roster-remote/...' in the API log
+  -> a workspace package was renamed while the dev server was running. The tsx
+     watcher holds the old resolution and its auto-restart can race `pnpm install`.
+     Kill it and restart step 4; nothing is wrong with the code.
+
 App stuck on "Could not connect to development server" after a --clear
   -> Metro needs a moment after a cold rebuild. Wait ~30-60s, then tap Reload
      in the simulator, or press i in the Metro terminal.
@@ -126,11 +131,34 @@ ONE-TIME (Mac + Apple Developer Program)
 5. First device build needs a provisioning profile with Push Notifications
    (`aps-environment`). Create it once with:
      cd app/ios
-     xcodebuild -workspace FantasyFocus.xcworkspace -scheme FantasyFocus \
+     xcodebuild -workspace RosterRemote.xcworkspace -scheme RosterRemote \
        -configuration Debug -destination 'id=<DEVICE_UDID>' \
-       -allowProvisioningUpdates -allowProvisioningDeviceRegistration build
+       -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
+       DEVELOPMENT_TEAM=LY2XMRG6VY build
    After that, `pnpm expo run:ios --device` can reuse the profile.
    Bundle ID: com.fantasyfocus.app  Team: LY2XMRG6VY (Parker Jones).
+
+   DEVELOPMENT_TEAM is not optional after a clean prebuild. The team is stored in
+   the generated (gitignored) .xcodeproj, so `expo prebuild --clean` discards it and
+   the build fails with:
+     error: Signing for "RosterRemote" requires a development team.
+   Passing it on the command line avoids opening Xcode just to re-pick the team.
+
+AFTER A CLEAN PREBUILD (expo prebuild --clean)
+----------------------------------------------
+Regenerating ios/ is safe but drops anything that lived only in the generated
+project. Verify these rather than assuming, because the failure modes are quiet:
+  # 1. Local native modules re-autolinked. AirPlayRoute is loaded via
+  #    requireOptionalNativeModule, which returns null when unlinked — a failed
+  #    autolink degrades to "no AirPlay target" with NO error anywhere.
+  rg -c "AirPlayRoute" "ios/Pods/Target Support Files/Pods-RosterRemote/ExpoModulesProvider.swift"
+  # 2. It actually linked, not just registered. Note: in Debug the app code is in
+  #    RosterRemote.debug.dylib, NOT the thin RosterRemote executable — checking the
+  #    executable finds nothing and looks like a failure when it isn't.
+  nm -a <DerivedData>/Build/Products/Debug-iphoneos/RosterRemote.app/RosterRemote.debug.dylib \
+    | grep -c AirPlayRoute        # expect ~292, and 0 is a real failure
+  # 3. Bundle identity survived (this is what keeps B1's APNs credentials valid):
+  codesign -d --entitlements :- <path>/RosterRemote.app | grep -o 'aps-environment'
 
 EVERY SESSION — DEVICE REACHABILITY
 -----------------------------------
@@ -142,7 +170,7 @@ Prefer same Wi-Fi as the Mac:
   ipconfig getifaddr en0          # e.g. 192.168.12.24
   EXPO_PUBLIC_SUPABASE_URL=http://<en0-ip>:54321
   EXPO_PUBLIC_API_BASE_URL=http://<en0-ip>:3000
-  Allow Local Network for FantasyFocus when iOS prompts.
+  Allow Local Network for RosterRemote when iOS prompts.
 
 If the phone is USB-only for development (`devicectl` transportType: wired)
 and Wi-Fi times out, use the Mac's USB link-local IP (en8, 169.254.x.x) instead:
@@ -182,7 +210,7 @@ BUILD / LAUNCH
 
 VERIFY (objective — not just "it opened")
 ----------------------------------------
-- App process on device: FantasyFocus / com.fantasyfocus.app
+- App process on device: RosterRemote / com.fantasyfocus.app
 - API log shows requests with remoteAddress = the phone (not 127.0.0.1 /
   the Mac's own IP). Over USB that is typically the 169.254 peer.
 - Sign-in works; GET /leagues and GET /state/nfl return 200 from that address.

@@ -17,6 +17,17 @@ plus the root package, (2) README / RUNBOOK / TRACK-B docs, (3) `app.json` `name
 `scheme`, the in-app UI strings, and the clean `expo prebuild` the `name` change forces.
 Commit 3 is last on purpose: it is the only one that invalidates a working device build.
 
+Device-verified on a physical iPhone after the clean prebuild: the app installs in place
+under the unchanged bundle ID and reports as `RosterRemote / com.fantasyfocus.app`, signed
+against the existing `iOS Team Provisioning Profile: com.fantasyfocus.app` with
+`aps-environment: development` intact — so B1's push credentials survived. The dormant
+AirPlay native module re-autolinked and re-linked (verified in the regenerated
+`ExpoModulesProvider.swift` and by symbol inspection of the device binary, not assumed —
+`requireOptionalNativeModule` would have returned `null` silently on failure). Two
+operational gaps this exposed are recorded in RUNBOOK: a clean prebuild discards
+`DEVELOPMENT_TEAM`, and a running API dev server must be restarted after a workspace
+scope rename.
+
 **Deliberately kept on the old name — do not "fix" these:**
 
 - **Bundle ID `com.fantasyfocus.app`.** Not user-visible (the name under the icon is

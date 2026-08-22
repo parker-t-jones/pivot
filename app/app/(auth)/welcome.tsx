@@ -12,7 +12,7 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.eyebrow}>Fantasy Focus</Text>
+        <Text style={styles.eyebrow}>RosterRemote</Text>
         <Text style={styles.title}>Never miss your fantasy player&apos;s big moment</Text>
         <Text style={styles.body}>
           We watch every game your fantasy players are in and tell you exactly when to switch —

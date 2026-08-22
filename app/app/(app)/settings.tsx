@@ -487,7 +487,7 @@ function LeaguesSection({
               <Pressable
                 disabled={busyLeagueId === league.league_id}
                 onPress={() =>
-                  Alert.alert('Disconnect league?', `Remove "${league.name}" from Fantasy Focus?`, [
+                  Alert.alert('Disconnect league?', `Remove "${league.name}" from RosterRemote?`, [
                     { text: 'Cancel', style: 'cancel' },
                     {
                       text: 'Disconnect',
@@ -588,7 +588,7 @@ function AboutSection() {
 
   return (
     <SectionCard title="About">
-      <Text style={styles.rowSubtext}>Fantasy Focus v{version}</Text>
+      <Text style={styles.rowSubtext}>RosterRemote v{version}</Text>
       <Pressable onPress={() => void Linking.openURL('mailto:support@fantasyfocus.app')}>
         <Text style={styles.linkText}>Contact support</Text>
       </Pressable>
