@@ -1,4 +1,4 @@
-# RosterRemote — Sprint 10 Track B Handoff
+# Pivot — Sprint 10 Track B Handoff
 
 ## Status as of this handoff
 
@@ -159,7 +159,7 @@ Connect metadata/screenshots/review-prep work.
 
 ## Environment reminders (carried over from Track A friction)
 
-- Local API: `pnpm --filter @roster-remote/api dev` (port 3000)
+- Local API: `pnpm --filter @pivot/api dev` (port 3000)
 - Local Supabase: `supabase start` (needs Docker Desktop running first)
 - Metro/Simulator: `cd app && pnpm start`, press `i`
 - **Real device builds** are a new wrinkle Track A never touched — expect a

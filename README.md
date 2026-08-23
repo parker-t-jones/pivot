@@ -1,6 +1,6 @@
-# RosterRemote
+# Pivot
 
-This repository implements the **RosterRemote** product. The full specification — tech stack (§5), architecture (§6), data model, APIs, UX, and build order — lives in **[PLAN.md](./PLAN.md)**. Treat `PLAN.md` as the source of truth for implementation details.
+This repository implements the **Pivot** product. The full specification — tech stack (§5), architecture (§6), data model, APIs, UX, and build order — lives in **[PLAN.md](./PLAN.md)**. Treat `PLAN.md` as the source of truth for implementation details.
 
 ## Monorepo layout
 
@@ -34,7 +34,7 @@ pnpm format      # Prettier write
 Client dev server (after install):
 
 ```bash
-pnpm --filter @roster-remote/app start
+pnpm --filter @pivot/app start
 ```
 
 ## Documentation

@@ -1,11 +1,11 @@
-ROSTERREMOTE — LOCAL DEV STARTUP
+PIVOT — LOCAL DEV STARTUP
 ================================
 Simulator path below. Physical iPhone: see "PHYSICAL DEVICE (iOS)" after Common Fixes.
 
 The old name survives on purpose in three places below — do not "tidy" them: the repo
 directory is still `.../projects/fantasyfocus`, the bundle ID is still
 `com.fantasyfocus.app` (kept so B1's APNs credentials stay valid), and the Expo project
-is still `@parkertjones/fantasy-focus`. See PLAN.md's rename note (Aug 21, 2026).
+is still `@parkertjones/fantasy-focus`. See PLAN.md's rename notes (Aug 21 and Aug 23, 2026).
 
 ONE-TIME SETUP (skip if already done)
 --------------------------------------
@@ -51,7 +51,7 @@ before starting the next.
 
 4. API server (new tab)
    cd /Users/parkerjones/Developer/projects/fantasyfocus
-   pnpm --filter @roster-remote/api dev
+   pnpm --filter @pivot/api dev
    # Wait for: "Server listening at http://127.0.0.1:3000"
 
 5. Metro / Expo (new tab)
@@ -84,12 +84,12 @@ Sleeper sync / connect lineup empty, or `players_not_seeded` (503)
 lsof -i :3000
   -> if empty, API server is down; if MULTIPLE pids, kill and restart clean:
      lsof -ti :3000 | xargs kill -9
-     pnpm --filter @roster-remote/api dev
+     pnpm --filter @pivot/api dev
 
 "Missing Authorization bearer token" on any curl
   -> your $JWT is empty or expired (~1hr). Just run: jwt
 
-ERR_MODULE_NOT_FOUND: Cannot find package '@roster-remote/...' in the API log
+ERR_MODULE_NOT_FOUND: Cannot find package '@pivot/...' in the API log
   -> a workspace package was renamed while the dev server was running. The tsx
      watcher holds the old resolution and its auto-restart can race `pnpm install`.
      Kill it and restart step 4; nothing is wrong with the code.
@@ -131,7 +131,7 @@ ONE-TIME (Mac + Apple Developer Program)
 5. First device build needs a provisioning profile with Push Notifications
    (`aps-environment`). Create it once with:
      cd app/ios
-     xcodebuild -workspace RosterRemote.xcworkspace -scheme RosterRemote \
+     xcodebuild -workspace Pivot.xcworkspace -scheme Pivot \
        -configuration Debug -destination 'id=<DEVICE_UDID>' \
        -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
        DEVELOPMENT_TEAM=LY2XMRG6VY build
@@ -141,7 +141,7 @@ ONE-TIME (Mac + Apple Developer Program)
    DEVELOPMENT_TEAM is not optional after a clean prebuild. The team is stored in
    the generated (gitignored) .xcodeproj, so `expo prebuild --clean` discards it and
    the build fails with:
-     error: Signing for "RosterRemote" requires a development team.
+     error: Signing for "Pivot" requires a development team.
    Passing it on the command line avoids opening Xcode just to re-pick the team.
 
 AFTER A CLEAN PREBUILD (expo prebuild --clean)
@@ -151,14 +151,14 @@ project. Verify these rather than assuming, because the failure modes are quiet:
   # 1. Local native modules re-autolinked. AirPlayRoute is loaded via
   #    requireOptionalNativeModule, which returns null when unlinked — a failed
   #    autolink degrades to "no AirPlay target" with NO error anywhere.
-  rg -c "AirPlayRoute" "ios/Pods/Target Support Files/Pods-RosterRemote/ExpoModulesProvider.swift"
+  rg -c "AirPlayRoute" "ios/Pods/Target Support Files/Pods-Pivot/ExpoModulesProvider.swift"
   # 2. It actually linked, not just registered. Note: in Debug the app code is in
-  #    RosterRemote.debug.dylib, NOT the thin RosterRemote executable — checking the
+  #    Pivot.debug.dylib, NOT the thin Pivot executable — checking the
   #    executable finds nothing and looks like a failure when it isn't.
-  nm -a <DerivedData>/Build/Products/Debug-iphoneos/RosterRemote.app/RosterRemote.debug.dylib \
+  nm -a <DerivedData>/Build/Products/Debug-iphoneos/Pivot.app/Pivot.debug.dylib \
     | grep -c AirPlayRoute        # expect ~292, and 0 is a real failure
   # 3. Bundle identity survived (this is what keeps B1's APNs credentials valid):
-  codesign -d --entitlements :- <path>/RosterRemote.app | grep -o 'aps-environment'
+  codesign -d --entitlements :- <path>/Pivot.app | grep -o 'aps-environment'
 
 EVERY SESSION — DEVICE REACHABILITY
 -----------------------------------
@@ -170,7 +170,7 @@ Prefer same Wi-Fi as the Mac:
   ipconfig getifaddr en0          # e.g. 192.168.12.24
   EXPO_PUBLIC_SUPABASE_URL=http://<en0-ip>:54321
   EXPO_PUBLIC_API_BASE_URL=http://<en0-ip>:3000
-  Allow Local Network for RosterRemote when iOS prompts.
+  Allow Local Network for Pivot when iOS prompts.
 
 If the phone is USB-only for development (`devicectl` transportType: wired)
 and Wi-Fi times out, use the Mac's USB link-local IP (en8, 169.254.x.x) instead:
@@ -210,7 +210,7 @@ BUILD / LAUNCH
 
 VERIFY (objective — not just "it opened")
 ----------------------------------------
-- App process on device: RosterRemote / com.fantasyfocus.app
+- App process on device: Pivot / com.fantasyfocus.app
 - API log shows requests with remoteAddress = the phone (not 127.0.0.1 /
   the Mac's own IP). Over USB that is typically the 169.254 peer.
 - Sign-in works; GET /leagues and GET /state/nfl return 200 from that address.

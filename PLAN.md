@@ -1,4 +1,4 @@
-# RosterRemote — Build Plan
+# Pivot — Build Plan
 
 A spec for building a fantasy-aware NFL viewing app. v1 ships as a fantasy command center that routes users to the right games (via deep-link or TV cast) based on real-time fantasy lineup activity. Architecture is designed to swap into native streaming when partnership deals are landed in Phase 2.
 
@@ -54,9 +54,24 @@ Question #5, which is a B3 submission blocker independent of the rename. Histori
 Issues that cite these technical IDs as they existed at the time of the events are left
 unchanged on purpose.
 
-Trademark clearance on "RosterRemote" has **not** been formally done (e.g. USPTO TESS
+Trademark clearance on "Pivot" has **not** been formally done (e.g. USPTO TESS
 search or legal counsel). Informal web searches turned up nothing conflicting; that is
 not the same as clearance. See Open Question #4.
+
+**Rename (Aug 23, 2026).** Product name changed again, RosterRemote → **Pivot** —
+in-app/display branding only: the home-screen name, in-app UI copy, splash/onboarding
+text, docs, and comments. Explicitly out of scope for this pass: the future App Store
+Connect listing name and trademark clearance/filing — those are a separate, later step,
+not part of an in-app display-name change.
+
+Ran as three gated commits, same discipline as Aug 21: (1) `app.json` `name`/`scheme`,
+the in-app UI strings, and the pnpm workspace scope `@roster-remote/*` → `@pivot/*` (the
+Aug 21 pass's package rename, redone since the brand moved again — confirmed with the
+requester before touching it, since the preserved-identifier list as given no longer
+matched the repo); (2) docs — this file, README, RUNBOOK, TRACK-B, B3-HANDOFF; (3) a
+final grep sweep, confirmation that the four items below are still untouched, and the
+`expo prebuild --clean` the `name` change forces. Same four preserved identifiers as the
+Aug 21 note above — untouched again this pass.
 
 ---
 
@@ -83,7 +98,7 @@ not the same as clearance. See Open Question #4.
 
 ## 1. Executive Summary
 
-**Product.** RosterRemote — a mobile app that monitors live NFL games and the user's fantasy football lineup, then surfaces real-time notifications when their fantasy players become active on the field. The user can switch their viewing (on phone or TV) to the relevant game in one tap.
+**Product.** Pivot — a mobile app that monitors live NFL games and the user's fantasy football lineup, then surfaces real-time notifications when their fantasy players become active on the field. The user can switch their viewing (on phone or TV) to the relevant game in one tap.
 
 **Core value proposition.** Stop missing your fantasy plays. The app does what NFL RedZone does (showing you the most important action) but personalized to *your* fantasy team.
 
@@ -1569,13 +1584,14 @@ Issues that need resolution but don't block the build:
    partnership problem, not a client-engineering one. Section 15's partnership work is the most
    plausible unlock; it would also make this moot for any partner whose video we embed directly.
 3. **v1.5 subscription price point.** Suggested range $9.99–14.99/month, defer to market research.
-4. **RosterRemote trademark clearance.** Informal web searches turned up nothing conflicting with
+4. **Pivot trademark clearance.** Informal web searches turned up nothing conflicting with
    the name, but that is not formal clearance. A real search (e.g. USPTO TESS) and/or legal counsel
    review is still outstanding before App Store Connect listing and any trademark filing. Do not
    treat the PLAN.md rename note (Aug 21, 2026) as having closed this.
-5. **Rename items still outstanding after the Aug 21, 2026 code-level pass.** The packages, docs,
-   `app.json` `name`/`scheme`, and in-app UI strings are done; see the rename note at the top for
-   what is deliberately kept on the old name. Three items remain:
+5. **Rename items still outstanding after the Aug 21 and Aug 23, 2026 code-level passes.** The
+   packages, docs, `app.json` `name`/`scheme`, and in-app UI strings are done for both renames;
+   see the rename notes at the top for what is deliberately kept on the old name. Three items
+   remain:
    - **A real domain with live `/terms` and `/privacy`.** Settings still links
      `support@fantasyfocus.app`, `https://fantasyfocus.app/terms`, and `.../privacy`. This is a
      **B3 submission blocker regardless of the rename** — App Store Connect requires a reachable
@@ -1583,8 +1599,8 @@ Issues that need resolution but don't block the build:
      swap. Left pointing at the old name on purpose: an honestly-outdated URL is better than a
      renamed one that 404s during review, which would fail silently until rejection. Overlaps
      Open Question #8 (lawyer review of the policy text itself); this is the hosting half.
-   - **The EAS project slug** (`fantasy-focus` → `roster-remote`, plus the matching rename on
-     expo.dev). Deferred until after TestFlight is verified green — rationale in the rename note.
+   - **The EAS project slug** (`fantasy-focus` → `pivot`, plus the matching rename on
+     expo.dev). Deferred until after TestFlight is verified green — rationale in the rename notes.
      Low urgency, but record it rather than letting the mismatch become permanent by default.
    - **Trademark clearance**, still open as Open Question #4 above.
 6. **Launch marketing strategy.** Out of scope for this plan.
@@ -2178,4 +2194,4 @@ Aim for 30K+ WAU and 60%+ retention through the season to have a credible partne
 
 ---
 
-*End of plan. This is the buildable specification for RosterRemote v1.*
+*End of plan. This is the buildable specification for Pivot v1.*
