@@ -1,4 +1,4 @@
-import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@roster-remote/dispatcher';
+import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@pivot/dispatcher';
 import Fastify from 'fastify';
 import {
   serializerCompiler,

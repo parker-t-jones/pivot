@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FlagState, GameState } from '@roster-remote/shared';
+import type { FlagState, GameState } from '@pivot/shared';
 import { InMemoryGameStateStore } from './inMemoryGameStateStore.js';
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {

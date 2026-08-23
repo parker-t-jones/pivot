@@ -8,7 +8,7 @@ importers:
 
   .:
     dependencies:
-      '@roster-remote/shared':
+      '@pivot/shared':
         specifier: workspace:^
         version: link:shared
       '@supabase/supabase-js':
@@ -121,13 +121,13 @@ importers:
       '@fastify/websocket':
         specifier: ^11.3.0
         version: 11.3.0
-      '@roster-remote/dispatcher':
+      '@pivot/dispatcher':
         specifier: workspace:^
         version: link:../dispatcher
-      '@roster-remote/engine':
+      '@pivot/engine':
         specifier: workspace:^
         version: link:../engine
-      '@roster-remote/shared':
+      '@pivot/shared':
         specifier: workspace:^
         version: link:../../shared
       '@supabase/supabase-js':
@@ -176,10 +176,10 @@ importers:
 
   services/dispatcher:
     dependencies:
-      '@roster-remote/engine':
+      '@pivot/engine':
         specifier: workspace:^
         version: link:../engine
-      '@roster-remote/shared':
+      '@pivot/shared':
         specifier: workspace:^
         version: link:../../shared
       '@upstash/redis':
@@ -207,7 +207,7 @@ importers:
 
   services/engine:
     dependencies:
-      '@roster-remote/shared':
+      '@pivot/shared':
         specifier: workspace:^
         version: link:../../shared
       csv-parse:
@@ -5668,7 +5668,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.85.3': {}
 

@@ -1,4 +1,4 @@
-import type { GameState } from '@roster-remote/shared';
+import type { GameState } from '@pivot/shared';
 import type { GameSummaryInfo } from './catalogs.js';
 
 /**

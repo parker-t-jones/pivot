@@ -1,4 +1,4 @@
-import type { SlotType } from '@roster-remote/shared';
+import type { SlotType } from '@pivot/shared';
 
 export interface RosterMappingSlot {
   /** Sleeper `player_id` (or team abbreviation for DEF) — resolved against `players.sleeper_id` by the caller. */

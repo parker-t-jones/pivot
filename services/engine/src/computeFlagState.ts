@@ -1,4 +1,4 @@
-import type { FlagReason, FlagState, GameState, UserLineupCache } from '@roster-remote/shared';
+import type { FlagReason, FlagState, GameState, UserLineupCache } from '@pivot/shared';
 import { defaultClock, type Clock } from './clock.js';
 
 /**

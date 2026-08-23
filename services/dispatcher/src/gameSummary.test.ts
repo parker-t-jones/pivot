@@ -1,4 +1,4 @@
-import type { GameState } from '@roster-remote/shared';
+import type { GameState } from '@pivot/shared';
 import { describe, expect, it } from 'vitest';
 import { buildGameSummary } from './gameSummary.js';
 

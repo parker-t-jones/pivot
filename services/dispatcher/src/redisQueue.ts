@@ -1,5 +1,5 @@
 import type { Redis } from '@upstash/redis';
-import type { FlagEvent } from '@roster-remote/shared';
+import type { FlagEvent } from '@pivot/shared';
 import type { FlagEventQueue, QueuedFlagEvent } from './queue.js';
 
 const QUEUE_KEY = 'flag_event_queue';

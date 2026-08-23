@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { FlagEvent, FlagState } from '@roster-remote/shared';
+import type { FlagEvent, FlagState } from '@pivot/shared';
 
 type FlagEventType = FlagEvent['type'];
 

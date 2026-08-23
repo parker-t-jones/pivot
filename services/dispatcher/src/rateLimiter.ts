@@ -1,4 +1,4 @@
-import type { FlagEvent, FlagReasonType, Preferences } from '@roster-remote/shared';
+import type { FlagEvent, FlagReasonType, Preferences } from '@pivot/shared';
 
 /** Section 3 "Rate limiting" / Section 8 `shouldRateLimit`: max 3 per 60s sliding window. */
 const WINDOW_MS = 60_000;

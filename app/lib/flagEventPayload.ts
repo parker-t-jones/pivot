@@ -1,14 +1,14 @@
 /**
  * Sprint 6 Phase 6 — the client's own mirror of `FlagEventEnvelope['payload']`
  * (`services/dispatcher/src/delivery.ts`). This is deliberately a hand-copied structural type, not an
- * import from `@roster-remote/dispatcher`: the client never receives a `FlagEventEnvelope` TypeScript
+ * import from `@pivot/dispatcher`: the client never receives a `FlagEventEnvelope` TypeScript
  * value, only its JSON-serialized `payload` (Phase 3's invariant — push `data` is set to
  * `envelope.payload` verbatim, and the not-yet-built WebSocket client will receive the same shape).
  * A mobile client should describe the wire format it actually parses, not reach into a backend
  * package's internal implementation type it will never run against at runtime.
  *
  * Keep this in sync with `FlagEventEnvelope['payload']` by hand — a real drift-detection mechanism
- * (e.g. a shared `@roster-remote/wire-types` package) is future work, not this phase's scope.
+ * (e.g. a shared `@pivot/wire-types` package) is future work, not this phase's scope.
  */
 
 export interface FlagReason {

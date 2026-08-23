@@ -1,4 +1,4 @@
-import type { FlagState, GameState } from '@roster-remote/shared';
+import type { FlagState, GameState } from '@pivot/shared';
 import type { GameStateStore } from './gameStateStore.js';
 
 function flagKey(userId: string, gameId: string): string {

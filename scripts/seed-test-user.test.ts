@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assignRoster } from './seed-test-user.js';
-import type { Position, SlotType } from '@roster-remote/shared';
+import type { Position, SlotType } from '@pivot/shared';
 
 interface RosterSpec {
   positionInLineup: string;

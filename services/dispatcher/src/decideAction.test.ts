@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FlagEvent, FlagState } from '@roster-remote/shared';
+import type { FlagEvent, FlagState } from '@pivot/shared';
 import { decideAction, type DecideActionSession, type DecideActionUser } from './decideAction.js';
 
 function makeFlagState(overrides: Partial<FlagState> = {}): FlagState {

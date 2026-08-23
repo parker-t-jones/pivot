@@ -1,4 +1,4 @@
-import type { FlagReason, FlagState, GameState, UnitOnField } from '@roster-remote/shared';
+import type { FlagReason, FlagState, GameState, UnitOnField } from '@pivot/shared';
 
 /**
  * Serialization for the Section 7 Redis hashes. `@upstash/redis` JSON-parses hash values on read

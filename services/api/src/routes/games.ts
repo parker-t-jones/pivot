@@ -1,5 +1,5 @@
-import { rankBroadcasts, type GameBroadcastOption } from '@roster-remote/dispatcher';
-import type { GameState } from '@roster-remote/shared';
+import { rankBroadcasts, type GameBroadcastOption } from '@pivot/dispatcher';
+import type { GameState } from '@pivot/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';

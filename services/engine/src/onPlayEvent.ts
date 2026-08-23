@@ -1,4 +1,4 @@
-import type { GameState, UserLineupCache } from '@roster-remote/shared';
+import type { GameState, UserLineupCache } from '@pivot/shared';
 import { defaultClock, type Clock } from './clock.js';
 import { applyPlayToState } from './applyPlayToState.js';
 import { computeFlagState } from './computeFlagState.js';
@@ -10,7 +10,7 @@ import type { PlayEvent } from './playEvent.js';
 
 /**
  * The slice of Sprint 3's `LineupCacheProvider` the engine needs (just the reader). Declared here,
- * structurally, rather than importing `@roster-remote/api` so the engine doesn't depend on the API
+ * structurally, rather than importing `@pivot/api` so the engine doesn't depend on the API
  * package (and so Sprint 3 code is untouched). Both `InMemoryLineupCache` and `RedisLineupCache`
  * satisfy it; production wiring (Sprint 5) passes the real provider (decision: structural reuse).
  */

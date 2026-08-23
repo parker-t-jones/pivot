@@ -1,5 +1,5 @@
-import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@roster-remote/dispatcher';
-import type { GameState, UserLineupCache } from '@roster-remote/shared';
+import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@pivot/dispatcher';
+import type { GameState, UserLineupCache } from '@pivot/shared';
 import Fastify from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,
@@ -16,7 +16,7 @@ import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
 import flagsRoutes from './flags.js';
 import { toRecommendedAction } from './flags.js';
-import type { Action } from '@roster-remote/dispatcher';
+import type { Action } from '@pivot/dispatcher';
 
 const JWT_SECRET = 'test-secret-at-least-32-characters-long';
 const WEEK = 5;

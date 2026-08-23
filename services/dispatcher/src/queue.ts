@@ -1,4 +1,4 @@
-import type { FlagEvent } from '@roster-remote/shared';
+import type { FlagEvent } from '@pivot/shared';
 
 /**
  * `flag_event_queue` (PLAN.md Section 7) — a sorted set of `{ event_json : fire_at_timestamp }`.

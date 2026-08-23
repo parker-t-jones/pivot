@@ -56,7 +56,7 @@ export default function SignInScreen() {
     >
       <View style={styles.card}>
         <Text style={styles.title}>Sign in</Text>
-        <Text style={styles.subtitle}>Access your RosterRemote account.</Text>
+        <Text style={styles.subtitle}>Access your Pivot account.</Text>
 
         <TextInput
           autoCapitalize="none"

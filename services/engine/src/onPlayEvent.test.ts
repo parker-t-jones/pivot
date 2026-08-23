@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { UserLineupCache } from '@roster-remote/shared';
+import type { UserLineupCache } from '@pivot/shared';
 import type { Clock } from './clock.js';
 import type { PlayEvent } from './playEvent.js';
 import { InMemoryGameStateProvider } from './gameStateProvider.js';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePreferences, type FlagEvent, type FlagState } from '@roster-remote/shared';
+import { parsePreferences, type FlagEvent, type FlagState } from '@pivot/shared';
 import { InMemoryRateLimitStore, isInQuietHours, shouldRateLimit } from './rateLimiter.js';
 
 function makeFlagState(overrides: Partial<FlagState> = {}): FlagState {

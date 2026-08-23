@@ -1,5 +1,5 @@
-import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@roster-remote/dispatcher';
-import type { GameState } from '@roster-remote/shared';
+import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@pivot/dispatcher';
+import type { GameState } from '@pivot/shared';
 import Fastify from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,

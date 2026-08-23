@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Redis } from '@upstash/redis';
 import { afterAll, describe, expect, it } from 'vitest';
-import type { GameState } from '@roster-remote/shared';
+import type { GameState } from '@pivot/shared';
 import { RedisGameStateProvider } from './redisGameStateProvider.js';
 
 /*

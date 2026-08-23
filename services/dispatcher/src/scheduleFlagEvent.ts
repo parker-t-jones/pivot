@@ -1,5 +1,5 @@
-import { defaultClock, type Clock, type EventDispatcher } from '@roster-remote/engine';
-import type { FlagEvent } from '@roster-remote/shared';
+import { defaultClock, type Clock, type EventDispatcher } from '@pivot/engine';
+import type { FlagEvent } from '@pivot/shared';
 import {
   lagSecondsFor,
   resolveLikelyBroadcastSource,

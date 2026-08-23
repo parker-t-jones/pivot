@@ -1,8 +1,8 @@
-import type { FlagReason, Preferences } from '@roster-remote/shared';
+import type { FlagReason, Preferences } from '@pivot/shared';
 
 /**
  * Structural interfaces the dispatcher needs from the `users`/`viewing_sessions`/`games`/`teams`/
- * `players`/`flag_events` tables. Declared here (rather than importing `@roster-remote/api` and its
+ * `players`/`flag_events` tables. Declared here (rather than importing `@pivot/api` and its
  * generated `database.types.ts`) so the dispatcher package stays free of a dependency on the API
  * package (sprint decision #9 — dependencies run api -> dispatcher, never the reverse); this mirrors
  * the engine's `LineupCacheReader` pattern from Sprint 4.

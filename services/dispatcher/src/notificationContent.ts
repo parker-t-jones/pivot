@@ -1,4 +1,4 @@
-import type { FlagEvent, FlagReason, FlagReasonType } from '@roster-remote/shared';
+import type { FlagEvent, FlagReason, FlagReasonType } from '@pivot/shared';
 import type { PlayerInfo } from './catalogs.js';
 
 /**

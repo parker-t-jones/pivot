@@ -3,7 +3,7 @@ import {
   createRealtimeChannels,
   type GameStateStore,
   type RealtimeSubscriber,
-} from '@roster-remote/dispatcher';
+} from '@pivot/dispatcher';
 import websocketPlugin from '@fastify/websocket';
 import Fastify from 'fastify';
 import {

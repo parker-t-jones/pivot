@@ -1,5 +1,5 @@
 {
-  "name": "roster-remote",
+  "name": "pivot",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.0",
@@ -30,7 +30,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@roster-remote/shared": "workspace:^",
+    "@pivot/shared": "workspace:^",
     "@supabase/supabase-js": "^2.108.2",
     "dotenv": "^17.4.2"
   }

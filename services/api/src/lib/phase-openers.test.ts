@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveDisplayPhase } from './phase-openers.js';
-import { etCalendarDateFromUtc } from '@roster-remote/shared';
+import { etCalendarDateFromUtc } from '@pivot/shared';
 
 const PRE = '2026-08-06';
 const REG = '2026-09-09';

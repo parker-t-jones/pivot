@@ -1,4 +1,4 @@
-import type { FlagState, GameState } from '@roster-remote/shared';
+import type { FlagState, GameState } from '@pivot/shared';
 
 /**
  * Hot-path state the engine reads/writes while processing plays (PLAN.md Section 8 `redis.*` calls +

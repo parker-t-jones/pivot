@@ -1,4 +1,4 @@
-import { etCalendarDateFromInstant, etCalendarDateFromUtc } from '@roster-remote/shared';
+import { etCalendarDateFromInstant, etCalendarDateFromUtc } from '@pivot/shared';
 import type { SupabaseServiceClient } from './supabase.js';
 
 export type NflPhase = 'off' | 'pre' | 'regular' | 'post';

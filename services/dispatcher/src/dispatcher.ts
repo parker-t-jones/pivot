@@ -1,4 +1,4 @@
-import { defaultClock, type Clock } from '@roster-remote/engine';
+import { defaultClock, type Clock } from '@pivot/engine';
 import type { DeliveryDeps } from './delivery.js';
 import { deliverFlagEvent } from './delivery.js';
 import { isStillRelevant } from './isStillRelevant.js';

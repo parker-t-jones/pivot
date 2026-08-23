@@ -4,7 +4,7 @@ import {
   serializeUserLineupCache,
   type SerializedUserLineupCache,
   type UserLineupCache,
-} from '@roster-remote/shared';
+} from '@pivot/shared';
 import type { LineupCacheProvider, NflState } from './types.js';
 
 const NFL_STATE_KEY = 'current_nfl_state';

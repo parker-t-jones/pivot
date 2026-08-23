@@ -1,4 +1,4 @@
-import type { GameState } from '@roster-remote/shared';
+import type { GameState } from '@pivot/shared';
 
 /**
  * Pure filter (PLAN.md Section 8 "Interesting state change filter"): true when a state transition

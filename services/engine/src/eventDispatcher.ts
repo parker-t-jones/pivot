@@ -1,4 +1,4 @@
-import type { FlagEvent } from '@roster-remote/shared';
+import type { FlagEvent } from '@pivot/shared';
 
 /**
  * Where the engine hands off emitted flag events. In Sprint 4 the only implementation captures events

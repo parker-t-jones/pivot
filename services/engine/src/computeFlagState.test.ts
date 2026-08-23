@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GameState, UserLineupCache } from '@roster-remote/shared';
+import type { GameState, UserLineupCache } from '@pivot/shared';
 import type { Clock } from './clock.js';
 import { computeFlagState } from './computeFlagState.js';
 

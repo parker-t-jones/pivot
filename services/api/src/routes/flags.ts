@@ -1,16 +1,16 @@
-import { computeFlagState } from '@roster-remote/engine';
+import { computeFlagState } from '@pivot/engine';
 import {
   buildGameSummary,
   decideAction,
   type Action,
   type ViewingSessionSnapshot,
-} from '@roster-remote/dispatcher';
+} from '@pivot/dispatcher';
 import {
   parsePreferences,
   type FlagEvent,
   type FlagState,
   type GameState,
-} from '@roster-remote/shared';
+} from '@pivot/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';

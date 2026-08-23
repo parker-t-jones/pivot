@@ -1,5 +1,5 @@
 {
-  "name": "@roster-remote/shared",
+  "name": "@pivot/shared",
   "version": "0.0.0",
   "private": true,
   "type": "module",

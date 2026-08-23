@@ -3,8 +3,8 @@ import {
   type LineupCacheReader,
   type OnPlayEventDeps,
   type PlayEvent,
-} from '@roster-remote/engine';
-import type { UserLineupCache } from '@roster-remote/shared';
+} from '@pivot/engine';
+import type { UserLineupCache } from '@pivot/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryBroadcastCatalog } from './broadcastLag.js';
 import {

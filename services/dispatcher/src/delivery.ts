@@ -1,5 +1,5 @@
-import { defaultClock, type Clock } from '@roster-remote/engine';
-import type { FlagEvent, FlagState, GameState } from '@roster-remote/shared';
+import { defaultClock, type Clock } from '@pivot/engine';
+import type { FlagEvent, FlagState, GameState } from '@pivot/shared';
 import { resolveLikelyBroadcastSource, type BroadcastCatalog } from './broadcastLag.js';
 import { preferredBroadcast, resolveBroadcasts } from './broadcastResolver.js';
 import type {

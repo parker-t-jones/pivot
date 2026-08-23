@@ -1,4 +1,4 @@
-import type { UserLineupCache } from '@roster-remote/shared';
+import type { UserLineupCache } from '@pivot/shared';
 import type { LineupCacheProvider, NflState } from './types.js';
 
 function lineupKey(userId: string, week: number): string {

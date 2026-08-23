@@ -1,4 +1,4 @@
-import type { LeaguePlatform } from '@roster-remote/shared';
+import type { LeaguePlatform } from '@pivot/shared';
 import { ApiError } from '../lib/errors.js';
 import type {
   FantasyProvider,

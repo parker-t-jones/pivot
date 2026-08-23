@@ -1,5 +1,5 @@
 {
-  "name": "@roster-remote/engine",
+  "name": "@pivot/engine",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@roster-remote/shared": "workspace:^",
+    "@pivot/shared": "workspace:^",
     "csv-parse": "^5.6.0"
   }
 }

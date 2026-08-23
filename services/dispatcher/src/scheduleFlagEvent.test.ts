@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FlagEvent, FlagState } from '@roster-remote/shared';
+import type { FlagEvent, FlagState } from '@pivot/shared';
 import { InMemoryBroadcastCatalog } from './broadcastLag.js';
 import { InMemoryFlagEventQueue } from './inMemoryQueue.js';
 import { QueueingEventDispatcher } from './scheduleFlagEvent.js';

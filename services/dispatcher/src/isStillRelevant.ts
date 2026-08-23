@@ -1,4 +1,4 @@
-import type { FlagEvent, FlagState } from '@roster-remote/shared';
+import type { FlagEvent, FlagState } from '@pivot/shared';
 
 /**
  * Re-validation before firing (Section 8 `flagEventDispatcher`), extended per Sprint 4 closeout item

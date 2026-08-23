@@ -31,9 +31,9 @@ export default function NotificationsPermissionScreen() {
       <View style={styles.card}>
         <Text style={styles.title}>Never miss the moment</Text>
         <Text style={styles.body}>
-          RosterRemote watches every game your players are in. When one of them takes the field — or
-          a big play changes who has the ball — we&apos;ll send you a notification so you can switch
-          over before you miss it.
+          Pivot watches every game your players are in. When one of them takes the field — or a big
+          play changes who has the ball — we&apos;ll send you a notification so you can switch over
+          before you miss it.
         </Text>
         <Text style={styles.body}>You can turn these off any time in Settings.</Text>
 

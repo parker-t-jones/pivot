@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { UserLineupCache } from '@roster-remote/shared';
+import type { UserLineupCache } from '@pivot/shared';
 import { InMemoryLineupCache } from './in-memory.js';
 
 function makeLineupCache(overrides: Partial<UserLineupCache> = {}): UserLineupCache {

@@ -1,4 +1,4 @@
-import { InMemoryGameStateStore } from '@roster-remote/dispatcher';
+import { InMemoryGameStateStore } from '@pivot/dispatcher';
 import Fastify from 'fastify';
 import {
   serializerCompiler,
@@ -9,7 +9,7 @@ import websocketPlugin from '@fastify/websocket';
 import { SignJWT } from 'jose';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { InMemoryRealtimeBus } from '@roster-remote/dispatcher';
+import { InMemoryRealtimeBus } from '@pivot/dispatcher';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
