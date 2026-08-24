@@ -73,6 +73,21 @@ final grep sweep, confirmation that the four items below are still untouched, an
 `expo prebuild --clean` the `name` change forces. Same four preserved identifiers as the
 Aug 21 note above — untouched again this pass.
 
+Commit 3 verification: a repo-wide `grep -ri rosterremote` (tracked and untracked, ios/
+excluded — see next paragraph) returned nothing outside this note and the Aug 21 note
+above, plus one untracked `app/.env` comment fixed on the spot even though it's git-
+ignored. Bundle ID, EAS slug, and Supabase `project_id` reconfirmed byte-for-byte via
+direct read after the fact, not assumed from the earlier diff. `expo prebuild --clean`
+was actually run (not left as a documented TODO) — regenerated `ios/Pivot.xcodeproj`,
+`ios/Pivot.xcworkspace`, and `Pods-Pivot` exactly as predicted in RUNBOOK, with no
+CocoaPods-cache staleness from the old name; a fresh grep of the regenerated `ios/` tree
+(the one place old-name strings could hide in generated `.pbxproj`/`Info.plist` files
+without commits 1–2 touching them) came back clean. `Info.plist`/`project.pbxproj`
+confirmed `CFBundleDisplayName`/`PRODUCT_NAME` = `Pivot` and `CFBundleIdentifier` still
+`com.fantasyfocus.app`. Device-verified in the iOS Simulator after a full `expo run:ios`
+build: the home-screen icon label and the Expo Dev Launcher's own title both read
+"Pivot" (screenshotted, not eyeballed from logs).
+
 ---
 
 ## Table of Contents
