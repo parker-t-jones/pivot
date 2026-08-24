@@ -74,13 +74,12 @@ in `PLAN.md`'s rename note; the short version:
 | iOS bundle ID      | `com.fantasyfocus.app`                           | Changing it means a new Apple App ID, new provisioning, and re-doing B1's verified APNs setup, for zero user-visible gain                                          |
 | EAS slug / project | `fantasy-focus` / `@parkertjones/fantasy-focus`  | Renaming needs a matching rename on expo.dev — the only remote-state change, against the project holding B1's push credentials. Deferred until TestFlight is green |
 | Local Supabase     | `project_id = "FantasyFocusApp"`                 | Names the Docker containers; renaming orphans the local volume (seed data, test user, verified push token) silently                                                |
-| Repo directory     | `.../projects/fantasyfocus`                      | GitHub repo is `roster-remote`; the local dir was never renamed. RUNBOOK `cd` paths depend on this                                                                 |
 | Settings URLs      | `fantasyfocus.app/terms`, `/privacy`, `support@` | See blocker #4 below — needs a real domain, not a string swap                                                                                                      |
 
 ### Repo state
 
 - Branch `main`, **11 commits ahead of `origin/main`** — nothing is pushed.
-  Remote is `https://github.com/parker-t-jones/roster-remote`.
+  Remote is `https://github.com/parker-t-jones/pivot`.
 - Working tree clean. Typecheck clean. **590 tests pass**, 5 skipped.
 - Pre-existing red that is NOT yours to fix unless you want to: `pnpm lint` has
   14 errors and `pnpm format:check` has 68 failures, both long-standing and
@@ -230,7 +229,7 @@ From `PLAN.md` Known Issues — none are regressions, all are filed:
 
 ```
 Repo          /Users/parkerjones/Developer/projects/fantasyfocus   (dir keeps old name)
-Remote        https://github.com/parker-t-jones/roster-remote      (11 commits unpushed)
+Remote        https://github.com/parker-t-jones/pivot      (11 commits unpushed)
 Bundle ID     com.fantasyfocus.app        Team LY2XMRG6VY
 EAS project   @parkertjones/fantasy-focus  id 63e2ba9a-dc24-48cc-af2b-dc2c27014634
 APNs key      82JW379P4C

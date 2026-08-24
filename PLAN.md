@@ -47,7 +47,7 @@ scope rename.
   audit, the test user, and the verified push token — silently, with no error.
 - **`scripts/seed-test-user.ts` defaults** (`test@fantasyfocus.dev`). Env-overridable;
   renaming orphans the existing local auth user for no benefit.
-- **The repo directory** `.../projects/fantasyfocus` (the GitHub repo is `roster-remote`).
+- **The repo directory** `.../projects/pivot` (the GitHub repo is `pivot`).
 
 Still outstanding: the `fantasyfocus.app` support/terms/privacy URLs in Settings — see Open
 Question #5, which is a B3 submission blocker independent of the rename. Historical Known
