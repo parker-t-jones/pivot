@@ -129,6 +129,14 @@ public final class AirPlayRouteModule: Module {
 
   /// Main thread only (AVRouteDetector requirement).
   private func startRouteDetection() {
+    #if targetEnvironment(simulator)
+    // AVRouteDetector requires real AirPlay route discovery hardware/networking that the
+    // Simulator doesn't provide. There, `multipleRoutesDetected`'s KVO change value comes back
+    // malformed and the `.observe` call below aborts the process on launch (Swift's KVO bridging
+    // hits a forced cast it can't satisfy) — 100% reproducible, not a race. Leave
+    // `targetAvailable` at its `false` default instead; this is a device-only feature regardless.
+    return
+    #else
     let detector = AVRouteDetector()
     detector.isRouteDetectionEnabled = true
     routeDetector = detector
@@ -143,6 +151,7 @@ public final class AirPlayRouteModule: Module {
       self.targetAvailable = available
       self.sendEvent("onTargetAvailabilityChange", ["available": available])
     }
+    #endif
   }
 
   /// Bridges `AVRoutePickerViewDelegate`'s dismissal callback to a closure. Separate object because

@@ -58,11 +58,20 @@ Trademark clearance on "Pivot" has **not** been formally done (e.g. USPTO TESS
 search or legal counsel). Informal web searches turned up nothing conflicting; that is
 not the same as clearance. See Open Question #4.
 
-**Rename (Aug 23, 2026).** Product name changed again, RosterRemote → **Pivot** —
-in-app/display branding only: the home-screen name, in-app UI copy, splash/onboarding
-text, docs, and comments. Explicitly out of scope for this pass: the future App Store
-Connect listing name and trademark clearance/filing — those are a separate, later step,
-not part of an in-app display-name change.
+**Rename (Aug 23, 2026).** Product name changed again, RosterRemote → **Pivot**.
+Rationale: "pivot" carries credibility across sports — a foundational move in
+basketball, a key technique for a football quarterback or running back, the turning
+motion on a baseball double play — while doubling as the app's core mechanic: pivoting
+the user's viewing focus in real time as fantasy-relevant plays happen (e.g., the
+notification the instant Jonathan Taylor gets the ball). It also reads well technically,
+implying the instant-adaptation-to-new-information behavior the switching engine has to
+deliver — calculating varying stream delays to fire that pivot at the exact right
+split-second.
+
+This pass is in-app/display branding only: the home-screen name, in-app UI copy,
+splash/onboarding text, docs, and comments. Explicitly out of scope for this pass: the
+future App Store Connect listing name and trademark clearance/filing — those are a
+separate, later step, not part of an in-app display-name change.
 
 Ran as three gated commits, same discipline as Aug 21: (1) `app.json` `name`/`scheme`,
 the in-app UI strings, and the pnpm workspace scope `@roster-remote/*` → `@pivot/*` (the
