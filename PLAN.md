@@ -36,11 +36,17 @@ scope rename.
   topic is hardcoded anywhere. Changing it would mean a new Apple App ID, new provisioning,
   reassigning the APNs key, and a new APNs device token — staling the `device_tokens` rows
   B1 was verified against, for zero user-visible gain.
-- **Expo project slug `fantasy-focus` / `@parkertjones/fantasy-focus`.** The slug is the
-  identity EAS resolves against `extra.eas.projectId`, so renaming it requires a matching
-  rename on expo.dev — the only remote-state change in the whole rename, against the
-  project holding B1's verified push credentials. Deferred until after TestFlight is green.
-  Push is unaffected either way: tokens are issued against `projectId`, not the slug.
+- **Expo project slug `fantasy-focus` / `@parkertjones/fantasy-focus`.** Permanently kept,
+  not deferred — confirmed Aug 26, 2026 (B3.0) that this was never actually a deferrable
+  rename. A project's slug is bound to its `extra.eas.projectId` at creation and cannot be
+  changed: editing `app.json`'s `slug` to `pivot` broke `eas project:info` immediately
+  (`Slug for project identified by "extra.eas.projectId" ... does not match the "slug"
+  field`). The only path to a different slug is a brand-new EAS project — a new UUID,
+  requiring B1's verified APNs key to be reassigned and device push tokens re-registered —
+  for an identifier that never appears in the app UI, only in `@account/slug` URLs on
+  expo.dev and EAS CLI output. Not worth that cost. (Push itself was never at risk either
+  way: tokens are issued against `projectId`, not the slug — that part of the original
+  reasoning held up.)
 - **`supabase/config.toml` `project_id = "FantasyFocusApp"`.** That string names the local
   Docker containers. Renaming it makes `supabase start` build a fresh empty stack and orphan
   the current volume — seeded players, the corrected deep-link URLs from the Open Question #2
@@ -1612,10 +1618,12 @@ Issues that need resolution but don't block the build:
    the name, but that is not formal clearance. A real search (e.g. USPTO TESS) and/or legal counsel
    review is still outstanding before App Store Connect listing and any trademark filing. Do not
    treat the PLAN.md rename note (Aug 21, 2026) as having closed this.
-5. **Rename items still outstanding after the Aug 21 and Aug 23, 2026 code-level passes.** The
-   packages, docs, `app.json` `name`/`scheme`, and in-app UI strings are done for both renames;
-   see the rename notes at the top for what is deliberately kept on the old name. Three items
-   remain:
+5. **Rename items after the Aug 21, Aug 23, and Aug 26, 2026 code-level passes.** The
+   packages, docs, `app.json` `name`/`scheme`, and in-app UI strings are done for all three
+   passes; see the rename notes at the top for what is deliberately kept on the old name —
+   that list now includes the EAS project slug, resolved Aug 26, 2026 as a permanent
+   won't-fix rather than a deferred rename (it isn't actually possible without minting a
+   new EAS project; see the rename note for why). Two items remain:
    - **A real domain with live `/terms` and `/privacy`.** Settings still links
      `support@fantasyfocus.app`, `https://fantasyfocus.app/terms`, and `.../privacy`. This is a
      **B3 submission blocker regardless of the rename** — App Store Connect requires a reachable
@@ -1623,9 +1631,6 @@ Issues that need resolution but don't block the build:
      swap. Left pointing at the old name on purpose: an honestly-outdated URL is better than a
      renamed one that 404s during review, which would fail silently until rejection. Overlaps
      Open Question #8 (lawyer review of the policy text itself); this is the hosting half.
-   - **The EAS project slug** (`fantasy-focus` → `pivot`, plus the matching rename on
-     expo.dev). Deferred until after TestFlight is verified green — rationale in the rename notes.
-     Low urgency, but record it rather than letting the mismatch become permanent by default.
    - **Trademark clearance**, still open as Open Question #4 above.
 6. **Launch marketing strategy.** Out of scope for this plan.
 7. **TestFlight beta cohort.** Likely 50–100 users for August preseason testing.

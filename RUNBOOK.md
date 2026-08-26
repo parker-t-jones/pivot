@@ -4,8 +4,9 @@ Simulator path below. Physical iPhone: see "PHYSICAL DEVICE (iOS)" after Common 
 
 The old name survives on purpose in three places below — do not "tidy" them: the repo
 directory is still `.../projects/fantasyfocus`, the bundle ID is still
-`com.fantasyfocus.app` (kept so B1's APNs credentials stay valid), and the Expo project
-is still `@parkertjones/fantasy-focus`. See PLAN.md's rename notes (Aug 21 and Aug 23, 2026).
+`com.fantasyfocus.app` (kept so B1's APNs credentials stay valid), and the Expo project is
+permanently `@parkertjones/fantasy-focus` — its slug can't be changed without minting a new
+EAS project. See PLAN.md's rename notes (Aug 21, Aug 23, and Aug 26, 2026).
 
 ONE-TIME SETUP (skip if already done)
 --------------------------------------
