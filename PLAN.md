@@ -237,7 +237,7 @@ priority = (active_players × 2)
 - Sleeper API lineup integration
 - Manual lineup entry
 - One league per user
-- Real-time Sportradar play-by-play ingestion
+- Real-time play-by-play ingestion (production data source not yet chosen — see Section 5 / Open Questions #1)
 - Switching engine with possession-level flag detection
 - Priority scoring with red-zone and close-game bonuses
 - Push notifications via Expo Push
@@ -280,7 +280,7 @@ priority = (active_players × 2)
 | Hot state | Upstash Redis | Serverless Redis, minimal ops, ideal for game state cache |
 | Push | Expo Notifications | Wraps APNs (and FCM for v1.5), free tier sufficient |
 | Hosting | Fly.io | Strong WebSocket support, global edge presence |
-| Data | Sportradar NFL Real-Time API | Sub-second play-by-play push feed |
+| Data | TBD — evaluating options | Sportradar (sub-second push feed) was the original pick but is enterprise-tier pricing, not viable at current budget. ESPN's unofficial site API (`site.api.espn.com`) is used for prototyping/calibration only (Section 8), not as a production source. See Open Questions #1 |
 | Fantasy | Sleeper API | Free, well-documented, no auth ceremony |
 | Cast | ~~react-native-google-cast~~ + native AirPlay (local Expo module) | Cast cut in v1 — no video rights (Section 2). `react-native-google-cast` was never added; the AirPlay module exists but is dormant |
 | Monitoring | Sentry + Axiom | Errors + structured logs |
@@ -292,7 +292,7 @@ priority = (active_players × 2)
 ### Data flow
 
 ```
-Sportradar push feed
+Real-time data feed (provider TBD — Section 5)
       ↓
 [Ingestion Service]  ← writes game state to Redis
       ↓
@@ -313,7 +313,7 @@ Sportradar push feed
 
 ### Services
 
-- **Ingestion service** — persistent connection to Sportradar push feed. Writes game state to Redis on every play. Mirrors to `game_state_history` table every 30s.
+- **Ingestion service** — persistent connection to the production real-time data feed once one is selected (Section 5 — provider TBD). Writes game state to Redis on every play. Mirrors to `game_state_history` table every 30s.
 - **Switching engine** — subscribes to game state changes via Redis pub/sub. Recomputes flag states per user, emits flag events to dispatcher.
 - **Event dispatcher** — manages the deferred-firing queue (Redis sorted set). Pops due events, applies rate limiting, delivers via WebSocket and/or Expo Push.
 - **API server** — REST endpoints (Fastify). Authenticated via Supabase JWT.
@@ -477,7 +477,7 @@ Multiple rows per game (e.g., FOX broadcast + Sunday Ticket simulcast).
 | `user_id` | uuid | FK → users |
 | `game_id` | uuid | FK → games |
 | `event_type` | text | `'flag_added' \| 'flag_removed' \| 'priority_increased' \| 'priority_decreased'` |
-| `triggering_play_id` | text | nullable, Sportradar play ID |
+| `triggering_play_id` | text | nullable, provider-specific play ID (data source TBD — Section 5) |
 | `priority_score` | numeric | |
 | `reasons` | jsonb | array of reason objects |
 | `fired_at` | timestamptz | |
@@ -556,7 +556,7 @@ user_notifications:{user_id}      sorted set → { event_id : delivered_at_times
 
 ### Overview
 
-The engine is a stateful event processor: Sportradar play events in, flag events out. It maintains game state in Redis, cross-references it against cached user lineups, and emits flag deltas with priority scores. A dispatcher layer defers notifications to align with stream lag and applies rate limiting.
+The engine is a stateful event processor: play-by-play events in (from whichever real-time data source is eventually selected — Section 5), flag events out. It maintains game state in Redis, cross-references it against cached user lineups, and emits flag deltas with priority scores. A dispatcher layer defers notifications to align with stream lag and applies rate limiting.
 
 ### Core types
 
@@ -943,7 +943,7 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 - **Overtime.** Quarter 5 always triggers `close_game` bonus regardless of score margin. `isCloseLateGame` should be extended.
 - **User has players on both teams.** Both offense and defense reasons can be active simultaneously. Priority scores accumulate.
 - **Lineup changes mid-game.** On `lineup_slots` update, invalidate `user_lineup_cache:{user_id}:{week}` and `users_with_stake:*` indexes. Schedule a recomputation.
-- **Sportradar feed disconnect.** Mark game states older than 90s as stale. Engine stops flagging from stale state. Reconnect re-syncs.
+- **Live data feed disconnect.** Mark game states older than 90s as stale. Engine stops flagging from stale state. Reconnect re-syncs.
 - **Game ends.** On `status → 'final'`, fire `flag_removed` for every user flagged on this game.
 
 ### Stream synchronization research (Aug 29, 2026)
@@ -952,7 +952,7 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 
 **Reframe: two notifications, not one.** The hard synchronization problem only applies to *revealing an outcome*, not to getting the user's attention. Split into (a) a **routing nudge** — "something notable just happened, switch to Channel X" — which reveals nothing and so has no spoiler risk and can fire near-real-time, and (b) the **reveal** — "here's what happened" — which is genuinely spoiler-sensitive and is the only part `BROADCAST_LAG_SECONDS`-style timing needs to gate. Worth preserving as a design pattern independent of the findings below.
 
-**Data provider evaluated: ESPN's unofficial site API.** For prototyping/calibration only (not a production ingestion decision — Sportradar, Section 5, remains the real-time production data source). `site.api.espn.com` was chosen over Tank01 (play-by-play marked "beta") and MySportsFeeds (non-commercial license risk) because it's free and already the same undocumented-API family as the v2 ESPN fantasy integration (Section 15) — same accepted no-SLA/could-change-without-notice risk, not a new category of risk.
+**Data provider evaluated: ESPN's unofficial site API.** For prototyping/calibration only (not a production ingestion decision — the production real-time data source is still undecided; see Section 5 / Open Questions #1, since Sportradar's enterprise-tier pricing has ruled it out as a default). `site.api.espn.com` was chosen over Tank01 (play-by-play marked "beta") and MySportsFeeds (non-commercial license risk) because it's free and already the same undocumented-API family as the v2 ESPN fantasy integration (Section 15) — same accepted no-SLA/could-change-without-notice risk, not a new category of risk.
 
 **Empirical finding: ~28-32s baseline delay vs. YouTube TV.** Measured live via a throwaway script (`experiments/espn-latency-probe.ts`) against the Colts @ Lions game. Two independent methods — hand stopwatch, and world-clock-vs-terminal-timestamp corrected for ~2.5s clock drift — converged within ~3 seconds of each other, landing on a **~28-32 second delay** between ESPN's play-by-play data and the YouTube TV broadcast.
 
@@ -1457,7 +1457,7 @@ iOS grouped list:
 - Sleeper sync failed: inline message with retry, last lineup preserved
 - Deep-link target not installed: sheet with alternate broadcast or "Get [app]" App Store link
 - ~~Cast target unreachable: "Couldn't reach your Apple TV..." with retry~~ — moot in v1, no cast flow (Section 2)
-- Sportradar feed stale: grey indicator on game card + "Live data delayed"
+- Live data feed stale: grey indicator on game card + "Live data delayed"
 - Catastrophic backend: maintenance screen with "Try again"
 
 ### Interaction patterns
@@ -1483,7 +1483,7 @@ Nine sprints, each ~2–3 weeks for a solo dev with AI assistance. Total target:
 
 ### Sprint 2: Data ingestion in isolation
 - Stand up ingestion service
-- Connect to Sportradar sandbox feed
+- Connect to a real-time data feed sandbox (provider TBD — Section 5; Sportradar was the original candidate)
 - Implement `applyPlayToState` and Redis game state writer
 - Add structured logging
 - Goal: backend logs possession changes in real time from a recorded game
@@ -1567,10 +1567,10 @@ Deferred:
 
 ### Procurement required before launch
 
-1. **Sportradar NFL Real-Time API contract**
-   - Largest cost line item, estimate $3K–25K+/month depending on tier
-   - Push feed (not polling) required for sub-second latency
-   - Start procurement immediately
+1. **Production real-time play-by-play data provider — not yet selected**
+   - Sportradar was the original pick (sub-second push feed) but its enterprise-tier pricing (est. $3K–25K+/month) is not viable at current budget — ruled out as a default, not procured
+   - ESPN's unofficial site API is in use for prototyping/calibration only (Section 8), not production
+   - Evaluate lower-cost alternatives (e.g. Tank01, MySportsFeeds — see Stream synchronization research, Section 8) before committing; see Open Questions #1
 
 2. **Apple Developer account** — $99/year, instant
 
@@ -1590,7 +1590,7 @@ Deferred:
 | Sentry | Error monitoring | Free tier |
 | Axiom | Logs | Free tier |
 
-Total managed services: ~$150/mo. Sportradar dominates the budget.
+Total managed services: ~$150/mo — excludes the production real-time data provider, which is still unselected (see Open Questions #1); that line item dominated budget projections back when Sportradar was the assumed default.
 
 ### Free / no-cost integrations
 
@@ -1604,7 +1604,7 @@ Total managed services: ~$150/mo. Sportradar dominates the budget.
 
 Issues that need resolution but don't block the build:
 
-1. **Sportradar pricing tier.** Final contract determines real cost structure.
+1. **Production real-time data provider.** No source is committed. Sportradar (sub-second push feed) was the original aspirational pick, but its enterprise-tier pricing is not viable at current budget — ruled out as a default, not contracted. ESPN's unofficial site API (`site.api.espn.com`) is being used for prototyping/calibration only (Stream synchronization research, Section 8), not as a production decision. Needs a real evaluation of lower-cost alternatives (Tank01, MySportsFeeds, etc. — Section 8) before production launch.
 2. **Deep-link availability per service.** Partly answered in Sprint 10 Track B; the remaining
    unknown is narrower and different in kind from what this question originally assumed. Two
    sub-questions, and conflating them is what let broken links ship for three sprints:
@@ -1972,7 +1972,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Root cause:** Sleeper's `/state/nfl` calendar fields track Sleeper's internal phase labels, not schedule ground truth. `season_start_date` appears phase-relative; `season_type` flips before the corresponding games begin. Both also change annually.
 
-**Fix:** Home keys off schedule-derived `display_phase` + `preseason_start` / `regular_season_start` on `GET /state/nfl` (MIN kickoffs from seeded `games`, ET calendar day). `season_type` and `season_start_date` remain as Sleeper passthrough for engine/ingestion / metadata — never for Home display. When Sportradar ingestion lands, openers (and eventually season end) come from that schedule source instead of the ESPN seed.
+**Fix:** Home keys off schedule-derived `display_phase` + `preseason_start` / `regular_season_start` on `GET /state/nfl` (MIN kickoffs from seeded `games`, ET calendar day). `season_type` and `season_start_date` remain as Sleeper passthrough for engine/ingestion / metadata — never for Home display. When production real-time ingestion lands (provider TBD — Section 5), openers (and eventually season end) come from that schedule source instead of the ESPN seed.
 
 **Resolution (Sprint 10 Phase 2.5):** Home and `/games?week=` key off `display_phase`; State 4a copy uses opener date-only fields. Remaining gap: `display_phase` has no season-end bound (separate open entry below).
 
@@ -1982,7 +1982,7 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Root cause:** the derivation bounds the season's start (from seeded openers) but not its end.
 
-**Fix (with the annual reseed workflow / Sportradar ingestion):** derive a season end from schedule data — either the last seeded game's date, or the NEXT season's `preseason_start` once the schedule is reseeded — and treat today > season_end as `'off'`. Deferred because the correct fix depends on the annual reseed workflow, which doesn't exist yet.
+**Fix (with the annual reseed workflow / production real-time ingestion, provider TBD):** derive a season end from schedule data — either the last seeded game's date, or the NEXT season's `preseason_start` once the schedule is reseeded — and treat today > season_end as `'off'`. Deferred because the correct fix depends on the annual reseed workflow, which doesn't exist yet.
 
 **Trigger date:** first surfaces after the 2026 season concludes (~Jan 2027).
 
@@ -1990,9 +1990,9 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 **Symptom:** Phase openers and Home States 3–4 kickoffs come from `data/nfl-schedule-YYYY.json` seeded into `games`. A stale file silently serves last year's dates.
 
-**Root cause:** Until Sportradar ingestion (Sprint 2) owns the schedule, the committed ESPN-derived JSON + `pnpm seed:schedule` is the schedule source. Kickoffs and openers change annually.
+**Root cause:** Until production real-time ingestion (provider TBD — Section 5) owns the schedule, the committed ESPN-derived JSON + `pnpm seed:schedule` is the schedule source. Kickoffs and openers change annually.
 
-**Fix:** each season, run `pnpm fetch:nfl-schedule` (regenerates the JSON from ESPN's public scoreboard), commit the new `data/nfl-schedule-YYYY.json`, and re-run `pnpm seed:schedule`. Sportradar ingestion eventually replaces this seed as the schedule source.
+**Fix:** each season, run `pnpm fetch:nfl-schedule` (regenerates the JSON from ESPN's public scoreboard), commit the new `data/nfl-schedule-YYYY.json`, and re-run `pnpm seed:schedule`. Production real-time ingestion (once a provider is selected) eventually replaces this seed as the schedule source.
 
 **Impact if unfixed:** State 4a shows wrong opener dates; States 3–4 show wrong kickoffs after the calendar rolls.
 
@@ -2132,8 +2132,10 @@ higher-value-but-harder axis is **sports betting slips**:
 - **DraftKings / FanDuel / etc.** — link a user's placed bets so the app flags
   games those bets are live in ("your same-game parlay is playing out now").
   This is what makes PRESEASON meaningful: Sleeper has no preseason lineup, so
-  fantasy can't drive preseason flags, but betting stakes can (Sportradar does
-  cover preseason games).
+  fantasy can't drive preseason flags, but betting stakes can if the eventual
+  real-time data provider covers preseason games (Sportradar, the original
+  candidate, does — but the production provider is still undecided; see
+  Section 5 / Open Questions #1).
 Hard constraints — why this is post-v1, not near-term:
 - **API access is closed/partner-gated.** DraftKings and FanDuel do not offer
   open public read APIs for a user's bets; access likely requires a commercial
@@ -2220,11 +2222,11 @@ Aim for 30K+ WAU and 60%+ retention through the season to have a credible partne
 - Cache: Upstash Redis
 - Push: Expo Notifications
 - Host: Fly.io
-- Data: Sportradar (NFL play-by-play), Sleeper (fantasy)
+- Data: TBD — production provider unselected (Section 5 / Open Questions #1), Sleeper (fantasy)
 - Cast: cut in v1 (no video rights — Section 2); native AirPlay module present but dormant
 
 ### Key files / modules (expected)
-- `services/ingestion/` — Sportradar consumer
+- `services/ingestion/` — real-time data feed consumer (provider TBD)
 - `services/engine/` — switching engine
 - `services/dispatcher/` — deferred event firing
 - `services/api/` — REST + WebSocket server
