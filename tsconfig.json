@@ -4,5 +4,5 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["scripts", "vitest.config.ts"]
+  "include": ["scripts", "experiments", "vitest.config.ts"]
 }
