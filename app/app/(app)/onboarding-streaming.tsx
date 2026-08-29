@@ -54,7 +54,8 @@ export default function OnboardingStreamingScreen() {
         styles.content,
         { paddingTop: insets.top + 48, paddingBottom: 48 },
       ]}
-    >      <Text style={styles.title}>Which streaming services do you have?</Text>
+    >
+      <Text style={styles.title}>Which streaming services do you have?</Text>
       <Text style={styles.subtitle}>
         We&apos;ll recommend the service you already pay for, whenever there&apos;s a choice.
       </Text>
