@@ -60,17 +60,43 @@ export type ResumptionResult =
 export const RESUMPTION_CEILING_MS = 4 * 60 * 1000;
 
 /**
- * Given a possession-change event and the plays that follow it (in order), walk forward
- * applying the classifier. Returns the first REAL_ACTION play as the trigger (with elapsed
- * time since the possession-change event), "aborted" on an ABORT play, or a ceiling fallback
- * if we spend RESUMPTION_CEILING_MS walking through SKIP_AND_WAIT plays without resolving.
+ * Given the play immediately preceding a possession change (the actual real-world moment
+ * possession changed — e.g. the punt, the fumble, the failed 4th down) and the sequence of
+ * plays starting from the one that first reveals the new possession in `poss:` (in order),
+ * walk forward applying the classifier. Returns the first REAL_ACTION play as the trigger,
+ * "aborted" on an ABORT play, or a ceiling fallback if we spend RESUMPTION_CEILING_MS walking
+ * through SKIP_AND_WAIT plays without resolving.
+ *
+ * The possession-revealing play (`playsFromPossessionChange[0]`) is classified BEFORE
+ * deciding whether to keep scanning, since `poss:` only flips on the new team's first play —
+ * that play can itself already be real action (e.g. a punt return's first offensive snap),
+ * not merely a "change occurred" marker to skip past. When it's already real action, it's the
+ * trigger, with elapsed time measured from the actual possession-change moment (`precedingPlay`).
+ * When it's procedural (e.g. an Official Timeout), scanning continues exactly as before,
+ * anchored on the revealing play itself rather than on `precedingPlay`.
  */
 export function watchForResumption(
-  changeEvent: ResumptionPlay,
-  subsequentPlays: ResumptionPlay[],
+  precedingPlay: ResumptionPlay,
+  playsFromPossessionChange: ResumptionPlay[],
 ): ResumptionResult {
+  const [revealingPlay, ...subsequentPlays] = playsFromPossessionChange;
+  if (!revealingPlay) {
+    return { outcome: 'NO_MORE_PLAYS', elapsedMs: 0 };
+  }
+
+  const revealingCategory = classifyPlayType(revealingPlay.typeId);
+  const revealingElapsedMs = revealingPlay.timestampMs - precedingPlay.timestampMs;
+
+  if (revealingCategory === 'REAL_ACTION') {
+    return { outcome: 'REAL_ACTION', triggerPlay: revealingPlay, elapsedMs: revealingElapsedMs };
+  }
+  if (revealingCategory === 'ABORT') {
+    return { outcome: 'ABORTED', abortPlay: revealingPlay, elapsedMs: revealingElapsedMs };
+  }
+
+  // SKIP_AND_WAIT — keep walking from the revealing play, but bail out if we've waited too long.
   for (const play of subsequentPlays) {
-    const elapsedMs = play.timestampMs - changeEvent.timestampMs;
+    const elapsedMs = play.timestampMs - revealingPlay.timestampMs;
     const category = classifyPlayType(play.typeId);
 
     if (category === 'REAL_ACTION') {
@@ -79,7 +105,6 @@ export function watchForResumption(
     if (category === 'ABORT') {
       return { outcome: 'ABORTED', abortPlay: play, elapsedMs };
     }
-    // SKIP_AND_WAIT — keep walking, but bail out if we've waited too long.
     if (elapsedMs >= RESUMPTION_CEILING_MS) {
       return { outcome: 'CEILING_FALLBACK', elapsedMs };
     }
@@ -88,7 +113,7 @@ export function watchForResumption(
   const lastPlay = subsequentPlays[subsequentPlays.length - 1];
   return {
     outcome: 'NO_MORE_PLAYS',
-    elapsedMs: lastPlay ? lastPlay.timestampMs - changeEvent.timestampMs : 0,
+    elapsedMs: lastPlay ? lastPlay.timestampMs - revealingPlay.timestampMs : revealingElapsedMs,
   };
 }
 
@@ -147,16 +172,16 @@ async function readLoggedPlays(): Promise<LoggedPlay[]> {
 }
 
 interface PossessionChangeEvent {
-  index: number; // index into the full plays array
-  play: LoggedPlay;
-  previousPossession: string;
+  index: number; // index into the full plays array of the possession-revealing play
+  play: LoggedPlay; // the play whose `poss:` first differs from the previous play
+  precedingPlay: LoggedPlay; // the actual last play by the team that had the ball
 }
 
 function findPossessionChangeEvents(plays: LoggedPlay[]): PossessionChangeEvent[] {
   const events: PossessionChangeEvent[] = [];
   for (let i = 1; i < plays.length; i++) {
     if (plays[i].possession !== plays[i - 1].possession) {
-      events.push({ index: i, play: plays[i], previousPossession: plays[i - 1].possession });
+      events.push({ index: i, play: plays[i], precedingPlay: plays[i - 1] });
     }
   }
   return events;
@@ -252,7 +277,7 @@ function runKnownCaseComparisons(
       continue;
     }
 
-    const result = watchForResumption(event.play, plays.slice(event.index + 1));
+    const result = watchForResumption(event.precedingPlay, plays.slice(event.index));
     const actualSeconds = result.outcome === 'NO_MORE_PLAYS' ? null : Math.round(result.elapsedMs / 1000);
     const withinTolerance =
       actualSeconds != null &&
@@ -316,9 +341,9 @@ async function main(): Promise<void> {
   console.log('=== Possession-change events and resumption outcomes ===\n');
   for (const event of events) {
     const ts = new Date(event.play.timestampMs).toLocaleTimeString('en-US', { hour12: false });
-    const result = watchForResumption(event.play, plays.slice(event.index + 1));
+    const result = watchForResumption(event.precedingPlay, plays.slice(event.index));
     console.log(
-      `[${ts}] ${event.play.quarter} ${event.play.clock} | ${event.previousPossession} -> ${event.play.possession} | ` +
+      `[${ts}] ${event.play.quarter} ${event.play.clock} | ${event.precedingPlay.possession} -> ${event.play.possession} | ` +
         `event: ${event.play.typeId}/${event.play.typeText} | ${formatOutcome(result)}`,
     );
   }
