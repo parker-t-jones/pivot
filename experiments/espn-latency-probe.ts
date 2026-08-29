@@ -7,6 +7,11 @@
  * timestamps against when you actually see each play happen on YouTube TV, to get
  * an empirical read on ESPN's feed latency vs. a live TV broadcast.
  *
+ * Also captures each play's structured `type.id`/`type.text` classification plus the
+ * scoringPlay/isTurnover/isPenalty flags, so a deny-list of procedural play types
+ * (timeouts, end-of-period, two-minute warning, etc.) can be built from real ESPN
+ * type IDs instead of pattern-matching the free-text description.
+ *
  * Usage:
  *   npx tsx experiments/espn-latency-probe.ts
  *
@@ -81,6 +86,12 @@ interface EspnPlayStart {
   team?: { id?: string };
 }
 
+/** ESPN's structured play classification, e.g. { id: "74", text: "Official Timeout" }. */
+interface EspnPlayType {
+  id?: string;
+  text?: string;
+}
+
 interface EspnPlay {
   id?: string;
   sequenceNumber?: string;
@@ -88,6 +99,10 @@ interface EspnPlay {
   period?: EspnPlayPeriod;
   clock?: EspnPlayClock;
   start?: EspnPlayStart;
+  type?: EspnPlayType;
+  scoringPlay?: boolean;
+  isTurnover?: boolean;
+  isPenalty?: boolean;
 }
 
 interface EspnDriveTeam {
@@ -177,6 +192,20 @@ function formatDownDistance(play: EspnPlay): string {
   return play.start?.downDistanceText ?? play.start?.shortDownDistanceText ?? '—';
 }
 
+function formatPlayType(play: EspnPlay): string {
+  const id = play.type?.id ?? '?';
+  const text = play.type?.text ?? 'unknown';
+  return `${id}/"${text}"`;
+}
+
+function formatFlags(play: EspnPlay): string {
+  const flags: string[] = [];
+  if (play.scoringPlay) flags.push('scoring');
+  if (play.isTurnover) flags.push('turnover');
+  if (play.isPenalty) flags.push('penalty');
+  return flags.length > 0 ? flags.join(',') : '—';
+}
+
 function playKey(play: EspnPlay, index: number): string {
   return play.id ?? play.sequenceNumber ?? `idx:${index}`;
 }
@@ -223,6 +252,7 @@ function flattenPlays(summary: EspnSummary): FlattenedPlay[] {
 
 async function pollGame(eventId: string): Promise<void> {
   const seenPlayIds = new Set<string>();
+  let loggedPlayKeys = false;
   console.log(`Polling every ${POLL_INTERVAL_MS / 1000}s. Logging to ${LOG_PATH}`);
 
   for (;;) {
@@ -246,14 +276,21 @@ async function pollGame(eventId: string): Promise<void> {
         if (seenPlayIds.has(key)) continue;
         seenPlayIds.add(key);
 
+        if (!loggedPlayKeys) {
+          loggedPlayKeys = true;
+          console.log(`[debug] raw play object top-level keys: ${Object.keys(play).join(', ')}`);
+        }
+
         const quarter = play.period?.number != null ? `Q${play.period.number}` : 'Q?';
         const clock = play.clock?.displayValue ?? '?:??';
         const downDistance = formatDownDistance(play);
         const possession = resolvePossession(play, drive, teamIdToAbbreviation);
         const text = play.text ?? '(no play text)';
+        const playType = formatPlayType(play);
+        const flags = formatFlags(play);
 
         await log(
-          `[${nowStamp()}] ${quarter} ${clock} | ${downDistance} | poss: ${possession} | ${text}`,
+          `[${nowStamp()}] ${quarter} ${clock} | ${downDistance} | poss: ${possession} | ${text} | type: ${playType} | flags: ${flags}`,
         );
       }
 
