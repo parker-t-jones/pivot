@@ -946,6 +946,25 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 - **Sportradar feed disconnect.** Mark game states older than 90s as stale. Engine stops flagging from stale state. Reconnect re-syncs.
 - **Game ends.** On `status → 'final'`, fire `flag_removed` for every user flagged on this game.
 
+### Stream synchronization research (Aug 29, 2026)
+
+`BROADCAST_LAG_SECONDS` above is a conceptual, pre-data model (per-platform constants, no calibration behind them yet). A research pass this sprint worked the actual sync problem before v1.5/v2 build it for real — reframing the design, evaluating data sources, and taking a first empirical latency measurement. Full write-up in `STREAM-SYNC-RESEARCH-FINDINGS.MD`; this is the condensed version. No code changed as a result of this pass.
+
+**Reframe: two notifications, not one.** The hard synchronization problem only applies to *revealing an outcome*, not to getting the user's attention. Split into (a) a **routing nudge** — "something notable just happened, switch to Channel X" — which reveals nothing and so has no spoiler risk and can fire near-real-time, and (b) the **reveal** — "here's what happened" — which is genuinely spoiler-sensitive and is the only part `BROADCAST_LAG_SECONDS`-style timing needs to gate. Worth preserving as a design pattern independent of the findings below.
+
+**Data provider evaluated: ESPN's unofficial site API.** For prototyping/calibration only (not a production ingestion decision — Sportradar, Section 5, remains the real-time production data source). `site.api.espn.com` was chosen over Tank01 (play-by-play marked "beta") and MySportsFeeds (non-commercial license risk) because it's free and already the same undocumented-API family as the v2 ESPN fantasy integration (Section 15) — same accepted no-SLA/could-change-without-notice risk, not a new category of risk.
+
+**Empirical finding: ~28-32s baseline delay vs. YouTube TV.** Measured live via a throwaway script (`experiments/espn-latency-probe.ts`) against the Colts @ Lions game. Two independent methods — hand stopwatch, and world-clock-vs-terminal-timestamp corrected for ~2.5s clock drift — converged within ~3 seconds of each other, landing on a **~28-32 second delay** between ESPN's play-by-play data and the YouTube TV broadcast.
+
+**Overturned hypothesis, recorded as a lesson (same category as the `display_phase`/`season_type` lesson in Known Issues).**
+**Hypothesis:** a fumble's possession-change log appeared to fire in under 5 seconds — suggesting ESPN might fast-track "exciting" plays (turnovers, scores) ahead of routine ones.
+**What the log actually showed:** the fast-looking line was a false read — the moment officials confirmed the ruling on the broadcast actually lined up with a *second*, later log entry, not the fast first one.
+**Correction:** both ESPN's data and the broadcast are gated by the same real-world confirmation delay (officials/replay review), not by ESPN prioritizing play types. Confirmed by punts, kickoffs, and a touchdown all separately measuring in the same ~30s range — no fast lane exists. Caution against pattern-matching a "special case" from a single early data point.
+
+**Design decision: pad possession-change reveals above the raw mean.** For possession-change-triggered reveals specifically, use a working estimate of **~35-40s**, not the raw ~30s mean. Rationale is mechanism-backed, not just conservative-by-default: firing early risks spoiling the app's core value, while firing late is usually low-cost because a possession change (turnover, punt, kickoff) is frequently followed by a commercial break — the user typically isn't missing live action by getting the reveal a bit later than the raw baseline.
+
+**Open items / limitations.** Small sample (~12 data points, one game, one platform). Not yet tested against a lower-latency platform (cable/OTA) — if ESPN's own ~30s lag exceeds a fast platform's broadcast delay, that platform's `BROADCAST_LAG_SECONDS` entry might need little to no added buffer once a real production feed is used. ESPN remains a prototyping choice only, not a committed production data source.
+
 ---
 
 ## 9. API Contracts
