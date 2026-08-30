@@ -228,10 +228,29 @@ importers:
         version: 4.1.10(@types/node@26.1.1)(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.47.1)(tsx@4.23.0)(yaml@2.9.0))
 
   services/ingestion:
+    dependencies:
+      '@pivot/engine':
+        specifier: workspace:^
+        version: link:../engine
+      '@pivot/shared':
+        specifier: workspace:^
+        version: link:../../shared
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.1)(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.47.1)(tsx@4.23.0)(yaml@2.9.0))
 
   shared:
     dependencies:
@@ -5668,9 +5687,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.85.3': {}
 
