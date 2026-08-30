@@ -1,17 +1,24 @@
 /**
- * A team identifier as seen by the engine. Opaque string on purpose: in the live Sportradar flow
- * the ingestion layer translates Sportradar team IDs → our `teams.id` UUIDs before building a
- * `PlayEvent`, so the engine sees UUIDs; in the Sprint 4 replay/integration flow both sides of every
- * comparison use nflverse team abbreviations (e.g. `'KC'`, `'LV'`). `computeFlagState` treats the id
- * opaquely, so behavior is identical either way (see sprint summary decision #3).
+ * A team identifier as seen by the engine. Opaque string on purpose: a live flow may translate the
+ * provider's team IDs → our `teams.id` UUIDs in the ingestion layer before building a `PlayEvent`,
+ * so the engine sees UUIDs; the replay/integration flow and `EspnPlaySource` both use team
+ * abbreviations (e.g. `'KC'`, `'LV'`). `computeFlagState` treats the id opaquely, so behavior is
+ * identical either way (see sprint summary decision #3).
  */
 export type TeamId = string;
 
 /**
- * Normalized, source-agnostic play type. Both nflverse CSV rows and (eventually) Sportradar push
- * events map into this enum in their respective `PlaySource`; the engine never sees raw source
- * strings. `applyPlayToState` maps these to `UnitOnField` (see that file for the offense / special
- * teams / none mapping and the kicker rationale).
+ * Normalized, source-agnostic play type. Both nflverse CSV rows and ESPN play-by-play entries map
+ * into this enum in their respective `PlaySource`; the engine never sees raw source strings.
+ * `applyPlayToState` maps these to `UnitOnField` (see that file for the offense / special teams /
+ * none mapping and the kicker rationale).
+ *
+ * `end_half` is deliberately distinct from `end_period` even though both are clock stoppages, and
+ * neither is `end_game`. Resumption detection (`resumptionWatcher.ts`) treats a quarter break as
+ * something to wait through but halftime as something to abort on — halftime runs far longer than
+ * the pause after any in-game stoppage, so collapsing the two would make the watcher sit through an
+ * entire intermission. Sources that can't distinguish them (nflverse's `quarter_end`) map to
+ * `end_period`.
  */
 export type PlayType =
   | 'pass'
@@ -26,12 +33,14 @@ export type PlayType =
   | 'no_play'
   | 'timeout'
   | 'end_period'
+  | 'end_half'
   | 'end_game';
 
 /**
  * Normalized play event — the single shape the engine consumes, regardless of source. Maps cleanly
- * from nflverse CSV (Sprint 4 `ReplayPlaySource`) and from Sportradar's push feed (later). This is
- * the raw signal from the field; `applyPlayToState` folds it into a `GameState`.
+ * from nflverse CSV (`ReplayPlaySource`) and from ESPN's play-by-play (`EspnPlaySource`, in
+ * `@pivot/ingestion`). This is the raw signal from the field; `applyPlayToState` folds it into a
+ * `GameState`.
  *
  * `week` lives on the play, not on `GameState`: game state is what's true on the field right now,
  * whereas week is contextual season metadata used to select the correct lineup cache. Keeping them

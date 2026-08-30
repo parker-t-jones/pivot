@@ -62,7 +62,7 @@ describe('applyPlayToState — unitOnField mapping', () => {
     expect(applyPlayToState(null, makePlay({ playType }), clock).unitOnField).toBe('special_teams');
   });
 
-  const controlPlays: PlayType[] = ['no_play', 'timeout', 'end_period', 'end_game'];
+  const controlPlays: PlayType[] = ['no_play', 'timeout', 'end_period', 'end_half', 'end_game'];
   it.each(controlPlays)('maps %s to none', (playType) => {
     expect(applyPlayToState(null, makePlay({ playType }), clock).unitOnField).toBe('none');
   });
@@ -121,5 +121,11 @@ describe('applyPlayToState — specific transitions', () => {
 
   it('marks the game final on an end_game play type', () => {
     expect(applyPlayToState(null, makePlay({ playType: 'end_game' }), clock).status).toBe('final');
+  });
+
+  it('does not mark the game final at the end of a half', () => {
+    expect(applyPlayToState(null, makePlay({ playType: 'end_half' }), clock).status).toBe(
+      'in_progress',
+    );
   });
 });
