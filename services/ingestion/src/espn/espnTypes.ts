@@ -80,6 +80,28 @@ export const espnCompetitorSchema = z.object({
   team: z.object({ abbreviation: z.string().optional() }).optional(),
 });
 
+/**
+ * One event from `.../scoreboard`. Shares `espnCompetitorSchema`/`espnStatusSchema` with the summary
+ * schema below — confirmed identical shape on both endpoints (`competitor.id`, `competitor.team.
+ * abbreviation`, `status.type.{state,completed}`), which is what makes reusing them safe rather than
+ * coincidental.
+ */
+export const espnScoreboardEventSchema = z.object({
+  id: z.string(),
+  competitions: z
+    .array(
+      z.object({
+        competitors: z.array(espnCompetitorSchema).optional(),
+      }),
+    )
+    .optional(),
+  status: espnStatusSchema.optional(),
+});
+
+export const espnScoreboardSchema = z.object({
+  events: z.array(espnScoreboardEventSchema).optional(),
+});
+
 export const espnSummarySchema = z.object({
   header: z
     .object({
@@ -110,3 +132,5 @@ export type EspnPlay = z.infer<typeof espnPlaySchema>;
 export type EspnDrive = z.infer<typeof espnDriveSchema>;
 export type EspnCompetitor = z.infer<typeof espnCompetitorSchema>;
 export type EspnSummary = z.infer<typeof espnSummarySchema>;
+export type EspnScoreboardEvent = z.infer<typeof espnScoreboardEventSchema>;
+export type EspnScoreboard = z.infer<typeof espnScoreboardSchema>;

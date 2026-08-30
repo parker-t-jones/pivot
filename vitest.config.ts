@@ -11,6 +11,11 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['services/*/src/**/*.test.ts', 'app/**/*.test.ts', 'scripts/**/*.test.ts'],
+    include: [
+      'shared/src/**/*.test.ts',
+      'services/*/src/**/*.test.ts',
+      'app/**/*.test.ts',
+      'scripts/**/*.test.ts',
+    ],
   },
 });

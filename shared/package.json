@@ -13,6 +13,7 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "@sentry/node": "^10.72.0",
     "zod": "^4.4.3"
   }
 }
