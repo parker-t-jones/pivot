@@ -11,6 +11,12 @@
  * is the logic a real ingestion service would eventually reuse (given a possession-change
  * event and a stream of subsequent plays with ESPN type IDs, decide when — if ever — to fire).
  *
+ * SUPERSEDED: this logic has since been promoted into `services/engine/src/resumptionWatcher.ts`
+ * (provider-agnostic `PlayType` categories, not raw ESPN `type.id`s), with these same four cases
+ * ported into `resumptionWatcher.test.ts` as permanent regression tests. This script is kept only
+ * as a record of how the algorithm was originally validated against the raw captured log — prefer
+ * the promoted module for anything new.
+ *
  * Usage:
  *   npx tsx experiments/backtest-resumption.ts
  *
@@ -292,13 +298,19 @@ function runKnownCaseComparisons(
     );
   }
 
-  // The TD -> timeout -> kickoff case doesn't correspond to a single possession-change ->
-  // resumption-watcher trigger the way the other three do (possession, as this script
-  // computes it from `poss:`, doesn't flip to the receiving team until their first
-  // scrimmage snap — the touchdown, the ensuing timeout, and the kickoff itself all still
-  // show the scoring team's possession). Compare the three known raw timestamps directly
-  // instead of forcing it through the resumption watcher.
-  console.log('\n[TD -> timeout -> kickoff] Not a resumption-watcher case (see comment above) —');
+  // The TD -> timeout -> kickoff case is never fed into the watcher by THIS HARNESS's
+  // possession-change auto-detector — possession, as this script computes it from `poss:`,
+  // doesn't flip to the receiving team until their first scrimmage snap, so the touchdown,
+  // the ensuing timeout, and the kickoff itself all still show the scoring team's possession,
+  // and the harness's change-finder (which only anchors on possession CHANGES) never
+  // identifies an anchor point here. That's a limitation of this harness's anchor-finding,
+  // NOT of watchForResumption itself — the promoted watcher handles this sequence directly
+  // (`watchForResumption(touchdown, [timeout, kickoff])`, see
+  // services/engine/src/resumptionWatcher.test.ts), no raw-timestamp special-casing needed.
+  // Compare the three known raw timestamps directly here instead, since building the
+  // "anchor on the play after a score, not just a possession change" logic into this
+  // throwaway harness isn't worth it now that the real watcher already covers the case.
+  console.log('\n[TD -> timeout -> kickoff] Not auto-detected as an anchor by this harness (see comment above) —');
   console.log('  comparing the three raw log timestamps directly instead:');
   try {
     const tdIndex = findPlayIndexByAnchor(plays, 'Tr.Williams up the middle for 1 yard, TOUCHDOWN');

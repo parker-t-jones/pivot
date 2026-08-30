@@ -1,0 +1,12 @@
+{
+  // Overrides the workspace default for this directory only. `experiments/` is throwaway/
+  // provenance code (see the SUPERSEDED notes in its scripts) — not worth hand-patching for
+  // noUncheckedIndexedAccess call sites in scripts that are about to be superseded anyway.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["."]
+}

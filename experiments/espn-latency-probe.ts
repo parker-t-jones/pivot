@@ -12,6 +12,12 @@
  * (timeouts, end-of-period, two-minute warning, etc.) can be built from real ESPN
  * type IDs instead of pattern-matching the free-text description.
  *
+ * SUPERSEDED for production use: the classification work this script fed into now lives in
+ * `services/ingestion/src/espn/espnPlayTypeMap.ts` (ESPN `type.id` -> normalized `PlayType`) and
+ * `services/engine/src/resumptionWatcher.ts` (the classifier/watcher that consumes it). This
+ * script is kept only as the original latency-measurement/data-capture tool, not as a source of
+ * current classification logic.
+ *
  * Usage:
  *   npx tsx experiments/espn-latency-probe.ts
  *

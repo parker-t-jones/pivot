@@ -3,8 +3,9 @@
  * (no auth) and writes `data/nfl-schedule-2026.json` for `pnpm seed:schedule` to consume.
  *
  * Annual refresh: re-run this script (or bump the year) when the next season's slate is published.
- * Sportradar ingestion (Sprint 2) eventually replaces this as the schedule source — see PLAN
- * Known Issues.
+ * `@pivot/ingestion`'s `EspnPlaySource` (Section 5/8) is the committed live-feed consumer but isn't
+ * wired to own the schedule yet, so this script + `pnpm seed:schedule` remains the interim schedule
+ * source — see PLAN Known Issues.
  *
  * Usage: `pnpm fetch:nfl-schedule` from the repo root.
  */

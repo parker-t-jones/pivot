@@ -135,7 +135,9 @@ export interface ReplayPlaySourceOptions {
 /**
  * File-backed `PlaySource` (PLAN.md Section 2 swap-ready boundary). Reads recorded nflverse
  * play-by-play, filters to a single game, and emits normalized `PlayEvent`s in order with a
- * configurable delay. The real Sportradar push-feed source is deferred (Sprint 2/5).
+ * configurable delay. The real live-feed source is `@pivot/ingestion`'s `EspnPlaySource`
+ * (Section 5/8); this replay source remains useful for deterministic tests/demos independent
+ * of ESPN's live endpoint.
  */
 export class ReplayPlaySource implements PlaySource {
   readonly id = 'replay' as const;

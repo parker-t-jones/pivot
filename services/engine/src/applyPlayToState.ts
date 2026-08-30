@@ -47,9 +47,10 @@ function unitOnFieldFor(play: PlayEvent): UnitOnField {
  * `clock` supplies `updatedAt` (the only non-play input) — injected for determinism (decision #1).
  *
  * @remarks Section 6 places `applyPlayToState` in the ingestion service, but the transformation is
- * engine-owned domain logic; when the real Sportradar consumer lands (Sprint 2), ingestion will
- * import this from the engine package and translate Sportradar team ids → our UUIDs before calling it
- * (decision #2/#3). Ingestion is transport; this function is the domain.
+ * engine-owned domain logic. `@pivot/ingestion`'s `EspnPlaySource` exists (Section 5/8) but isn't
+ * wired into this function yet; once it is, ingestion will import this from the engine package and
+ * translate ESPN team abbreviations → our UUIDs before calling it (decision #2/#3). Ingestion is
+ * transport; this function is the domain.
  */
 export function applyPlayToState(
   _previous: GameState | null,

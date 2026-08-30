@@ -280,10 +280,10 @@ priority = (active_players × 2)
 | Hot state | Upstash Redis | Serverless Redis, minimal ops, ideal for game state cache |
 | Push | Expo Notifications | Wraps APNs (and FCM for v1.5), free tier sufficient |
 | Hosting | Fly.io | Strong WebSocket support, global edge presence |
-| Data | TBD — evaluating options | Sportradar (sub-second push feed) was the original pick but is enterprise-tier pricing, not viable at current budget. ESPN's unofficial site API (`site.api.espn.com`) is used for prototyping/calibration only (Section 8), not as a production source. See Open Questions #1 |
+| Data | ESPN unofficial site API (`site.api.espn.com`) | Committed as the production real-time (and schedule) data source — `@pivot/ingestion`'s `EspnPlaySource` (Section 8). Sportradar (sub-second push feed) was the original pick but is enterprise-tier pricing, not viable at current budget, and was ruled out before commitment. ESPN's API is free but unofficial/undocumented (no SLA, could change without notice) — an accepted risk, not an open question. See Open Questions #1 |
 | Fantasy | Sleeper API | Free, well-documented, no auth ceremony |
 | Cast | ~~react-native-google-cast~~ + native AirPlay (local Expo module) | Cast cut in v1 — no video rights (Section 2). `react-native-google-cast` was never added; the AirPlay module exists but is dormant |
-| Monitoring | Sentry + Axiom | Errors + structured logs |
+| Monitoring | Sentry (ESPN ingestion shape-failure reporting only so far — `@pivot/shared`'s `ErrorReporter`/`initSentry`, Section 8) + Axiom (not yet integrated) | Errors + structured logs |
 
 ---
 
@@ -292,7 +292,7 @@ priority = (active_players × 2)
 ### Data flow
 
 ```
-Real-time data feed (provider TBD — Section 5)
+Real-time data feed (ESPN unofficial site API — Section 5)
       ↓
 [Ingestion Service]  ← writes game state to Redis
       ↓
@@ -313,7 +313,7 @@ Real-time data feed (provider TBD — Section 5)
 
 ### Services
 
-- **Ingestion service** — persistent connection to the production real-time data feed once one is selected (Section 5 — provider TBD). Writes game state to Redis on every play. Mirrors to `game_state_history` table every 30s.
+- **Ingestion service** — persistent connection to ESPN's unofficial site API (Section 5), the committed production real-time data feed. Writes game state to Redis on every play. Mirrors to `game_state_history` table every 30s.
 - **Switching engine** — subscribes to game state changes via Redis pub/sub. Recomputes flag states per user, emits flag events to dispatcher.
 - **Event dispatcher** — manages the deferred-firing queue (Redis sorted set). Pops due events, applies rate limiting, delivers via WebSocket and/or Expo Push.
 - **API server** — REST endpoints (Fastify). Authenticated via Supabase JWT.
@@ -619,7 +619,7 @@ interface FlagEvent {
 ### Play event handler (entry point)
 
 ```typescript
-async function onPlayEvent(play: SportradarPlay): Promise<void> {
+async function onPlayEvent(play: PlayEvent): Promise<void> {
   // 1. Update game state in Redis
   const oldState = await redis.getGameState(play.gameId);
   const newState = applyPlayToState(oldState, play);
@@ -952,7 +952,7 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 
 **Reframe: two notifications, not one.** The hard synchronization problem only applies to *revealing an outcome*, not to getting the user's attention. Split into (a) a **routing nudge** — "something notable just happened, switch to Channel X" — which reveals nothing and so has no spoiler risk and can fire near-real-time, and (b) the **reveal** — "here's what happened" — which is genuinely spoiler-sensitive and is the only part `BROADCAST_LAG_SECONDS`-style timing needs to gate. Worth preserving as a design pattern independent of the findings below.
 
-**Data provider evaluated: ESPN's unofficial site API.** For prototyping/calibration only (not a production ingestion decision — the production real-time data source is still undecided; see Section 5 / Open Questions #1, since Sportradar's enterprise-tier pricing has ruled it out as a default). `site.api.espn.com` was chosen over Tank01 (play-by-play marked "beta") and MySportsFeeds (non-commercial license risk) because it's free and already the same undocumented-API family as the v2 ESPN fantasy integration (Section 15) — same accepted no-SLA/could-change-without-notice risk, not a new category of risk.
+**Data provider evaluated: ESPN's unofficial site API.** Evaluated here for prototyping/calibration; since committed as the production data source (Section 5 / Open Questions #1) on the strength of the resumption-detection approach validated below, after Sportradar's enterprise-tier pricing ruled it out as a default. `site.api.espn.com` was chosen over Tank01 (play-by-play marked "beta") and MySportsFeeds (non-commercial license risk) because it's free and already the same undocumented-API family as the v2 ESPN fantasy integration (Section 15) — same accepted no-SLA/could-change-without-notice risk, not a new category of risk.
 
 **Empirical finding: ~28-32s baseline delay vs. YouTube TV.** Measured live via a throwaway script (`experiments/espn-latency-probe.ts`) against the Colts @ Lions game. Two independent methods — hand stopwatch, and world-clock-vs-terminal-timestamp corrected for ~2.5s clock drift — converged within ~3 seconds of each other, landing on a **~28-32 second delay** between ESPN's play-by-play data and the YouTube TV broadcast.
 
@@ -969,20 +969,22 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 
 Follow-up to the stream synchronization research above. The padded-delay model in that subsection assumed a roughly-fixed short pause after any possession change, so a single buffered estimate (~35-40s) could stand in for "play has resumed." Classifying every logged play by ESPN's `type.id` (added to the probe, `experiments/espn-latency-probe.ts`, commit 815c7c3) showed that assumption is false: the pause after a possession change is **bimodal**, not a single distribution with a fat tail. Some changes (e.g. a punt return) resume in ~1 minute with no formal timeout; others (e.g. a turnover or scoring play) run ~2:49-2:51 because a timeout gets called first. Nothing about the possession-change event itself predicts which mode a given instance falls into — a fixed padded delay is either too short for the slow mode or needlessly late for the fast one. So the mechanism was changed from *guessing a delay length* to *waiting for concrete evidence that play has resumed*: the first play after a possession change that ESPN classifies as real action, whatever that ends up taking.
 
-**Classification rule.** Every play's ESPN `type.id` sorts into one of three categories:
+**Classification rule — two layers.** The watcher's category logic doesn't key off ESPN's `type.id` directly. It's split so a future provider swap only requires a new adapter, not a rewrite of the validated algorithm:
 
-- **`SKIP_AND_WAIT`** — `74` (Official Timeout), `21` (Timeout), `75` (Two-minute warning), `2` (End Period). Procedural, expected to be followed by real action soon; the watcher keeps scanning forward past these.
-- **`ABORT`** — `65` (End of Half), `66` (End of Game). Structurally different from a timeout — halftime runs far longer than the ~2:50 timeout pattern — so the watcher cancels outright rather than waiting through it. A fresh possession-change event at the start of the next half restarts the flow naturally; no special-cased "resume after halftime" logic is needed.
-- **`REAL_ACTION`** — everything else, including any unrecognized `type.id`. This is the default/fallback, not an explicit allow-list, so an unknown type fails toward firing rather than silently waiting forever.
-- **Safety ceiling** — ~4 minutes of continuous `SKIP_AND_WAIT` with no `REAL_ACTION` or `ABORT` falls back to firing anyway. The mechanism can never go silent indefinitely even if a play type is misclassified or ESPN's feed does something unexpected.
+- **Provider-agnostic layer (`@pivot/engine`'s `resumptionWatcher.ts`).** `classifyPlayType` sorts a normalized `PlayType` (the same enum `PlayEvent`/`applyPlayToState` use) into one of three categories:
+  - **`SKIP_AND_WAIT`** — `timeout`, `end_period`. Procedural, expected to be followed by real action soon; the watcher keeps scanning forward past these.
+  - **`ABORT`** — `end_half`, `end_game`. Structurally different from a timeout — halftime runs far longer than the ~2:50 timeout pattern — so the watcher cancels outright rather than waiting through it. A fresh possession-change event at the start of the next half restarts the flow naturally; no special-cased "resume after halftime" logic is needed.
+  - **`REAL_ACTION`** — every other `PlayType`. This is the default/fallback, not an explicit allow-list, so an unknown type fails toward firing rather than silently waiting forever.
+  - **Safety ceiling** — ~4 minutes of continuous `SKIP_AND_WAIT` with no `REAL_ACTION` or `ABORT` falls back to firing anyway. The mechanism can never go silent indefinitely even if a play type is misclassified or the feed does something unexpected.
+- **ESPN-specific layer (`@pivot/ingestion`'s `espnPlayTypeMap.ts`).** A lookup table maps ESPN's `type.id` onto the normalized `PlayType` above — e.g. `74` (Official Timeout) / `21` (Timeout) / `75` (Two-minute warning) → `timeout`; `2` (End Period) → `end_period`; `65` (End of Half) → `end_half`; `66` (End of Game) → `end_game`; everything else observed (`run`, `pass`, `punt`, `kickoff`, `sack`, etc.) → its corresponding `PlayType`, all landing in `REAL_ACTION` once classified. This table was built and verified against a 17-game survey (2026 preseason, 2025 regular season, 2025 postseason), not just the single Colts @ Lions game the backtest below replays — 26 distinct `type.id` values observed. Extra points and two-point attempts are not separately observable from this source (ESPN folds them into the scoring play's own text) and are documented as an accepted gap rather than a mapped case, since the app never computes fantasy scoring and so nothing depends on their accuracy.
 
 **Anchor-timing subtlety.** `poss:` (the possession field the watcher keys off of) only flips on the new team's first tracked play, not on the play that actually ended the old team's possession — e.g. a punt's `poss:` still shows the kicking team; it's the return team's first offensive snap that first shows the new possession. An earlier version of the watcher treated that first-differing play as a pure "change occurred" marker and started scanning strictly after it, which meant that when the revealing play was itself already real action (a punt return's first snap), the watcher skipped past the true trigger looking for a "next" one and picked up an unrelated later play instead (fixed in commit 25eb470). The corrected logic classifies the revealing play *before* deciding whether to keep scanning:
 - If the revealing play is `REAL_ACTION`, it's the trigger, and elapsed time is measured from the **preceding play** (the actual moment possession changed) — not from the revealing play itself, which would trivially always measure zero.
 - If the revealing play is procedural (`SKIP_AND_WAIT`, e.g. a timeout announcement), elapsed time is measured from that revealing play, and the watcher continues scanning forward for the next `REAL_ACTION` entry, exactly as before.
 
-**Backtest validation status.** The classifier and resumption watcher were implemented as small pure functions (`experiments/backtest-resumption.ts`) and replayed against the full, already-captured Colts @ Lions game log (`experiments/game-latency-log.txt`). All four hand-analyzed reference cases match expected timing: fumble→timeout→play (~2:51), punt→play (~1:02), TD→timeout→kickoff (~0:42 then ~2:50), turnover-on-downs→timeout→play (~2:49). This validates the algorithm against real historical data replayed all at once. It has **not** yet been run against a live, incrementally-arriving feed (events showing up one poll at a time rather than a complete pre-loaded log), and does not yet include the actual scheduling/firing mechanism (a delay queue) needed to turn a detected trigger into a fired notification in production.
+**Backtest validation status.** The classifier and resumption watcher started as small pure functions in `experiments/backtest-resumption.ts`, replayed against the full, already-captured Colts @ Lions game log (`experiments/game-latency-log.txt`), then promoted byte-for-byte (same anchor logic) into `services/engine/src/resumptionWatcher.ts` with the four hand-analyzed cases ported into `resumptionWatcher.test.ts` as permanent regression tests, so they run on every future change rather than only on request. All four match expected timing: fumble→timeout→play (~2:51), punt→play (~1:02), TD→timeout→kickoff (~0:42 then ~2:50), turnover-on-downs→timeout→play (~2:49). The TD case runs through the watcher directly (`watchForResumption(touchdown, [timeout, kickoff])`) — it needs no raw-timestamp special-casing; the backtest script's separate direct-timestamp comparison for that case was a limitation of the *harness's* possession-change auto-detection (a touchdown doesn't flip the log's `poss:` field until the receiving team's kickoff return, so the harness's change-finder never anchored the watcher there on its own), not of the watcher itself. This validates the algorithm against real historical data replayed all at once. It has **not** yet been run against a live, incrementally-arriving feed — `@pivot/ingestion`'s `EspnPlaySource` now polls and emits normalized `PlayEvent`s incrementally, but nothing yet calls `watchForResumption` against that stream — and does not yet drive the actual notification-firing/scheduling step in production.
 
-**Open items.** Two milestones remain, deliberately not conflated with this backtest result: (1) live-feed integration — proving the same classify/watch logic against events arriving incrementally via polling, not a complete log; (2) the notification-firing infrastructure itself — the Redis-backed delay queue design discussed elsewhere in this doc but not yet built. Both are pending, to be documented in their own right once proven, not assumed working because the offline backtest passed.
+**Open items.** Two milestones remain, deliberately not conflated with this backtest result: (1) live-feed integration — wiring `watchForResumption` to consume `EspnPlaySource`'s incrementally-arriving `PlayEvent`s, rather than the backtest's complete pre-loaded log; (2) resumption-gated scheduling. To be precise about what's actually missing here, since an earlier version of this note overstated it: the Redis-backed delay queue itself already exists and is built (`FlagEventQueue`/`RedisFlagEventQueue`, `QueueingEventDispatcher` — Section 11 Sprint 5 resolution) and is in production use today for the fixed `BROADCAST_LAG_SECONDS` padding. What's missing is using a resumption watcher's detected trigger time as that queue's `scheduledFireAt`, in place of the fixed padding — a scheduling-input change, not new firing infrastructure. Both remain pending, to be documented in their own right once proven, not assumed working because the offline backtest passed.
 
 ---
 
@@ -1609,7 +1611,7 @@ Deferred:
 | Sentry | Error monitoring | Free tier |
 | Axiom | Logs | Free tier |
 
-Total managed services: ~$150/mo — excludes the production real-time data provider, which is still unselected (see Open Questions #1); that line item dominated budget projections back when Sportradar was the assumed default.
+Total managed services: ~$150/mo — excludes the production real-time data provider. ESPN's unofficial site API (Section 5 / Open Questions #1) is committed and free, so this line item — which dominated budget projections back when Sportradar's enterprise-tier pricing was the assumed default — did not end up materializing.
 
 ### Free / no-cost integrations
 
@@ -1623,7 +1625,7 @@ Total managed services: ~$150/mo — excludes the production real-time data prov
 
 Issues that need resolution but don't block the build:
 
-1. **Production real-time data provider.** No source is committed. Sportradar (sub-second push feed) was the original aspirational pick, but its enterprise-tier pricing is not viable at current budget — ruled out as a default, not contracted. ESPN's unofficial site API (`site.api.espn.com`) is being used for prototyping/calibration only (Stream synchronization research, Section 8), not as a production decision. Needs a real evaluation of lower-cost alternatives (Tank01, MySportsFeeds, etc. — Section 8) before production launch.
+1. **Production real-time data provider — RESOLVED.** ESPN's unofficial site API (`site.api.espn.com`) is the committed production source for both live play-by-play and schedule data, implemented in `@pivot/ingestion` (`EspnPlaySource`, Section 5/6/8). Sportradar (sub-second push feed) was the original aspirational pick, but its enterprise-tier pricing was not viable at current budget and it was ruled out before commitment. Residual accepted risk, not an open question: ESPN's API is undocumented/unofficial (no SLA, could change without notice) — the same risk category already accepted for the v2 ESPN fantasy integration (Section 15).
 2. **Deep-link availability per service.** Partly answered in Sprint 10 Track B; the remaining
    unknown is narrower and different in kind from what this question originally assumed. Two
    sub-questions, and conflating them is what let broken links ship for three sprints:
@@ -2241,11 +2243,11 @@ Aim for 30K+ WAU and 60%+ retention through the season to have a credible partne
 - Cache: Upstash Redis
 - Push: Expo Notifications
 - Host: Fly.io
-- Data: TBD — production provider unselected (Section 5 / Open Questions #1), Sleeper (fantasy)
+- Data: ESPN unofficial site API (Section 5 / Open Questions #1), Sleeper (fantasy)
 - Cast: cut in v1 (no video rights — Section 2); native AirPlay module present but dormant
 
 ### Key files / modules (expected)
-- `services/ingestion/` — real-time data feed consumer (provider TBD)
+- `services/ingestion/` — ESPN consumer (`@pivot/ingestion`; Section 5/8)
 - `services/engine/` — switching engine
 - `services/dispatcher/` — deferred event firing
 - `services/api/` — REST + WebSocket server

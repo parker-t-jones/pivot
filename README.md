@@ -8,7 +8,7 @@ pnpm workspaces (see `pnpm-workspace.yaml`):
 
 | Path                                             | Role                       |
 | ------------------------------------------------ | -------------------------- |
-| [`services/ingestion/`](./services/ingestion/)   | Sportradar push ingestion  |
+| [`services/ingestion/`](./services/ingestion/)   | ESPN data ingestion        |
 | [`services/engine/`](./services/engine/)         | Switching engine           |
 | [`services/dispatcher/`](./services/dispatcher/) | Deferred events + delivery |
 | [`services/api/`](./services/api/)               | REST + WebSocket server    |
