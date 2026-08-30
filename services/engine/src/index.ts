@@ -13,3 +13,11 @@ export type { ReplayPlaySourceOptions, NflverseRow } from './replayPlaySource.js
 export { defaultClock, type Clock } from './clock.js';
 export type { PlaySource } from './types.js';
 export type { PlayEvent, PlayType, TeamId } from './playEvent.js';
+export {
+  classifyPlayType,
+  watchForResumption,
+  RESUMPTION_CEILING_MS,
+  type PlayCategory,
+  type ObservedPlay,
+  type ResumptionResult,
+} from './resumptionWatcher.js';
