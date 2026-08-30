@@ -1,7 +1,7 @@
 import type { PlayEvent, PlaySource } from '@pivot/engine';
 import { NoOpErrorReporter, type ErrorReporter } from '@pivot/shared';
 import { espnClient, type EspnClient } from './espnClient.js';
-import { reportShapeFailure } from './errors.js';
+import { reportShapeFailure, ShapeFailureReportThrottle } from './errors.js';
 import { mapEspnPlay, resolveGameContext, type EspnGameContext } from './mapEspnPlay.js';
 import type { EspnDrive, EspnPlay, EspnSummary } from './espnTypes.js';
 
@@ -20,6 +20,9 @@ export interface EspnPlaySourceOptions {
   errorReporter?: ErrorReporter;
   /** Injectable for tests; defaults to the real `espnClient` hitting ESPN's live API. */
   client?: Pick<EspnClient, 'getSummary'>;
+  /** Injectable for tests; defaults to a fresh throttle owned by this instance, so Sentry-report
+   *  throttling persists across polls for this game but starts clean for each new instance. */
+  shapeFailureThrottle?: ShapeFailureReportThrottle;
 }
 
 function isFinal(summary: EspnSummary): boolean {
@@ -64,11 +67,13 @@ export class EspnPlaySource implements PlaySource {
   private readonly pollIntervalMs: number;
   private readonly errorReporter: ErrorReporter;
   private readonly client: Pick<EspnClient, 'getSummary'>;
+  private readonly shapeFailureThrottle: ShapeFailureReportThrottle;
 
   constructor(private readonly options: EspnPlaySourceOptions) {
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.errorReporter = options.errorReporter ?? new NoOpErrorReporter();
     this.client = options.client ?? espnClient;
+    this.shapeFailureThrottle = options.shapeFailureThrottle ?? new ShapeFailureReportThrottle();
   }
 
   async subscribe(handler: (play: PlayEvent) => Promise<void>): Promise<void> {
@@ -80,11 +85,16 @@ export class EspnPlaySource implements PlaySource {
 
       if (!result.ok) {
         if (result.kind === 'invalid_shape') {
-          reportShapeFailure(this.errorReporter, {
-            eventId: this.options.eventId,
-            reason: result.reason,
-            issues: result.issues,
-          });
+          reportShapeFailure(
+            this.errorReporter,
+            {
+              eventId: this.options.eventId,
+              signature: 'shape-mismatch:getSummary',
+              reason: result.reason,
+              issues: result.issues,
+            },
+            this.shapeFailureThrottle,
+          );
         } else {
           console.error(`[espn-ingestion] ${result.reason}, retrying...`);
         }
@@ -97,10 +107,15 @@ export class EspnPlaySource implements PlaySource {
       if (context === null) {
         context = resolveGameContext(summary, this.options.eventId);
         if (context === null) {
-          reportShapeFailure(this.errorReporter, {
-            eventId: this.options.eventId,
-            reason: 'summary header did not identify both competing teams',
-          });
+          reportShapeFailure(
+            this.errorReporter,
+            {
+              eventId: this.options.eventId,
+              signature: 'missing-team-context',
+              reason: 'summary header did not identify both competing teams',
+            },
+            this.shapeFailureThrottle,
+          );
           await this.sleep();
           continue;
         }

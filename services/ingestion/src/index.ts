@@ -16,7 +16,14 @@ export { mapEspnPlay, resolveGameContext, type EspnGameContext } from './espn/ma
 
 export { EspnPlaySource, type EspnPlaySourceOptions } from './espn/espnPlaySource.js';
 
-export { IngestionError, reportShapeFailure, type ShapeFailureContext } from './espn/errors.js';
+export {
+  IngestionError,
+  reportShapeFailure,
+  ShapeFailureReportThrottle,
+  SHAPE_FAILURE_REPORT_WINDOW_MS,
+  type ShapeFailureContext,
+  type ShapeFailureReportThrottleOptions,
+} from './espn/errors.js';
 
 export type {
   EspnDrive,
