@@ -3,6 +3,8 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PrimaryButton } from './PrimaryButton';
+import { SecondaryButton } from './SecondaryButton';
 import type { FlagEventPayload } from '../lib/flagEventPayload';
 import type { NotificationUserAction } from '../lib/notificationActions';
 import { theme } from '../lib/theme';
@@ -67,7 +69,10 @@ export function FlagEventBanner({ banner, onAction }: FlagEventBannerProps) {
         style={styles.backdrop}
       />
       <Animated.View
-        style={[styles.card, { paddingTop: insets.top + 12, transform: [{ translateY }] }]}
+        style={[
+          styles.card,
+          { paddingTop: insets.top + theme.spacing.md, transform: [{ translateY }] },
+        ]}
       >
         <Text numberOfLines={1} style={styles.title}>
           {banner.title}
@@ -76,12 +81,16 @@ export function FlagEventBanner({ banner, onAction }: FlagEventBannerProps) {
           {banner.body}
         </Text>
         <View style={styles.actions}>
-          <Pressable onPress={() => onAction('dismissed')} style={styles.dismissButton}>
-            <Text style={styles.dismissButtonText}>Dismiss</Text>
-          </Pressable>
-          <Pressable onPress={() => onAction('switched')} style={styles.switchButton}>
-            <Text style={styles.switchButtonText}>Switch</Text>
-          </Pressable>
+          <SecondaryButton
+            label="Dismiss"
+            onPress={() => onAction('dismissed')}
+            style={styles.actionButton}
+          />
+          <PrimaryButton
+            label="Switch"
+            onPress={() => onAction('switched')}
+            style={styles.actionButton}
+          />
         </View>
       </Animated.View>
     </View>
@@ -89,10 +98,13 @@ export function FlagEventBanner({ banner, onAction }: FlagEventBannerProps) {
 }
 
 const styles = StyleSheet.create({
+  actionButton: {
+    flex: 1,
+  },
   actions: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md2,
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
@@ -100,7 +112,7 @@ const styles = StyleSheet.create({
   },
   body: {
     color: theme.colors.textSecondary,
-    fontSize: 14,
+    fontSize: theme.type.small.size,
     marginTop: theme.spacing.xs,
   },
   card: {
@@ -112,37 +124,13 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg,
     shadowColor: theme.colors.background,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: theme.spacing.xs },
     shadowOpacity: 0.2,
     shadowRadius: 10,
   },
-  dismissButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
-    borderRadius: theme.radii.sm,
-    flex: 1,
-    paddingVertical: theme.spacing.md,
-  },
-  dismissButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.body.size,
-    fontWeight: '600',
-  },
-  switchButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.sm,
-    flex: 1,
-    paddingVertical: theme.spacing.md,
-  },
-  switchButtonText: {
-    color: theme.colors.onAccent,
-    fontSize: theme.type.body.size,
-    fontWeight: '600',
-  },
   title: {
     color: theme.colors.textPrimary,
-    fontSize: 16,
+    fontSize: theme.type.button.size,
     fontWeight: '700',
   },
 });

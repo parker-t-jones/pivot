@@ -8,8 +8,11 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import { ActivityIndicator, Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Modal, StyleSheet, Text, View } from 'react-native';
 
+import { ListRow } from '../components/ListRow';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { SecondaryButton } from '../components/SecondaryButton';
 import { apiClient } from '../lib/apiClient';
 import type { GameBroadcast, GameBroadcastsResponse } from '../lib/gameDisplay';
 import { serviceLabel } from '../lib/gameDisplay';
@@ -100,7 +103,12 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
    *  here rather than leaving the overlay component to notice and trigger it — keeps all the
    *  data-fetching side effects in this provider, not in a render body. */
   const enterErrorPhase = useCallback(
-    (gameId: string, message: string, failedService: string | null, prefetched?: GameBroadcast[]) => {
+    (
+      gameId: string,
+      message: string,
+      failedService: string | null,
+      prefetched?: GameBroadcast[],
+    ) => {
       if (prefetched !== undefined) {
         setPhase({
           status: 'error',
@@ -223,7 +231,11 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
   return (
     <SwitchingContext.Provider value={{ switchToGame }}>
       {children}
-      <SwitchingOverlay phase={phase} onDismiss={dismissError} onSelectAlternate={onSelectAlternate} />
+      <SwitchingOverlay
+        phase={phase}
+        onDismiss={dismissError}
+        onSelectAlternate={onSelectAlternate}
+      />
     </SwitchingContext.Provider>
   );
 }
@@ -261,7 +273,12 @@ function SwitchingOverlay({
   const isError = phase.status === 'error';
 
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={isError ? onDismiss : undefined}>
+    <Modal
+      transparent
+      animationType="fade"
+      visible
+      onRequestClose={isError ? onDismiss : undefined}
+    >
       <View style={styles.overlay}>
         {isError ? (
           <View style={styles.errorCard}>
@@ -284,9 +301,7 @@ function SwitchingOverlay({
               </View>
             ) : null}
 
-            <Pressable accessibilityRole="button" onPress={onDismiss} style={styles.errorButton}>
-              <Text style={styles.errorButtonText}>Close</Text>
-            </Pressable>
+            <PrimaryButton label="Close" onPress={onDismiss} style={styles.closeButton} />
           </View>
         ) : (
           <View style={styles.switchingCard}>
@@ -310,28 +325,13 @@ function AlternateBroadcastRow({
   const hasDeepLink = broadcast.deep_link_url.length > 0;
   const appStoreUrl = streamingServiceAppStoreUrl(broadcast.service);
 
-  return (
-    <View style={styles.broadcastRow}>
-      <Text style={styles.broadcastRowLabel}>{serviceLabel(broadcast.service)}</Text>
-      {hasDeepLink ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => onSelect(broadcast)}
-          style={styles.broadcastRowButton}
-        >
-          <Text style={styles.broadcastRowButtonText}>Watch</Text>
-        </Pressable>
-      ) : appStoreUrl ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => void Linking.openURL(appStoreUrl)}
-          style={[styles.broadcastRowButton, styles.broadcastRowButtonSecondary]}
-        >
-          <Text style={styles.broadcastRowButtonTextSecondary}>Get app</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
+  const trailing = hasDeepLink ? (
+    <PrimaryButton label="Watch" onPress={() => onSelect(broadcast)} />
+  ) : appStoreUrl ? (
+    <SecondaryButton label="Get app" onPress={() => void Linking.openURL(appStoreUrl)} />
+  ) : null;
+
+  return <ListRow title={serviceLabel(broadcast.service)} trailing={trailing} />;
 }
 
 export function useSwitching(): SwitchingContextValue {
@@ -351,68 +351,27 @@ const styles = StyleSheet.create({
   broadcastLoading: {
     marginTop: theme.spacing.lg,
   },
-  broadcastRow: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  broadcastRowButton: {
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.sm,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  broadcastRowButtonSecondary: {
-    backgroundColor: theme.colors.border,
-  },
-  broadcastRowButtonText: {
-    color: theme.colors.onAccent,
-    fontSize: theme.type.caption.size,
-    fontWeight: '700',
-  },
-  broadcastRowButtonTextSecondary: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.caption.size,
-    fontWeight: '700',
-  },
-  broadcastRowLabel: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.body.size,
-    fontWeight: '600',
+  closeButton: {
+    marginTop: theme.spacing.lg2,
+    width: '100%',
   },
   colorFlash: {
     borderRadius: theme.radii.lg,
     borderWidth: 2,
   },
-  errorButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.sm,
-    marginTop: 18,
-    paddingVertical: theme.spacing.md,
-    width: '100%',
-  },
-  errorButtonText: {
-    color: theme.colors.onAccent,
-    fontSize: theme.type.body.size,
-    fontWeight: '600',
-  },
   errorCard: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radii.lg,
     marginHorizontal: theme.spacing.xl,
-    padding: 22,
+    // TODO: confirm visual — was padding: 22 (equidistant from lg2/xl)
+    padding: theme.spacing.lg2,
     width: '100%',
     maxWidth: 380,
   },
   errorMessage: {
     color: theme.colors.textTertiary,
     fontSize: theme.type.body.size,
-    lineHeight: 21,
+    lineHeight: theme.type.body.lineHeight,
   },
   errorTitle: {
     color: theme.colors.textPrimary,

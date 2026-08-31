@@ -1,6 +1,7 @@
 import { Link, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { PrimaryButton } from '../../components/PrimaryButton';
 import { theme } from '../../lib/theme';
 
 /** PLAN.md Section 10 onboarding step 1 ("Welcome — value prop, 'Get started' CTA"). Sprint 9 Phase
@@ -19,13 +20,11 @@ export default function WelcomeScreen() {
           before the play happens, not after.
         </Text>
 
-        <Pressable
-          accessibilityRole="button"
+        <PrimaryButton
+          label="Get started"
           onPress={() => router.push('/(auth)/sign-up')}
           style={styles.button}
-        >
-          <Text style={styles.buttonText}>Get started</Text>
-        </Pressable>
+        />
 
         <Text style={styles.footerText}>
           Already have an account?{' '}
@@ -41,20 +40,11 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   body: {
     color: theme.colors.textSecondary,
-    fontSize: 16,
-    lineHeight: 23,
+    fontSize: theme.type.button.size,
+    lineHeight: theme.type.button.lineHeight,
   },
   button: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.sm,
     marginTop: theme.spacing.sm,
-    paddingVertical: 14,
-  },
-  buttonText: {
-    color: theme.colors.onAccent,
-    fontSize: 16,
-    fontWeight: '700',
   },
   card: {
     gap: theme.spacing.lg,
@@ -69,20 +59,20 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: theme.colors.accent,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: theme.type.small.size,
+    fontWeight: theme.type.eyebrow.weight,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   footerText: {
     color: theme.colors.textTertiary,
-    fontSize: 14,
+    fontSize: theme.type.small.size,
     marginTop: theme.spacing.xs,
     textAlign: 'center',
   },
   link: {
     color: theme.colors.accent,
-    fontWeight: '600',
+    fontWeight: theme.type.smallStrong.weight,
   },
   title: {
     color: theme.colors.textPrimary,

@@ -5,16 +5,19 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../components/ErrorState';
+import { ListRow } from '../../components/ListRow';
 import { PlayerPicker } from '../../components/PlayerPicker';
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { SecondaryButton } from '../../components/SecondaryButton';
+import { TextButton } from '../../components/TextButton';
+import { TextField } from '../../components/TextField';
 import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
 import { ApiRequestError } from '../../lib/apiClient';
 import {
@@ -66,9 +69,7 @@ export default function ConnectTeamScreen() {
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
-        <Pressable accessibilityRole="button" onPress={onClose}>
-          <Text style={styles.backText}>Close</Text>
-        </Pressable>
+        <TextButton label="Close" onPress={onClose} />
       </View>
 
       {mode === 'choose' ? (
@@ -89,12 +90,8 @@ function ChooseProvider({ onChoose }: { onChoose: (mode: Mode) => void }) {
       <Text style={styles.subtitle}>
         We&apos;ll watch every game your players are in and tell you the moment to switch over.
       </Text>
-      <Pressable onPress={() => onChoose('sleeper')} style={styles.primaryButton}>
-        <Text style={styles.primaryButtonText}>Connect Sleeper</Text>
-      </Pressable>
-      <Pressable onPress={() => onChoose('manual')} style={styles.secondaryButton}>
-        <Text style={styles.secondaryButtonText}>Add manually</Text>
-      </Pressable>
+      <PrimaryButton label="Connect Sleeper" onPress={() => onChoose('sleeper')} />
+      <SecondaryButton label="Add manually" onPress={() => onChoose('manual')} />
     </View>
   );
 }
@@ -133,7 +130,9 @@ function ConnectSleeper({ onConnected }: { onConnected: () => void | Promise<voi
       await connectSleeperLeague(username.trim(), league.league_id);
       await onConnected();
     } catch (error) {
-      setErrorMessage(error instanceof ApiRequestError ? error.message : 'Could not connect league.');
+      setErrorMessage(
+        error instanceof ApiRequestError ? error.message : 'Could not connect league.',
+      );
       setConnectingLeagueId(null);
     }
   };
@@ -146,22 +145,14 @@ function ConnectSleeper({ onConnected }: { onConnected: () => void | Promise<voi
       <Text style={styles.title}>Connect Sleeper</Text>
       <Text style={styles.subtitle}>Enter your Sleeper username to find your leagues.</Text>
 
-      <TextInput
+      <TextField
         autoCapitalize="none"
         onChangeText={setUsername}
         placeholder="Sleeper username"
-        placeholderTextColor={theme.colors.textSecondary}
-        style={styles.input}
         value={username}
       />
 
-      <Pressable disabled={isSearching} onPress={onFindLeagues} style={styles.primaryButton}>
-        {isSearching ? (
-          <ActivityIndicator color={theme.colors.onAccent} />
-        ) : (
-          <Text style={styles.primaryButtonText}>Find leagues</Text>
-        )}
-      </Pressable>
+      <PrimaryButton label="Find leagues" loading={isSearching} onPress={onFindLeagues} />
 
       {errorMessage ? <ErrorState message={errorMessage} /> : null}
 
@@ -170,19 +161,18 @@ function ConnectSleeper({ onConnected }: { onConnected: () => void | Promise<voi
           data={leagues}
           keyExtractor={(item) => item.league_id}
           renderItem={({ item }) => (
-            <Pressable
+            <ListRow
               disabled={connectingLeagueId !== null}
               onPress={() => onSelectLeague(item)}
-              style={styles.leagueOption}
-            >
-              <View>
-                <Text style={styles.leagueOptionTitle}>{item.name}</Text>
-                <Text style={styles.leagueOptionSubtitle}>{item.season} season</Text>
-              </View>
-              {connectingLeagueId === item.league_id ? (
-                <ActivityIndicator color={theme.colors.textPrimary} />
-              ) : null}
-            </Pressable>
+              style={styles.leagueRow}
+              subtitle={`${item.season} season`}
+              title={item.name}
+              trailing={
+                connectingLeagueId === item.league_id ? (
+                  <ActivityIndicator color={theme.colors.textPrimary} />
+                ) : null
+              }
+            />
           )}
         />
       ) : null}
@@ -207,7 +197,9 @@ function ConnectManual({ onConnected }: { onConnected: () => void | Promise<void
       const lineup = await fetchLineup(created.league_id);
       setLeague({ league_id: created.league_id, week: lineup.week });
     } catch (error) {
-      setErrorMessage(error instanceof ApiRequestError ? error.message : 'Could not create league.');
+      setErrorMessage(
+        error instanceof ApiRequestError ? error.message : 'Could not create league.',
+      );
     } finally {
       setIsCreating(false);
     }
@@ -235,20 +227,8 @@ function ConnectManual({ onConnected }: { onConnected: () => void | Promise<void
       >
         <Text style={styles.title}>Add your team manually</Text>
         <Text style={styles.subtitle}>Name your league — you&apos;ll add players next.</Text>
-        <TextInput
-          onChangeText={setName}
-          placeholder="League name"
-          placeholderTextColor={theme.colors.textSecondary}
-          style={styles.input}
-          value={name}
-        />
-        <Pressable disabled={isCreating} onPress={onCreateLeague} style={styles.primaryButton}>
-          {isCreating ? (
-            <ActivityIndicator color={theme.colors.onAccent} />
-          ) : (
-            <Text style={styles.primaryButtonText}>Continue</Text>
-          )}
-        </Pressable>
+        <TextField onChangeText={setName} placeholder="League name" value={name} />
+        <PrimaryButton label="Continue" loading={isCreating} onPress={onCreateLeague} />
         {errorMessage ? <ErrorState message={errorMessage} /> : null}
       </KeyboardAvoidingView>
     );
@@ -269,74 +249,24 @@ function ConnectManual({ onConnected }: { onConnected: () => void | Promise<void
 }
 
 const styles = StyleSheet.create({
-  backText: {
-    color: theme.colors.accent,
-    fontSize: 16,
-  },
   content: {
     flex: 1,
     gap: theme.spacing.md,
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.lg2,
   },
   header: {
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.lg2,
   },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 10,
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    paddingHorizontal: 14,
-    paddingVertical: theme.spacing.md,
-  },
-  leagueOption: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  leagueRow: {
     marginBottom: theme.spacing.sm,
-    paddingHorizontal: 14,
-    paddingVertical: theme.spacing.md,
-  },
-  leagueOptionSubtitle: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.type.caption.size,
-  },
-  leagueOptionTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.body.size,
-    fontWeight: '600',
-  },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: 10,
-    paddingVertical: 14,
-  },
-  primaryButtonText: {
-    color: theme.colors.onAccent,
-    fontSize: 16,
-    fontWeight: '700',
   },
   screen: {
     backgroundColor: theme.colors.background,
     flex: 1,
   },
-  secondaryButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: 10,
-    paddingVertical: 14,
-  },
-  secondaryButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
   subtitle: {
     color: theme.colors.textSecondary,
-    fontSize: 14,
+    fontSize: theme.type.small.size,
     marginBottom: theme.spacing.sm,
   },
   title: {

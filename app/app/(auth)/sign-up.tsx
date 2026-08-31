@@ -1,16 +1,9 @@
 import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { TextField } from '../../components/TextField';
 import { isValidEmail } from '../../lib/email';
 import { supabase } from '../../lib/supabase';
 import { theme } from '../../lib/theme';
@@ -75,48 +68,36 @@ export default function SignUpScreen() {
         <Text style={styles.title}>Create account</Text>
         <Text style={styles.subtitle}>Sign up with email and password.</Text>
 
-        <TextInput
+        <TextField
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
           onChangeText={setEmail}
           placeholder="Email"
-          placeholderTextColor={theme.colors.textTertiary}
-          style={styles.input}
           value={email}
         />
 
-        <TextInput
+        <TextField
           autoCapitalize="none"
           autoComplete="password-new"
           onChangeText={setPassword}
           placeholder="Password"
-          placeholderTextColor={theme.colors.textTertiary}
           secureTextEntry
-          style={styles.input}
           value={password}
         />
 
-        <TextInput
+        <TextField
           autoCapitalize="none"
           autoComplete="password-new"
           onChangeText={setPasswordConfirmation}
           placeholder="Confirm password"
-          placeholderTextColor={theme.colors.textTertiary}
           secureTextEntry
-          style={styles.input}
           value={passwordConfirmation}
         />
 
         {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
 
-        <Pressable disabled={isSubmitting} onPress={onSignUp} style={styles.button}>
-          {isSubmitting ? (
-            <ActivityIndicator color={theme.colors.onAccent} />
-          ) : (
-            <Text style={styles.buttonText}>Sign up</Text>
-          )}
-        </Pressable>
+        <PrimaryButton label="Sign up" loading={isSubmitting} onPress={onSignUp} />
 
         <Text style={styles.footerText}>
           Already have an account?{' '}
@@ -130,17 +111,6 @@ export default function SignUpScreen() {
 }
 
 const styles = StyleSheet.create({
-  button: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.sm,
-    paddingVertical: theme.spacing.md,
-  },
-  buttonText: {
-    color: theme.colors.onAccent,
-    fontSize: 16,
-    fontWeight: '600',
-  },
   card: {
     gap: theme.spacing.md,
     width: '100%',
@@ -150,35 +120,25 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.lg2,
   },
   error: {
     color: theme.colors.danger,
-    fontSize: 14,
+    fontSize: theme.type.small.size,
   },
   footerText: {
     color: theme.colors.textTertiary,
-    fontSize: 14,
+    fontSize: theme.type.small.size,
     marginTop: theme.spacing.xs,
     textAlign: 'center',
   },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radii.sm,
-    borderWidth: 1,
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 10,
-  },
   link: {
     color: theme.colors.accent,
-    fontWeight: '600',
+    fontWeight: theme.type.button.weight,
   },
   subtitle: {
     color: theme.colors.textSecondary,
-    fontSize: 15,
+    fontSize: theme.type.body.size,
     marginBottom: theme.spacing.sm,
   },
   title: {

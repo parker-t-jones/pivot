@@ -16,7 +16,7 @@ import { theme } from '../../lib/theme';
 function LoadingState({ message }: { message: string }) {
   return (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" />
+      <ActivityIndicator color={theme.colors.accent} size="large" />
       <Text style={styles.loadingText}>{message}</Text>
     </View>
   );
@@ -28,12 +28,7 @@ function LoadingState({ message }: { message: string }) {
  */
 function AppNavigator() {
   const { status: pushStatusRaw } = usePushPermission();
-  const {
-    status: leaguesStatus,
-    leagueCount,
-    errorMessage,
-    refreshLeagues,
-  } = useLeaguesGate();
+  const { status: leaguesStatus, leagueCount, errorMessage, refreshLeagues } = useLeaguesGate();
   // Read the session module directly in the gate path so a Close → replace race cannot see a
   // stale React snapshot of connectDeferred (Bug 1). Context still owns deferConnect / re-renders.
   const connectDeferred = isConnectDeferredForSession();
@@ -56,9 +51,7 @@ function AppNavigator() {
   });
 
   const decisionKey =
-    decision.action === 'leave_notifications'
-      ? `leave:${decision.destination}`
-      : decision.action;
+    decision.action === 'leave_notifications' ? `leave:${decision.destination}` : decision.action;
 
   useEffect(() => {
     switch (decision.action) {
@@ -144,6 +137,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: theme.colors.textTertiary,
-    fontSize: 16,
+    fontSize: theme.type.button.size,
   },
 });

@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { PrimaryButton } from '../../components/PrimaryButton';
 import { resetToHomeRoot } from '../../lib/navigateAfterConnect';
 import { theme } from '../../lib/theme';
 
@@ -16,9 +17,11 @@ export default function OnboardingAllSetScreen() {
           We&apos;re watching every game your players are in. We&apos;ll notify you the moment one
           of them takes the field in a big spot.
         </Text>
-        <Pressable onPress={() => resetToHomeRoot(router)} style={styles.button}>
-          <Text style={styles.buttonText}>Go to Home</Text>
-        </Pressable>
+        <PrimaryButton
+          label="Go to Home"
+          onPress={() => resetToHomeRoot(router)}
+          style={styles.button}
+        />
       </View>
     </View>
   );
@@ -29,22 +32,13 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     fontSize: theme.type.body.size,
     fontWeight: theme.type.body.weight,
-    lineHeight: 21,
+    lineHeight: theme.type.body.lineHeight,
   },
   button: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: 10,
     marginTop: theme.spacing.md,
-    paddingVertical: 14,
-  },
-  buttonText: {
-    color: theme.colors.onAccent,
-    fontSize: 16,
-    fontWeight: '700',
   },
   card: {
-    gap: 14,
+    gap: theme.spacing.md2,
     width: '100%',
   },
   container: {

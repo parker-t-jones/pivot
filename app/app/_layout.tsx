@@ -4,11 +4,12 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { SessionProvider, useSession } from '../contexts/SessionContext';
+import { theme } from '../lib/theme';
 
 function LoadingState({ message }: { message: string }) {
   return (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" />
+      <ActivityIndicator color={theme.colors.accent} size="large" />
       <Text style={styles.loadingText}>{message}</Text>
     </View>
   );
@@ -71,13 +72,14 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   loadingContainer: {
     alignItems: 'center',
+    backgroundColor: theme.colors.background,
     flex: 1,
-    gap: 12,
+    gap: theme.spacing.md,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.xl,
   },
   loadingText: {
-    color: '#444',
-    fontSize: 16,
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.button.size,
   },
 });

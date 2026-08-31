@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '../../components/EmptyState';
@@ -11,6 +11,7 @@ import { HomePregameCard } from '../../components/HomePregameCard';
 import { IdleHomeCard } from '../../components/IdleHomeCard';
 import { LoadingState } from '../../components/LoadingState';
 import { NowActiveCard } from '../../components/NowActiveCard';
+import { TextButton } from '../../components/TextButton';
 import { useSwitching } from '../../contexts/SwitchingContext';
 import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
 import { ApiRequestError, apiClient } from '../../lib/apiClient';
@@ -45,7 +46,12 @@ import {
   type LineupResponse,
 } from '../../lib/leagues';
 import { fetchNflState, type NflStateResponse } from '../../lib/nflState';
-import { fetchGamesLive, fetchGamesWeek, type LiveGame, type ScheduleGame } from '../../lib/schedule';
+import {
+  fetchGamesLive,
+  fetchGamesWeek,
+  type LiveGame,
+  type ScheduleGame,
+} from '../../lib/schedule';
 import { resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../../lib/teamDisplay';
 import { theme } from '../../lib/theme';
 import { useHomeRealtime } from '../../lib/useHomeRealtime';
@@ -112,12 +118,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { switchToGame } = useSwitching();
-  const {
-    status: leaguesStatus,
-    leagues,
-    leaguesRevision,
-    refreshLeagues,
-  } = useLeaguesGate();
+  const { status: leaguesStatus, leagues, leaguesRevision, refreshLeagues } = useLeaguesGate();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -126,9 +127,7 @@ export default function HomeScreen() {
 
   const applyBroadcasts = useCallback(async (gameId: string) => {
     try {
-      const response = await apiClient.get<GameBroadcastsResponse>(
-        `/games/${gameId}/broadcasts`,
-      );
+      const response = await apiClient.get<GameBroadcastsResponse>(`/games/${gameId}/broadcasts`);
       const broadcasts = response.broadcasts;
       const broadcast = pickPreferredBroadcast(broadcasts);
       setHomeData((prev) => {
@@ -409,14 +408,11 @@ export default function HomeScreen() {
     >
       <View style={styles.headerRow}>
         <Text style={styles.title}>Home</Text>
-        <Pressable
-          accessibilityRole="button"
+        <TextButton
           accessibilityLabel="Settings"
+          label="Settings"
           onPress={() => router.push('/(app)/settings')}
-          style={styles.settingsButton}
-        >
-          <Text style={styles.settingsButtonText}>Settings</Text>
-        </Pressable>
+        />
       </View>
 
       {isLoading ? (
@@ -432,7 +428,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.lg2,
     paddingVertical: theme.spacing.xl,
   },
   headerRow: {
@@ -444,15 +440,6 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: theme.colors.background,
     flex: 1,
-  },
-  settingsButton: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 6,
-  },
-  settingsButtonText: {
-    color: theme.colors.accent,
-    fontSize: theme.type.body.size,
-    fontWeight: '600',
   },
   title: {
     color: theme.colors.textPrimary,

@@ -29,8 +29,8 @@ const styles = StyleSheet.create({
   },
   inline: {
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 40,
+    gap: theme.spacing.md,
+    paddingVertical: theme.spacing.xxxl,
   },
   text: {
     color: theme.colors.textTertiary,

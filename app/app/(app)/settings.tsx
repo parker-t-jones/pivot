@@ -2,7 +2,6 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Linking,
   Pressable,
@@ -16,6 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
+import { SecondaryButton } from '../../components/SecondaryButton';
+import { TextButton } from '../../components/TextButton';
 import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
 import { useSession } from '../../contexts/SessionContext';
 import { ApiRequestError } from '../../lib/apiClient';
@@ -32,13 +33,22 @@ import {
   type LeagueSummary,
   type LineupResponse,
 } from '../../lib/leagues';
-import { deleteAccount, fetchMe, patchPreferences, setAppPresence, type MeResponse } from '../../lib/me';
+import {
+  deleteAccount,
+  fetchMe,
+  patchPreferences,
+  setAppPresence,
+  type MeResponse,
+} from '../../lib/me';
 import { unregisterPushNotificationsAsync } from '../../lib/pushNotifications';
 import { STREAMING_SERVICES, streamingServiceLabel } from '../../lib/streamingServices';
 import { supabase } from '../../lib/supabase';
 import { theme } from '../../lib/theme';
 
-const NOTIFICATION_MODES: { value: MeResponse['preferences']['notificationMode']; label: string }[] = [
+const NOTIFICATION_MODES: {
+  value: MeResponse['preferences']['notificationMode'];
+  label: string;
+}[] = [
   { value: 'all', label: 'All' },
   { value: 'high_leverage_only', label: 'High-leverage only' },
   { value: 'off', label: 'Off' },
@@ -48,6 +58,9 @@ const SUPPORT_EMAIL = 'support@pivot-sports.app';
 const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}`;
 const PRIVACY_POLICY_URL = 'https://pivot-sports.app/privacy';
 const TERMS_OF_SERVICE_URL = 'https://pivot-sports.app/terms';
+
+const SWITCH_TRACK = { false: theme.colors.border, true: theme.colors.accent } as const;
+const SWITCH_THUMB = theme.colors.textPrimary;
 
 function openExternalUrl(url: string, failedMessage: string): void {
   void Linking.openURL(url).catch(() => {
@@ -232,9 +245,7 @@ function SettingsHeader({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
-      <Pressable accessibilityRole="button" onPress={onBack} style={styles.backButton}>
-        <Text style={styles.backButtonText}>Close</Text>
-      </Pressable>
+      <TextButton label="Close" onPress={onBack} />
       <Text style={styles.headerTitle}>Settings</Text>
       <View style={styles.headerSpacer} />
     </View>
@@ -270,21 +281,23 @@ function AccountSection({
       <Text style={styles.rowLabel}>{email}</Text>
       <Text style={styles.rowSubtext}>{subscriptionTier === 'pro' ? 'Pro' : 'Free'} plan</Text>
 
-      <Pressable disabled={isSigningOut} onPress={onSignOut} style={styles.secondaryButton}>
-        {isSigningOut ? (
-          <ActivityIndicator color={theme.colors.textPrimary} />
-        ) : (
-          <Text style={styles.secondaryButtonText}>Sign out</Text>
-        )}
-      </Pressable>
+      <SecondaryButton
+        disabled={isSigningOut}
+        label="Sign out"
+        loading={isSigningOut}
+        onPress={onSignOut}
+        style={styles.accountButton}
+      />
 
-      <Pressable disabled={isDeletingAccount} onPress={onDeleteAccount} style={styles.dangerButton}>
-        {isDeletingAccount ? (
-          <ActivityIndicator color={theme.colors.danger} />
-        ) : (
-          <Text style={styles.dangerButtonText}>Delete account</Text>
-        )}
-      </Pressable>
+      <TextButton
+        disabled={isDeletingAccount}
+        hitArea="padding"
+        label="Delete account"
+        onPress={onDeleteAccount}
+        size="smallStrong"
+        style={styles.deleteAccount}
+        tone="danger"
+      />
     </SectionCard>
   );
 }
@@ -322,7 +335,13 @@ function NotificationsSection({
               key={mode.value}
               disabled={isSaving}
               onPress={() => save({ notificationMode: mode.value })}
-              style={[styles.segment, isActive && styles.segmentActive]}
+              style={({ pressed }) => [
+                styles.segment,
+                isActive && styles.segmentActive,
+                pressed &&
+                  !isSaving &&
+                  (isActive ? styles.segmentActivePressed : styles.segmentPressed),
+              ]}
             >
               <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
                 {mode.label}
@@ -337,19 +356,26 @@ function NotificationsSection({
         <Switch
           disabled={isSaving}
           onValueChange={(enabled) => save({ quietHours: { enabled } })}
+          thumbColor={SWITCH_THUMB}
+          trackColor={SWITCH_TRACK}
           value={preferences.quietHours.enabled}
         />
       </View>
       {preferences.quietHours.enabled ? (
         <Text style={styles.rowSubtext}>
-          {formatHour(preferences.quietHours.startHour)}–{formatHour(preferences.quietHours.endHour)}{' '}
-          ({preferences.quietHours.timezone})
+          {formatHour(preferences.quietHours.startHour)}–
+          {formatHour(preferences.quietHours.endHour)} ({preferences.quietHours.timezone})
         </Text>
       ) : null}
 
       <View style={styles.toggleRow}>
         <Text style={styles.rowLabel}>Auto-switch highest priority game</Text>
-        <Switch disabled value={preferences.autoSwitch} />
+        <Switch
+          disabled
+          thumbColor={SWITCH_THUMB}
+          trackColor={SWITCH_TRACK}
+          value={preferences.autoSwitch}
+        />
       </View>
       <Text style={styles.rowSubtext}>Coming soon.</Text>
     </SectionCard>
@@ -367,7 +393,10 @@ function StreamingServicesSection({
   onChange,
 }: {
   appPresence: MeResponse['app_presence'];
-  onChange: (service: (typeof STREAMING_SERVICES)[number], hasSubscription: boolean) => Promise<void>;
+  onChange: (
+    service: (typeof STREAMING_SERVICES)[number],
+    hasSubscription: boolean,
+  ) => Promise<void>;
 }) {
   const [savingService, setSavingService] = useState<string | null>(null);
   const presenceByService = useMemo(
@@ -395,6 +424,8 @@ function StreamingServicesSection({
                 setSavingService(null);
               }
             }}
+            thumbColor={SWITCH_THUMB}
+            trackColor={SWITCH_TRACK}
             value={presenceByService.get(service) ?? false}
           />
         </View>
@@ -464,8 +495,9 @@ function LeaguesSection({
             </View>
             <View style={styles.leagueRowActions}>
               {league.platform === 'sleeper' ? (
-                <Pressable
+                <TextButton
                   disabled={busyLeagueId === league.league_id}
+                  label="Sync"
                   onPress={async () => {
                     setBusyLeagueId(league.league_id);
                     try {
@@ -476,30 +508,27 @@ function LeaguesSection({
                       setBusyLeagueId(null);
                     }
                   }}
-                  style={styles.smallButton}
-                >
-                  <Text style={styles.smallButtonText}>Sync</Text>
-                </Pressable>
+                  size="smallStrong"
+                />
               ) : (
                 <>
-                  <Pressable
+                  <TextButton
                     disabled={busyLeagueId === league.league_id}
+                    label="Edit lineup"
                     onPress={() => onEditLineup(league.league_id)}
-                    style={styles.smallButton}
-                  >
-                    <Text style={styles.smallButtonText}>Edit lineup</Text>
-                  </Pressable>
-                  <Pressable
+                    size="smallStrong"
+                  />
+                  <TextButton
                     disabled={busyLeagueId === league.league_id}
+                    label="Rename"
                     onPress={() => promptRename(league)}
-                    style={styles.smallButton}
-                  >
-                    <Text style={styles.smallButtonText}>Rename</Text>
-                  </Pressable>
+                    size="smallStrong"
+                  />
                 </>
               )}
-              <Pressable
+              <TextButton
                 disabled={busyLeagueId === league.league_id}
+                label="Disconnect"
                 onPress={() =>
                   Alert.alert('Disconnect league?', `Remove "${league.name}" from Pivot?`, [
                     { text: 'Cancel', style: 'cancel' },
@@ -519,18 +548,19 @@ function LeaguesSection({
                     },
                   ])
                 }
-                style={[styles.smallButton, styles.smallButtonDanger]}
-              >
-                <Text style={styles.smallButtonDangerText}>Disconnect</Text>
-              </Pressable>
+                size="smallStrong"
+                tone="danger"
+              />
             </View>
           </View>
         ))
       )}
 
-      <Pressable onPress={onConnectAnother} style={styles.secondaryButton}>
-        <Text style={styles.secondaryButtonText}>Connect another team</Text>
-      </Pressable>
+      <SecondaryButton
+        label="Connect another team"
+        onPress={onConnectAnother}
+        style={styles.accountButton}
+      />
     </SectionCard>
   );
 }
@@ -551,9 +581,7 @@ function StarPlayersSection({
 }) {
   const [savingSlotId, setSavingSlotId] = useState<string | null>(null);
 
-  const allSlots = lineups.flatMap((lineup) =>
-    lineup.slots.map((slot) => ({ lineup, slot })),
-  );
+  const allSlots = lineups.flatMap((lineup) => lineup.slots.map((slot) => ({ lineup, slot })));
 
   return (
     <SectionCard title="Star players">
@@ -587,6 +615,8 @@ function StarPlayersSection({
                   setSavingSlotId(null);
                 }
               }}
+              thumbColor={SWITCH_THUMB}
+              trackColor={SWITCH_TRACK}
               value={slot.is_star}
             />
           </View>
@@ -638,73 +668,71 @@ function AboutSection() {
   return (
     <SectionCard title="About">
       <Text style={styles.rowSubtext}>Pivot v{version}</Text>
-      <Pressable
+      <TextButton
         accessibilityRole="link"
+        label="Contact support"
         onPress={() =>
           openExternalUrl(SUPPORT_MAILTO, `Email ${SUPPORT_EMAIL} from your mail app.`)
         }
-      >
-        <Text style={styles.linkText}>Contact support</Text>
-      </Pressable>
-      <Pressable
+        size="small"
+        style={styles.aboutLink}
+      />
+      <TextButton
         accessibilityRole="link"
+        label="Terms of service"
         onPress={() =>
           openExternalUrl(TERMS_OF_SERVICE_URL, 'Visit pivot-sports.app/terms in your browser.')
         }
-      >
-        <Text style={styles.linkText}>Terms of service</Text>
-      </Pressable>
-      <Pressable
+        size="small"
+        style={styles.aboutLink}
+      />
+      <TextButton
         accessibilityRole="link"
+        label="Privacy policy"
         onPress={() =>
           openExternalUrl(PRIVACY_POLICY_URL, 'Visit pivot-sports.app/privacy in your browser.')
         }
-      >
-        <Text style={styles.linkText}>Privacy policy</Text>
-      </Pressable>
+        size="small"
+        style={styles.aboutLink}
+      />
 
       {/* Moved here from Home (Sprint 9 Phase 2) — same dev/QA utility, just relocated now that
        *  Home no longer carries any account/debug chrome. */}
-      <Pressable disabled={isSendingTest} onPress={() => void onSendTestNotification()}>
-        <Text style={styles.linkText}>
-          {isSendingTest ? 'Sending in 2s…' : 'Send test notification'}
-        </Text>
-      </Pressable>
+      <TextButton
+        disabled={isSendingTest}
+        label={isSendingTest ? 'Sending in 2s…' : 'Send test notification'}
+        onPress={() => void onSendTestNotification()}
+        size="small"
+        style={styles.aboutLink}
+      />
     </SectionCard>
   );
 }
 
 const styles = StyleSheet.create({
-  backButton: {
-    paddingVertical: theme.spacing.xs,
+  aboutLink: {
+    marginTop: theme.spacing.sm,
   },
-  backButtonText: {
-    color: theme.colors.accent,
-    fontSize: 16,
+  accountButton: {
+    marginTop: theme.spacing.md,
   },
   content: {
-    gap: 20,
-    paddingBottom: 48,
-    paddingHorizontal: 20,
+    gap: theme.spacing.lg2,
+    paddingBottom: theme.spacing.huge,
+    paddingHorizontal: theme.spacing.lg2,
   },
-  dangerButton: {
+  deleteAccount: {
     alignItems: 'center',
     marginTop: theme.spacing.sm,
-    paddingVertical: 10,
-  },
-  dangerButtonText: {
-    color: theme.colors.danger,
-    fontSize: 14,
-    fontWeight: '600',
   },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.lg2,
   },
   headerSpacer: {
-    width: 48,
+    width: theme.spacing.huge,
   },
   headerTitle: {
     color: theme.colors.textPrimary,
@@ -716,7 +744,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: theme.spacing.md,
   },
   leagueRowActions: {
     flexDirection: 'row',
@@ -727,22 +755,19 @@ const styles = StyleSheet.create({
   },
   leagueRowInfo: {
     flex: 1,
-    gap: 2,
-  },
-  linkText: {
-    color: theme.colors.accent,
-    fontSize: 14,
-    marginTop: 6,
+    // TODO: confirm visual — was gap: 2
+    gap: theme.spacing.xs,
   },
   rowLabel: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.body.size,
-    fontWeight: '600',
+    fontWeight: theme.type.button.weight,
   },
   rowSubtext: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.caption.size,
-    marginTop: 2,
+    // TODO: confirm visual — was marginTop: 2
+    marginTop: theme.spacing.xs,
   },
   screen: {
     backgroundColor: theme.colors.background,
@@ -751,33 +776,21 @@ const styles = StyleSheet.create({
   section: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radii.lg,
-    gap: 6,
+    gap: theme.spacing.sm,
     padding: theme.spacing.lg,
   },
   sectionHint: {
     color: theme.colors.textSecondary,
-    fontSize: 12,
+    fontSize: theme.type.eyebrow.size,
     marginBottom: theme.spacing.xs,
   },
   sectionTitle: {
     color: theme.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
     marginBottom: theme.spacing.xs,
     textTransform: 'uppercase',
-  },
-  secondaryButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
-    borderRadius: 10,
-    marginTop: 10,
-    paddingVertical: theme.spacing.md,
-  },
-  secondaryButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.body.size,
-    fontWeight: '600',
   },
   segment: {
     alignItems: 'center',
@@ -788,42 +801,27 @@ const styles = StyleSheet.create({
   segmentActive: {
     backgroundColor: theme.colors.accent,
   },
+  segmentActivePressed: {
+    backgroundColor: theme.colors.accentPressed,
+  },
+  segmentPressed: {
+    backgroundColor: theme.colors.surfaceRaised,
+  },
   segmentText: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.caption.size,
-    fontWeight: '600',
+    fontWeight: theme.type.smallStrong.weight,
   },
   segmentTextActive: {
     color: theme.colors.onAccent,
   },
   segmentedControl: {
     backgroundColor: theme.colors.background,
-    borderRadius: 10,
+    borderRadius: theme.radii.control,
     flexDirection: 'row',
     gap: theme.spacing.xs,
-    marginBottom: 10,
+    marginBottom: theme.spacing.md,
     padding: theme.spacing.xs,
-  },
-  smallButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
-    borderRadius: theme.radii.sm,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  smallButtonDanger: {
-    backgroundColor: 'rgba(255, 90, 90, 0.14)',
-  },
-  smallButtonDangerText: {
-    color: theme.colors.danger,
-    fontSize: theme.type.caption.size,
-    fontWeight: '600',
-  },
-  smallButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.caption.size,
-    fontWeight: '600',
   },
   toggleRow: {
     alignItems: 'center',

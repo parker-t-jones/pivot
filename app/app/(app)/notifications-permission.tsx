@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { PrimaryButton } from '../../components/PrimaryButton';
 import { usePushPermission } from '../../contexts/PushPermissionContext';
 import { theme } from '../../lib/theme';
 
@@ -37,13 +38,12 @@ export default function NotificationsPermissionScreen() {
         </Text>
         <Text style={styles.body}>You can turn these off any time in Settings.</Text>
 
-        <Pressable disabled={isRequesting} onPress={onEnable} style={styles.button}>
-          {isRequesting ? (
-            <ActivityIndicator color={theme.colors.onAccent} />
-          ) : (
-            <Text style={styles.buttonText}>Enable notifications</Text>
-          )}
-        </Pressable>
+        <PrimaryButton
+          label="Enable notifications"
+          loading={isRequesting}
+          onPress={onEnable}
+          style={styles.button}
+        />
       </View>
     </View>
   );
@@ -54,22 +54,13 @@ const styles = StyleSheet.create({
     color: theme.colors.textTertiary,
     fontSize: theme.type.body.size,
     fontWeight: theme.type.body.weight,
-    lineHeight: 21,
+    lineHeight: theme.type.body.lineHeight,
   },
   button: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.sm,
     marginTop: theme.spacing.md,
-    paddingVertical: 14,
-  },
-  buttonText: {
-    color: theme.colors.onAccent,
-    fontSize: 16,
-    fontWeight: '600',
   },
   card: {
-    gap: 14,
+    gap: theme.spacing.md2,
     width: '100%',
   },
   container: {

@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
   heroBody: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.body.size,
-    lineHeight: 21,
+    lineHeight: theme.type.body.lineHeight,
   },
   heroTitle: {
     color: theme.colors.textPrimary,
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     color: theme.colors.textTertiary,
     fontSize: theme.type.caption.size,
-    fontWeight: '600',
+    fontWeight: theme.type.smallStrong.weight,
     letterSpacing: 0.3,
     marginTop: theme.spacing.sm,
     textTransform: 'uppercase',

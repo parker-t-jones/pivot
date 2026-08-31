@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { PrimaryButton } from './PrimaryButton';
+import { TextButton } from './TextButton';
 import { theme } from '../lib/theme';
 
 interface EmptyStateAction {
@@ -22,25 +24,34 @@ interface EmptyStateProps {
  * its own muted-text block. Deliberately plain (no illustration/icon system exists yet in this
  * codebase) — consistent typography/spacing is the win here, not visual richness.
  */
-export function EmptyState({ title, message, primaryAction, secondaryAction, children }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  message,
+  primaryAction,
+  secondaryAction,
+  children,
+}: EmptyStateProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{title}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {children}
       {primaryAction ? (
-        <Pressable
-          accessibilityRole="button"
+        <PrimaryButton
+          label={primaryAction.label}
           onPress={primaryAction.onPress}
-          style={styles.primaryButton}
-        >
-          <Text style={styles.primaryButtonText}>{primaryAction.label}</Text>
-        </Pressable>
+          style={styles.primary}
+        />
       ) : null}
       {secondaryAction ? (
-        <Pressable accessibilityRole="button" onPress={secondaryAction.onPress}>
-          <Text style={styles.secondaryButtonText}>{secondaryAction.label}</Text>
-        </Pressable>
+        <TextButton
+          hitArea="padding"
+          label={secondaryAction.label}
+          onPress={secondaryAction.onPress}
+          size="smallStrong"
+          tone="muted"
+          underline
+        />
       ) : null}
     </View>
   );
@@ -51,33 +62,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: 40,
+    paddingVertical: theme.spacing.xxxl,
   },
   message: {
     color: theme.colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: theme.type.small.size,
+    lineHeight: theme.type.small.lineHeight,
     textAlign: 'center',
   },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: 10,
+  primary: {
     marginTop: theme.spacing.sm,
-    minWidth: 200,
-    paddingVertical: 13,
-  },
-  primaryButtonText: {
-    color: theme.colors.onAccent,
-    fontSize: theme.type.body.size,
-    fontWeight: '700',
-  },
-  secondaryButtonText: {
-    color: theme.colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 2,
-    textDecorationLine: 'underline',
   },
   title: {
     color: theme.colors.textPrimary,

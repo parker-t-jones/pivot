@@ -1,11 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
 import { PlayerPicker } from '../../components/PlayerPicker';
+import { TextButton } from '../../components/TextButton';
 import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
 import { ApiRequestError } from '../../lib/apiClient';
 import { fetchLineup, putManualLineup } from '../../lib/leagues';
@@ -96,15 +97,13 @@ export default function EditManualLineupScreen() {
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
-        <Pressable
-          accessibilityRole="button"
+        <TextButton
+          label="Back"
           onPress={() => {
             if (router.canGoBack()) router.back();
             else router.replace('/(app)/settings');
           }}
-        >
-          <Text style={styles.backText}>Back</Text>
-        </Pressable>
+        />
         {league ? <Text style={styles.headerTitle}>{league.name}</Text> : null}
       </View>
 
@@ -113,7 +112,10 @@ export default function EditManualLineupScreen() {
       ) : errorMessage && week == null ? (
         <ErrorState message={errorMessage} onRetry={() => void load()} />
       ) : week == null ? (
-        <ErrorState message={errorMessage ?? 'Could not load lineup.'} onRetry={() => void load()} />
+        <ErrorState
+          message={errorMessage ?? 'Could not load lineup.'}
+          onRetry={() => void load()}
+        />
       ) : (
         <PlayerPicker
           roster={roster}
@@ -133,13 +135,9 @@ export default function EditManualLineupScreen() {
 }
 
 const styles = StyleSheet.create({
-  backText: {
-    color: theme.colors.accent,
-    fontSize: 16,
-  },
   header: {
     gap: theme.spacing.sm,
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.lg2,
     paddingBottom: theme.spacing.md,
   },
   headerTitle: {

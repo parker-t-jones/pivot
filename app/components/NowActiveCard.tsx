@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import {
   formatClock,
@@ -10,6 +10,7 @@ import {
 } from '../lib/gameDisplay';
 import { reasonChipCopy, resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../lib/teamDisplay';
 import { theme } from '../lib/theme';
+import { PrimaryButton } from './PrimaryButton';
 
 interface NowActiveCardProps {
   flag: CurrentFlag;
@@ -70,18 +71,16 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
         </View>
       ) : null}
 
-      <Pressable
-        accessibilityRole="button"
-        disabled={!canSwitch}
-        onPress={onSwitch}
-        style={[styles.cta, !canSwitch && styles.ctaDisabled]}
-      >
-        <Text style={[styles.ctaText, !canSwitch && styles.ctaTextDisabled]}>
-          {canSwitch && broadcast
+      <PrimaryButton
+        inactive={!canSwitch}
+        label={
+          canSwitch && broadcast
             ? `Watch on ${serviceLabel(broadcast.service)}`
-            : 'No broadcast available'}
-        </Text>
-      </Pressable>
+            : 'No broadcast available'
+        }
+        onPress={onSwitch}
+        style={styles.cta}
+      />
     </View>
   );
 }
@@ -89,33 +88,18 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    gap: 10,
-    padding: 20,
+    borderRadius: theme.radii.hero,
+    gap: theme.spacing.md,
+    padding: theme.spacing.lg2,
     width: '100%',
   },
   cta: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.md,
     marginTop: theme.spacing.sm,
-    paddingVertical: 15,
-  },
-  ctaDisabled: {
-    backgroundColor: theme.colors.border,
-  },
-  ctaText: {
-    color: theme.colors.onAccent,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  ctaTextDisabled: {
-    color: theme.colors.textPrimary,
   },
   eyebrow: {
     color: theme.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
@@ -131,18 +115,19 @@ const styles = StyleSheet.create({
   },
   reasonChip: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 176, 32, 0.18)',
+    backgroundColor: theme.colors.accentMuted,
     borderRadius: theme.radii.pill,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: 6,
+    paddingVertical: theme.spacing.sm,
   },
   reasonChipText: {
     color: theme.colors.accent,
     fontSize: theme.type.caption.size,
-    fontWeight: '600',
+    fontWeight: theme.type.smallStrong.weight,
   },
   score: {
     color: theme.colors.textPrimary,
+    // TODO: confirm visual — no type token for 22/700 score display
     fontSize: 22,
     fontWeight: '700',
   },

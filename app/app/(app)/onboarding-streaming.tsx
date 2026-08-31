@@ -1,12 +1,18 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../components/ErrorState';
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { TextButton } from '../../components/TextButton';
 import { ApiRequestError } from '../../lib/apiClient';
 import { setAppPresence } from '../../lib/me';
-import { STREAMING_SERVICES, streamingServiceLabel, type StreamingService } from '../../lib/streamingServices';
+import {
+  STREAMING_SERVICES,
+  streamingServiceLabel,
+  type StreamingService,
+} from '../../lib/streamingServices';
 import { theme } from '../../lib/theme';
 
 /** PLAN.md Section 10 onboarding step 4 ("Streaming services — multi-select grid, persists to
@@ -52,7 +58,7 @@ export default function OnboardingStreamingScreen() {
       style={styles.screen}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + 48, paddingBottom: 48 },
+        { paddingTop: insets.top + theme.spacing.huge, paddingBottom: theme.spacing.huge },
       ]}
     >
       <Text style={styles.title}>Which streaming services do you have?</Text>
@@ -67,7 +73,11 @@ export default function OnboardingStreamingScreen() {
             <Pressable
               key={service}
               onPress={() => toggle(service)}
-              style={[styles.chip, isSelected && styles.chipSelected]}
+              style={({ pressed }) => [
+                styles.chip,
+                isSelected && styles.chipSelected,
+                pressed && (isSelected ? styles.chipSelectedPressed : styles.chipPressed),
+              ]}
             >
               <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
                 {streamingServiceLabel(service)}
@@ -79,19 +89,23 @@ export default function OnboardingStreamingScreen() {
 
       {errorMessage ? <ErrorState message={errorMessage} /> : null}
 
-      <Pressable disabled={isSaving} onPress={onContinue} style={styles.primaryButton}>
-        {isSaving ? (
-          <ActivityIndicator color={theme.colors.onAccent} />
-        ) : (
-          <Text style={styles.primaryButtonText}>Continue</Text>
-        )}
-      </Pressable>
-      <Pressable
+      <PrimaryButton
         disabled={isSaving}
+        label="Continue"
+        loading={isSaving}
+        onPress={onContinue}
+        style={styles.continue}
+      />
+      <TextButton
+        disabled={isSaving}
+        hitArea="padding"
+        label="Skip for now"
         onPress={() => router.replace('/(app)/notifications-permission?onboarding=1')}
-      >
-        <Text style={styles.skipText}>Skip for now</Text>
-      </Pressable>
+        size="small"
+        style={styles.skip}
+        tone="muted"
+        underline
+      />
     </ScrollView>
   );
 }
@@ -101,15 +115,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radii.pill,
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: 10,
+    paddingVertical: theme.spacing.md,
+  },
+  chipPressed: {
+    backgroundColor: theme.colors.surfaceRaised,
   },
   chipSelected: {
     backgroundColor: theme.colors.accent,
   },
+  chipSelectedPressed: {
+    backgroundColor: theme.colors.accentPressed,
+  },
   chipText: {
     color: theme.colors.textTertiary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: theme.type.smallStrong.size,
+    fontWeight: theme.type.smallStrong.weight,
   },
   chipTextSelected: {
     color: theme.colors.onAccent,
@@ -118,38 +138,26 @@ const styles = StyleSheet.create({
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.xl,
   },
+  continue: {
+    marginTop: theme.spacing.md,
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-  },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: 10,
-    marginTop: theme.spacing.md,
-    paddingVertical: 14,
-  },
-  primaryButtonText: {
-    color: theme.colors.onAccent,
-    fontSize: 16,
-    fontWeight: '700',
+    gap: theme.spacing.md,
   },
   screen: {
     backgroundColor: theme.colors.background,
     flex: 1,
   },
-  skipText: {
-    color: theme.colors.textSecondary,
-    fontSize: 14,
+  skip: {
+    alignItems: 'center',
     marginTop: theme.spacing.xs,
-    textAlign: 'center',
-    textDecorationLine: 'underline',
   },
   subtitle: {
     color: theme.colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: theme.type.small.size,
+    lineHeight: theme.type.small.lineHeight,
   },
   title: {
     color: theme.colors.textPrimary,

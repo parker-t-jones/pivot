@@ -1,15 +1,11 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { ErrorState } from './ErrorState';
+import { ListRow } from './ListRow';
+import { PrimaryButton } from './PrimaryButton';
+import { TextButton } from './TextButton';
+import { TextField } from './TextField';
 import { searchPlayers, type PlayerSearchResult } from '../lib/players';
 import { theme } from '../lib/theme';
 
@@ -64,27 +60,19 @@ export function PlayerPicker({
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
 
-      <TextInput
-        onChangeText={onSearch}
-        placeholder="Search players"
-        placeholderTextColor={theme.colors.textSecondary}
-        style={styles.input}
-        value={query}
-      />
+      <TextField onChangeText={onSearch} placeholder="Search players" value={query} />
       {isSearching ? <ActivityIndicator color={theme.colors.textPrimary} /> : null}
 
       <FlatList
         data={results.filter((p) => !rosteredIds.has(p.player_id))}
         keyExtractor={(item) => item.player_id}
         renderItem={({ item }) => (
-          <Pressable onPress={() => onAdd(item)} style={styles.leagueOption}>
-            <Text style={styles.leagueOptionTitle}>
-              {item.first_name} {item.last_name}
-            </Text>
-            <Text style={styles.leagueOptionSubtitle}>
-              {item.position} · {item.team?.abbreviation ?? 'FA'}
-            </Text>
-          </Pressable>
+          <ListRow
+            onPress={() => onAdd(item)}
+            style={styles.resultRow}
+            subtitle={`${item.position} · ${item.team?.abbreviation ?? 'FA'}`}
+            title={`${item.first_name} ${item.last_name}`}
+          />
         )}
         style={styles.resultsList}
       />
@@ -95,29 +83,28 @@ export function PlayerPicker({
         keyExtractor={(item) => item.player_id}
         renderItem={({ item }) => (
           <View style={styles.rosterRow}>
-            <Text style={styles.leagueOptionTitle}>
+            <Text style={styles.rosterName}>
               {item.first_name} {item.last_name} ({item.position})
             </Text>
-            <Pressable onPress={() => onRemove(item.player_id)}>
-              <Text style={styles.removeText}>Remove</Text>
-            </Pressable>
+            <TextButton
+              hitArea="slop"
+              label="Remove"
+              onPress={() => onRemove(item.player_id)}
+              size="smallStrong"
+              tone="danger"
+            />
           </View>
         )}
       />
 
       {errorMessage ? <ErrorState message={errorMessage} /> : null}
 
-      <Pressable
-        disabled={isSaving || roster.length === 0}
+      <PrimaryButton
+        disabled={roster.length === 0}
+        label={saveLabel}
+        loading={isSaving}
         onPress={onSave}
-        style={[styles.primaryButton, roster.length === 0 && styles.primaryButtonDisabled]}
-      >
-        {isSaving ? (
-          <ActivityIndicator color={theme.colors.onAccent} />
-        ) : (
-          <Text style={styles.primaryButtonText}>{saveLabel}</Text>
-        )}
-      </Pressable>
+      />
     </View>
   );
 }
@@ -126,63 +113,26 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     gap: theme.spacing.md,
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.lg2,
   },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 10,
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    paddingHorizontal: 14,
-    paddingVertical: theme.spacing.md,
-  },
-  leagueOption: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  resultRow: {
     marginBottom: theme.spacing.sm,
-    paddingHorizontal: 14,
-    paddingVertical: theme.spacing.md,
-  },
-  leagueOptionSubtitle: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.type.caption.size,
-  },
-  leagueOptionTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.body.size,
-    fontWeight: '600',
-  },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.accent,
-    borderRadius: 10,
-    paddingVertical: 14,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.5,
-  },
-  primaryButtonText: {
-    color: theme.colors.onAccent,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  removeText: {
-    color: theme.colors.danger,
-    fontSize: theme.type.caption.size,
-    fontWeight: '600',
   },
   resultsList: {
     maxHeight: 180,
   },
   rosterHeading: {
     color: theme.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
     marginTop: theme.spacing.sm,
     textTransform: 'uppercase',
+  },
+  rosterName: {
+    color: theme.colors.textPrimary,
+    flex: 1,
+    fontSize: theme.type.body.size,
+    fontWeight: theme.type.button.weight,
   },
   rosterRow: {
     alignItems: 'center',
@@ -192,7 +142,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     color: theme.colors.textSecondary,
-    fontSize: 14,
+    fontSize: theme.type.small.size,
     marginBottom: theme.spacing.sm,
   },
   title: {

@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
   body: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.body.size,
-    lineHeight: 21,
+    lineHeight: theme.type.body.lineHeight,
   },
   card: {
     backgroundColor: theme.colors.surface,
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: theme.colors.accent,
     fontSize: theme.type.caption.size,
-    fontWeight: '600',
+    fontWeight: theme.type.smallStrong.weight,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },

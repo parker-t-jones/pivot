@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { PrimaryButton } from './PrimaryButton';
 import { theme } from '../lib/theme';
 
 interface ErrorStateProps {
@@ -15,35 +16,20 @@ export function ErrorState({ message, onRetry, retryLabel = 'Retry' }: ErrorStat
   return (
     <View style={styles.container}>
       <Text style={styles.message}>{message}</Text>
-      {onRetry ? (
-        <Pressable accessibilityRole="button" onPress={onRetry} style={styles.button}>
-          <Text style={styles.buttonText}>{retryLabel}</Text>
-        </Pressable>
-      ) : null}
+      {onRetry ? <PrimaryButton label={retryLabel} onPress={onRetry} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  button: {
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.sm,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  buttonText: {
-    color: theme.colors.onAccent,
-    fontSize: theme.type.body.size,
-    fontWeight: '600',
-  },
   container: {
     alignItems: 'center',
     gap: theme.spacing.md,
-    paddingVertical: 40,
+    paddingVertical: theme.spacing.xxxl,
   },
   message: {
     color: theme.colors.danger,
-    fontSize: 14,
+    fontSize: theme.type.small.size,
     textAlign: 'center',
   },
 });
