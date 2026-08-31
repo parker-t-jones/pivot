@@ -19,7 +19,10 @@ import { LoadingState } from '../../components/LoadingState';
 import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
 import { useSession } from '../../contexts/SessionContext';
 import { ApiRequestError } from '../../lib/apiClient';
-import { scheduleTestFlagNotificationAsync } from '../../lib/devNotifications';
+import {
+  NotificationsDisabledError,
+  scheduleTestFlagNotificationAsync,
+} from '../../lib/devNotifications';
 import {
   disconnectLeague,
   fetchAllLineups,
@@ -40,6 +43,17 @@ const NOTIFICATION_MODES: { value: MeResponse['preferences']['notificationMode']
   { value: 'high_leverage_only', label: 'High-leverage only' },
   { value: 'off', label: 'Off' },
 ];
+
+const SUPPORT_EMAIL = 'support@pivot-sports.app';
+const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}`;
+const PRIVACY_POLICY_URL = 'https://pivot-sports.app/privacy';
+const TERMS_OF_SERVICE_URL = 'https://pivot-sports.app/terms';
+
+function openExternalUrl(url: string, failedMessage: string): void {
+  void Linking.openURL(url).catch(() => {
+    Alert.alert('Could not open', failedMessage);
+  });
+}
 
 /**
  * PLAN.md Section 10 Settings screen — Sprint 9 Phase 2. Reads/writes `GET /me`,
@@ -582,36 +596,76 @@ function StarPlayersSection({
   );
 }
 
+function promptEnableNotifications(): void {
+  Alert.alert(
+    'Notifications are off',
+    'Turn on notifications for Pivot in the Settings app, then try again.',
+    [
+      { text: 'Not now', style: 'cancel' },
+      {
+        text: 'Open Settings',
+        onPress: () =>
+          void Linking.openSettings().catch(() => {
+            Alert.alert(
+              'Could not open Settings',
+              'Open the Settings app, tap Pivot, and enable notifications.',
+            );
+          }),
+      },
+    ],
+  );
+}
+
 function AboutSection() {
   const version = Constants.expoConfig?.version ?? '0.0.0';
   const [isSendingTest, setIsSendingTest] = useState(false);
 
+  const onSendTestNotification = async () => {
+    setIsSendingTest(true);
+    try {
+      await scheduleTestFlagNotificationAsync();
+    } catch (error) {
+      if (error instanceof NotificationsDisabledError) {
+        promptEnableNotifications();
+      } else {
+        Alert.alert('Could not send test notification', errorMessage(error));
+      }
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
   return (
     <SectionCard title="About">
       <Text style={styles.rowSubtext}>Pivot v{version}</Text>
-      <Pressable onPress={() => void Linking.openURL('mailto:support@fantasyfocus.app')}>
+      <Pressable
+        accessibilityRole="link"
+        onPress={() =>
+          openExternalUrl(SUPPORT_MAILTO, `Email ${SUPPORT_EMAIL} from your mail app.`)
+        }
+      >
         <Text style={styles.linkText}>Contact support</Text>
       </Pressable>
-      <Pressable onPress={() => void Linking.openURL('https://fantasyfocus.app/terms')}>
+      <Pressable
+        accessibilityRole="link"
+        onPress={() =>
+          openExternalUrl(TERMS_OF_SERVICE_URL, 'Visit pivot-sports.app/terms in your browser.')
+        }
+      >
         <Text style={styles.linkText}>Terms of service</Text>
       </Pressable>
-      <Pressable onPress={() => void Linking.openURL('https://fantasyfocus.app/privacy')}>
+      <Pressable
+        accessibilityRole="link"
+        onPress={() =>
+          openExternalUrl(PRIVACY_POLICY_URL, 'Visit pivot-sports.app/privacy in your browser.')
+        }
+      >
         <Text style={styles.linkText}>Privacy policy</Text>
       </Pressable>
 
       {/* Moved here from Home (Sprint 9 Phase 2) — same dev/QA utility, just relocated now that
        *  Home no longer carries any account/debug chrome. */}
-      <Pressable
-        disabled={isSendingTest}
-        onPress={async () => {
-          setIsSendingTest(true);
-          try {
-            await scheduleTestFlagNotificationAsync();
-          } finally {
-            setIsSendingTest(false);
-          }
-        }}
-      >
+      <Pressable disabled={isSendingTest} onPress={() => void onSendTestNotification()}>
         <Text style={styles.linkText}>
           {isSendingTest ? 'Sending in 2s…' : 'Send test notification'}
         </Text>

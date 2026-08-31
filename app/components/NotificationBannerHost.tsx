@@ -1,5 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
+import { FullWindowOverlay } from 'react-native-screens';
 
 import { FlagEventBanner, type FlagEventBannerData } from './FlagEventBanner';
 import { useSwitching } from '../contexts/SwitchingContext';
@@ -30,9 +33,13 @@ let nextBannerKey = 0;
  * Mounted once inside the `(app)` group (`(app)/_layout.tsx`), as an overlay sibling to the group's
  * `<Stack>`. Owns the foreground half of the notification pipeline: installs the handler above
  * (import-time side effect), listens for notifications received while the app is running, and
- * renders `FlagEventBanner` for the most recent one. The backgrounded half — a tap on the
- * notification itself — is `NotificationResponseHandler`'s job, mounted alongside this component;
- * the two never fire for the same interaction (see that component's docstring).
+ * renders `FlagEventBanner` for the most recent one. Presented in `react-native-screens`'
+ * `FullWindowOverlay` (a separate iOS window) so the banner sits above native stack modals —
+ * Settings is `presentation: 'modal'`. A sibling View draws *under* that sheet; an RN `Modal` cannot
+ * present on top of an already-presented native modal (beep plays, banner mounts, nothing visible).
+ * The backgrounded half — a tap on the notification itself — is `NotificationResponseHandler`'s
+ * job, mounted alongside this component; the two never fire for the same interaction (see that
+ * component's docstring).
  *
  * Deliberately only tracks one banner at a time (last-in-wins) — Section 10 doesn't describe a
  * queue or stacking behavior, and the dispatcher's per-user rate limiting (Sprint 5) already keeps
@@ -98,5 +105,23 @@ export function NotificationBannerHost() {
 
   if (!activeBanner) return null;
 
-  return <FlagEventBanner banner={activeBanner} onAction={onAction} />;
+  return (
+    <FullWindowOverlay>
+      <View collapsable={false} pointerEvents="box-none" style={styles.overlayRoot}>
+        <SafeAreaProvider initialMetrics={initialWindowMetrics} style={styles.overlayRoot}>
+          <FlagEventBanner banner={activeBanner} onAction={onAction} />
+        </SafeAreaProvider>
+      </View>
+    </FullWindowOverlay>
+  );
 }
+
+const styles = StyleSheet.create({
+  overlayRoot: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+});

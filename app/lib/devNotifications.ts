@@ -49,6 +49,13 @@ function buildTestPayload(): FlagEventPayload {
   };
 }
 
+export class NotificationsDisabledError extends Error {
+  constructor() {
+    super('Notifications are off. Enable them for Pivot in the Settings app to receive alerts.');
+    this.name = 'NotificationsDisabledError';
+  }
+}
+
 /**
  * PLAN.md Section 10 Home State 3's "Subtle 'Test notifications' link" — and Sprint 6 Phase 6's
  * "simulator-friendly testing" ask. Expo Go dropped push support on SDK 53+ (Sprint 6 Phase 5
@@ -59,10 +66,16 @@ function buildTestPayload(): FlagEventPayload {
  * path — `scheduleNotificationAsync` with an immediate/zero-second trigger risks the OS coalescing it
  * into the call stack that scheduled it rather than a genuine async delivery.
  *
- * Uses whatever permission state already exists — same behavior a real push would have if permission
- * were denied (nothing is delivered, silently, exactly like a real push into a denied device).
+ * Checks the current OS permission first. Denied (or never-prompted) used to no-op silently, which
+ * looked like a broken button from Settings. Callers surface `NotificationsDisabledError` so the
+ * user can jump to the system Settings app.
  */
 export async function scheduleTestFlagNotificationAsync(): Promise<void> {
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') {
+    throw new NotificationsDisabledError();
+  }
+
   await Notifications.scheduleNotificationAsync({
     content: {
       title: TEST_TITLE,
