@@ -74,12 +74,12 @@ export default function OnboardingStreamingScreen() {
               key={service}
               onPress={() => toggle(service)}
               style={({ pressed }) => [
-                styles.chip,
-                isSelected && styles.chipSelected,
-                pressed && (isSelected ? styles.chipSelectedPressed : styles.chipPressed),
+                styles.block,
+                isSelected && styles.blockSelected,
+                pressed && styles.blockPressed,
               ]}
             >
-              <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+              <Text style={[styles.blockText, isSelected && styles.blockTextSelected]}>
                 {streamingServiceLabel(service)}
               </Text>
             </Pressable>
@@ -111,28 +111,32 @@ export default function OnboardingStreamingScreen() {
 }
 
 const styles = StyleSheet.create({
-  chip: {
+  /** UI-SPEC.md §7: larger block variant replacing the old pill chips. Unselected = `surface`
+   *  fill + muted text (standing in for the brief's "muted icon" — this repo has no icon system,
+   *  see AUDIT-UI-POLISH.md §4.3); selected = 2px `accentBorder` wrap + `textPrimary` text. */
+  block: {
+    alignItems: 'center',
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.pill,
+    borderColor: 'transparent',
+    borderRadius: theme.radii.lg,
+    borderWidth: theme.effects.panelBorderWidth * 2,
+    minWidth: '47%',
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.xl,
   },
-  chipPressed: {
+  blockPressed: {
     backgroundColor: theme.colors.surfaceRaised,
   },
-  chipSelected: {
-    backgroundColor: theme.colors.accent,
+  blockSelected: {
+    borderColor: theme.colors.accentBorder,
   },
-  chipSelectedPressed: {
-    backgroundColor: theme.colors.accentPressed,
-  },
-  chipText: {
+  blockText: {
     color: theme.colors.textTertiary,
     fontSize: theme.type.smallStrong.size,
     fontWeight: theme.type.smallStrong.weight,
   },
-  chipTextSelected: {
-    color: theme.colors.onAccent,
+  blockTextSelected: {
+    color: theme.colors.textPrimary,
   },
   content: {
     gap: theme.spacing.lg,
