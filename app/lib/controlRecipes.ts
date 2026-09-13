@@ -19,7 +19,6 @@ export const TEXT_FIELD_RECIPE = {
   backgroundColor: theme.colors.surface,
   borderRadius: theme.radii.control,
   color: theme.colors.textPrimary,
-  fontFamily: theme.type.button.fontFamily,
   fontSize: theme.type.button.size,
   paddingHorizontal: theme.spacing.lg,
   paddingVertical: theme.spacing.md2,

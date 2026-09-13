@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   blockText: {
     color: theme.colors.textTertiary,
     fontSize: theme.type.smallStrong.size,
-    fontFamily: theme.type.smallStrong.fontFamily,
+    fontWeight: theme.type.smallStrong.weight,
   },
   blockTextSelected: {
     color: theme.colors.textPrimary,
@@ -166,6 +166,6 @@ const styles = StyleSheet.create({
   title: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.title.size,
-    fontFamily: theme.type.title.fontFamily,
+    fontWeight: theme.type.title.weight,
   },
 });

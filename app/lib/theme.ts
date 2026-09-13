@@ -60,26 +60,19 @@ export const theme = {
       elevation: 8,
     },
   },
-  /**
-   * Manrope (UI-SPEC.md §0/§2.4 "geometric sans") — loaded via `expo-font` in `app/app/_layout.tsx`
-   * before any screen renders. Each entry's `fontFamily` is the weight-specific static font Manrope
-   * ships (`@expo-google-fonts/manrope`); `weight` is kept alongside for callers that still need the
-   * raw numeric value, but style declarations should set `fontFamily`, not `fontWeight` — mixing the
-   * two with a weight-specific custom family is what causes native font-weight synthesis bugs.
-   */
   type: {
-    title: { size: 26, weight: '600', lineHeight: 32, fontFamily: 'Manrope_600SemiBold' },
-    heading: { size: 20, weight: '600', lineHeight: 26, fontFamily: 'Manrope_600SemiBold' },
-    body: { size: 15, weight: '400', lineHeight: 21, fontFamily: 'Manrope_400Regular' },
-    bodyStrong: { size: 15, weight: '500', lineHeight: 21, fontFamily: 'Manrope_500Medium' },
-    caption: { size: 13, weight: '400', lineHeight: 18, fontFamily: 'Manrope_400Regular' },
-    button: { size: 16, weight: '600', lineHeight: 22, fontFamily: 'Manrope_600SemiBold' },
-    small: { size: 14, weight: '400', lineHeight: 20, fontFamily: 'Manrope_400Regular' },
-    smallStrong: { size: 14, weight: '600', lineHeight: 20, fontFamily: 'Manrope_600SemiBold' },
-    eyebrow: { size: 12, weight: '700', letterSpacing: 0.6, fontFamily: 'Manrope_700Bold' },
-    /** Tabular-ready clock / field-position labels. */
-    ticker: { size: 13, weight: '500', letterSpacing: 0, fontFamily: 'Manrope_500Medium' },
-    score: { size: 22, weight: '700', lineHeight: 28, fontFamily: 'Manrope_700Bold' },
+    title: { size: 26, weight: '600', lineHeight: 32 },
+    heading: { size: 20, weight: '600', lineHeight: 26 },
+    body: { size: 15, weight: '400', lineHeight: 21 },
+    bodyStrong: { size: 15, weight: '500', lineHeight: 21 },
+    caption: { size: 13, weight: '400', lineHeight: 18 },
+    button: { size: 16, weight: '600', lineHeight: 22 },
+    small: { size: 14, weight: '400', lineHeight: 20 },
+    smallStrong: { size: 14, weight: '600', lineHeight: 20 },
+    eyebrow: { size: 12, weight: '700', letterSpacing: 0.6 },
+    /** Tabular-ready clock / field-position labels — system font until a mono asset ships. */
+    ticker: { size: 13, weight: '500', letterSpacing: 0 },
+    score: { size: 22, weight: '700', lineHeight: 28 },
   },
 } as const;
 

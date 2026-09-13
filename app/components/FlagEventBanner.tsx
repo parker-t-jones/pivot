@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: theme.colors.textPrimary,
-    fontFamily: 'Manrope_700Bold',
     fontSize: theme.type.button.size,
+    fontWeight: '700',
   },
 });

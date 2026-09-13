@@ -63,6 +63,6 @@ const styles = StyleSheet.create({
   title: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.title.size,
-    fontFamily: theme.type.title.fontFamily,
+    fontWeight: theme.type.title.weight,
   },
 });

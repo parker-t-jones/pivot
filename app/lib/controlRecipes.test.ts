@@ -22,7 +22,6 @@ describe('controlRecipes', () => {
     expect(TEXT_FIELD_RECIPE.paddingHorizontal).toBe(theme.spacing.lg);
     expect(TEXT_FIELD_RECIPE.paddingVertical).toBe(theme.spacing.md2);
     expect(TEXT_FIELD_RECIPE.fontSize).toBe(theme.type.button.size);
-    expect(TEXT_FIELD_RECIPE.fontFamily).toBe(theme.type.button.fontFamily);
   });
 
   it('merges list rows onto control radius and md/md2 padding', () => {

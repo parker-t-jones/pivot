@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
   body: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.body.size,
-    fontFamily: theme.type.body.fontFamily,
+    fontWeight: theme.type.body.weight,
     lineHeight: theme.type.body.lineHeight,
   },
   card: {
@@ -67,18 +67,18 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: theme.colors.accent,
     fontSize: theme.type.caption.size,
-    fontFamily: theme.type.smallStrong.fontFamily,
+    fontWeight: theme.type.smallStrong.weight,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   heading: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.heading.size,
-    fontFamily: theme.type.heading.fontFamily,
+    fontWeight: theme.type.heading.weight,
   },
   leagueLine: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.caption.size,
-    fontFamily: theme.type.caption.fontFamily,
+    fontWeight: theme.type.caption.weight,
   },
 });

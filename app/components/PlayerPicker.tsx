@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   rosterHeading: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.eyebrow.size,
-    fontFamily: theme.type.eyebrow.fontFamily,
+    fontWeight: theme.type.eyebrow.weight,
     marginTop: theme.spacing.sm,
     textTransform: 'uppercase',
   },
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     flex: 1,
     fontSize: theme.type.body.size,
-    fontFamily: theme.type.button.fontFamily,
+    fontWeight: theme.type.button.weight,
   },
   rosterRow: {
     alignItems: 'center',
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   title: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.title.size,
-    fontFamily: theme.type.title.fontFamily,
+    fontWeight: theme.type.title.weight,
     marginTop: theme.spacing.md,
   },
 });

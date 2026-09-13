@@ -54,7 +54,7 @@ export function TextButton({
             {
               color: toneColor(tone),
               fontSize: type.size,
-              fontFamily: type.fontFamily,
+              fontWeight: type.weight,
             },
             underline && styles.underline,
             pressed && !disabled && tone === 'accent' && styles.accentPressed,

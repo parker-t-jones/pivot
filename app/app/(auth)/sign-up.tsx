@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   },
   link: {
     color: theme.colors.accent,
-    fontFamily: theme.type.button.fontFamily,
+    fontWeight: theme.type.button.weight,
   },
   subtitle: {
     color: theme.colors.textSecondary,
@@ -144,6 +144,6 @@ const styles = StyleSheet.create({
   title: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.title.size,
-    fontFamily: theme.type.title.fontFamily,
+    fontWeight: theme.type.title.weight,
   },
 });

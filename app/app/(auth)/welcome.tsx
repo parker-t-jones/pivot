@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: theme.colors.accent,
     fontSize: theme.type.small.size,
-    fontFamily: theme.type.eyebrow.fontFamily,
+    fontWeight: theme.type.eyebrow.weight,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
@@ -72,11 +72,11 @@ const styles = StyleSheet.create({
   },
   link: {
     color: theme.colors.accent,
-    fontFamily: theme.type.smallStrong.fontFamily,
+    fontWeight: theme.type.smallStrong.weight,
   },
   title: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.title.size,
-    fontFamily: theme.type.title.fontFamily,
+    fontWeight: theme.type.title.weight,
   },
 });

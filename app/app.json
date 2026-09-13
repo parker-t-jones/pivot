@@ -14,8 +14,7 @@
     },
     "plugins": [
       "expo-router",
-      "expo-notifications",
-      "expo-font"
+      "expo-notifications"
     ],
     "extra": {
       "router": {},

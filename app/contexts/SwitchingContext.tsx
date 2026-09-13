@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
   errorTitle: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.heading.size,
-    fontFamily: theme.type.heading.fontFamily,
+    fontWeight: theme.type.heading.weight,
     marginBottom: theme.spacing.sm,
   },
   overlay: {
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
   switchingText: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.heading.size,
-    fontFamily: theme.type.heading.fontFamily,
+    fontWeight: theme.type.heading.weight,
     textAlign: 'center',
   },
 });
