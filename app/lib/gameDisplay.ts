@@ -82,6 +82,49 @@ export function quarterLabel(quarter: number): string {
   return quarter >= 5 ? 'OT' : `Q${quarter}`;
 }
 
+const DOWN_ORDINALS: Record<number, string> = {
+  1: '1st',
+  2: '2nd',
+  3: '3rd',
+  4: '4th',
+};
+
+/** Broadcast-style down-and-distance, e.g. `"1st & 10"`. Null when either input is missing. */
+export function downDistanceLabel(down: number | null, distance: number | null): string | null {
+  if (down === null || distance === null) return null;
+  const ordinal = DOWN_ORDINALS[down];
+  if (!ordinal) return null;
+  return `${ordinal} & ${distance}`;
+}
+
+/**
+ * Broadcast-style field position, e.g. `"IND 32"`.
+ * `yardsToEndzone > 50` → own territory (`100 - yards`, possessing abbr);
+ * otherwise opponent territory (`yards`, opponent abbr). Null when yardline or possession is missing.
+ */
+export function fieldPositionLabel(
+  yardsToEndzone: number | null,
+  possessionAbbr: string | null,
+  opponentAbbr: string | null,
+): string | null {
+  if (yardsToEndzone === null || possessionAbbr === null) return null;
+  if (yardsToEndzone > 50) {
+    return `${possessionAbbr} ${100 - yardsToEndzone}`;
+  }
+  if (opponentAbbr === null) return null;
+  return `${opponentAbbr} ${yardsToEndzone}`;
+}
+
+/** Marker position as % from the possessing team's own goal (0) toward opponent end zone (100). */
+export function fieldGaugeMarkerPercent(yardsToEndzone: number): number {
+  return Math.max(0, Math.min(100, 100 - yardsToEndzone));
+}
+
+/** Red-zone highlight when the ball is inside the opponent's 20. */
+export function fieldGaugeShowsRedZone(yardsToEndzone: number): boolean {
+  return yardsToEndzone <= 20;
+}
+
 /** The `preferred` broadcast (the switch target), or the first available, or null. */
 export function pickPreferredBroadcast(broadcasts: GameBroadcast[]): GameBroadcast | null {
   return broadcasts.find((b) => b.preferred) ?? broadcasts[0] ?? null;

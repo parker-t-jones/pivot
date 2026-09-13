@@ -11,6 +11,8 @@ function row(overrides: Partial<NflverseRow> = {}): NflverseRow {
     posteam: 'KC',
     defteam: 'LV',
     yardline_100: '65',
+    down: '1',
+    ydstogo: '10',
     quarter_seconds_remaining: '870',
     qtr: '1',
     play_type: 'run',
@@ -41,6 +43,8 @@ describe('mapNflverseRow', () => {
       quarter: 1,
       secondsRemainingInQuarter: 870,
       yardsToOpponentEndzone: 65,
+      down: 1,
+      distance: 10,
       isFinalPlay: false,
     });
   });
@@ -87,12 +91,20 @@ describe('mapNflverseRow', () => {
 
   it('treats an empty posteam / yardline (e.g. kickoff) as null', () => {
     const play = mapNflverseRow(
-      row({ posteam: '', yardline_100: '', play_type: 'kickoff' }),
+      row({ posteam: '', yardline_100: '', down: '1', ydstogo: '10', play_type: 'kickoff' }),
       false,
     );
     expect(play.possessionTeamId).toBeNull();
     expect(play.yardsToOpponentEndzone).toBeNull();
+    expect(play.down).toBeNull();
+    expect(play.distance).toBeNull();
     expect(play.playType).toBe('kickoff');
+  });
+
+  it('maps down and ydstogo on a scrimmage play', () => {
+    const play = mapNflverseRow(row({ down: '3', ydstogo: '7' }), false);
+    expect(play.down).toBe(3);
+    expect(play.distance).toBe(7);
   });
 
   it('maps a two-point attempt to two_point_attempt regardless of underlying pass/run', () => {

@@ -38,6 +38,16 @@ export interface GameSummary {
   score: { home: number; away: number };
   quarter: number;
   time_remaining_sec: number;
+  /** Possessing team abbreviation, or null when nobody has the ball. */
+  possession_team: string | null;
+  /** Yards from the possessing team to the opponent end zone; null when not applicable. */
+  yards_to_endzone: number | null;
+  /** Current down (1–4), or null when not a scrimmage situation. */
+  down: number | null;
+  /** Yards to go for a first down, or null when not a scrimmage situation. */
+  distance: number | null;
+  /** Whether the ball is inside the opponent's 20. */
+  in_red_zone: boolean;
 }
 
 export interface FlaggedPlayer {

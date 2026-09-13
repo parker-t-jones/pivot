@@ -15,12 +15,24 @@ function toStringOrEmpty(value: unknown): string {
   return value === null || value === undefined ? '' : String(value);
 }
 
+/** Empty string ↔ null, matching `possession_team_id`. */
+function toNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = toNumber(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function nullableNumberToString(value: number | null): string {
+  return value === null ? '' : String(value);
+}
+
 // --- game_state:{game_id} hash (Section 7) ---
 //
 // Section 7 lists possession_team_id, unit_on_field, score_home, score_away, quarter,
-// time_remaining_sec, in_red_zone, updated_at. A faithful `GameState` round-trip (Section 8 type)
-// also needs game_id, home_team_id, away_team_id, status — stored here as a necessary superset of
-// Section 7's illustrative field list (there is no separate writer; this provider owns the key).
+// time_remaining_sec, yards_to_opponent_endzone, down, distance, in_red_zone, updated_at.
+// A faithful `GameState` round-trip (Section 8 type) also needs game_id, home_team_id,
+// away_team_id, status — stored here as a necessary superset of Section 7's illustrative field
+// list (there is no separate writer; this provider owns the key).
 
 export function serializeGameState(state: GameState): Record<string, string> {
   return {
@@ -33,6 +45,9 @@ export function serializeGameState(state: GameState): Record<string, string> {
     score_away: String(state.scoreAway),
     quarter: String(state.quarter),
     time_remaining_sec: String(state.timeRemainingSec),
+    yards_to_opponent_endzone: nullableNumberToString(state.yardsToOpponentEndzone),
+    down: nullableNumberToString(state.down),
+    distance: nullableNumberToString(state.distance),
     in_red_zone: state.inRedZone ? '1' : '0',
     status: state.status,
     updated_at: String(state.updatedAt),
@@ -51,6 +66,9 @@ export function deserializeGameState(raw: Record<string, unknown>): GameState {
     scoreAway: toNumber(raw['score_away']),
     quarter: toNumber(raw['quarter']),
     timeRemainingSec: toNumber(raw['time_remaining_sec']),
+    yardsToOpponentEndzone: toNullableNumber(raw['yards_to_opponent_endzone']),
+    down: toNullableNumber(raw['down']),
+    distance: toNullableNumber(raw['distance']),
     inRedZone: toNumber(raw['in_red_zone']) === 1,
     status: toStringOrEmpty(raw['status']) as GameState['status'],
     updatedAt: toNumber(raw['updated_at']),

@@ -229,6 +229,10 @@ describe('filterLiveStakeGames', () => {
       quarter: 1,
       time_remaining_sec: 800,
       possession_team: 'KC',
+      yards_to_endzone: null,
+      down: null,
+      distance: null,
+      in_red_zone: false,
     },
     {
       game_id: 'g2',
@@ -246,6 +250,10 @@ describe('filterLiveStakeGames', () => {
       quarter: 2,
       time_remaining_sec: 400,
       possession_team: null,
+      yards_to_endzone: null,
+      down: null,
+      distance: null,
+      in_red_zone: false,
     },
   ];
 

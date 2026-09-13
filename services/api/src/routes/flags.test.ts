@@ -154,6 +154,9 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
     scoreAway: 7,
     quarter: 2,
     timeRemainingSec: 500,
+    yardsToOpponentEndzone: null,
+    down: null,
+    distance: null,
     inRedZone: false,
     status: 'in_progress',
     updatedAt: 0,
@@ -370,6 +373,11 @@ describe('GET /flags/current', () => {
       score: { home: 14, away: 7 },
       quarter: 2,
       time_remaining_sec: 500,
+      possession_team: 'KC',
+      yards_to_endzone: null,
+      down: null,
+      distance: null,
+      in_red_zone: false,
     });
     // No viewing session yet (Phase 6) -> currentPrimaryPriority is 0 -> any flagged game recommends
     // switch_primary (autoSwitch is off by default).

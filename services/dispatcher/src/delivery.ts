@@ -1,5 +1,10 @@
 import { defaultClock, type Clock } from '@pivot/engine';
-import type { FlagEvent, FlagState, GameState } from '@pivot/shared';
+import {
+  resolvePossessionAbbreviation,
+  type FlagEvent,
+  type FlagState,
+  type GameState,
+} from '@pivot/shared';
 import { resolveLikelyBroadcastSource, type BroadcastCatalog } from './broadcastLag.js';
 import { preferredBroadcast, resolveBroadcasts } from './broadcastResolver.js';
 import type {
@@ -55,7 +60,7 @@ export interface FlagEventEnvelope {
     event_type: FlagEvent['type'];
     /** Sprint 9 Phase 1 addition — `possession_team` is an envelope-level enrichment layered on top
      *  of the frozen Section 8 `FlagState` shape (spread onto it below), not a change to `FlagState`
-     *  itself, so `services/engine` stays untouched. See `resolvePossessionTeamAbbreviation` and the
+     *  itself, so `services/engine` stays untouched. See `resolvePossessionAbbreviation` and the
      *  `old_state` population note in `deliverFlagEvent` for why `old_state.possession_team` is
      *  unconditionally `null` rather than best-effort. */
     old_state: (FlagState & { possession_team: string | null }) | null;
@@ -99,19 +104,18 @@ function resolveNotificationTeamNames(
 }
 
 /**
- * Sprint 9 Phase 1 — resolves the Section 9 `new_state.possession_team` abbreviation: whichever team
- * currently has the ball, by abbreviation, from the SAME `GameState` + `GameSummaryInfo` already
- * fetched for `game_summary`/`resolveNotificationTeamNames`. `null` when there's no live game state
- * or no possession is set (special teams / between plays / kickoff — matches `computeFlagState`'s
- * own gate, Section 8).
+ * Sprint 9 Phase 1 — resolves the Section 9 `new_state.possession_team` abbreviation via the shared
+ * `resolvePossessionAbbreviation` helper (also used by `buildGameSummary` and `GET /games/live`).
  */
 function resolvePossessionTeamAbbreviation(
   gameState: GameState | null,
   info: GameSummaryInfo | null,
 ): string | null {
-  if (!gameState?.possessionTeamId) return null;
-  const homePossessing = gameState.possessionTeamId === gameState.homeTeamId;
-  return (homePossessing ? info?.homeTeamAbbreviation : info?.awayTeamAbbreviation) ?? null;
+  return resolvePossessionAbbreviation(
+    gameState,
+    info?.homeTeamAbbreviation,
+    info?.awayTeamAbbreviation,
+  );
 }
 
 /**

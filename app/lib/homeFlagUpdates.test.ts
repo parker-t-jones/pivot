@@ -79,6 +79,11 @@ function flagPayload(
       score: { home: 14, away: 7 },
       quarter: 2,
       time_remaining_sec: 400,
+      possession_team: null,
+      yards_to_endzone: null,
+      down: null,
+      distance: null,
+      in_red_zone: false,
       ...game_summary,
     },
     flagged_players: [
@@ -108,6 +113,11 @@ function currentFlag(gameId: string, priority: number): CurrentFlag {
       score: { home: 14, away: 7 },
       quarter: 2,
       time_remaining_sec: 400,
+      possession_team: null,
+      yards_to_endzone: null,
+      down: null,
+      distance: null,
+      in_red_zone: false,
     },
     recommended_action: 'switch_primary',
   };

@@ -17,6 +17,8 @@ export const theme = {
     accentMuted: 'rgba(255, 176, 32, 0.18)',
     onAccent: '#412402',
     danger: '#FF5A5A',
+    /** Danger at 14% opacity — red-zone gauge fill and Settings disconnect chip. */
+    dangerMuted: 'rgba(255, 90, 90, 0.14)',
     success: '#3ECf8E',
   },
   spacing: {
@@ -52,6 +54,9 @@ export const theme = {
     small: { size: 14, weight: '400', lineHeight: 20 },
     smallStrong: { size: 14, weight: '600', lineHeight: 20 },
     eyebrow: { size: 12, weight: '700', letterSpacing: 0.6 },
+    /** Tabular-ready clock / field-position labels — system font until a mono asset ships. */
+    ticker: { size: 13, weight: '500', letterSpacing: 0 },
+    score: { size: 22, weight: '700', lineHeight: 28 },
   },
 } as const;
 

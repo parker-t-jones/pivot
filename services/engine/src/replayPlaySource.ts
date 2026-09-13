@@ -15,6 +15,8 @@ export interface NflverseRow {
   posteam?: string;
   defteam?: string;
   yardline_100?: string;
+  down?: string;
+  ydstogo?: string;
   quarter_seconds_remaining?: string;
   qtr?: string;
   play_type?: string;
@@ -106,19 +108,23 @@ function scoreAfterPlay(r: NflverseRow): { home: number; away: number } {
 /** Pure map of one nflverse row → normalized `PlayEvent`. `isFinalPlay` is decided by the caller. */
 export function mapNflverseRow(r: NflverseRow, isFinalPlay: boolean): PlayEvent {
   const score = scoreAfterPlay(r);
+  const possessionTeamId = nullable(r.posteam);
+  const hasPossession = possessionTeamId !== null;
   return {
     playId: text(r.play_id),
     gameId: text(r.game_id),
     week: num(r.week, 0),
     homeTeamId: text(r.home_team),
     awayTeamId: text(r.away_team),
-    possessionTeamId: nullable(r.posteam),
+    possessionTeamId,
     playType: toPlayType(r),
     scoreHome: score.home,
     scoreAway: score.away,
     quarter: num(r.qtr, 0),
     secondsRemainingInQuarter: num(r.quarter_seconds_remaining, 0),
-    yardsToOpponentEndzone: numOrNull(r.yardline_100),
+    yardsToOpponentEndzone: hasPossession ? numOrNull(r.yardline_100) : null,
+    down: hasPossession ? numOrNull(r.down) : null,
+    distance: hasPossession ? numOrNull(r.ydstogo) : null,
     isFinalPlay,
   };
 }

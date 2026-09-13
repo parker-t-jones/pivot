@@ -42,6 +42,11 @@ function buildTestPayload(): FlagEventPayload {
       score: { home: 10, away: 7 },
       quarter: 2,
       time_remaining_sec: 434,
+      possession_team: null,
+      yards_to_endzone: null,
+      down: null,
+      distance: null,
+      in_red_zone: false,
     },
     flagged_players: [
       { player_id: 'test-player', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' },

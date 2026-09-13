@@ -24,6 +24,12 @@ export interface GameState {
   scoreAway: number;
   quarter: number; // 1-5 (5 = OT)
   timeRemainingSec: number;
+  /** Distance (yards) from the possessing team to the opponent's end zone; `null` when not applicable. */
+  yardsToOpponentEndzone: number | null;
+  /** Current down (1–4), or `null` when not a scrimmage situation / no possession. */
+  down: number | null;
+  /** Yards to go for a first down, or `null` when not a scrimmage situation / no possession. */
+  distance: number | null;
   inRedZone: boolean;
   status: 'scheduled' | 'in_progress' | 'final';
   updatedAt: number; // unix ms

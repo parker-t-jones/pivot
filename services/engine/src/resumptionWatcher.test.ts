@@ -31,6 +31,8 @@ function makePlay(overrides: Partial<PlayEvent> = {}): PlayEvent {
     quarter: 3,
     secondsRemainingInQuarter: 0,
     yardsToOpponentEndzone: 50,
+    down: 1,
+    distance: 10,
     isFinalPlay: false,
     ...overrides,
   };

@@ -17,7 +17,7 @@ function play(overrides: Partial<EspnPlay> = {}): EspnPlay {
     type: { id: '5', text: 'Rush' },
     period: { number: 3 },
     clock: { displayValue: '13:28' },
-    start: { team: { id: '11' }, yardsToEndzone: 33 },
+    start: { team: { id: '11' }, yardsToEndzone: 33, down: 1, distance: 10 },
     homeScore: 16,
     awayScore: 19,
     ...overrides,
@@ -41,6 +41,8 @@ describe('mapEspnPlay', () => {
       quarter: 3,
       secondsRemainingInQuarter: 808,
       yardsToOpponentEndzone: 33,
+      down: 1,
+      distance: 10,
       isFinalPlay: false,
     });
   });
@@ -68,6 +70,33 @@ describe('mapEspnPlay', () => {
 
     expect(mapped.possessionTeamId).toBeNull();
     expect(mapped.yardsToOpponentEndzone).toBeNull();
+    expect(mapped.down).toBeNull();
+    expect(mapped.distance).toBeNull();
+  });
+
+  it('maps down and distance on a scrimmage play', () => {
+    const mapped = mapEspnPlay(
+      play({ start: { yardsToEndzone: 33, down: 3, distance: 7 } }),
+      detDrive,
+      context,
+      false,
+    );
+
+    expect(mapped.down).toBe(3);
+    expect(mapped.distance).toBe(7);
+  });
+
+  it('reports no down/distance when the drive has no team', () => {
+    const mapped = mapEspnPlay(
+      play({ start: { yardsToEndzone: 33, down: 1, distance: 10 } }),
+      {},
+      context,
+      false,
+    );
+
+    expect(mapped.possessionTeamId).toBeNull();
+    expect(mapped.down).toBeNull();
+    expect(mapped.distance).toBeNull();
   });
 
   it('keeps possession on a kickoff, which ESPN files under the receiving team’s drive', () => {
@@ -123,6 +152,8 @@ describe('mapEspnPlay', () => {
       scoreHome: 0,
       scoreAway: 0,
       yardsToOpponentEndzone: null,
+      down: null,
+      distance: null,
     });
   });
 

@@ -20,6 +20,11 @@ function game(overrides: Partial<GameSummary> = {}): GameSummary {
     score: { home: 14, away: 10 },
     quarter: 3,
     time_remaining_sec: 434,
+    possession_team: null,
+    yards_to_endzone: null,
+    down: null,
+    distance: null,
+    in_red_zone: false,
     ...overrides,
   };
 }

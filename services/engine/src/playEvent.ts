@@ -61,6 +61,10 @@ export interface PlayEvent {
   secondsRemainingInQuarter: number;
   /** Distance (yards) from the possessing team to the opponent's end zone; `null` when not applicable. */
   yardsToOpponentEndzone: number | null;
+  /** Current down (1–4), or `null` when not a scrimmage situation / no possession. */
+  down: number | null;
+  /** Yards to go for a first down, or `null` when not a scrimmage situation / no possession. */
+  distance: number | null;
   /** True when this play ends the game (drives `status` → `'final'`). */
   isFinalPlay: boolean;
 }

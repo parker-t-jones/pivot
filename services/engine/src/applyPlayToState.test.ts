@@ -21,6 +21,8 @@ function makePlay(overrides: Partial<PlayEvent> = {}): PlayEvent {
     quarter: 1,
     secondsRemainingInQuarter: 900,
     yardsToOpponentEndzone: 50,
+    down: 1,
+    distance: 10,
     isFinalPlay: false,
     ...overrides,
   };
@@ -39,6 +41,9 @@ describe('applyPlayToState — projection from a play', () => {
       scoreAway: 0,
       quarter: 1,
       timeRemainingSec: 900,
+      yardsToOpponentEndzone: 50,
+      down: 1,
+      distance: 10,
       inRedZone: false,
       status: 'in_progress',
       updatedAt: FIXED_NOW,
@@ -101,6 +106,33 @@ describe('applyPlayToState — specific transitions', () => {
       applyPlayToState(null, makePlay({ possessionTeamId: null, yardsToOpponentEndzone: 5 }), clock)
         .inRedZone,
     ).toBe(false);
+  });
+
+  it('passes through yardline, down, and distance from the play', () => {
+    const state = applyPlayToState(
+      null,
+      makePlay({ yardsToOpponentEndzone: 32, down: 2, distance: 7 }),
+      clock,
+    );
+    expect(state.yardsToOpponentEndzone).toBe(32);
+    expect(state.down).toBe(2);
+    expect(state.distance).toBe(7);
+  });
+
+  it('nulls yardline/down/distance when the play has no possession', () => {
+    const state = applyPlayToState(
+      null,
+      makePlay({
+        possessionTeamId: null,
+        yardsToOpponentEndzone: null,
+        down: null,
+        distance: null,
+      }),
+      clock,
+    );
+    expect(state.yardsToOpponentEndzone).toBeNull();
+    expect(state.down).toBeNull();
+    expect(state.distance).toBeNull();
   });
 
   it('reflects a scoring play in the score fields', () => {

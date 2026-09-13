@@ -1,8 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import {
-  formatClock,
-  quarterLabel,
   reasonLabel,
   serviceLabel,
   type CurrentFlag,
@@ -10,6 +8,7 @@ import {
 } from '../lib/gameDisplay';
 import { reasonChipCopy, resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../lib/teamDisplay';
 import { theme } from '../lib/theme';
+import { FieldGauge } from './FieldGauge';
 import { PrimaryButton } from './PrimaryButton';
 
 interface NowActiveCardProps {
@@ -24,10 +23,10 @@ interface NowActiveCardProps {
 }
 
 /**
- * PLAN.md Section 10 Home State 1 "Now active" card (the dominant card): teams + score, game-state
- * strip, a reason chip, and the primary CTA ("Watch on {service}"). The CTA is disabled when there's
- * no resolvable broadcast/deep link, matching Section 10's graceful-degradation intent rather than
- * offering a button that leads nowhere.
+ * PLAN.md Section 10 Home State 1 "Now active" card (the dominant card): teams + score, field
+ * gauge (UI-SPEC.md §3.1), a reason chip, and the primary CTA ("Watch on {service}"). The CTA is
+ * disabled when there's no resolvable broadcast/deep link, matching Section 10's
+ * graceful-degradation intent rather than offering a button that leads nowhere.
  *
  * Sprint 9 Phase 2: the reason chip now renders the Section 10 fidelity target — player name(s),
  * position, and team+unit ("Jonathan Taylor active — RB — Colts offense") — using Phase 1's
@@ -48,6 +47,13 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
         ? reasonLabel(primaryReason)
         : null;
 
+  const opponentTeam =
+    game.possession_team === null
+      ? null
+      : game.possession_team === game.home_team
+        ? game.away_team
+        : game.home_team;
+
   return (
     <View style={styles.card}>
       <Text style={styles.eyebrow}>Now active</Text>
@@ -61,9 +67,15 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
         </Text>
       </View>
 
-      <Text style={styles.stateStrip}>
-        {quarterLabel(game.quarter)} · {formatClock(game.time_remaining_sec)}
-      </Text>
+      <FieldGauge
+        yardsToEndzone={game.yards_to_endzone}
+        possessionTeam={game.possession_team}
+        opponentTeam={opponentTeam}
+        down={game.down}
+        distance={game.distance}
+        quarter={game.quarter}
+        timeRemainingSec={game.time_remaining_sec}
+      />
 
       {chipText ? (
         <View style={styles.reasonChip}>
@@ -127,12 +139,8 @@ const styles = StyleSheet.create({
   },
   score: {
     color: theme.colors.textPrimary,
-    // TODO: confirm visual — no type token for 22/700 score display
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  stateStrip: {
-    color: theme.colors.textTertiary,
-    fontSize: theme.type.body.size,
+    fontSize: theme.type.score.size,
+    fontWeight: theme.type.score.weight,
+    lineHeight: theme.type.score.lineHeight,
   },
 });

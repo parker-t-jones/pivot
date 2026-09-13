@@ -13,6 +13,9 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
     scoreAway: 7,
     quarter: 3,
     timeRemainingSec: 400,
+    yardsToOpponentEndzone: 32,
+    down: 1,
+    distance: 10,
     inRedZone: false,
     status: 'in_progress',
     updatedAt: 0,
@@ -44,6 +47,11 @@ describe('buildGameSummary', () => {
       score: { home: 14, away: 7 },
       quarter: 3,
       time_remaining_sec: 400,
+      possession_team: 'KC',
+      yards_to_endzone: 32,
+      down: 1,
+      distance: 10,
+      in_red_zone: false,
     });
   });
 
@@ -57,6 +65,11 @@ describe('buildGameSummary', () => {
     expect(summary.home_team_secondary_color).toBe('');
     expect(summary.away_team_primary_color).toBe('');
     expect(summary.away_team_secondary_color).toBe('');
+    expect(summary.possession_team).toBeNull();
+    expect(summary.yards_to_endzone).toBe(32);
+    expect(summary.down).toBe(1);
+    expect(summary.distance).toBe(10);
+    expect(summary.in_red_zone).toBe(false);
   });
 
   it('defaults every field when the GameState itself is unavailable', () => {
@@ -73,6 +86,38 @@ describe('buildGameSummary', () => {
       score: { home: 0, away: 0 },
       quarter: 0,
       time_remaining_sec: 0,
+      possession_team: null,
+      yards_to_endzone: null,
+      down: null,
+      distance: null,
+      in_red_zone: false,
     });
+  });
+
+  it('resolves possession_team and in_red_zone from live GameState', () => {
+    const summary = buildGameSummary(
+      makeGameState({
+        possessionTeamId: 'away-team-id',
+        yardsToOpponentEndzone: 12,
+        down: 3,
+        distance: 2,
+        inRedZone: true,
+      }),
+      {
+        homeTeamAbbreviation: 'KC',
+        awayTeamAbbreviation: 'LV',
+        homeTeamName: 'Chiefs',
+        awayTeamName: 'Raiders',
+        homeTeamPrimaryColor: '',
+        homeTeamSecondaryColor: '',
+        awayTeamPrimaryColor: '',
+        awayTeamSecondaryColor: '',
+      },
+    );
+    expect(summary.possession_team).toBe('LV');
+    expect(summary.yards_to_endzone).toBe(12);
+    expect(summary.down).toBe(3);
+    expect(summary.distance).toBe(2);
+    expect(summary.in_red_zone).toBe(true);
   });
 });

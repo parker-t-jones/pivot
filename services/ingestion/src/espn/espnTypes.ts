@@ -35,11 +35,15 @@ export const espnPlayTypeSchema = z.object({
  * on procedural entries it is actively misleading. Observed on real timeouts, `start.team.id` names a
  * team that contradicts the drive's offense (a timeout inside a DET drive reported team `11`/IND),
  * and `yardsToEndzone` is `0` or stale (`58` on an End Period entry). So the mapper takes possession
- * from the drive and ignores both fields whenever nobody has the ball.
+ * from the drive and ignores yardline/down/distance whenever nobody has the ball.
  */
 export const espnPlayStartSchema = z.object({
   team: z.object({ id: z.string().optional() }).optional(),
   yardsToEndzone: z.number().optional(),
+  /** Current down (1–4). Meaningful only on scrimmage plays — see file header. */
+  down: z.number().optional(),
+  /** Yards to go for a first down. Meaningful only on scrimmage plays — see file header. */
+  distance: z.number().optional(),
 });
 
 export const espnPlaySchema = z.object({

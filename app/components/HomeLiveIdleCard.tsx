@@ -1,8 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { formatClock, quarterLabel } from '../lib/gameDisplay';
 import type { LiveGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
+import { FieldGauge } from './FieldGauge';
 
 interface HomeLiveIdleCardProps {
   /** Stake games currently in progress (State 2). */
@@ -25,32 +25,41 @@ export function HomeLiveIdleCard({ liveGames }: HomeLiveIdleCardProps) {
       </View>
 
       <Text style={styles.sectionLabel}>Your live games</Text>
-      {liveGames.map((game) => (
-        <View key={game.game_id} style={styles.gameRow}>
-          <View style={styles.matchupRow}>
-            <Text style={styles.matchup}>
-              {game.away_team} @ {game.home_team}
-            </Text>
-            <Text style={styles.score}>
-              {game.score.away}–{game.score.home}
-            </Text>
+      {liveGames.map((game) => {
+        const opponentTeam =
+          game.possession_team === null
+            ? null
+            : game.possession_team === game.home_team
+              ? game.away_team
+              : game.home_team;
+
+        return (
+          <View key={game.game_id} style={styles.gameRow}>
+            <View style={styles.matchupRow}>
+              <Text style={styles.matchup}>
+                {game.away_team} @ {game.home_team}
+              </Text>
+              <Text style={styles.score}>
+                {game.score.away}–{game.score.home}
+              </Text>
+            </View>
+            <FieldGauge
+              yardsToEndzone={game.yards_to_endzone}
+              possessionTeam={game.possession_team}
+              opponentTeam={opponentTeam}
+              down={game.down}
+              distance={game.distance}
+              quarter={game.quarter}
+              timeRemainingSec={game.time_remaining_sec}
+            />
           </View>
-          <Text style={styles.clock}>
-            {quarterLabel(game.quarter)} · {formatClock(game.time_remaining_sec)}
-            {game.possession_team ? ` · ${game.possession_team} ball` : ''}
-          </Text>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  clock: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.type.caption.size,
-    fontWeight: theme.type.caption.weight,
-  },
   gameRow: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radii.md,

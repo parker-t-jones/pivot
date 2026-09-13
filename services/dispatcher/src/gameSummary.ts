@@ -1,4 +1,4 @@
-import type { GameState } from '@pivot/shared';
+import { resolvePossessionAbbreviation, type GameState } from '@pivot/shared';
 import type { GameSummaryInfo } from './catalogs.js';
 
 /**
@@ -25,6 +25,17 @@ export interface GameSummary {
   score: { home: number; away: number };
   quarter: number;
   time_remaining_sec: number;
+  /** Possessing team abbreviation, or null when nobody has the ball. Same rule as
+   *  `flag_event` `new_state.possession_team` and `GET /games/live`. */
+  possession_team: string | null;
+  /** Yards from the possessing team to the opponent end zone; null when not applicable. */
+  yards_to_endzone: number | null;
+  /** Current down (1–4), or null when not a scrimmage situation. */
+  down: number | null;
+  /** Yards to go for a first down, or null when not a scrimmage situation. */
+  distance: number | null;
+  /** Whether the ball is inside the opponent's 20. Derived server-side from yards_to_endzone. */
+  in_red_zone: boolean;
 }
 
 export function buildGameSummary(
@@ -43,5 +54,14 @@ export function buildGameSummary(
     score: { home: gameState?.scoreHome ?? 0, away: gameState?.scoreAway ?? 0 },
     quarter: gameState?.quarter ?? 0,
     time_remaining_sec: gameState?.timeRemainingSec ?? 0,
+    possession_team: resolvePossessionAbbreviation(
+      gameState,
+      info?.homeTeamAbbreviation,
+      info?.awayTeamAbbreviation,
+    ),
+    yards_to_endzone: gameState?.yardsToOpponentEndzone ?? null,
+    down: gameState?.down ?? null,
+    distance: gameState?.distance ?? null,
+    in_red_zone: gameState?.inRedZone ?? false,
   };
 }

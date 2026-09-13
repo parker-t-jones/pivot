@@ -158,6 +158,8 @@ describe('engine integration — replay a real 2024 NFL game (KC @ LV, Week 8)',
       quarter: finalState?.quarter ?? 4,
       secondsRemainingInQuarter: 0,
       yardsToOpponentEndzone: 5,
+      down: 1,
+      distance: 10,
       isFinalPlay: true,
     };
     await onPlayEvent(deps, postFinalPlay);

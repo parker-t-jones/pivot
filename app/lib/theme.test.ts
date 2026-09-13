@@ -15,6 +15,7 @@ describe('theme', () => {
     expect(theme.colors.accentMuted).toBe('rgba(255, 176, 32, 0.18)');
     expect(theme.colors.onAccent).toBe('#412402');
     expect(theme.colors.danger).toBe('#FF5A5A');
+    expect(theme.colors.dangerMuted).toBe('rgba(255, 90, 90, 0.14)');
     expect(theme.colors.success).toBe('#3ECf8E');
 
     expect(theme.spacing.xs).toBe(4);
@@ -62,5 +63,7 @@ describe('theme', () => {
     expect(theme.type.small).toEqual({ size: 14, weight: '400', lineHeight: 20 });
     expect(theme.type.smallStrong).toEqual({ size: 14, weight: '600', lineHeight: 20 });
     expect(theme.type.eyebrow).toEqual({ size: 12, weight: '700', letterSpacing: 0.6 });
+    expect(theme.type.ticker).toEqual({ size: 13, weight: '500', letterSpacing: 0 });
+    expect(theme.type.score).toEqual({ size: 22, weight: '700', lineHeight: 28 });
   });
 });

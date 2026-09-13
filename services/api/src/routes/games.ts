@@ -1,5 +1,4 @@
-import { rankBroadcasts, type GameBroadcastOption } from '@pivot/dispatcher';
-import type { GameState } from '@pivot/shared';
+import { buildGameSummary, rankBroadcasts, type GameBroadcastOption } from '@pivot/dispatcher';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
@@ -26,18 +25,6 @@ function teamFields(home: TeamDisplay | undefined, away: TeamDisplay | undefined
     away_team_primary_color: away?.primary_color ?? '',
     away_team_secondary_color: away?.secondary_color ?? '',
   };
-}
-
-/** Abbreviation of the possessing team, or null — same rule as `flag_event` `new_state.possession_team`. */
-function possessionTeamAbbreviation(
-  gameState: GameState,
-  home: TeamDisplay | undefined,
-  away: TeamDisplay | undefined,
-): string | null {
-  if (!gameState.possessionTeamId) return null;
-  if (gameState.possessionTeamId === gameState.homeTeamId) return home?.abbreviation ?? null;
-  if (gameState.possessionTeamId === gameState.awayTeamId) return away?.abbreviation ?? null;
-  return null;
 }
 
 function toWireBroadcasts(broadcasts: GameBroadcastOption[], subscribedServices: Set<string>) {
@@ -202,6 +189,10 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       quarter: number;
       time_remaining_sec: number;
       possession_team: string | null;
+      yards_to_endzone: number | null;
+      down: number | null;
+      distance: number | null;
+      in_red_zone: boolean;
     }> = [];
 
     for (const game of candidates) {
@@ -211,15 +202,21 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       const home = teamById.get(game.home_team_id);
       const away = teamById.get(game.away_team_id);
+      const summary = buildGameSummary(gameState, {
+        homeTeamAbbreviation: home?.abbreviation ?? '',
+        awayTeamAbbreviation: away?.abbreviation ?? '',
+        homeTeamName: home?.name ?? '',
+        awayTeamName: away?.name ?? '',
+        homeTeamPrimaryColor: home?.primary_color ?? '',
+        homeTeamSecondaryColor: home?.secondary_color ?? '',
+        awayTeamPrimaryColor: away?.primary_color ?? '',
+        awayTeamSecondaryColor: away?.secondary_color ?? '',
+      });
       liveGames.push({
         game_id: game.id,
         status: 'in_progress',
         scheduled_start: game.scheduled_start,
-        ...teamFields(home, away),
-        score: { home: gameState.scoreHome, away: gameState.scoreAway },
-        quarter: gameState.quarter,
-        time_remaining_sec: gameState.timeRemainingSec,
-        possession_team: possessionTeamAbbreviation(gameState, home, away),
+        ...summary,
       });
     }
 

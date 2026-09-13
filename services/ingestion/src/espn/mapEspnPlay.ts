@@ -115,6 +115,8 @@ export function mapEspnPlay(
     secondsRemainingInQuarter: parseClockToSeconds(play.clock?.displayValue),
     // Ignored without possession: ESPN reports 0 (or a stale value) on procedural entries.
     yardsToOpponentEndzone: hasPossession ? (play.start?.yardsToEndzone ?? null) : null,
+    down: hasPossession ? (play.start?.down ?? null) : null,
+    distance: hasPossession ? (play.start?.distance ?? null) : null,
     isFinalPlay,
   };
 }

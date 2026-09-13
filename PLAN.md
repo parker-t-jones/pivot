@@ -508,7 +508,8 @@ Snapshot every 30 seconds from Redis. Used for replay/debugging.
 game_state:{game_id}              hash → { game_id, home_team_id, away_team_id,
                                             possession_team_id, unit_on_field,
                                             score_home, score_away, quarter,
-                                            time_remaining_sec, in_red_zone,
+                                            time_remaining_sec, yards_to_opponent_endzone,
+                                            down, distance, in_red_zone,
                                             status, updated_at }
 
 user_flagged_games:{user_id}      sorted set → { game_id : priority_score }
@@ -579,6 +580,9 @@ interface GameState {
   scoreAway: number;
   quarter: number;          // 1-5 (5 = OT)
   timeRemainingSec: number;
+  yardsToOpponentEndzone: number | null;
+  down: number | null;      // 1–4; null when not a scrimmage situation
+  distance: number | null;  // yards to go; null when not a scrimmage situation
   inRedZone: boolean;
   status: 'scheduled' | 'in_progress' | 'final';
   updatedAt: number;        // unix ms
@@ -1140,7 +1144,12 @@ across the whole slate — not `pickBroadcastSource` (timing / lag-only among su
     score: { home: number, away: number },
     quarter: number,
     time_remaining_sec: number,
-    possession_team: string | null             // abbreviation; null if none — same idea as flag_event
+    possession_team: string | null,            // abbreviation; null if none — same idea as flag_event
+    // Field-position fields (shared game_summary shape via buildGameSummary):
+    yards_to_endzone: number | null,           // yards to opponent end zone; null when no possession
+    down: number | null,                       // 1–4; null when not a scrimmage situation
+    distance: number | null,                   // yards to go; null when not a scrimmage situation
+    in_red_zone: boolean                       // derived server-side from yards_to_endzone <= 20
   }>
 }
 ```
@@ -1312,7 +1321,14 @@ check in the route handler, not an RLS policy) — the same service-role-plus-ch
       away_team_secondary_color: string,
       score: { home: number, away: number },
       quarter: number,
-      time_remaining_sec: number
+      time_remaining_sec: number,
+      // Field-position enrichment (same shape as GET /games/live; also used by GET /flags/current's
+      // `game` field via the shared buildGameSummary builder):
+      possession_team: string | null,          // abbreviation; null if none
+      yards_to_endzone: number | null,
+      down: number | null,
+      distance: number | null,
+      in_red_zone: boolean
     },
     flagged_players: Array<{
       player_id: string,

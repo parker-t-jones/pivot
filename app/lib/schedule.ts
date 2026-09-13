@@ -40,6 +40,10 @@ export interface LiveGame {
   quarter: number;
   time_remaining_sec: number;
   possession_team: string | null;
+  yards_to_endzone: number | null;
+  down: number | null;
+  distance: number | null;
+  in_red_zone: boolean;
 }
 
 export interface GamesLiveResponse {
