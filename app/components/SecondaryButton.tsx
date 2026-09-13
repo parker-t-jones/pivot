@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
   label: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.button.size,
-    fontWeight: theme.type.button.weight,
+    fontFamily: theme.type.button.fontFamily,
   },
   pressed: {
     backgroundColor: theme.colors.accentMuted,

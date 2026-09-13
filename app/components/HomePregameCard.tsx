@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: theme.colors.accent,
     fontSize: theme.type.caption.size,
-    fontWeight: theme.type.smallStrong.weight,
+    fontFamily: theme.type.smallStrong.fontFamily,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
@@ -69,12 +69,12 @@ const styles = StyleSheet.create({
   heroTitle: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.heading.size,
-    fontWeight: theme.type.heading.weight,
+    fontFamily: theme.type.heading.fontFamily,
   },
   matchup: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.bodyStrong.size,
-    fontWeight: theme.type.bodyStrong.weight,
+    fontFamily: theme.type.bodyStrong.fontFamily,
     marginBottom: theme.spacing.xs,
   },
   playerRow: {
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     color: theme.colors.textTertiary,
     fontSize: theme.type.caption.size,
-    fontWeight: theme.type.smallStrong.weight,
+    fontFamily: theme.type.smallStrong.fontFamily,
     letterSpacing: 0.3,
     marginTop: theme.spacing.sm,
     textTransform: 'uppercase',

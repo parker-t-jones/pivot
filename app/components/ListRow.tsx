@@ -72,6 +72,6 @@ const styles = StyleSheet.create({
   title: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.body.size,
-    fontWeight: theme.type.button.weight,
+    fontFamily: theme.type.button.fontFamily,
   },
 });

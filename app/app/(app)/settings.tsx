@@ -737,7 +737,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.heading.size,
-    fontWeight: theme.type.heading.weight,
+    fontFamily: theme.type.heading.fontFamily,
   },
   leagueRow: {
     borderTopColor: theme.colors.surfaceRaised,
@@ -761,7 +761,7 @@ const styles = StyleSheet.create({
   rowLabel: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.body.size,
-    fontWeight: theme.type.button.weight,
+    fontFamily: theme.type.button.fontFamily,
   },
   rowSubtext: {
     color: theme.colors.textSecondary,
@@ -787,7 +787,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.eyebrow.size,
-    fontWeight: theme.type.eyebrow.weight,
+    fontFamily: theme.type.eyebrow.fontFamily,
     letterSpacing: theme.type.eyebrow.letterSpacing,
     marginBottom: theme.spacing.xs,
     textTransform: 'uppercase',
@@ -810,7 +810,7 @@ const styles = StyleSheet.create({
   segmentText: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.caption.size,
-    fontWeight: theme.type.smallStrong.weight,
+    fontFamily: theme.type.smallStrong.fontFamily,
   },
   segmentTextActive: {
     color: theme.colors.onAccent,

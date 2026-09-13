@@ -1,3 +1,10 @@
+import {
+  Manrope_400Regular,
+  Manrope_500Medium,
+  Manrope_600SemiBold,
+  Manrope_700Bold,
+} from '@expo-google-fonts/manrope';
+import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -16,7 +23,16 @@ function LoadingState({ message }: { message: string }) {
 }
 
 function RootNavigator() {
-  const { isLoading, session } = useSession();
+  const { isLoading: isSessionLoading, session } = useSession();
+  // Manrope (UI-SPEC.md §2.4 typography pass) — gated into the same loading screen as session
+  // restore rather than a second splash step.
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+  });
+  const isLoading = isSessionLoading || !fontsLoaded;
   const segments = useSegments();
   const router = useRouter();
   const inAuthGroup = segments[0] === '(auth)';

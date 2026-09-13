@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
   body: {
     color: theme.colors.textTertiary,
     fontSize: theme.type.body.size,
-    fontWeight: theme.type.body.weight,
+    fontFamily: theme.type.body.fontFamily,
     lineHeight: theme.type.body.lineHeight,
   },
   button: {
@@ -73,6 +73,6 @@ const styles = StyleSheet.create({
   title: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.title.size,
-    fontWeight: theme.type.title.weight,
+    fontFamily: theme.type.title.fontFamily,
   },
 });

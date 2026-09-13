@@ -116,14 +116,14 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.eyebrow.size,
-    fontWeight: theme.type.eyebrow.weight,
+    fontFamily: theme.type.eyebrow.fontFamily,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   matchup: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.heading.size,
-    fontWeight: theme.type.heading.weight,
+    fontFamily: theme.type.heading.fontFamily,
   },
   matchupRow: {
     alignItems: 'center',
@@ -140,12 +140,12 @@ const styles = StyleSheet.create({
   reasonChipText: {
     color: theme.colors.accent,
     fontSize: theme.type.caption.size,
-    fontWeight: theme.type.smallStrong.weight,
+    fontFamily: theme.type.smallStrong.fontFamily,
   },
   score: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.score.size,
-    fontWeight: theme.type.score.weight,
+    fontFamily: theme.type.score.fontFamily,
     lineHeight: theme.type.score.lineHeight,
   },
 });

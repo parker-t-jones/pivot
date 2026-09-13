@@ -89,13 +89,13 @@ const styles = StyleSheet.create({
   heroTitle: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.heading.size,
-    fontWeight: theme.type.heading.weight,
+    fontFamily: theme.type.heading.fontFamily,
   },
   matchup: {
     color: theme.colors.textPrimary,
     flexShrink: 1,
     fontSize: theme.type.bodyStrong.size,
-    fontWeight: theme.type.bodyStrong.weight,
+    fontFamily: theme.type.bodyStrong.fontFamily,
   },
   matchupRow: {
     alignItems: 'center',
@@ -106,12 +106,12 @@ const styles = StyleSheet.create({
   score: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.bodyStrong.size,
-    fontWeight: theme.type.bodyStrong.weight,
+    fontFamily: theme.type.bodyStrong.fontFamily,
   },
   sectionLabel: {
     color: theme.colors.textTertiary,
     fontSize: theme.type.caption.size,
-    fontWeight: theme.type.smallStrong.weight,
+    fontFamily: theme.type.smallStrong.fontFamily,
     letterSpacing: 0.3,
     marginTop: theme.spacing.sm,
     textTransform: 'uppercase',

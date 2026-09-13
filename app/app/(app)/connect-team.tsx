@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   title: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.title.size,
-    fontWeight: theme.type.title.weight,
+    fontFamily: theme.type.title.fontFamily,
     marginTop: theme.spacing.md,
   },
 });

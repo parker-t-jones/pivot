@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   ticker: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.ticker.size,
-    fontWeight: theme.type.ticker.weight,
+    fontFamily: theme.type.ticker.fontFamily,
     letterSpacing: theme.type.ticker.letterSpacing,
   },
   track: {

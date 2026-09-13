@@ -59,12 +59,50 @@ describe('theme', () => {
     expect(theme.type.bodyStrong.lineHeight).toBe(21);
     expect(theme.type.caption.lineHeight).toBe(18);
 
-    expect(theme.type.button).toEqual({ size: 16, weight: '600', lineHeight: 22 });
-    expect(theme.type.small).toEqual({ size: 14, weight: '400', lineHeight: 20 });
-    expect(theme.type.smallStrong).toEqual({ size: 14, weight: '600', lineHeight: 20 });
-    expect(theme.type.eyebrow).toEqual({ size: 12, weight: '700', letterSpacing: 0.6 });
-    expect(theme.type.ticker).toEqual({ size: 13, weight: '500', letterSpacing: 0 });
-    expect(theme.type.score).toEqual({ size: 22, weight: '700', lineHeight: 28 });
+    expect(theme.type.button).toEqual({
+      size: 16,
+      weight: '600',
+      lineHeight: 22,
+      fontFamily: 'Manrope_600SemiBold',
+    });
+    expect(theme.type.small).toEqual({
+      size: 14,
+      weight: '400',
+      lineHeight: 20,
+      fontFamily: 'Manrope_400Regular',
+    });
+    expect(theme.type.smallStrong).toEqual({
+      size: 14,
+      weight: '600',
+      lineHeight: 20,
+      fontFamily: 'Manrope_600SemiBold',
+    });
+    expect(theme.type.eyebrow).toEqual({
+      size: 12,
+      weight: '700',
+      letterSpacing: 0.6,
+      fontFamily: 'Manrope_700Bold',
+    });
+    expect(theme.type.ticker).toEqual({
+      size: 13,
+      weight: '500',
+      letterSpacing: 0,
+      fontFamily: 'Manrope_500Medium',
+    });
+    expect(theme.type.score).toEqual({
+      size: 22,
+      weight: '700',
+      lineHeight: 28,
+      fontFamily: 'Manrope_700Bold',
+    });
+  });
+
+  it('gives every type scale entry a Manrope fontFamily (UI-SPEC.md §0/§2.4)', () => {
+    expect(theme.type.title.fontFamily).toBe('Manrope_600SemiBold');
+    expect(theme.type.heading.fontFamily).toBe('Manrope_600SemiBold');
+    expect(theme.type.body.fontFamily).toBe('Manrope_400Regular');
+    expect(theme.type.bodyStrong.fontFamily).toBe('Manrope_500Medium');
+    expect(theme.type.caption.fontFamily).toBe('Manrope_400Regular');
   });
 
   it('adds the UI-SPEC.md §2 border/glow tokens', () => {
