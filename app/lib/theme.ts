@@ -61,7 +61,8 @@ export const theme = {
     },
   },
   type: {
-    title: { size: 26, weight: '600', lineHeight: 32 },
+    /** Bold + tight tracking — screen-level titles ("Home"). */
+    title: { size: 26, weight: '700', lineHeight: 32, letterSpacing: -0.3 },
     heading: { size: 20, weight: '600', lineHeight: 26 },
     body: { size: 15, weight: '400', lineHeight: 21 },
     bodyStrong: { size: 15, weight: '500', lineHeight: 21 },
@@ -70,9 +71,11 @@ export const theme = {
     small: { size: 14, weight: '400', lineHeight: 20 },
     smallStrong: { size: 14, weight: '600', lineHeight: 20 },
     eyebrow: { size: 12, weight: '700', letterSpacing: 0.6 },
-    /** Tabular-ready clock / field-position labels — system font until a mono asset ships. */
-    ticker: { size: 13, weight: '500', letterSpacing: 0 },
-    score: { size: 22, weight: '700', lineHeight: 28 },
+    /** Clock / field-position ticker line — `tabular-nums` so digits don't jitter as they change
+     *  width (e.g. "7:14" → "7:09"), system font (no mono asset shipped). */
+    ticker: { size: 13, weight: '500', letterSpacing: 0, fontVariant: ['tabular-nums'] },
+    /** Bold + tight tracking + tabular-nums (score digits changing width shouldn't reflow). */
+    score: { size: 22, weight: '700', lineHeight: 28, letterSpacing: -0.2, fontVariant: ['tabular-nums'] },
   },
 } as const;
 

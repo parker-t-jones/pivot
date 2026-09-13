@@ -85,12 +85,15 @@ panelGlow: {
 
 Apply to `NowActiveCard`'s outer `View` when a flag is active, and to whichever live-game row in `HomeLiveIdleCard` matches the current possessing team.
 
-### 2.4 Typography
+### 2.4 Typography — implemented, system font only
 
-`theme.type` already has a full scale (`title`/`heading`/`body`/`bodyStrong`/`caption`/`button`/`small`/`smallStrong`/`eyebrow` — `app/lib/theme.ts:44-53`). Two gaps the brief's "monospace ticker" idea exposes that already exist independent of this brief:
+`theme.type` already has a full scale (`title`/`heading`/`body`/`bodyStrong`/`caption`/`button`/`small`/`smallStrong`/`eyebrow` — `app/lib/theme.ts`). The brief's "geometric sans" was tried for real with a bundled font (`expo-font` + `@expo-google-fonts/manrope`) and then **reverted** — the mockups' bolder look turned out to just be the system font (SF Pro on iOS) at a heavier weight with tighter tracking, not a distinct typeface; a real custom font is a much bigger footprint (new deps, native rebuild, per-weight static files) for a difference nobody could actually see next to the system font at these sizes. Shipped instead, system-font-only:
 
-- `NowActiveCard.tsx:130` has a `// TODO: confirm visual — no type token for 22/700 score display` hardcoded score size. This pass proposes closing it with `theme.type.score` (§5) rather than leaving it a literal.
-- No `theme.type.ticker` exists for the quarter/clock line (`Q2 · 7:14`). Proposed as monospace-ready (tabular figures) so the clock doesn't jitter as digits change width — this is a real, narrow win independent of the rest of the brief.
+- `theme.type.title` is now `weight: '700'` (was `'600'`) with `letterSpacing: -0.3` — "Home"-style screen titles read as bold/tight, matching the mockups, with zero font asset.
+- `NowActiveCard`/`HomeLiveIdleCard`/`AlsoFlaggedRow`'s matchup line (`"COLTS @ TITANS"`) locally overrides to `fontWeight: '700', letterSpacing: -0.2` rather than bumping the shared `heading` token (which stays lighter for plain screen headers elsewhere).
+- `theme.type.score` (already `22/700`) gains `letterSpacing: -0.2` and `fontVariant: ['tabular-nums']` — the score digits are bold/tight and don't reflow as they change width.
+- `theme.type.ticker` (the quarter/clock line, `Q2 · 7:14`) gains `fontVariant: ['tabular-nums']` for the same reason — the clock doesn't jitter as digits change width. Still system font, no mono asset.
+- `AlsoFlaggedRow`'s "ALSO FLAGGED" label uses the `eyebrow` token directly (same family as "NOW ACTIVE"), not a separate smaller style.
 
 
 

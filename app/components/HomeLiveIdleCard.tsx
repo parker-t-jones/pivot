@@ -91,11 +91,13 @@ const styles = StyleSheet.create({
     fontSize: theme.type.heading.size,
     fontWeight: theme.type.heading.weight,
   },
+  /** Bold + tight tracking, matching NowActiveCard's matchup treatment (UI-SPEC.md §2.4). */
   matchup: {
     color: theme.colors.textPrimary,
     flexShrink: 1,
     fontSize: theme.type.bodyStrong.size,
-    fontWeight: theme.type.bodyStrong.weight,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   matchupRow: {
     alignItems: 'center',
@@ -106,7 +108,9 @@ const styles = StyleSheet.create({
   score: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.bodyStrong.size,
-    fontWeight: theme.type.bodyStrong.weight,
+    fontVariant: [...theme.type.score.fontVariant],
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   sectionLabel: {
     color: theme.colors.textTertiary,

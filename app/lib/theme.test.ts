@@ -31,7 +31,7 @@ describe('theme', () => {
     expect(theme.radii.pill).toBe(999);
 
     expect(theme.type.title.size).toBe(26);
-    expect(theme.type.title.weight).toBe('600');
+    expect(theme.type.title.weight).toBe('700');
     expect(theme.type.heading.size).toBe(20);
     expect(theme.type.heading.weight).toBe('600');
     expect(theme.type.body.size).toBe(15);
@@ -54,6 +54,7 @@ describe('theme', () => {
     expect(theme.opacity.disabled).toBe(0.5);
 
     expect(theme.type.title.lineHeight).toBe(32);
+    expect(theme.type.title.letterSpacing).toBe(-0.3);
     expect(theme.type.heading.lineHeight).toBe(26);
     expect(theme.type.body.lineHeight).toBe(21);
     expect(theme.type.bodyStrong.lineHeight).toBe(21);
@@ -63,8 +64,22 @@ describe('theme', () => {
     expect(theme.type.small).toEqual({ size: 14, weight: '400', lineHeight: 20 });
     expect(theme.type.smallStrong).toEqual({ size: 14, weight: '600', lineHeight: 20 });
     expect(theme.type.eyebrow).toEqual({ size: 12, weight: '700', letterSpacing: 0.6 });
-    expect(theme.type.ticker).toEqual({ size: 13, weight: '500', letterSpacing: 0 });
-    expect(theme.type.score).toEqual({ size: 22, weight: '700', lineHeight: 28 });
+  });
+
+  it('uses tabular-nums + tight tracking for live-updating numbers (UI-SPEC.md §2.4)', () => {
+    expect(theme.type.ticker).toEqual({
+      size: 13,
+      weight: '500',
+      letterSpacing: 0,
+      fontVariant: ['tabular-nums'],
+    });
+    expect(theme.type.score).toEqual({
+      size: 22,
+      weight: '700',
+      lineHeight: 28,
+      letterSpacing: -0.2,
+      fontVariant: ['tabular-nums'],
+    });
   });
 
   it('adds the UI-SPEC.md §2 border/glow tokens', () => {

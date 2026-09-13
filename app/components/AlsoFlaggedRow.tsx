@@ -80,22 +80,25 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     width: 168,
   },
+  /** Same eyebrow family as NowActiveCard's "Now active" label (UI-SPEC.md §2.4). */
   label: {
     color: theme.colors.textTertiary,
-    fontFamily: theme.type.smallStrong.fontFamily,
-    fontSize: theme.type.caption.size,
-    letterSpacing: 0.3,
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
     textTransform: 'uppercase',
   },
+  /** Bold + tight tracking, matching NowActiveCard's matchup treatment. */
   matchup: {
     color: theme.colors.textPrimary,
-    fontFamily: theme.type.bodyStrong.fontFamily,
     fontSize: theme.type.small.size,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   score: {
     color: theme.colors.textSecondary,
-    fontFamily: theme.type.body.fontFamily,
     fontSize: theme.type.caption.size,
+    fontVariant: [...theme.type.score.fontVariant],
   },
   scrollContent: {
     gap: theme.spacing.sm,
@@ -114,8 +117,8 @@ const styles = StyleSheet.create({
   },
   switchLabel: {
     color: theme.colors.textPrimary,
-    fontFamily: theme.type.smallStrong.fontFamily,
     fontSize: theme.type.small.size,
+    fontWeight: theme.type.smallStrong.weight,
   },
   wrap: {
     gap: theme.spacing.sm,

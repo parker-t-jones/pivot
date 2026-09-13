@@ -120,10 +120,13 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
+  /** Bold + tight tracking, matching the title/score treatment (UI-SPEC.md §2.4) — deliberately
+   *  bolder than the shared `heading` token, which stays lighter for plain screen headers. */
   matchup: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.heading.size,
-    fontWeight: theme.type.heading.weight,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   matchupRow: {
     alignItems: 'center',
@@ -145,7 +148,9 @@ const styles = StyleSheet.create({
   score: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.score.size,
+    fontVariant: [...theme.type.score.fontVariant],
     fontWeight: theme.type.score.weight,
+    letterSpacing: theme.type.score.letterSpacing,
     lineHeight: theme.type.score.lineHeight,
   },
 });
