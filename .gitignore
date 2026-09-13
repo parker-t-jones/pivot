@@ -7,6 +7,8 @@ dist
 .DS_Store
 coverage
 /experiments/game-latency-log.txt
+# Live-test capture from live-sunday-harness.ts / mark-visible.ts (plays, events, markers).
+/experiments/logs/
 # Expo-generated native projects only. Anchored: a bare `android`/`ios` also matched
 # `app/modules/*/ios`, silently excluding local native module source that must be committed.
 /app/android/

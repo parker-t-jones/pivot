@@ -31,6 +31,9 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@pivot/dispatcher": "workspace:^",
+    "@pivot/engine": "workspace:^",
+    "@pivot/ingestion": "workspace:^",
     "@pivot/shared": "workspace:^",
     "@supabase/supabase-js": "^2.108.2",
     "dotenv": "^17.4.2"

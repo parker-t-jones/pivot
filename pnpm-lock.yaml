@@ -8,6 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@pivot/dispatcher':
+        specifier: workspace:^
+        version: link:services/dispatcher
+      '@pivot/engine':
+        specifier: workspace:^
+        version: link:services/engine
+      '@pivot/ingestion':
+        specifier: workspace:^
+        version: link:services/ingestion
       '@pivot/shared':
         specifier: workspace:^
         version: link:shared
