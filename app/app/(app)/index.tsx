@@ -1,10 +1,10 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
+import { HomeDashboard } from '../../components/HomeDashboard';
 import { HomeLiveIdleCard } from '../../components/HomeLiveIdleCard';
 import { HomeOffDayCard } from '../../components/HomeOffDayCard';
 import { HomePregameCard } from '../../components/HomePregameCard';
@@ -395,26 +395,18 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + theme.spacing.xl }]}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={onRefresh}
-          tintColor={theme.colors.textPrimary}
-        />
-      }
-    >
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Home</Text>
+    <HomeDashboard
+      contentTopInset={insets.top + theme.spacing.xl}
+      onRefresh={onRefresh}
+      refreshing={isRefreshing}
+      headerRight={
         <TextButton
           accessibilityLabel="Settings"
           label="Settings"
           onPress={() => router.push('/(app)/settings')}
         />
-      </View>
-
+      }
+    >
       {isLoading ? (
         <LoadingState message="Loading…" />
       ) : loadError ? (
@@ -422,28 +414,6 @@ export default function HomeScreen() {
       ) : (
         renderBody()
       )}
-    </ScrollView>
+    </HomeDashboard>
   );
 }
-
-const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: theme.spacing.lg2,
-    paddingVertical: theme.spacing.xl,
-  },
-  headerRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: theme.spacing.sm,
-  },
-  screen: {
-    backgroundColor: theme.colors.background,
-    flex: 1,
-  },
-  title: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.title.size,
-    fontWeight: theme.type.title.weight,
-  },
-});
