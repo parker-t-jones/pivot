@@ -38,9 +38,9 @@ describe('serializeGameState / deserializeGameState', () => {
       unitOnField: 'none',
     });
     const raw = serializeGameState(state);
-    expect(raw.yards_to_opponent_endzone).toBe('');
-    expect(raw.down).toBe('');
-    expect(raw.distance).toBe('');
+    expect(raw['yards_to_opponent_endzone']).toBe('');
+    expect(raw['down']).toBe('');
+    expect(raw['distance']).toBe('');
     expect(deserializeGameState(raw)).toEqual(state);
   });
 
