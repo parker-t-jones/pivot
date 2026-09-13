@@ -252,6 +252,9 @@ function SettingsHeader({ onBack }: { onBack: () => void }) {
   );
 }
 
+/** UI-SPEC.md §9 ("Settings — proposed only"): every section card gets the §2 accentBorder +
+ *  panelGlow treatment, same as NowActiveCard — the mockup's only real delta from the shipped
+ *  screen besides the switch tinting (already wired via SWITCH_THUMB/SWITCH_TRACK below). */
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
     <View style={styles.section}>
@@ -775,9 +778,12 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.accentBorder,
     borderRadius: theme.radii.lg,
+    borderWidth: theme.effects.panelBorderWidth,
     gap: theme.spacing.sm,
     padding: theme.spacing.lg,
+    ...theme.effects.panelGlow,
   },
   sectionHint: {
     color: theme.colors.textSecondary,
