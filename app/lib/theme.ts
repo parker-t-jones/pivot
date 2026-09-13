@@ -20,6 +20,10 @@ export const theme = {
     /** Danger at 14% opacity — red-zone gauge fill and Settings disconnect chip. */
     dangerMuted: 'rgba(255, 90, 90, 0.14)',
     success: '#3ECf8E',
+    /** Accent at 25% opacity — "active" panel stroke (UI-SPEC.md §2.1). */
+    accentBorder: 'rgba(255, 176, 32, 0.25)',
+    /** Accent at 15% opacity — shadow color for panelGlow below (UI-SPEC.md §2.3). */
+    accentGlow: 'rgba(255, 176, 32, 0.15)',
   },
   spacing: {
     xs: 4,
@@ -43,6 +47,18 @@ export const theme = {
   },
   opacity: {
     disabled: 0.5,
+  },
+  effects: {
+    panelBorderWidth: 1,
+    /** "Active" amber glow for a card that owns the current flag/possession (UI-SPEC.md §2.3,
+     *  §3.3). `elevation` is the Android fallback — RN `shadow*` props are iOS-only. */
+    panelGlow: {
+      shadowColor: '#FFB020',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.15,
+      shadowRadius: 20,
+      elevation: 8,
+    },
   },
   type: {
     title: { size: 26, weight: '600', lineHeight: 32 },

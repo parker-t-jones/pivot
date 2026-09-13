@@ -66,4 +66,18 @@ describe('theme', () => {
     expect(theme.type.ticker).toEqual({ size: 13, weight: '500', letterSpacing: 0 });
     expect(theme.type.score).toEqual({ size: 22, weight: '700', lineHeight: 28 });
   });
+
+  it('adds the UI-SPEC.md §2 border/glow tokens', () => {
+    expect(theme.colors.accentBorder).toBe('rgba(255, 176, 32, 0.25)');
+    expect(theme.colors.accentGlow).toBe('rgba(255, 176, 32, 0.15)');
+
+    expect(theme.effects.panelBorderWidth).toBe(1);
+    expect(theme.effects.panelGlow).toEqual({
+      shadowColor: '#FFB020',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.15,
+      shadowRadius: 20,
+      elevation: 8,
+    });
+  });
 });

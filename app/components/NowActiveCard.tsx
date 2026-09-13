@@ -26,7 +26,9 @@ interface NowActiveCardProps {
  * PLAN.md Section 10 Home State 1 "Now active" card (the dominant card): teams + score, field
  * gauge (UI-SPEC.md §3.1), a reason chip, and the primary CTA ("Watch on {service}"). The CTA is
  * disabled when there's no resolvable broadcast/deep link, matching Section 10's
- * graceful-degradation intent rather than offering a button that leads nowhere.
+ * graceful-degradation intent rather than offering a button that leads nowhere. The outer card
+ * always carries the `accentBorder` stroke + `panelGlow` (UI-SPEC.md §2.3/§3.3) — it only renders
+ * for an active flag, so there's no "possession" condition to gate it on.
  *
  * Sprint 9 Phase 2: the reason chip now renders the Section 10 fidelity target — player name(s),
  * position, and team+unit ("Jonathan Taylor active — RB — Colts offense") — using Phase 1's
@@ -100,10 +102,13 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.accentBorder,
     borderRadius: theme.radii.hero,
+    borderWidth: theme.effects.panelBorderWidth,
     gap: theme.spacing.md,
     padding: theme.spacing.lg2,
     width: '100%',
+    ...theme.effects.panelGlow,
   },
   cta: {
     marginTop: theme.spacing.sm,

@@ -34,7 +34,10 @@ export function HomeLiveIdleCard({ liveGames }: HomeLiveIdleCardProps) {
               : game.home_team;
 
         return (
-          <View key={game.game_id} style={styles.gameRow}>
+          <View
+            key={game.game_id}
+            style={[styles.gameRow, game.possession_team !== null && styles.gameRowActive]}
+          >
             <View style={styles.matchupRow}>
               <Text style={styles.matchup}>
                 {game.away_team} @ {game.home_team}
@@ -65,6 +68,12 @@ const styles = StyleSheet.create({
     borderRadius: theme.radii.md,
     gap: theme.spacing.xs,
     padding: theme.spacing.md,
+  },
+  /** The row whose team currently has the ball (UI-SPEC.md §3.3) — not every row. */
+  gameRowActive: {
+    borderColor: theme.colors.accentBorder,
+    borderWidth: theme.effects.panelBorderWidth,
+    ...theme.effects.panelGlow,
   },
   hero: {
     backgroundColor: theme.colors.surface,
