@@ -28,6 +28,7 @@ function baseSlice(overrides: Partial<HomeFlagSlice> = {}): HomeFlagSlice {
     playerTeamMap: new Map(),
     lineups: [],
     flag: null,
+    otherFlags: [],
     broadcast: null,
     broadcasts: [],
     liveStakeGames: [],
@@ -278,6 +279,155 @@ describe('applyFlagEventToHome', () => {
     expect(result.slice.flag?.game_id).toBe('g-high');
     expect(result.needsBroadcastFetch).toBe(false);
   });
+
+  it('flag_added with lower priority than current adds it to otherFlags instead of dropping it', () => {
+    const result = applyFlagEventToHome(
+      baseSlice({
+        flag: currentFlag('g-high', 90),
+        otherFlags: [currentFlag('g-mid', 60)],
+        branch: { branch: 'state1' },
+      }),
+      flagPayload({
+        event_type: 'flag_added',
+        game_id: 'g-low',
+        new_state: {
+          gameId: 'g-low',
+          flagged: true,
+          priorityScore: 20,
+          reasons: [{ type: 'offense_active', triggeringPlayerIds: ['p1'] }],
+          computedAt: 3,
+          possession_team: 'BUF',
+        },
+      }),
+      now,
+    );
+    expect(result.slice.flag?.game_id).toBe('g-high');
+    expect(result.slice.otherFlags.map((f) => f.game_id)).toEqual(['g-mid', 'g-low']);
+  });
+
+  it('flag_added with higher priority demotes the old primary into otherFlags', () => {
+    const result = applyFlagEventToHome(
+      baseSlice({
+        flag: currentFlag('g-low', 30),
+        otherFlags: [currentFlag('g-mid', 20)],
+        branch: { branch: 'state1' },
+      }),
+      flagPayload({
+        event_type: 'flag_added',
+        game_id: 'g-high',
+        new_state: {
+          gameId: 'g-high',
+          flagged: true,
+          priorityScore: 90,
+          reasons: [{ type: 'red_zone', triggeringPlayerIds: ['p1'] }],
+          computedAt: 3,
+          possession_team: 'BUF',
+        },
+      }),
+      now,
+    );
+    expect(result.slice.flag?.game_id).toBe('g-high');
+    expect(result.slice.otherFlags.map((f) => f.game_id)).toEqual(['g-low', 'g-mid']);
+    expect(result.needsBroadcastFetch).toBe(true);
+  });
+
+  it('priority_increased for an entry in otherFlags updates and re-sorts it in place', () => {
+    const result = applyFlagEventToHome(
+      baseSlice({
+        flag: currentFlag('g-primary', 90),
+        otherFlags: [currentFlag('g-a', 40), currentFlag('g-b', 30)],
+        branch: { branch: 'state1' },
+      }),
+      flagPayload({
+        event_type: 'priority_increased',
+        game_id: 'g-b',
+        new_state: {
+          gameId: 'g-b',
+          flagged: true,
+          priorityScore: 50,
+          reasons: [{ type: 'red_zone', triggeringPlayerIds: ['p1'] }],
+          computedAt: 3,
+          possession_team: 'BUF',
+        },
+      }),
+      now,
+    );
+    expect(result.slice.flag?.game_id).toBe('g-primary');
+    expect(result.slice.otherFlags.map((f) => f.game_id)).toEqual(['g-b', 'g-a']);
+    expect(result.slice.otherFlags[0]?.priority_score).toBe(50);
+    expect(result.needsBroadcastFetch).toBe(false);
+  });
+
+  it('flag_removed for the primary promotes the top of otherFlags', () => {
+    const result = applyFlagEventToHome(
+      baseSlice({
+        flag: currentFlag('g1', 50),
+        otherFlags: [currentFlag('g2', 40), currentFlag('g3', 30)],
+        branch: { branch: 'state1' },
+        broadcasts: [
+          {
+            service: 'cbs',
+            deep_link_url: 'cbs://x',
+            requires_subscription: false,
+            user_has_subscription: true,
+            typical_lag_seconds: 15,
+            preferred: true,
+          },
+        ],
+      }),
+      flagPayload({ event_type: 'flag_removed', game_id: 'g1' }),
+      now,
+    );
+    expect(result.slice.flag?.game_id).toBe('g2');
+    expect(result.slice.otherFlags.map((f) => f.game_id)).toEqual(['g3']);
+    expect(result.slice.broadcasts).toEqual([]);
+    expect(result.slice.branch).toEqual({ branch: 'state1' });
+    expect(result.needsBroadcastFetch).toBe(true);
+    expect(result.broadcastGameId).toBe('g2');
+  });
+
+  it('flag_removed for the primary with no otherFlags clears to no flag (existing behavior)', () => {
+    const result = applyFlagEventToHome(
+      baseSlice({
+        flag: currentFlag('g1', 50),
+        branch: { branch: 'state1' },
+      }),
+      flagPayload({ event_type: 'flag_removed', game_id: 'g1' }),
+      now,
+    );
+    expect(result.slice.flag).toBeNull();
+    expect(result.slice.otherFlags).toEqual([]);
+    expect(result.slice.branch).toEqual({ branch: 'state4' });
+  });
+
+  it('flag_removed for an entry in otherFlags (not primary) just removes it', () => {
+    const result = applyFlagEventToHome(
+      baseSlice({
+        flag: currentFlag('g1', 50),
+        otherFlags: [currentFlag('g2', 40), currentFlag('g3', 30)],
+        branch: { branch: 'state1' },
+      }),
+      flagPayload({ event_type: 'flag_removed', game_id: 'g2' }),
+      now,
+    );
+    expect(result.slice.flag?.game_id).toBe('g1');
+    expect(result.slice.otherFlags.map((f) => f.game_id)).toEqual(['g3']);
+    expect(result.needsBroadcastFetch).toBe(false);
+  });
+
+  it('flag_removed for a game matching neither primary nor otherFlags is a true no-op', () => {
+    const slice = baseSlice({
+      flag: currentFlag('g1', 50),
+      otherFlags: [currentFlag('g2', 40)],
+      branch: { branch: 'state1' },
+    });
+    const result = applyFlagEventToHome(
+      slice,
+      flagPayload({ event_type: 'flag_removed', game_id: 'other' }),
+      now,
+    );
+    expect(result.slice).toBe(slice);
+  });
 });
 
 describe('reconcileHomeWithFlagsCurrent', () => {
@@ -305,7 +455,21 @@ describe('reconcileHomeWithFlagsCurrent', () => {
       now,
     );
     expect(result.slice.flag).toBeNull();
+    expect(result.slice.otherFlags).toEqual([]);
     expect(result.slice.branch).toEqual({ branch: 'state4' });
+  });
+
+  it('sets otherFlags to everything after the top flag', () => {
+    const top = currentFlag('g1', 80);
+    const second = currentFlag('g2', 50);
+    const third = currentFlag('g3', 30);
+    const result = reconcileHomeWithFlagsCurrent(
+      baseSlice({ branch: { branch: 'state4' } }),
+      { flags: [top, second, third], generated_at: now.toISOString() },
+      now,
+    );
+    expect(result.slice.flag?.game_id).toBe('g1');
+    expect(result.slice.otherFlags.map((f) => f.game_id)).toEqual(['g2', 'g3']);
   });
 });
 

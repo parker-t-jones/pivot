@@ -23,6 +23,10 @@ export interface HomeFlagSlice {
   playerTeamMap: PlayerTeamMap;
   lineups: LineupResponse[];
   flag: CurrentFlag | null;
+  /** PLAN.md Section 10 State 1 "Also flagged" row — every flagged game below the primary, kept
+   *  priority-sorted (matches `/flags/current`'s own sort). Never fetched a broadcast eagerly for
+   *  these — `AlsoFlaggedRow`'s Switch button resolves that on tap. */
+  otherFlags: CurrentFlag[];
   broadcast: GameBroadcast | null;
   broadcasts: GameBroadcast[];
   liveStakeGames: LiveGame[];
@@ -54,6 +58,22 @@ export function flagEventToCurrentFlag(payload: FlagEventPayload): CurrentFlag {
   };
 }
 
+/** Same tie-break as `/flags/current` (`flags.ts`): priority descending, game_id ascending. */
+function sortFlags(flags: CurrentFlag[]): CurrentFlag[] {
+  return [...flags].sort(
+    (a, b) => b.priority_score - a.priority_score || a.game_id.localeCompare(b.game_id),
+  );
+}
+
+function removeOtherFlag(otherFlags: CurrentFlag[], gameId: string): CurrentFlag[] {
+  return otherFlags.filter((entry) => entry.game_id !== gameId);
+}
+
+/** Inserts/updates by `game_id`, re-sorting so a priority change re-ranks it in place. */
+function upsertOtherFlag(otherFlags: CurrentFlag[], flag: CurrentFlag): CurrentFlag[] {
+  return sortFlags([...removeOtherFlag(otherFlags, flag.game_id), flag]);
+}
+
 function recomputeBranch(slice: HomeFlagSlice, hasFlags: boolean, now: Date): HomeBranch {
   if (!slice.nflState) return slice.branch;
   const stakeTeams = stakeTeamAbbreviations(slice.playerTeamMap);
@@ -76,18 +96,22 @@ export interface ApplyFlagEventResult {
 }
 
 /**
- * Applies a live `flag_event` to Home without a full refetch.
- * Returns whether broadcasts need a fetch for the (possibly new) primary flag.
+ * Removes a game from either the primary flag slot or the "also flagged" list — shared by
+ * `flag_removed` and the `flagged: false` (priority dropped below threshold) case below. Promotes
+ * the top of `otherFlags` into the primary slot when the primary is the one being cleared, rather
+ * than just dropping to no flag at all while other flagged games are still live.
  */
-export function applyFlagEventToHome(
-  slice: HomeFlagSlice,
-  payload: FlagEventPayload,
-  now: Date = new Date(),
-): ApplyFlagEventResult {
-  if (payload.event_type === 'flag_removed') {
-    if (slice.flag?.game_id !== payload.game_id) {
+function clearFlag(slice: HomeFlagSlice, gameId: string, now: Date): ApplyFlagEventResult {
+  if (slice.flag?.game_id !== gameId) {
+    const otherFlags = removeOtherFlag(slice.otherFlags, gameId);
+    if (otherFlags.length === slice.otherFlags.length) {
       return { slice, needsBroadcastFetch: false, broadcastGameId: null };
     }
+    return { slice: { ...slice, otherFlags }, needsBroadcastFetch: false, broadcastGameId: null };
+  }
+
+  const [promoted, ...rest] = slice.otherFlags;
+  if (!promoted) {
     const cleared: HomeFlagSlice = {
       ...slice,
       flag: null,
@@ -98,19 +122,34 @@ export function applyFlagEventToHome(
     return { slice: cleared, needsBroadcastFetch: false, broadcastGameId: null };
   }
 
-  // flag_added | priority_increased | priority_decreased — only surface flagged games as State 1.
+  const promotedSlice: HomeFlagSlice = {
+    ...slice,
+    flag: promoted,
+    otherFlags: rest,
+    broadcast: null,
+    broadcasts: [],
+    branch: recomputeBranch(slice, true, now),
+  };
+  return { slice: promotedSlice, needsBroadcastFetch: true, broadcastGameId: promoted.game_id };
+}
+
+/**
+ * Applies a live `flag_event` to Home without a full refetch.
+ * Returns whether broadcasts need a fetch for the (possibly new) primary flag.
+ */
+export function applyFlagEventToHome(
+  slice: HomeFlagSlice,
+  payload: FlagEventPayload,
+  now: Date = new Date(),
+): ApplyFlagEventResult {
+  if (payload.event_type === 'flag_removed') {
+    return clearFlag(slice, payload.game_id, now);
+  }
+
+  // flag_added | priority_increased | priority_decreased — only surface flagged games as State 1
+  // (primary) or the "also flagged" row (everything else).
   if (!payload.new_state.flagged) {
-    if (slice.flag?.game_id === payload.game_id) {
-      const cleared: HomeFlagSlice = {
-        ...slice,
-        flag: null,
-        broadcast: null,
-        broadcasts: [],
-        branch: recomputeBranch(slice, false, now),
-      };
-      return { slice: cleared, needsBroadcastFetch: false, broadcastGameId: null };
-    }
-    return { slice, needsBroadcastFetch: false, broadcastGameId: null };
+    return clearFlag(slice, payload.game_id, now);
   }
 
   const incoming = flagEventToCurrentFlag(payload);
@@ -142,12 +181,14 @@ export function applyFlagEventToHome(
     };
   }
 
-  // Different game — only take over State 1 if priority is strictly higher (or equal with newer event).
+  // Different game — only take over State 1 if priority is strictly higher (or equal with newer
+  // event); the old primary demotes into the "also flagged" list rather than being dropped.
   if (incoming.priority_score >= current.priority_score) {
     return {
       slice: {
         ...slice,
         flag: incoming,
+        otherFlags: upsertOtherFlag(removeOtherFlag(slice.otherFlags, incoming.game_id), current),
         broadcast: null,
         broadcasts: [],
         branch: recomputeBranch(slice, true, now),
@@ -157,7 +198,12 @@ export function applyFlagEventToHome(
     };
   }
 
-  return { slice, needsBroadcastFetch: false, broadcastGameId: null };
+  // Doesn't overtake the primary — track/update it in the also-flagged list instead of dropping it.
+  return {
+    slice: { ...slice, otherFlags: upsertOtherFlag(slice.otherFlags, incoming) },
+    needsBroadcastFetch: false,
+    broadcastGameId: null,
+  };
 }
 
 /**
@@ -169,12 +215,15 @@ export function reconcileHomeWithFlagsCurrent(
   response: FlagsCurrentResponse,
   now: Date = new Date(),
 ): ApplyFlagEventResult {
-  const top = response.flags[0] ?? null;
+  // Already priority-sorted server-side (`flags.ts`) — everything after the top is the
+  // "also flagged" row as-is, no re-sort needed.
+  const [top, ...otherFlags] = response.flags;
   if (!top) {
     return {
       slice: {
         ...slice,
         flag: null,
+        otherFlags: [],
         broadcast: null,
         broadcasts: [],
         branch: recomputeBranch(slice, false, now),
@@ -189,6 +238,7 @@ export function reconcileHomeWithFlagsCurrent(
     slice: {
       ...slice,
       flag: top,
+      otherFlags,
       broadcast: sameGame ? slice.broadcast : null,
       broadcasts: sameGame ? slice.broadcasts : [],
       branch: recomputeBranch(slice, true, now),

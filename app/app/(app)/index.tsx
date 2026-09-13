@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AlsoFlaggedRow } from '../../components/AlsoFlaggedRow';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 import { HomeDashboard } from '../../components/HomeDashboard';
@@ -64,6 +66,8 @@ interface HomeData {
   playerTeamMap: PlayerTeamMap;
   lineups: LineupResponse[];
   flag: CurrentFlag | null;
+  /** Home State 1 "Also flagged" row — every other flagged game, priority-sorted. */
+  otherFlags: CurrentFlag[];
   broadcast: GameBroadcast | null;
   broadcasts: GameBroadcast[];
   liveStakeGames: LiveGame[];
@@ -83,6 +87,7 @@ function toFlagSlice(data: HomeData): HomeFlagSlice {
     playerTeamMap: data.playerTeamMap,
     lineups: data.lineups,
     flag: data.flag,
+    otherFlags: data.otherFlags,
     broadcast: data.broadcast,
     broadcasts: data.broadcasts,
     liveStakeGames: data.liveStakeGames,
@@ -102,6 +107,7 @@ function emptyHome(partial: Partial<HomeData> & Pick<HomeData, 'hasLeagues' | 'b
     playerTeamMap: EMPTY_TEAM_MAP,
     lineups: [],
     flag: null,
+    otherFlags: [],
     broadcast: null,
     broadcasts: [],
     liveStakeGames: [],
@@ -234,6 +240,7 @@ export default function HomeScreen() {
       const playerTeamMap = buildPlayerTeamMap(lineups);
       const stakeTeams = stakeTeamAbbreviations(playerTeamMap);
       const topFlag = flagsResponse.flags[0] ?? null;
+      const otherFlags = flagsResponse.flags.slice(1);
       const liveStakeGames = filterLiveStakeGames(liveResponse.games, stakeTeams);
       const weekGames = weekResponse.games;
       const now = new Date();
@@ -276,6 +283,7 @@ export default function HomeScreen() {
         playerTeamMap,
         lineups,
         flag: topFlag,
+        otherFlags,
         broadcast,
         broadcasts,
         liveStakeGames,
@@ -339,6 +347,42 @@ export default function HomeScreen() {
     });
   }, [homeData, switchToGame]);
 
+  /**
+   * "Also flagged" row Switch button — resolves that game's broadcast on demand and switches
+   * playback to it directly. Deliberately does not touch `homeData.flag`/`broadcast(s)`: tapping
+   * Switch here does not promote that game to the Home State 1 primary (see report).
+   */
+  const onSwitchOther = useCallback(
+    async (flag: CurrentFlag) => {
+      let broadcasts: GameBroadcast[] = [];
+      try {
+        const response = await apiClient.get<GameBroadcastsResponse>(
+          `/games/${flag.game_id}/broadcasts`,
+        );
+        broadcasts = response.broadcasts;
+      } catch (error) {
+        console.warn('[home] failed to load broadcasts for also-flagged switch', error);
+      }
+      const broadcast = pickPreferredBroadcast(broadcasts);
+      const flaggedTeam = resolveFlaggedTeamDisplay(
+        flag.game,
+        flag.flagged_players,
+        homeData?.playerTeamMap ?? EMPTY_TEAM_MAP,
+      );
+      switchToGame({
+        gameId: flag.game_id,
+        deepLinkUrl: broadcast?.deep_link_url ?? null,
+        label: `${flag.game.away_team} @ ${flag.game.home_team}`,
+        teamName: flaggedTeam?.name,
+        teamColors: flaggedTeam
+          ? { primary: flaggedTeam.primaryColor, secondary: flaggedTeam.secondaryColor }
+          : null,
+        broadcasts,
+      });
+    },
+    [homeData, switchToGame],
+  );
+
   function renderBody() {
     if (!homeData) return null;
 
@@ -370,12 +414,15 @@ export default function HomeScreen() {
         );
       case 'state1':
         return homeData.flag ? (
-          <NowActiveCard
-            flag={homeData.flag}
-            broadcast={homeData.broadcast}
-            playerTeamMap={homeData.playerTeamMap}
-            onSwitch={onSwitch}
-          />
+          <View style={styles.state1}>
+            <NowActiveCard
+              flag={homeData.flag}
+              broadcast={homeData.broadcast}
+              playerTeamMap={homeData.playerTeamMap}
+              onSwitch={onSwitch}
+            />
+            <AlsoFlaggedRow flags={homeData.otherFlags} onSwitch={onSwitchOther} />
+          </View>
         ) : null;
       case 'state2':
         return <HomeLiveIdleCard liveGames={homeData.liveStakeGames} />;
@@ -417,3 +464,9 @@ export default function HomeScreen() {
     </HomeDashboard>
   );
 }
+
+const styles = StyleSheet.create({
+  state1: {
+    gap: theme.spacing.lg,
+  },
+});
