@@ -161,3 +161,117 @@ describe('applyPlayToState — specific transitions', () => {
     );
   });
 });
+
+describe('applyPlayToState — carrying possession forward through a clock stoppage', () => {
+  it('carries possession, unit, and field position forward through a timeout', () => {
+    const previous = applyPlayToState(
+      null,
+      makePlay({
+        possessionTeamId: 'KC',
+        playType: 'run',
+        yardsToOpponentEndzone: 15,
+        down: 3,
+        distance: 2,
+      }),
+      clock,
+    );
+    expect(previous.inRedZone).toBe(true);
+
+    const duringTimeout = applyPlayToState(
+      previous,
+      makePlay({ possessionTeamId: null, playType: 'timeout', yardsToOpponentEndzone: null, down: null, distance: null }),
+      clock,
+    );
+
+    expect(duringTimeout.possessionTeamId).toBe('KC');
+    expect(duringTimeout.unitOnField).toBe('offense');
+    expect(duringTimeout.yardsToOpponentEndzone).toBe(15);
+    expect(duringTimeout.down).toBe(3);
+    expect(duringTimeout.distance).toBe(2);
+    expect(duringTimeout.inRedZone).toBe(true);
+  });
+
+  it('carries possession forward through a two-minute warning (end_period)', () => {
+    const previous = applyPlayToState(null, makePlay({ possessionTeamId: 'KC', playType: 'pass' }), clock);
+    const duringWarning = applyPlayToState(
+      previous,
+      makePlay({ possessionTeamId: null, playType: 'end_period' }),
+      clock,
+    );
+    expect(duringWarning.possessionTeamId).toBe('KC');
+    expect(duringWarning.unitOnField).toBe('offense');
+  });
+
+  it('does NOT carry possession forward through an end_half (real intermission)', () => {
+    const previous = applyPlayToState(null, makePlay({ possessionTeamId: 'KC', playType: 'run' }), clock);
+    const atHalftime = applyPlayToState(
+      previous,
+      makePlay({ possessionTeamId: null, playType: 'end_half' }),
+      clock,
+    );
+    expect(atHalftime.possessionTeamId).toBeNull();
+    expect(atHalftime.unitOnField).toBe('none');
+  });
+
+  it('does NOT carry possession forward through an end_game', () => {
+    const previous = applyPlayToState(null, makePlay({ possessionTeamId: 'KC', playType: 'run' }), clock);
+    const atEnd = applyPlayToState(
+      previous,
+      makePlay({ possessionTeamId: null, playType: 'end_game' }),
+      clock,
+    );
+    expect(atEnd.possessionTeamId).toBeNull();
+    expect(atEnd.unitOnField).toBe('none');
+  });
+
+  it('does not carry anything forward when there is no previous state', () => {
+    const duringTimeout = applyPlayToState(
+      null,
+      makePlay({ possessionTeamId: null, playType: 'timeout' }),
+      clock,
+    );
+    expect(duringTimeout.possessionTeamId).toBeNull();
+    expect(duringTimeout.unitOnField).toBe('none');
+  });
+
+  it('reflects a real possession change normally (non-stoppage play with new possession)', () => {
+    const previous = applyPlayToState(null, makePlay({ possessionTeamId: 'KC' }), clock);
+    const afterTurnover = applyPlayToState(previous, makePlay({ possessionTeamId: 'LV' }), clock);
+    expect(afterTurnover.possessionTeamId).toBe('LV');
+  });
+
+  it('carries possession forward through a pre-snap-penalty no_play naming the SAME team', () => {
+    const previous = applyPlayToState(
+      null,
+      makePlay({ possessionTeamId: 'KC', playType: 'run', down: 3, distance: 5 }),
+      clock,
+    );
+    const duringPenalty = applyPlayToState(
+      previous,
+      makePlay({ possessionTeamId: 'KC', playType: 'no_play', down: 3, distance: 10 }),
+      clock,
+    );
+    expect(duringPenalty.possessionTeamId).toBe('KC');
+    expect(duringPenalty.unitOnField).toBe('offense');
+    // Field position/down-distance are carried from `previous`, not the (also valid) penalty play's
+    // own values — the penalty play is treated as a no-op, consistent with `no_play`'s meaning.
+    expect(duringPenalty.down).toBe(3);
+    expect(duringPenalty.distance).toBe(5);
+  });
+
+  it('does NOT carry possession forward through a no_play naming a DIFFERENT team (ambiguous new drive)', () => {
+    const previous = applyPlayToState(null, makePlay({ possessionTeamId: 'KC', playType: 'run' }), clock);
+    const freshDrivePenalty = applyPlayToState(
+      previous,
+      makePlay({ possessionTeamId: 'LV', playType: 'no_play' }),
+      clock,
+    );
+    expect(freshDrivePenalty.possessionTeamId).toBe('LV');
+    expect(freshDrivePenalty.unitOnField).toBe('none');
+  });
+
+  it('does not carry a no_play forward when there is no previous state', () => {
+    const state = applyPlayToState(null, makePlay({ possessionTeamId: 'KC', playType: 'no_play' }), clock);
+    expect(state.unitOnField).toBe('none');
+  });
+});

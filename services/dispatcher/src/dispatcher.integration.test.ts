@@ -167,13 +167,16 @@ function makePlay(overrides: Partial<PlayEvent> = {}): PlayEvent {
   };
 }
 
-/** Toggles possession off (timeout, no unit on field) — reliably produces a `flag_removed` diff
- *  against whatever flag_added state preceded it, without needing priority-delta math. */
-function makeTimeoutPlay(overrides: Partial<PlayEvent> = {}): PlayEvent {
+/** Flips possession to AWAY (a genuine change, not a stoppage) — reliably produces a `flag_removed`
+ *  diff against whatever flag_added state preceded it, without needing priority-delta math. Not a
+ *  `timeout`: `applyPlayToState`'s carry-forward fix (Live Sunday test, Finding 1/1a — a `timeout` or
+ *  other `SKIP_AND_WAIT`/same-team `no_play` no longer zeroes `unitOnField` when possession hasn't
+ *  actually changed) means a real timeout play here would no longer toggle the flag off at all, which
+ *  is the whole point of that fix — so this test needs an actual possession change instead. */
+function makeAwayPossessionPlay(overrides: Partial<PlayEvent> = {}): PlayEvent {
   return makePlay({
-    playId: 'play-timeout',
-    possessionTeamId: null,
-    playType: 'timeout',
+    playId: 'play-away',
+    possessionTeamId: AWAY,
     ...overrides,
   });
 }
@@ -294,13 +297,15 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
     const p = buildPipeline();
     await p.gameStateStore.markUserActive(USER_ID, 10 * 60_000);
 
-    // Alternates flag_added/flag_removed (KC has the ball, then a timeout) so every play produces a
-    // fresh, deliverable event without needing priority-delta bookkeeping. Each event is fully
-    // processed (queued -> advanced to its fire time -> ticked) before the next play fires, so no
-    // event is ever superseded before its own delivery.
+    // Alternates flag_added/flag_removed (KC has the ball, then LV has the ball) so every play
+    // produces a fresh, deliverable event without needing priority-delta bookkeeping. Each event is
+    // fully processed (queued -> advanced to its fire time -> ticked) before the next play fires, so
+    // no event is ever superseded before its own delivery.
     for (let i = 0; i < 4; i += 1) {
       const play =
-        i % 2 === 0 ? makePlay({ playId: `play-${i}` }) : makeTimeoutPlay({ playId: `play-${i}` });
+        i % 2 === 0
+          ? makePlay({ playId: `play-${i}` })
+          : makeAwayPossessionPlay({ playId: `play-${i}` });
       await onPlayEvent(p.onPlayEventDeps, play);
       vi.advanceTimersByTime(CBS_LAG_MS);
 

@@ -128,8 +128,38 @@ const LOG_DIR = path.resolve(__dirname, 'logs');
 
 const WATCHED_USER_ID = 'harness-watched-user';
 const DATA_ONLY_USER_ID = 'harness-dataonly-user';
-/** YouTube TV's live entry point — what an `action.deep_link_url` tap should open. */
+/** YouTube TV's live entry point — fallback for any game without a known per-broadcast videoId. */
 const YOUTUBE_TV_DEEP_LINK = 'https://tv.youtube.com/live';
+/**
+ * Per-game YouTube TV `videoId`s, hand-captured from the browser address bar while each broadcast
+ * was live (see PLAN.md's deep-link open question: `tv.youtube.com/watch/<videoId>` opens directly
+ * into the live game, but the videoId isn't derivable from the matchup — it has to come from
+ * somewhere per-broadcast). Filled in only for today's watched games; anything absent here falls
+ * back to `YOUTUBE_TV_DEEP_LINK` (opens YouTube TV's home/live tab instead of the exact game).
+ */
+const GAME_VIDEO_IDS: Readonly<Record<string, string>> = {
+  '401872661': '_XYzBeHLxpU', // Bears (CAR @ CHI)
+  '401872660': 'skeSQ9ZXBXc', // Bills (HOU @ BUF)
+};
+/**
+ * Overrides which team's offense the watched user is staked in, keyed by gameId. Defaults to
+ * `context.homeTeamId` (see `stakeTeamFor`) when a game has no entry here.
+ *
+ * Only one team per game — never both — is staked (see `buildLineup`'s doc comment: staking both
+ * sides of a game keeps `flagged` permanently `true` across every possession change, so
+ * `diffFlagStates` never toggles and no event fires at all). A single stake already notifies on
+ * *every* possession change in a two-team game: `flag_added` when the staked team takes over,
+ * `flag_removed` (with "<other team> has the ball now" copy) when the other team does. So staking
+ * HOU in 401872660 already covers both "Bills coming on offense" and "Texans coming on offense" —
+ * only 401872661 needs an override, to point the stake at CHI instead of the default home team CAR.
+ */
+const STAKE_TEAM_OVERRIDES: Readonly<Record<string, string>> = {
+  '401872661': 'CHI', // Bears — user wants flags on Chicago's offense, not Carolina's.
+};
+
+function stakeTeamFor(context: EspnGameContext): string {
+  return STAKE_TEAM_OVERRIDES[context.gameId] ?? context.homeTeamId;
+}
 /**
  * Stand-in token for a no-push run. `deliverFlagEvent` skips the push branch entirely when the token
  * is `null`, so nulling it would hide the exact thing a dry run wants to inspect — the title, body and
@@ -436,7 +466,7 @@ function buildLineup(userId: string, contexts: EspnGameContext[]): UserLineupCac
   const starPlayerIds = new Set<string>();
 
   contexts.forEach((context, index) => {
-    const team = context.homeTeamId;
+    const team = stakeTeamFor(context);
     teamPositions.set(team, new Set<'offense' | 'defense'>(['offense']));
     const playerId = `${team}-RB1`;
     playerToTeam.set(playerId, team);
@@ -450,7 +480,7 @@ function buildLineup(userId: string, contexts: EspnGameContext[]): UserLineupCac
 
 function seedPlayers(catalog: InMemoryPlayerCatalog, contexts: EspnGameContext[]): void {
   for (const context of contexts) {
-    const team = context.homeTeamId;
+    const team = stakeTeamFor(context);
     catalog.setPlayer({
       playerId: `${team}-RB1`,
       firstName: teamInfo(team).nickname,
@@ -487,10 +517,12 @@ function seedGameCatalog(catalog: InMemoryGameCatalog, contexts: EspnGameContext
  */
 function seedBroadcasts(catalog: InMemoryBroadcastCatalog, contexts: EspnGameContext[]): void {
   for (const context of contexts) {
+    const videoId = GAME_VIDEO_IDS[context.gameId];
+    const deepLinkUrl = videoId ? `https://tv.youtube.com/watch/${videoId}` : YOUTUBE_TV_DEEP_LINK;
     catalog.setGameBroadcasts(context.gameId, [
       {
         service: 'sunday_ticket',
-        deepLinkUrl: YOUTUBE_TV_DEEP_LINK,
+        deepLinkUrl,
         requiresSubscription: true,
       },
     ]);
@@ -623,10 +655,10 @@ async function runHarness(config: HarnessConfig): Promise<void> {
   // Shim 1: stakes keyed by ESPN abbreviation. Watched games belong to the token-bearing user so
   // only they generate pushes (Shim/see header "watched vs data-only").
   for (const context of watchedContexts) {
-    gameStateStore.addStake(context.homeTeamId, WATCHED_USER_ID);
+    gameStateStore.addStake(stakeTeamFor(context), WATCHED_USER_ID);
   }
   for (const context of dataOnlyContexts) {
-    gameStateStore.addStake(context.homeTeamId, DATA_ONLY_USER_ID);
+    gameStateStore.addStake(stakeTeamFor(context), DATA_ONLY_USER_ID);
   }
 
   userDirectory.setUser(makeUser(WATCHED_USER_ID, config.pushToken ?? DRY_RUN_PUSH_TOKEN));
@@ -854,7 +886,7 @@ async function runHarness(config: HarnessConfig): Promise<void> {
   for (const context of watchedContexts) {
     console.log(
       `  WATCH  ${context.gameId}  ${context.awayTeamId} @ ${context.homeTeamId}  ` +
-        `(stake: ${context.homeTeamId} offense)`,
+        `(stake: ${stakeTeamFor(context)} offense)`,
     );
   }
   for (const context of dataOnlyContexts) {

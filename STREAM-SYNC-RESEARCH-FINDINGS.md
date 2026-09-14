@@ -111,7 +111,11 @@ A specific, mechanism-backed rationale was identified for padding the delay esti
 - ESPN's unofficial-endpoint risk (no SLA, could change without notice) remains an accepted but real risk, consistent with the same risk already accepted for the v2 fantasy integration plan.
 - No commitment yet to ESPN as the production data provider — this was explicitly a free prototyping/calibration choice, not a final decision.
 
+
+
 ## **10. Resumption Detection: Waiting for the First Real Play, Not a Fixed Delay**
+
+
 
 #### **10.1 The Problem With a Single Padded Delay**
 
@@ -210,8 +214,6 @@ The play that first reveals a possession change can itself already be real actio
 
 - If that play is REAL_ACTION (the punt case): the trigger is that play itself, but elapsed time is measured from the **preceding** play (the actual real-world moment of the possession change) — not from the revealing play, which would trivially always compute as zero.
 - If that play is procedural (the timeout cases): elapsed time is measured from that revealing play, and scanning continues forward as before.
-
-
 
 #### **10.8 Backtest Validation**
 

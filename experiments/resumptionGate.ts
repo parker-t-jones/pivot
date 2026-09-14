@@ -56,6 +56,23 @@ export class ResumptionGatedDispatcher {
   private readonly windowOpen = new Map<string, boolean>();
   /** gameId -> the resolution produced while processing the CURRENT play, if any. */
   private readonly resolutionThisPlay = new Map<string, ResumptionResolution>();
+  /**
+   * gameId -> a resolution that was set on the PREVIOUS play but never consumed by a `dispatch()`
+   * call that play (e.g. a kickoff resolves REAL_ACTION on itself, per the file header's "window
+   * anchoring" prediction, but a kickoff never produces a `flag_added` — `applyPlayToState` puts it in
+   * `SPECIAL_TEAMS_PLAY_TYPES`, not `OFFENSE_PLAY_TYPES` — so the event this resolution is actually
+   * FOR doesn't exist until the following offensive snap). Findings doc, Finding 2: without this,
+   * `beginPlay` wiped the resolution one play before anything ever read it, so every kickoff-started
+   * drive's `flag_added` went out via `fire_immediately` with `resolution: null`, silently bypassing
+   * resumption-gating for the one play type (`kickoff`) most likely to actually need it.
+   *
+   * Deliberately bounded to exactly one extra play, not "last resolution ever": `beginPlay` demotes
+   * whatever is still sitting in `resolutionThisPlay` into this slot, and the NEXT `beginPlay` call
+   * (i.e. two plays after the resolution was set) drops it for good if nothing consumed it by then —
+   * so a resolution can carry forward to cover the immediately-following play's event, but can't keep
+   * misattributing itself to unrelated events several plays later.
+   */
+  private readonly carryOverResolution = new Map<string, ResumptionResolution>();
   /** gameId -> events dispatched while a window was open, awaiting its resolution. */
   private readonly parked = new Map<string, ParkedEvent[]>();
 
@@ -67,9 +84,17 @@ export class ResumptionGatedDispatcher {
 
   /**
    * Called by the harness before `onPlayEvent`, so `dispatch` can tell "a window resolved on the play
-   * I am currently reacting to" from "a window resolved some plays ago".
+   * I am currently reacting to" from "a window resolved some plays ago". Demotes an unconsumed
+   * resolution from the play that just ended into a one-play grace period (`carryOverResolution`)
+   * instead of discarding it outright — see that field's comment for why.
    */
   beginPlay(gameId: string): void {
+    const leftover = this.resolutionThisPlay.get(gameId);
+    if (leftover) {
+      this.carryOverResolution.set(gameId, leftover);
+    } else {
+      this.carryOverResolution.delete(gameId);
+    }
     this.resolutionThisPlay.delete(gameId);
   }
 
@@ -80,9 +105,15 @@ export class ResumptionGatedDispatcher {
     void this.releaseParked(gameId, resolution);
   }
 
-  /** Called by the harness when a tracker opens a window. */
+  /**
+   * Called by the harness when a tracker opens a window. A fresh possession change starting also
+   * invalidates any not-yet-consumed carry-over from a prior, now-irrelevant resolution — otherwise a
+   * kickoff whose return is itself immediately fumbled (a second possession change before the first
+   * one's `flag_added` ever fired) could misattribute the wrong resolution to the eventual event.
+   */
   noteWindowOpened(gameId: string): void {
     this.windowOpen.set(gameId, true);
+    this.carryOverResolution.delete(gameId);
   }
 
   async dispatch(event: FlagEvent): Promise<void> {
@@ -95,7 +126,12 @@ export class ResumptionGatedDispatcher {
       return;
     }
 
-    const resolution = this.resolutionThisPlay.get(gameId) ?? null;
+    const resolution =
+      this.resolutionThisPlay.get(gameId) ?? this.carryOverResolution.get(gameId) ?? null;
+    // Consumed at most once: the first event dispatched after a resolution lands claims it, so a
+    // second, unrelated event later doesn't also inherit it.
+    this.resolutionThisPlay.delete(gameId);
+    this.carryOverResolution.delete(gameId);
 
     if (resolution?.outcome === 'ABORTED') {
       // The possession change this event describes was separated from real action by halftime or the
