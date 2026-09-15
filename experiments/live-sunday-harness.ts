@@ -140,6 +140,7 @@ const YOUTUBE_TV_DEEP_LINK = 'https://tv.youtube.com/live';
 const GAME_VIDEO_IDS: Readonly<Record<string, string>> = {
   '401872661': '_XYzBeHLxpU', // Bears (CAR @ CHI)
   '401872660': 'skeSQ9ZXBXc', // Bills (HOU @ BUF)
+  '401872931': 'MrXg0chrojg', // MNF (DEN @ KC)
 };
 /**
  * Overrides which team's offense the watched user is staked in, keyed by gameId. Defaults to
