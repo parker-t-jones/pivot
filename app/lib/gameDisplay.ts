@@ -34,9 +34,10 @@ export interface GameBroadcastsResponse {
 }
 
 /** Human labels for `game_broadcasts.service` (Section 7 enum) — drives the Section 10 CTA copy
- *  ("Watch on Sunday Ticket"). Unknown services fall back to the raw value. */
+ *  (`Watch on {preferred service}`). `sunday_ticket` displays as YouTube TV (Google carries NFL
+ *  Sunday Ticket inside YouTube TV). Unknown services fall back to the raw value. */
 const SERVICE_LABELS: Record<string, string> = {
-  sunday_ticket: 'Sunday Ticket',
+  sunday_ticket: 'YouTube TV',
   espn_plus: 'ESPN+',
   paramount_plus: 'Paramount+',
   peacock: 'Peacock',
@@ -47,6 +48,9 @@ const SERVICE_LABELS: Record<string, string> = {
   cbs: 'CBS',
   nbc: 'NBC',
   abc: 'ABC',
+  hulu: 'Hulu',
+  fubo: 'Fubo',
+  directv: 'DIRECTV',
 };
 
 export function serviceLabel(service: string): string {
@@ -120,9 +124,64 @@ export function fieldGaugeMarkerPercent(yardsToEndzone: number): number {
   return Math.max(0, Math.min(100, 100 - yardsToEndzone));
 }
 
-/** Red-zone highlight when the ball is inside the opponent's 20. */
+/** Yard-line numbers painted on the 100-yard stick (`10 20 30 40 50 40 30 20 10`). */
+export const FIELD_GAUGE_TICK_LABELS = [10, 20, 30, 40, 50, 40, 30, 20, 10] as const;
+
+/** Right-edge width of the always-on red-zone geography (opponent's 20-yard area). */
+export const FIELD_GAUGE_RED_ZONE_PERCENT = 20;
+
+/** Tick position as % from the possessing team's own goal; index 0 → 10-yard line. */
+export function fieldGaugeTickPercent(tickIndex: number): number {
+  return (tickIndex + 1) * 10;
+}
+
+/** True when the ball is inside the opponent's 20 — does not gate painting the red-zone geography. */
 export function fieldGaugeShowsRedZone(yardsToEndzone: number): boolean {
   return yardsToEndzone <= 20;
+}
+
+/** Uppercase nicknames for the Now Active matchup line (`COLTS @ TITANS`). */
+export function matchupNicknameLabel(awayName: string, homeName: string): string {
+  return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
+}
+
+/** Abbreviation of the team opposite possession, or null when nobody has the ball. */
+export function opponentAbbreviation(
+  possessionTeam: string | null,
+  homeTeam: string,
+  awayTeam: string,
+): string | null {
+  if (possessionTeam === null) return null;
+  return possessionTeam === homeTeam ? awayTeam : homeTeam;
+}
+
+/** Clock ticker, appending down/distance when both are present (`Q2 · 7:14 · 1st & 10`). */
+export function gameClockLine(
+  quarter: number,
+  timeRemainingSec: number,
+  down: number | null,
+  distance: number | null,
+): string {
+  const clock = `${quarterLabel(quarter)} · ${formatClock(timeRemainingSec)}`;
+  const downDistance = downDistanceLabel(down, distance);
+  return downDistance ? `${clock} · ${downDistance}` : clock;
+}
+
+/**
+ * Also-flagged situation column. Clock always; field position and down/distance omitted when
+ * null (kickoff / timeout / between plays).
+ */
+export function alsoFlaggedSituationLines(game: GameSummary): string[] {
+  const lines = [gameClockLine(game.quarter, game.time_remaining_sec, null, null)];
+  const position = fieldPositionLabel(
+    game.yards_to_endzone,
+    game.possession_team,
+    opponentAbbreviation(game.possession_team, game.home_team, game.away_team),
+  );
+  if (position) lines.push(position);
+  const downDistance = downDistanceLabel(game.down, game.distance);
+  if (downDistance) lines.push(downDistance);
+  return lines;
 }
 
 /** The `preferred` broadcast (the switch target), or the first available, or null. */

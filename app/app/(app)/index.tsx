@@ -451,6 +451,7 @@ export default function HomeScreen() {
           accessibilityLabel="Settings"
           label="Settings"
           onPress={() => router.push('/(app)/settings')}
+          tone="muted"
         />
       }
     >

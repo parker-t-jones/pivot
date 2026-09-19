@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import {
+  matchupNicknameLabel,
+  opponentAbbreviation,
   reasonLabel,
   serviceLabel,
   type CurrentFlag,
@@ -23,12 +25,13 @@ interface NowActiveCardProps {
 }
 
 /**
- * PLAN.md Section 10 Home State 1 "Now active" card (the dominant card): teams + score, field
- * gauge (UI-SPEC.md §3.1), a reason chip, and the primary CTA ("Watch on {service}"). The CTA is
- * disabled when there's no resolvable broadcast/deep link, matching Section 10's
- * graceful-degradation intent rather than offering a button that leads nowhere. The outer card
- * always carries the `accentBorder` stroke + `panelGlow` (UI-SPEC.md §2.3/§3.3) — it only renders
- * for an active flag, so there's no "possession" condition to gate it on.
+ * PLAN.md Section 10 Home State 1 "Now active" card (the dominant card): uppercase nicknames +
+ * score, numbered field gauge (UI-SPEC.md §3.1), an outlined reason chip, and the primary CTA
+ * (`Watch on {preferred service}` for this user × this game). The CTA is disabled when there's no
+ * resolvable broadcast/deep link, matching Section 10's graceful-degradation intent rather than
+ * offering a button that leads nowhere. The outer card always carries the `accentBorder` stroke +
+ * `panelGlow` (UI-SPEC.md §2.3/§3.3) — it only renders for an active flag, so there's no
+ * "possession" condition to gate it on.
  *
  * Sprint 9 Phase 2: the reason chip now renders the Section 10 fidelity target — player name(s),
  * position, and team+unit ("Jonathan Taylor active — RB — Colts offense") — using Phase 1's
@@ -49,12 +52,11 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
         ? reasonLabel(primaryReason)
         : null;
 
-  const opponentTeam =
-    game.possession_team === null
-      ? null
-      : game.possession_team === game.home_team
-        ? game.away_team
-        : game.home_team;
+  const opponentTeam = opponentAbbreviation(
+    game.possession_team,
+    game.home_team,
+    game.away_team,
+  );
 
   return (
     <View style={styles.card}>
@@ -62,7 +64,7 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
 
       <View style={styles.matchupRow}>
         <Text style={styles.matchup}>
-          {game.away_team} @ {game.home_team}
+          {matchupNicknameLabel(game.away_team_name, game.home_team_name)}
         </Text>
         <Text style={styles.score}>
           {game.score.away}–{game.score.home}
@@ -114,7 +116,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
   },
   eyebrow: {
-    color: theme.colors.textSecondary,
+    color: theme.colors.accent,
     fontSize: theme.type.eyebrow.size,
     fontWeight: theme.type.eyebrow.weight,
     letterSpacing: 1,
@@ -124,6 +126,7 @@ const styles = StyleSheet.create({
    *  bolder than the shared `heading` token, which stays lighter for plain screen headers. */
   matchup: {
     color: theme.colors.textPrimary,
+    flexShrink: 1,
     fontSize: theme.type.heading.size,
     fontWeight: '700',
     letterSpacing: -0.2,
@@ -135,8 +138,9 @@ const styles = StyleSheet.create({
   },
   reasonChip: {
     alignSelf: 'flex-start',
-    backgroundColor: theme.colors.accentMuted,
+    borderColor: theme.colors.accent,
     borderRadius: theme.radii.pill,
+    borderWidth: 1,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
   },
