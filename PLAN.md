@@ -1395,7 +1395,7 @@ Three-tab bottom navigation (spec):
 Top to bottom:
 
 - **"Now active" card** (large, dominant): uppercase team nicknames + score ("COLTS @ TITANS"), a numbered 100-yard field gauge — always-on red-zone geography and "RED ZONE" caption on the opponent's 20, tick-labeled yard lines, possession marker, field-position caption, and a clock line that appends down/distance when present — an outlined (not filled) reason chip ("Jonathan Taylor active — RB — Colts offense"), primary CTA button ("Watch on {preferred broadcast service for this user × this game}", e.g. "Watch on YouTube TV" — resolved via `GET /games/:id/broadcasts`'s `preferred`; the "Cast to Apple TV" variant is cut in v1, see Section 2), secondary "Or use..." link
-- **"Also flagged" row**: horizontal scroll of situation cards for other flagged games — stacked away/home rows with a team-color dot + abbreviation (no team logos; `GameSummary` carries no logo field) plus a clock/field-position/down-distance column, each with an accent-outlined "Switch" button
+- **"Also flagged" row**: up to two situation cards per row (wrap below) for other flagged games — stacked away/home rows with a team-color dot + abbreviation (no team logos; `GameSummary` carries no logo field) plus a clock/field-position/down-distance column, each with an accent-outlined "Switch" button
 - **"Other live games"**: list of live games with user stake but no current flag
 - **"Today's other games"** (collapsible): rest of the slate
 

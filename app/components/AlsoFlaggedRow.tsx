@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   alsoFlaggedSituationLines,
   type CurrentFlag,
 } from '../lib/gameDisplay';
+import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
 
 interface AlsoFlaggedRowProps {
@@ -22,11 +23,12 @@ function teamDotColor(hex: string): string {
 }
 
 /**
- * PLAN.md Section 10 Home State 1 "Also flagged" row — every other flagged game rendered below
- * `NowActiveCard`. Situation cards (stacked abbrs + color dots, clock / field position /
- * down-distance); intentionally no `FieldGauge` and no `accentBorder`/`panelGlow` — that treatment
- * stays reserved for the card that owns the user's primary flag (UI-SPEC.md §3.3). NFL team logos
- * are a non-goal (no logo field on `GameSummary`). Renders nothing when there's nothing to show.
+ * PLAN.md Section 10 Home State 1 "Also flagged" — every other flagged game below
+ * `NowActiveCard`. Two cards per row (wrap below); situation cards (stacked abbrs + color dots,
+ * clock / field position / down-distance); intentionally no `FieldGauge` and no
+ * `accentBorder`/`panelGlow` — that treatment stays reserved for the primary flag card
+ * (UI-SPEC.md §3.3). NFL team logos are a non-goal (no logo field on `GameSummary`).
+ * Renders nothing when there's nothing to show.
  */
 export function AlsoFlaggedRow({ flags, onSwitch }: AlsoFlaggedRowProps) {
   const [switchingGameId, setSwitchingGameId] = useState<string | null>(null);
@@ -41,11 +43,7 @@ export function AlsoFlaggedRow({ flags, onSwitch }: AlsoFlaggedRowProps) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>Also flagged</Text>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-      >
+      <View style={styles.grid}>
         {flags.map((flag) => {
           const isSwitching = switchingGameId === flag.game_id;
           const situation = alsoFlaggedSituationLines(flag.game);
@@ -61,6 +59,7 @@ export function AlsoFlaggedRow({ flags, onSwitch }: AlsoFlaggedRowProps) {
                   abbreviation={flag.game.home_team}
                 />
               </View>
+              <View style={styles.cardDivider} />
               <View style={styles.situation}>
                 {situation.map((line) => (
                   <Text key={line} style={styles.situationLine}>
@@ -87,7 +86,7 @@ export function AlsoFlaggedRow({ flags, onSwitch }: AlsoFlaggedRowProps) {
             </View>
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -104,55 +103,73 @@ function TeamRow({ color, abbreviation }: { color: string; abbreviation: string 
 const styles = StyleSheet.create({
   abbreviation: {
     color: theme.colors.textPrimary,
-    fontSize: theme.type.small.size,
-    fontWeight: '700',
-    letterSpacing: -0.2,
+    fontFamily: fonts.sansBold,
+    fontSize: 16,
+    letterSpacing: -0.3,
   },
   card: {
-    backgroundColor: theme.colors.surface,
+    // Same canvas black as NowActiveCard (not `surface`).
+    backgroundColor: theme.colors.background,
     borderColor: theme.colors.border,
     borderRadius: theme.radii.md,
     borderWidth: 1,
+    flexBasis: '47%',
     flexDirection: 'row',
-    gap: theme.spacing.md,
-    padding: theme.spacing.md,
-    width: 220,
+    flexGrow: 1,
+    maxWidth: '48.5%',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+  },
+  cardDivider: {
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.border,
+    marginHorizontal: theme.spacing.xs,
+    width: StyleSheet.hairlineWidth * 2,
   },
   dot: {
     borderRadius: theme.radii.pill,
-    height: 10,
-    width: 10,
+    height: 9,
+    width: 9,
+  },
+  grid: {
+    columnGap: theme.spacing.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: theme.spacing.sm,
   },
   /** Same eyebrow family as NowActiveCard's "Now active" label (UI-SPEC.md §2.4). */
   label: {
     color: theme.colors.textTertiary,
+    fontFamily: theme.type.eyebrow.fontFamily,
     fontSize: theme.type.eyebrow.size,
     fontWeight: theme.type.eyebrow.weight,
     letterSpacing: theme.type.eyebrow.letterSpacing,
     textTransform: 'uppercase',
   },
-  scrollContent: {
-    gap: theme.spacing.sm,
-  },
   situation: {
     alignItems: 'flex-end',
     flex: 1,
-    gap: 2,
+    gap: 1,
+    justifyContent: 'center',
+    minWidth: 0,
   },
   situationLine: {
     color: theme.colors.textSecondary,
-    fontSize: theme.type.caption.size,
+    fontFamily: theme.type.ticker.fontFamily,
+    fontSize: 11,
     fontVariant: [...theme.type.score.fontVariant],
+    lineHeight: 14,
     textAlign: 'right',
   },
   switchButton: {
     alignItems: 'center',
+    alignSelf: 'flex-end',
     borderColor: theme.colors.accent,
-    borderRadius: theme.radii.control,
+    borderRadius: theme.radii.sm,
     borderWidth: 1,
+    flexShrink: 0,
     justifyContent: 'center',
     marginTop: theme.spacing.xs,
-    minWidth: 72,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.xs,
   },
@@ -161,17 +178,19 @@ const styles = StyleSheet.create({
   },
   switchLabel: {
     color: theme.colors.accent,
-    fontSize: theme.type.small.size,
+    fontSize: theme.type.caption.size,
     fontWeight: theme.type.smallStrong.weight,
   },
   teamRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: theme.spacing.sm,
+    gap: theme.spacing.xs,
   },
+  /** 4/9 − 1/20 of the card width (divider nudged left by 5%). */
   teams: {
-    gap: theme.spacing.sm,
-    justifyContent: 'center',
+    justifyContent: 'space-evenly',
+    minHeight: 72,
+    width: '39.444%',
   },
   wrap: {
     gap: theme.spacing.sm,

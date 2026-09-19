@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   section: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.background,
     borderColor: theme.colors.accentBorder,
     borderRadius: theme.radii.lg,
     borderWidth: theme.effects.panelBorderWidth,
