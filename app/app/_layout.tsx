@@ -1,9 +1,11 @@
+import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { SessionProvider, useSession } from '../contexts/SessionContext';
+import { displayFontMap } from '../lib/fonts';
 import { theme } from '../lib/theme';
 
 function LoadingState({ message }: { message: string }) {
@@ -56,6 +58,16 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts(displayFontMap);
+
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaProvider>
+        <LoadingState message="Loading..." />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     // Sprint 6 Phase 6: `FlagEventBanner` reads safe-area insets so it slides in below the status
     // bar/notch. `expo-router`'s bundled `react-navigation` already wraps screens in a

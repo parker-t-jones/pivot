@@ -9,12 +9,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@expo-google-fonts/jetbrains-mono": "^0.4.1",
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
+    "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@expo/metro-runtime": "^56.0.15",
     "@supabase/supabase-js": "^2.108.2",
     "expo": "~56.0.12",
     "expo-constants": "~56.0.18",
     "expo-dev-client": "~56.0.23",
     "expo-device": "~56.0.4",
+    "expo-font": "^56.0.7",
     "expo-haptics": "~56.0.3",
     "expo-linking": "~56.0.14",
     "expo-notifications": "~56.0.20",

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { TEXT_BUTTON_HIT_SLOP } from '../lib/controlRecipes';
 import { theme } from '../lib/theme';
@@ -18,6 +18,7 @@ interface TextButtonProps {
   accessibilityRole?: 'button' | 'link';
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
+  labelStyle?: StyleProp<TextStyle>;
 }
 
 export function TextButton({
@@ -31,6 +32,7 @@ export function TextButton({
   accessibilityRole = 'button',
   accessibilityLabel,
   style,
+  labelStyle,
 }: TextButtonProps) {
   const type = theme.type[size];
 
@@ -59,6 +61,7 @@ export function TextButton({
             underline && styles.underline,
             pressed && !disabled && tone === 'accent' && styles.accentPressed,
             pressed && !disabled && tone === 'muted' && styles.mutedPressed,
+            labelStyle,
           ]}
         >
           {label}

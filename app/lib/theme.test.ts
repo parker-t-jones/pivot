@@ -10,9 +10,9 @@ describe('theme', () => {
     expect(theme.colors.textPrimary).toBe('#FFFFFF');
     expect(theme.colors.textSecondary).toBe('#9A9AA3');
     expect(theme.colors.textTertiary).toBe('#6E6E78');
-    expect(theme.colors.accent).toBe('#FFB020');
-    expect(theme.colors.accentPressed).toBe('#E09A10');
-    expect(theme.colors.accentMuted).toBe('rgba(255, 176, 32, 0.18)');
+    expect(theme.colors.accent).toBe('#F5A018');
+    expect(theme.colors.accentPressed).toBe('#D68C10');
+    expect(theme.colors.accentMuted).toBe('rgba(245, 160, 24, 0.18)');
     expect(theme.colors.onAccent).toBe('#412402');
     expect(theme.colors.danger).toBe('#FF5A5A');
     expect(theme.colors.dangerMuted).toBe('rgba(255, 90, 90, 0.14)');
@@ -32,8 +32,10 @@ describe('theme', () => {
 
     expect(theme.type.title.size).toBe(26);
     expect(theme.type.title.weight).toBe('700');
+    expect(theme.type.title.fontFamily).toBe('PlusJakartaSans_700Bold');
     expect(theme.type.heading.size).toBe(20);
     expect(theme.type.heading.weight).toBe('600');
+    expect(theme.type.heading.fontFamily).toBe('PlusJakartaSans_600SemiBold');
     expect(theme.type.body.size).toBe(15);
     expect(theme.type.body.weight).toBe('400');
     expect(theme.type.bodyStrong.size).toBe(15);
@@ -63,7 +65,12 @@ describe('theme', () => {
     expect(theme.type.button).toEqual({ size: 16, weight: '600', lineHeight: 22 });
     expect(theme.type.small).toEqual({ size: 14, weight: '400', lineHeight: 20 });
     expect(theme.type.smallStrong).toEqual({ size: 14, weight: '600', lineHeight: 20 });
-    expect(theme.type.eyebrow).toEqual({ size: 12, weight: '700', letterSpacing: 0.6 });
+    expect(theme.type.eyebrow).toEqual({
+      size: 12,
+      weight: '700',
+      letterSpacing: 0.6,
+      fontFamily: 'JetBrainsMono_700Bold',
+    });
   });
 
   it('uses tabular-nums + tight tracking for live-updating numbers (UI-SPEC.md §2.4)', () => {
@@ -72,6 +79,7 @@ describe('theme', () => {
       weight: '500',
       letterSpacing: 0,
       fontVariant: ['tabular-nums'],
+      fontFamily: 'JetBrainsMono_500Medium',
     });
     expect(theme.type.score).toEqual({
       size: 22,
@@ -79,16 +87,23 @@ describe('theme', () => {
       lineHeight: 28,
       letterSpacing: -0.2,
       fontVariant: ['tabular-nums'],
+      fontFamily: 'PlusJakartaSans_700Bold',
     });
   });
 
+  it('pairs Plus Jakarta Sans headers/scores with JetBrains Mono metrics (type trial)', () => {
+    expect(theme.type.title.fontFamily).toBe('PlusJakartaSans_700Bold');
+    expect(theme.type.heading.fontFamily).toBe('PlusJakartaSans_600SemiBold');
+    expect(theme.type.score.fontFamily).toBe('PlusJakartaSans_700Bold');
+  });
+
   it('adds the UI-SPEC.md §2 border/glow tokens', () => {
-    expect(theme.colors.accentBorder).toBe('rgba(255, 176, 32, 0.25)');
-    expect(theme.colors.accentGlow).toBe('rgba(255, 176, 32, 0.15)');
+    expect(theme.colors.accentBorder).toBe('rgba(245, 160, 24, 0.25)');
+    expect(theme.colors.accentGlow).toBe('rgba(245, 160, 24, 0.15)');
 
     expect(theme.effects.panelBorderWidth).toBe(1);
     expect(theme.effects.panelGlow).toEqual({
-      shadowColor: '#FFB020',
+      shadowColor: '#F5A018',
       shadowOffset: { width: 0, height: 0 },
       shadowOpacity: 0.15,
       shadowRadius: 20,

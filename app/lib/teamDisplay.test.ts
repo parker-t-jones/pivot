@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FlaggedPlayer, GameSummary } from './flagEventPayload';
 import {
   reasonChipCopy,
+  reasonChipParts,
   resolveFlaggedTeamDisplay,
   resolvePossessingTeamDisplay,
   type PlayerTeamMap,
@@ -98,18 +99,26 @@ describe('resolveFlaggedTeamDisplay', () => {
   });
 });
 
-describe('reasonChipCopy', () => {
-  const coltsOffense = { name: 'Colts', abbreviation: 'IND', primaryColor: '#000', secondaryColor: '#fff' };
+describe('reasonChipCopy / reasonChipParts', () => {
+  const colts = { name: 'Colts', abbreviation: 'IND', primaryColor: '#000', secondaryColor: '#fff' };
 
-  it('matches the Section 10 fidelity example for a single flagged player', () => {
-    expect(reasonChipCopy('offense_active', [jonathanTaylor], coltsOffense)).toBe(
-      'Jonathan Taylor active — RB — Colts offense',
+  it('splits a single flagged player into players + team nickname', () => {
+    expect(reasonChipParts('offense_active', [jonathanTaylor], colts)).toEqual({
+      players: 'Jonathan Taylor active — RB',
+      team: 'Colts',
+    });
+    expect(reasonChipCopy('offense_active', [jonathanTaylor], colts)).toBe(
+      'Jonathan Taylor active — RB — Colts',
     );
   });
 
-  it('omits the team/unit tail when the team could not be resolved', () => {
+  it('omits the team segment when the team could not be resolved', () => {
+    expect(reasonChipParts('offense_active', [jonathanTaylor], null)).toEqual({
+      players: 'Jonathan Taylor active — RB',
+      team: null,
+    });
     expect(reasonChipCopy('offense_active', [jonathanTaylor], null)).toBe(
-      'Jonathan Taylor active — RB — offense',
+      'Jonathan Taylor active — RB',
     );
   });
 
@@ -120,25 +129,32 @@ describe('reasonChipCopy', () => {
       last_name: 'Pittman',
       position: 'WR',
     };
-    expect(reasonChipCopy('offense_active', [jonathanTaylor, second], coltsOffense)).toBe(
-      'Jonathan Taylor +1 more active — Colts offense',
+    expect(reasonChipParts('offense_active', [jonathanTaylor, second], colts)).toEqual({
+      players: 'Jonathan Taylor +1 more active',
+      team: 'Colts',
+    });
+    expect(reasonChipCopy('offense_active', [jonathanTaylor, second], colts)).toBe(
+      'Jonathan Taylor +1 more active — Colts',
     );
   });
 
-  it('maps every known reason type to a distinct phrase', () => {
-    expect(reasonChipCopy('defense_active', [jonathanTaylor], coltsOffense)).toContain(
-      'Colts defense',
-    );
-    expect(reasonChipCopy('red_zone', [jonathanTaylor], coltsOffense)).toContain('Colts red zone');
-    expect(reasonChipCopy('close_game', [jonathanTaylor], coltsOffense)).toContain(
-      'Colts close game',
-    );
-    expect(reasonChipCopy('star_player_active', [jonathanTaylor], coltsOffense)).toContain(
-      'Colts star player',
-    );
+  it('uses the team nickname on the right regardless of reason type', () => {
+    for (const reason of [
+      'offense_active',
+      'defense_active',
+      'red_zone',
+      'close_game',
+      'star_player_active',
+    ]) {
+      expect(reasonChipParts(reason, [jonathanTaylor], colts).team).toBe('Colts');
+    }
   });
 
   it('falls back to the bare reason type when there are no flagged players', () => {
-    expect(reasonChipCopy('offense_active', [], coltsOffense)).toBe('offense_active');
+    expect(reasonChipParts('offense_active', [], colts)).toEqual({
+      players: 'offense_active',
+      team: null,
+    });
+    expect(reasonChipCopy('offense_active', [], colts)).toBe('offense_active');
   });
 });

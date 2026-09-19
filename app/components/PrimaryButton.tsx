@@ -4,6 +4,7 @@ import {
   StyleSheet,
   Text,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 
@@ -19,6 +20,8 @@ interface PrimaryButtonProps {
   inactive?: boolean;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
+  /** Optional label override (e.g. type-trial face on Now Active CTA). */
+  labelStyle?: StyleProp<TextStyle>;
 }
 
 export function PrimaryButton({
@@ -29,6 +32,7 @@ export function PrimaryButton({
   inactive = false,
   accessibilityLabel,
   style,
+  labelStyle,
 }: PrimaryButtonProps) {
   const isDisabled = disabled || loading || inactive;
 
@@ -49,7 +53,7 @@ export function PrimaryButton({
       {loading ? (
         <ActivityIndicator color={inactive ? theme.colors.textPrimary : theme.colors.onAccent} />
       ) : (
-        <Text style={[styles.label, inactive && styles.inactiveLabel]}>{label}</Text>
+        <Text style={[styles.label, inactive && styles.inactiveLabel, labelStyle]}>{label}</Text>
       )}
     </Pressable>
   );

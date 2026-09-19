@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
 
 interface HomeDashboardProps {
@@ -62,7 +63,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: theme.colors.textPrimary,
+    // Same JetBrains Mono bold as the Now Active eyebrow (type trial).
+    fontFamily: fonts.monoBold,
     fontSize: theme.type.title.size,
-    fontWeight: theme.type.title.weight,
+    letterSpacing: theme.type.title.letterSpacing,
   },
 });

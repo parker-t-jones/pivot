@@ -88,6 +88,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: theme.colors.textPrimary,
+    fontFamily: theme.type.heading.fontFamily,
     fontSize: theme.type.heading.size,
     fontWeight: theme.type.heading.weight,
   },
@@ -95,6 +96,7 @@ const styles = StyleSheet.create({
   matchup: {
     color: theme.colors.textPrimary,
     flexShrink: 1,
+    fontFamily: theme.type.title.fontFamily,
     fontSize: theme.type.bodyStrong.size,
     fontWeight: '700',
     letterSpacing: -0.2,
@@ -107,6 +109,7 @@ const styles = StyleSheet.create({
   },
   score: {
     color: theme.colors.textPrimary,
+    fontFamily: theme.type.score.fontFamily,
     fontSize: theme.type.bodyStrong.size,
     fontVariant: [...theme.type.score.fontVariant],
     fontWeight: '700',
@@ -114,6 +117,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     color: theme.colors.textTertiary,
+    fontFamily: theme.type.eyebrow.fontFamily,
     fontSize: theme.type.caption.size,
     fontWeight: theme.type.smallStrong.weight,
     letterSpacing: 0.3,

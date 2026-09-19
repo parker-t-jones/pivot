@@ -55,6 +55,7 @@ import {
   type ScheduleGame,
 } from '../../lib/schedule';
 import { resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../../lib/teamDisplay';
+import { fonts } from '../../lib/fonts';
 import { theme } from '../../lib/theme';
 import { useHomeRealtime } from '../../lib/useHomeRealtime';
 
@@ -443,13 +444,14 @@ export default function HomeScreen() {
 
   return (
     <HomeDashboard
-      contentTopInset={insets.top + theme.spacing.xl}
+      contentTopInset={insets.top + theme.spacing.lg}
       onRefresh={onRefresh}
       refreshing={isRefreshing}
       headerRight={
         <TextButton
           accessibilityLabel="Settings"
           label="Settings"
+          labelStyle={styles.settingsLabel}
           onPress={() => router.push('/(app)/settings')}
           tone="muted"
         />
@@ -467,6 +469,10 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  settingsLabel: {
+    fontFamily: fonts.monoBold,
+    fontWeight: '400',
+  },
   state1: {
     gap: theme.spacing.lg,
   },

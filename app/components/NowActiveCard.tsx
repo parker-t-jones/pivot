@@ -1,18 +1,22 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import {
-  matchupNicknameLabel,
+  fieldAlignedMatchup,
+  hexWithAlpha,
   opponentAbbreviation,
   reasonLabel,
   serviceLabel,
   type CurrentFlag,
   type GameBroadcast,
 } from '../lib/gameDisplay';
-import { reasonChipCopy, resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../lib/teamDisplay';
+import { fonts } from '../lib/fonts';
+import { reasonChipParts, resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../lib/teamDisplay';
 import { theme } from '../lib/theme';
 import { FieldGauge } from './FieldGauge';
 import { PrimaryButton } from './PrimaryButton';
 
+/** Semi-transparent team primary wash behind each side (nickname + score). */
+const TEAM_NAME_WASH_ALPHA = 0.32;
 interface NowActiveCardProps {
   flag: CurrentFlag;
   /** The preferred broadcast to route to, or null when none resolved (deep-link degradation). */
@@ -25,31 +29,21 @@ interface NowActiveCardProps {
 }
 
 /**
- * PLAN.md Section 10 Home State 1 "Now active" card (the dominant card): uppercase nicknames +
- * score, numbered field gauge (UI-SPEC.md §3.1), an outlined reason chip, and the primary CTA
- * (`Watch on {preferred service}` for this user × this game). The CTA is disabled when there's no
- * resolvable broadcast/deep link, matching Section 10's graceful-degradation intent rather than
- * offering a button that leads nowhere. The outer card always carries the `accentBorder` stroke +
- * `panelGlow` (UI-SPEC.md §2.3/§3.3) — it only renders for an active flag, so there's no
- * "possession" condition to gate it on.
- *
- * Sprint 9 Phase 2: the reason chip now renders the Section 10 fidelity target — player name(s),
- * position, and team+unit ("Jonathan Taylor active — RB — Colts offense") — using Phase 1's
- * `flagged_players` plus `playerTeamMap` for the team portion. Falls back to the plain reason-type
- * label (`reasonLabel`) only if there are no flagged players on this flag at all (shouldn't happen
- * in practice — every flag has at least one triggering player — but is a real possibility the type
- * system allows for).
+ * PLAN.md Section 10 Home State 1 "Now active" card: field-aligned team names + centered split
+ * score, numbered field gauge (UI-SPEC.md §3.1), outlined reason chip with amber wash, and the
+ * primary CTA (`Watch on {preferred service}`). CTA disabled when no resolvable broadcast.
+ * Card uses `accentBorder` + `panelGlow` and `colors.background` (same as Home canvas).
  */
 export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowActiveCardProps) {
   const { game } = flag;
   const canSwitch = broadcast !== null && broadcast.deep_link_url.length > 0;
   const primaryReason = flag.reasons[0];
   const flaggedTeam = resolveFlaggedTeamDisplay(game, flag.flagged_players, playerTeamMap);
-  const chipText =
+  const chipParts =
     primaryReason && flag.flagged_players.length > 0
-      ? reasonChipCopy(primaryReason, flag.flagged_players, flaggedTeam)
+      ? reasonChipParts(primaryReason, flag.flagged_players, flaggedTeam)
       : primaryReason
-        ? reasonLabel(primaryReason)
+        ? { players: reasonLabel(primaryReason), team: null as string | null }
         : null;
 
   const opponentTeam = opponentAbbreviation(
@@ -57,18 +51,30 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
     game.home_team,
     game.away_team,
   );
+  const matchup = fieldAlignedMatchup(game);
+  const leftWash =
+    hexWithAlpha(matchup.leftPrimaryColor, TEAM_NAME_WASH_ALPHA) ?? theme.colors.surface;
+  const rightWash =
+    hexWithAlpha(matchup.rightPrimaryColor, TEAM_NAME_WASH_ALPHA) ?? theme.colors.surface;
 
   return (
     <View style={styles.card}>
       <Text style={styles.eyebrow}>Now active</Text>
 
       <View style={styles.matchupRow}>
-        <Text style={styles.matchup}>
-          {matchupNicknameLabel(game.away_team_name, game.home_team_name)}
-        </Text>
-        <Text style={styles.score}>
-          {game.score.away}–{game.score.home}
-        </Text>
+        <View style={[styles.sideChip, styles.sideChipLeft, { backgroundColor: leftWash }]}>
+          <Text style={[styles.teamName, styles.teamLeft]} numberOfLines={1}>
+            {matchup.leftName}
+          </Text>
+          <Text style={styles.score}>{matchup.leftScore}</Text>
+        </View>
+        <View style={styles.scoreDivider} />
+        <View style={[styles.sideChip, styles.sideChipRight, { backgroundColor: rightWash }]}>
+          <Text style={styles.score}>{matchup.rightScore}</Text>
+          <Text style={[styles.teamName, styles.teamRight]} numberOfLines={1}>
+            {matchup.rightName}
+          </Text>
+        </View>
       </View>
 
       <FieldGauge
@@ -81,9 +87,23 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
         timeRemainingSec={game.time_remaining_sec}
       />
 
-      {chipText ? (
+      {chipParts ? (
         <View style={styles.reasonChip}>
-          <Text style={styles.reasonChipText}>{chipText}</Text>
+          <View style={styles.reasonChipPlayers}>
+            <Text style={styles.reasonChipText} numberOfLines={1}>
+              {chipParts.players}
+            </Text>
+          </View>
+          {chipParts.team ? (
+            <>
+              <View style={styles.reasonChipDivider} />
+              <View style={styles.reasonChipTeam}>
+                <Text style={[styles.reasonChipText, styles.reasonChipTeamText]} numberOfLines={1}>
+                  {chipParts.team}
+                </Text>
+              </View>
+            </>
+          ) : null}
         </View>
       ) : null}
 
@@ -96,6 +116,7 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
         }
         onPress={onSwitch}
         style={styles.cta}
+        labelStyle={styles.ctaLabel}
       />
     </View>
   );
@@ -103,7 +124,7 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.background,
     borderColor: theme.colors.accentBorder,
     borderRadius: theme.radii.hero,
     borderWidth: theme.effects.panelBorderWidth,
@@ -115,46 +136,111 @@ const styles = StyleSheet.create({
   cta: {
     marginTop: theme.spacing.sm,
   },
+  ctaLabel: {
+    // Face is already Bold — drop recipe weight so RN doesn't skip Space Grotesk.
+    fontFamily: fonts.teamNickname,
+    fontWeight: '400',
+  },
   eyebrow: {
     color: theme.colors.accent,
+    fontFamily: theme.type.eyebrow.fontFamily,
     fontSize: theme.type.eyebrow.size,
     fontWeight: theme.type.eyebrow.weight,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  /** Bold + tight tracking, matching the title/score treatment (UI-SPEC.md §2.4) — deliberately
-   *  bolder than the shared `heading` token, which stays lighter for plain screen headers. */
-  matchup: {
-    color: theme.colors.textPrimary,
-    flexShrink: 1,
-    fontSize: theme.type.heading.size,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
   matchupRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    width: '100%',
   },
   reasonChip: {
-    alignSelf: 'flex-start',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.accentMuted,
     borderColor: theme.colors.accent,
     borderRadius: theme.radii.pill,
     borderWidth: 1,
-    paddingHorizontal: theme.spacing.md,
+    elevation: 3,
+    flexDirection: 'row',
+    overflow: 'hidden',
     paddingVertical: theme.spacing.sm,
+    shadowColor: theme.colors.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  /** ~3/4 of the pill — player active copy. */
+  reasonChipPlayers: {
+    flex: 3,
+    paddingHorizontal: theme.spacing.md,
+  },
+  reasonChipDivider: {
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.accent,
+    opacity: 0.55,
+    width: StyleSheet.hairlineWidth * 2,
+  },
+  /** ~1/4 of the pill — team nickname. */
+  reasonChipTeam: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.sm,
+  },
+  reasonChipTeamText: {
+    textAlign: 'center',
   },
   reasonChipText: {
     color: theme.colors.accent,
+    fontFamily: fonts.monoSemiBold,
     fontSize: theme.type.caption.size,
-    fontWeight: theme.type.smallStrong.weight,
+    fontWeight: '600',
   },
   score: {
     color: theme.colors.textPrimary,
+    fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: theme.type.score.size,
     fontVariant: [...theme.type.score.fontVariant],
-    fontWeight: theme.type.score.weight,
     letterSpacing: theme.type.score.letterSpacing,
     lineHeight: theme.type.score.lineHeight,
+    minWidth: 28,
+    textAlign: 'center',
+  },
+  scoreDivider: {
+    backgroundColor: theme.colors.border,
+    height: 22,
+    marginHorizontal: theme.spacing.xs,
+    width: StyleSheet.hairlineWidth * 2,
+  },
+  sideChip: {
+    alignItems: 'center',
+    borderRadius: theme.radii.sm,
+    flex: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+  },
+  sideChipLeft: {
+    justifyContent: 'space-between',
+  },
+  sideChipRight: {
+    justifyContent: 'space-between',
+  },
+  teamLeft: {
+    flexShrink: 1,
+    textAlign: 'left',
+  },
+  teamName: {
+    color: theme.colors.textPrimary,
+    // Weight is baked into the face — don't also set fontWeight '700' or RN may skip the custom font.
+    fontFamily: fonts.sansBold,
+    fontSize: 22,
+    letterSpacing: -0.5,
+  },
+  teamRight: {
+    flexShrink: 1,
+    textAlign: 'right',
   },
 });

@@ -89,47 +89,56 @@ export function resolveFlaggedTeamDisplay(
   return null;
 }
 
-/** Short phrase per `FlagReasonType` (Section 8) for the reason chip's tail — "{Team} {phrase}". */
-const REASON_PHRASES: Record<string, string> = {
-  offense_active: 'offense',
-  defense_active: 'defense',
-  red_zone: 'red zone',
-  close_game: 'close game',
-  star_player_active: 'star player',
-};
-
 function fullName(player: FlaggedPlayer): string {
   return `${player.first_name} ${player.last_name}`.trim();
 }
 
+export interface ReasonChipParts {
+  /** Left of the pill divider — e.g. "Josh Allen +3 more active". */
+  players: string;
+  /** Right of the pill divider — team nickname only, or null when unresolved. */
+  team: string | null;
+}
+
 /**
- * Section 10's reason chip fidelity target: "Jonathan Taylor active — RB — Colts offense". Falls
- * back gracefully when data is missing rather than guessing:
- *  - No flagged players at all -> the reason-type label only (`reasonLabel`'s job, not this one —
- *    callers should check `flaggedPlayers.length` first).
- *  - Team unresolved (`flaggedTeam` is `null`) -> omits the team/unit tail entirely.
- *  - More than one flagged player -> leads with the first (`/flags/current`/the WS payload don't
- *    order by relevance, so "first" is arbitrary but stable) and appends a "+N more" count rather
- *    than listing every name, matching the dispatcher's own `notificationContent.ts` convention for
- *    multi-player copy.
+ * Section 10 reason chip, split for the Now Active pill layout:
+ *   left  → "{name}[+N more] active" (and position when a single player)
+ *   right → team nickname only ("Bills")
+ *
+ * Falls back gracefully when data is missing rather than guessing:
+ *  - No flagged players at all -> `{ players: reasonType, team: null }` (callers usually check
+ *    `flaggedPlayers.length` first and use `reasonLabel` instead).
+ *  - Team unresolved -> `team: null` (pill renders without the divider/team segment).
+ *  - More than one flagged player -> leads with the first and appends "+N more".
  */
-export function reasonChipCopy(
+export function reasonChipParts(
   reasonType: string,
   flaggedPlayers: FlaggedPlayer[],
   flaggedTeam: TeamDisplay | null,
-): string {
+): ReasonChipParts {
   const [lead, ...rest] = flaggedPlayers;
-  if (!lead) return reasonType;
+  if (!lead) return { players: reasonType, team: null };
 
   const nameSegment =
     rest.length > 0 ? `${fullName(lead)} +${rest.length} more` : fullName(lead);
   const positionSegment = rest.length > 0 ? null : lead.position;
 
-  const phrase = REASON_PHRASES[reasonType] ?? reasonType;
-  const tailSegment = flaggedTeam ? `${flaggedTeam.name} ${phrase}` : phrase;
+  const players = [`${nameSegment} active`, positionSegment]
+    .filter((segment): segment is string => Boolean(segment))
+    .join(' — ');
 
-  const segments = [`${nameSegment} active`, positionSegment, tailSegment].filter(
-    (segment): segment is string => Boolean(segment),
-  );
-  return segments.join(' — ');
+  return {
+    players,
+    team: flaggedTeam?.name ?? null,
+  };
+}
+
+/** Flat string form of `reasonChipParts` (tests / non-UI callers). Joins with an em dash. */
+export function reasonChipCopy(
+  reasonType: string,
+  flaggedPlayers: FlaggedPlayer[],
+  flaggedTeam: TeamDisplay | null,
+): string {
+  const { players, team } = reasonChipParts(reasonType, flaggedPlayers, flaggedTeam);
+  return team ? `${players} — ${team}` : players;
 }
