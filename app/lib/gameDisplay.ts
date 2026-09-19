@@ -127,6 +127,12 @@ export function fieldGaugeMarkerPercent(yardsToEndzone: number): number {
 /** Yard-line numbers painted on the 100-yard stick (`10 20 30 40 50 40 30 20 10`). */
 export const FIELD_GAUGE_TICK_LABELS = [10, 20, 30, 40, 50, 40, 30, 20, 10] as const;
 
+/**
+ * Unlabeled 5-yard hash marks between each major tick (`5 15 … 95`), as % from the possessing
+ * team's own goal — same coordinate space as `fieldGaugeTickPercent` / `fieldGaugeMarkerPercent`.
+ */
+export const FIELD_GAUGE_MINOR_TICK_PERCENTS = [5, 15, 25, 35, 45, 55, 65, 75, 85, 95] as const;
+
 /** Right-edge width of the always-on red-zone geography (opponent's 20-yard area). */
 export const FIELD_GAUGE_RED_ZONE_PERCENT = 20;
 
@@ -143,6 +149,89 @@ export function fieldGaugeShowsRedZone(yardsToEndzone: number): boolean {
 /** Uppercase nicknames for the Now Active matchup line (`COLTS @ TITANS`). */
 export function matchupNicknameLabel(awayName: string, homeName: string): string {
   return `${awayName.toUpperCase()} @ ${homeName.toUpperCase()}`;
+}
+
+export interface FieldAlignedMatchup {
+  leftName: string;
+  rightName: string;
+  leftScore: number;
+  rightScore: number;
+  /** `teams.primary_color` for the left side (empty string when the catalog has none). */
+  leftPrimaryColor: string;
+  rightPrimaryColor: string;
+}
+
+/**
+ * Now Active scoreboard oriented like the field gauge: possessing team on the left (own goal),
+ * opponent on the right (the end zone being attacked). Scores sit with their team.
+ * When nobody has the ball, falls back to away-left / home-right (traditional "@" reading).
+ */
+export function fieldAlignedMatchup(game: {
+  possession_team: string | null;
+  home_team: string;
+  away_team: string;
+  home_team_name: string;
+  away_team_name: string;
+  home_team_primary_color: string;
+  away_team_primary_color: string;
+  score: { home: number; away: number };
+}): FieldAlignedMatchup {
+  const homeName = game.home_team_name.toUpperCase();
+  const awayName = game.away_team_name.toUpperCase();
+
+  if (game.possession_team === game.home_team) {
+    return {
+      leftName: homeName,
+      rightName: awayName,
+      leftScore: game.score.home,
+      rightScore: game.score.away,
+      leftPrimaryColor: game.home_team_primary_color,
+      rightPrimaryColor: game.away_team_primary_color,
+    };
+  }
+  if (game.possession_team === game.away_team) {
+    return {
+      leftName: awayName,
+      rightName: homeName,
+      leftScore: game.score.away,
+      rightScore: game.score.home,
+      leftPrimaryColor: game.away_team_primary_color,
+      rightPrimaryColor: game.home_team_primary_color,
+    };
+  }
+  return {
+    leftName: awayName,
+    rightName: homeName,
+    leftScore: game.score.away,
+    rightScore: game.score.home,
+    leftPrimaryColor: game.away_team_primary_color,
+    rightPrimaryColor: game.home_team_primary_color,
+  };
+}
+
+/**
+ * `#RRGGBB` / `#RGB` → `rgba(r,g,b,a)`. Returns null when the hex is empty or unparseable so
+ * callers can fall back to a neutral wash instead of inventing a color.
+ */
+export function hexWithAlpha(hex: string, alpha: number): string | null {
+  const raw = hex.trim().replace(/^#/, '');
+  let r: number;
+  let g: number;
+  let b: number;
+  if (raw.length === 3) {
+    r = parseInt(raw[0]! + raw[0]!, 16);
+    g = parseInt(raw[1]! + raw[1]!, 16);
+    b = parseInt(raw[2]! + raw[2]!, 16);
+  } else if (raw.length === 6) {
+    r = parseInt(raw.slice(0, 2), 16);
+    g = parseInt(raw.slice(2, 4), 16);
+    b = parseInt(raw.slice(4, 6), 16);
+  } else {
+    return null;
+  }
+  if ([r, g, b].some((n) => Number.isNaN(n))) return null;
+  const a = Math.max(0, Math.min(1, alpha));
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
 /** Abbreviation of the team opposite possession, or null when nobody has the ball. */

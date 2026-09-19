@@ -10,11 +10,14 @@ import {
   fieldPositionLabel,
   fieldGaugeMarkerPercent,
   fieldGaugeShowsRedZone,
+  FIELD_GAUGE_MINOR_TICK_PERCENTS,
   FIELD_GAUGE_RED_ZONE_PERCENT,
   FIELD_GAUGE_TICK_LABELS,
   fieldGaugeTickPercent,
   gameClockLine,
   matchupNicknameLabel,
+  fieldAlignedMatchup,
+  hexWithAlpha,
   opponentAbbreviation,
   type GameBroadcast,
 } from './gameDisplay';
@@ -140,6 +143,13 @@ describe('fieldGaugeTickPercent', () => {
   it('keeps the red-zone geography at the opponent 20', () => {
     expect(FIELD_GAUGE_RED_ZONE_PERCENT).toBe(20);
   });
+
+  it('places unlabeled 5-yard hashes between each major tick', () => {
+    expect(FIELD_GAUGE_MINOR_TICK_PERCENTS).toEqual([5, 15, 25, 35, 45, 55, 65, 75, 85, 95]);
+    for (const percent of FIELD_GAUGE_MINOR_TICK_PERCENTS) {
+      expect(percent % 10).toBe(5);
+    }
+  });
 });
 
 describe('fieldGaugeShowsRedZone', () => {
@@ -181,6 +191,66 @@ describe('pickPreferredBroadcast', () => {
 describe('matchupNicknameLabel', () => {
   it('uppercases nicknames', () => {
     expect(matchupNicknameLabel('Colts', 'Titans')).toBe('COLTS @ TITANS');
+  });
+});
+
+describe('fieldAlignedMatchup', () => {
+  const base = {
+    home_team: 'BUF',
+    away_team: 'DET',
+    home_team_name: 'Bills',
+    away_team_name: 'Lions',
+    home_team_primary_color: '#00338D',
+    away_team_primary_color: '#0076B6',
+    score: { home: 14, away: 0 },
+  };
+
+  it('puts the possessing team on the left (own-goal side of the gauge)', () => {
+    expect(fieldAlignedMatchup({ ...base, possession_team: 'BUF' })).toEqual({
+      leftName: 'BILLS',
+      rightName: 'LIONS',
+      leftScore: 14,
+      rightScore: 0,
+      leftPrimaryColor: '#00338D',
+      rightPrimaryColor: '#0076B6',
+    });
+  });
+
+  it('flips sides when the away team has the ball', () => {
+    expect(fieldAlignedMatchup({ ...base, possession_team: 'DET' })).toEqual({
+      leftName: 'LIONS',
+      rightName: 'BILLS',
+      leftScore: 0,
+      rightScore: 14,
+      leftPrimaryColor: '#0076B6',
+      rightPrimaryColor: '#00338D',
+    });
+  });
+
+  it('falls back to away-left / home-right with no possession', () => {
+    expect(fieldAlignedMatchup({ ...base, possession_team: null })).toEqual({
+      leftName: 'LIONS',
+      rightName: 'BILLS',
+      leftScore: 0,
+      rightScore: 14,
+      leftPrimaryColor: '#0076B6',
+      rightPrimaryColor: '#00338D',
+    });
+  });
+});
+
+describe('hexWithAlpha', () => {
+  it('converts a 6-digit hex to rgba', () => {
+    expect(hexWithAlpha('#00338D', 0.32)).toBe('rgba(0, 51, 141, 0.32)');
+  });
+
+  it('accepts 3-digit hex', () => {
+    expect(hexWithAlpha('#f00', 0.5)).toBe('rgba(255, 0, 0, 0.5)');
+  });
+
+  it('returns null for empty or invalid input', () => {
+    expect(hexWithAlpha('', 0.3)).toBeNull();
+    expect(hexWithAlpha('nope', 0.3)).toBeNull();
   });
 });
 
