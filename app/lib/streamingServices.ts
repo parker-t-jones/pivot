@@ -13,6 +13,9 @@ export const STREAMING_SERVICES = [
   'amazon_prime',
   'nfl_plus',
   'nfl_network',
+  'hulu',
+  'fubo',
+  'directv',
   'fox',
   'cbs',
   'nbc',
@@ -27,7 +30,7 @@ export interface StreamingServiceInfo {
   /**
    * App Store *search* link, not a direct `id`-based link — a wrong hardcoded numeric app id would
    * be worse than a search results page (silently 404s or opens the wrong app), and this doesn't
-   * require verifying eleven real App Store ids by hand. Good enough for the Section 10 "Get app"
+   * require verifying the catalog's real App Store ids by hand. Good enough for the Section 10 "Get app"
    * fallback; a real app deserves direct ids verified against the App Store, which is out of scope
    * for this pass (see report).
    */
@@ -41,7 +44,7 @@ function searchUrl(appName: string): string {
 export const STREAMING_SERVICE_INFO: Record<StreamingService, StreamingServiceInfo> = {
   sunday_ticket: {
     service: 'sunday_ticket',
-    label: 'Sunday Ticket',
+    label: 'YouTube TV',
     appStoreUrl: searchUrl('YouTube TV'),
   },
   espn_plus: { service: 'espn_plus', label: 'ESPN+', appStoreUrl: searchUrl('ESPN') },
@@ -58,6 +61,9 @@ export const STREAMING_SERVICE_INFO: Record<StreamingService, StreamingServiceIn
   },
   nfl_plus: { service: 'nfl_plus', label: 'NFL+', appStoreUrl: searchUrl('NFL') },
   nfl_network: { service: 'nfl_network', label: 'NFL Network', appStoreUrl: searchUrl('NFL') },
+  hulu: { service: 'hulu', label: 'Hulu', appStoreUrl: searchUrl('Hulu') },
+  fubo: { service: 'fubo', label: 'Fubo', appStoreUrl: searchUrl('Fubo') },
+  directv: { service: 'directv', label: 'DIRECTV', appStoreUrl: searchUrl('DIRECTV') },
   fox: { service: 'fox', label: 'FOX', appStoreUrl: searchUrl('FOX Sports') },
   cbs: { service: 'cbs', label: 'CBS', appStoreUrl: searchUrl('Paramount+') },
   nbc: { service: 'nbc', label: 'NBC', appStoreUrl: searchUrl('Peacock TV') },

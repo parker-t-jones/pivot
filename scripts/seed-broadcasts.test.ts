@@ -32,3 +32,24 @@ describe('buildBroadcastRows', () => {
     expect(rows.filter((r) => !r.requires_subscription).map((r) => r.service)).toEqual(['fox']);
   });
 });
+
+describe('BROADCAST_TEMPLATES', () => {
+  it('includes YouTube TV plus the vMVPD catalog as paid app-level landings', () => {
+    expect(BROADCAST_TEMPLATES['sunday_ticket']?.deepLinkUrl).toBe('https://tv.youtube.com/live');
+    expect(BROADCAST_TEMPLATES['hulu']).toEqual({
+      service: 'hulu',
+      deepLinkUrl: 'https://www.hulu.com/hub/sports',
+      requiresSubscription: true,
+    });
+    expect(BROADCAST_TEMPLATES['fubo']).toEqual({
+      service: 'fubo',
+      deepLinkUrl: 'https://www.fubo.tv/',
+      requiresSubscription: true,
+    });
+    expect(BROADCAST_TEMPLATES['directv']).toEqual({
+      service: 'directv',
+      deepLinkUrl: 'https://www.directv.com/',
+      requiresSubscription: true,
+    });
+  });
+});

@@ -352,7 +352,9 @@ Single Fly.io app for v1. Three processes: API server (handles REST + WebSocket)
 | `has_subscription` | boolean | |
 | `detected_at` | timestamptz | default `now()` |
 
-`service` enum: `'sunday_ticket' \| 'espn_plus' \| 'paramount_plus' \| 'peacock' \| 'amazon_prime' \| 'nfl_plus' \| 'nfl_network' \| 'fox' \| 'cbs' \| 'nbc' \| 'abc'`
+`service` enum: `'sunday_ticket' \| 'espn_plus' \| 'paramount_plus' \| 'peacock' \| 'amazon_prime' \| 'nfl_plus' \| 'nfl_network' \| 'hulu' \| 'fubo' \| 'directv' \| 'fox' \| 'cbs' \| 'nbc' \| 'abc'`
+
+`sunday_ticket` is the wire key for YouTube TV (Google carries NFL Sunday Ticket inside YouTube TV). User-facing copy is **YouTube TV**, not "Sunday Ticket". Do not rename the key — existing `user_app_presence` / `game_broadcasts` rows use it.
 
 Unique constraint: `(user_id, service)`.
 
@@ -787,11 +789,14 @@ async function scheduleFlagEvent(event: FlagEvent, gameState: GameState): Promis
 }
 
 const BROADCAST_LAG_SECONDS: Record<string, number> = {
-  'sunday_ticket': 75,
+  'sunday_ticket': 75, // YouTube TV / Sunday Ticket
   'espn_plus': 60,
   'paramount_plus': 50,
   'peacock': 45,
   'amazon_prime': 40,
+  'hulu': 45,          // unmeasured vMVPD estimate
+  'fubo': 50,          // unmeasured vMVPD estimate
+  'directv': 40,       // unmeasured vMVPD estimate
   'nfl_plus': 60,
   'nfl_network': 20,
   'fox': 8,

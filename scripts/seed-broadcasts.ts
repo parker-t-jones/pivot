@@ -71,6 +71,10 @@ export const BROADCAST_TEMPLATES: Record<string, ServiceTemplate> = {
   cbs: { service: 'cbs', deepLinkUrl: 'https://www.cbssports.com/nfl/scoreboard/', requiresSubscription: false },
   nbc: { service: 'nbc', deepLinkUrl: 'https://www.nbcsports.com/nfl/scores', requiresSubscription: false },
   abc: { service: 'abc', deepLinkUrl: 'https://www.espn.com/nfl/team', requiresSubscription: false },
+  // Unverified app-level landings (AASA not audited this pass — Open Question #2).
+  hulu: { service: 'hulu', deepLinkUrl: 'https://www.hulu.com/hub/sports', requiresSubscription: true },
+  fubo: { service: 'fubo', deepLinkUrl: 'https://www.fubo.tv/', requiresSubscription: true },
+  directv: { service: 'directv', deepLinkUrl: 'https://www.directv.com/', requiresSubscription: true },
 };
 
 export interface BroadcastSeedRow {

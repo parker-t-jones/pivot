@@ -1,10 +1,14 @@
 /** PLAN.md Section 8 "Deferred event scheduling" — verbatim. */
+/** `hulu` / `fubo` / `directv` lags are unmeasured vMVPD estimates, not device-calibrated. */
 export const BROADCAST_LAG_SECONDS: Record<string, number> = {
   sunday_ticket: 75,
   espn_plus: 60,
   paramount_plus: 50,
   peacock: 45,
   amazon_prime: 40,
+  hulu: 45,
+  fubo: 50,
+  directv: 40,
   nfl_plus: 60,
   nfl_network: 20,
   fox: 8,
