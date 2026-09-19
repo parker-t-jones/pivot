@@ -2,6 +2,8 @@
 
 Read-only, no-op pass: no `PLAN.md` or `app/` edits happened alongside this file. This is the incoming design brief translated into this repo's actual stack, tokens, and shipped screens, plus two rendered mockups so the look can be judged before anything is built. Treat it the same way as `[AUDIT-UI-POLISH.md](AUDIT-UI-POLISH.md)` — an inventory/intent document that a future sprint can turn into real diffs against `[app/lib/theme.ts](app/lib/theme.ts)` and the screens under `app/app/(app)/`. If a later pass implements any of this, fold the relevant parts into `PLAN.md` Section 10 and delete this file rather than letting two UX specs drift.
 
+**Status update (Sept 18, 2026): Home State 1 shipped.** §3.1 (field gauge), §3.3 (possession glow), §6 (`HomeDashboard`), and the Home State 1 row of §7/§9 below described proposals; those are now implemented (`app/components/FieldGauge.tsx`, `NowActiveCard.tsx`, `AlsoFlaggedRow.tsx`, `HomeDashboard.tsx`) and folded into `PLAN.md` §10's State 1 description, which is the source of truth for that screen going forward — the sections below are left in place as a historical record of the proposal, marked shipped inline, rather than deleted, since they still explain *why* each choice was made. Settings (§2 switch tinting, §3.2 sync slider) and the layout/web/TV notes (§4) remain live, unshipped proposals.
+
 ## 0. Stack correction
 
 The source brief was written against Tailwind CSS, `backdrop-filter`, `box-shadow`, and three CSS breakpoints. This is an Expo / React Native client with dark-only design tokens in `app/lib/theme.ts`, styled via `StyleSheet.create`, no CSS engine, and (`PLAN.md` §4) **no web or TV app in v1**. Every recipe below is restated in that vocabulary. Where the brief assumes a capability this repo doesn't have (blur, motion, a settings field, live yardage data), that's called out as a gap rather than quietly implemented as if it already existed.
@@ -101,11 +103,13 @@ Apply to `NowActiveCard`'s outer `View` when a flag is active, and to whichever 
 
 
 
-### 3.1 Linear field gauge
+### 3.1 Linear field gauge — SHIPPED
 
-**Data gap.** `GameSummary` (`app/lib/flagEventPayload.ts:27-41`) and `LiveGame` (`app/lib/schedule.ts:27-43`) carry `quarter`, `time_remaining_sec`, and `possession_team` — no yardline. The switching engine has the field position server-side (`yardsToOpponentEndzone` in `services/engine/src/playEvent.ts:63`, used for the red-zone threshold in `services/engine/src/applyPlayToState.ts:63-64`), but it isn't on any client-facing wire type today. Building a literal 100-yard bar with a ball marker is a Section 9 API change first (`game_summary` / `GET /games/live` would need a `yards_to_endzone` field) — not something this pass invents.
+`GameSummary` (`app/lib/flagEventPayload.ts`) and `LiveGame` (`app/lib/schedule.ts`) both already carry `yards_to_endzone`, `down`, and `distance` alongside `quarter`/`time_remaining_sec`/`possession_team` — the data gap this section originally described (no yardline on any client-facing wire type) no longer exists; a later pass added the field before this visual work started. Building the real gauge was therefore a pure display change, not a Section 9 API change.
 
-**What ships without a data-model change:** a coarse three-zone bar — `own territory / midfield / red zone` — driven by the `red_zone` reason (`app/lib/gameDisplay.ts:63`, already surfaced today as plain text "In the red zone") plus `possession_team` for direction. This is explicitly a degraded stand-in, labeled as such in the component, not the full gauge from the brief. Replaces the current plain clock line on `NowActiveCard` (`quarterLabel(game.quarter)} · {formatClock(...)}`, `NowActiveCard.tsx:64-66`) and `HomeLiveIdleCard`'s equivalent (`HomeLiveIdleCard.tsx:38-41`).
+`app/components/FieldGauge.tsx` renders a numbered 100-yard stick — tick-labeled yard lines (`10 20 30 40 50 40 30 20 10`, flat fill only, no `expo-linear-gradient`), an **always-on** red-zone geography on the opponent's 20 with a "RED ZONE" caption (not gated behind a red-zone check — the geography is always there, just like a real broadcast graphic; only the ball's position changes), a gold possession marker (`fieldGaugeMarkerPercent`), and a field-position caption (`IND 32`) under the marker. The clock line (`Q2 · 7:14`, appending down/distance when present via `gameClockLine`) always renders, including when `yards_to_endzone` is null (kickoff/timeout) — in that case the stick itself is omitted but the clock stays, so `NowActiveCard` never loses the clock the way the pre-gauge version did. `HomeLiveIdleCard` (State 2) mounts the same component, so it inherited the richer stick for free.
+
+No team logos anywhere on Home — `GameSummary`/`LiveGame` carry no logo field, and adding one is out of scope for this pass; team identity on the "Also flagged" cards is a color dot (`*_team_primary_color`) plus abbreviation instead.
 
 ### 3.2 Hardware-style sync slider
 
@@ -113,18 +117,19 @@ Apply to `NowActiveCard`'s outer `View` when a flag is active, and to whichever 
 
 If/when that preference exists, the control maps cleanly to a custom `PanResponder`- or `react-native-gesture-handler`-backed track using `theme.colors.accent` for the fill and `theme.colors.border` for the rail, with tick labels at the network presets the brief names (+15s cable, +30s YouTube TV, +45s Hulu Live) pulled from the same `BROADCAST_LAG_SECONDS` map so the UI and the dispatcher's actual timing can't drift apart.
 
-### 3.3 Possession glow
+### 3.3 Possession glow — SHIPPED
 
-No data gap — `possession_team` already exists on both `GameSummary` and `LiveGame`. Apply `theme.effects.panelGlow` (§2.3) to:
+`theme.effects.panelGlow` (§2.3) is applied to:
 
-- `NowActiveCard`'s outer card, always (it only renders for an active flag)
-- the specific row in `HomeLiveIdleCard.tsx:28-42` whose `possession_team` is non-null, rather than every row
+- `NowActiveCard`'s outer card, unconditionally (it only renders for an active flag, so there's no separate possession check to gate it on)
+- the specific row in `HomeLiveIdleCard` whose `possession_team` is non-null, rather than every row
+- deliberately **not** applied to `AlsoFlaggedRow`'s cards — that treatment stays reserved for the card that owns the user's primary flag
 
-A pulsing (vs. static) glow needs an animation primitive this repo doesn't currently import (no Reanimated/Animated usage in `app/components/`) — first version is a static glow. Pulsing is a follow-up, not a blocker.
+Still a static glow, as originally scoped — pulsing needs an animation primitive this repo doesn't import (no Reanimated/Animated usage in `app/components/`). That remains a follow-up, not a blocker.
 
 ## 4. Layout: mobile ships, web/TV are notes
 
-**Mobile is the only v1 layout.** `PLAN.md` §4 lists web and TV as explicitly out of scope; there's exactly one Expo Router tree (`app/app/`) and no responsive breakpoint logic anywhere in the client. This spec does not add a "bottom 40%" utility chrome layer — Home already has one header + one scrollable body (`app/app/(app)/index.tsx:396-425`), and moving primary actions to a fixed bottom band would conflict with the existing header/Settings-modal pattern rather than improve it. The one piece of the mobile brief that's already shipped intent: "Also flagged" as a horizontal scroll row of smaller cards is literally what `PLAN.md` Section 10 State 1 specifies (`PLAN.md:1376`), just not yet built (Home currently only ships State 1's hero, not the also-flagged row — see Known Issues in `PLAN.md`). Swipeable chips for the bench/other-games list is a density option for that same unbuilt row, not a new concept.
+**Mobile is the only v1 layout.** `PLAN.md` §4 lists web and TV as explicitly out of scope; there's exactly one Expo Router tree (`app/app/`) and no responsive breakpoint logic anywhere in the client. This spec does not add a "bottom 40%" utility chrome layer — Home already has one header + one scrollable body, and moving primary actions to a fixed bottom band would conflict with the existing header/Settings-modal pattern rather than improve it. The one piece of the mobile brief that's already shipped: "Also flagged" as a horizontal scroll row of smaller cards is literally what `PLAN.md` Section 10 State 1 specifies, and is now built as situation cards (§3.1/§9) — swipeable chips for the bench/other-games list ("Other live games" / "Today's other games," still unbuilt) is a density option for that row, not a new concept.
 
 **Laptop/web 3-column command center — out of v1.** Recorded here only so a future web client (if one is ever built) inherits the same token names instead of a fresh palette:
 
@@ -168,59 +173,9 @@ effects: {
 
 
 
-## 6. Sketch: `HomeDashboard` wrapper (documentation only — not created)
+## 6. `HomeDashboard` wrapper — SHIPPED
 
-Pulls layout chrome out of `HomeScreen` (`app/app/(app)/index.tsx`) without touching data fetching, WebSocket wiring, or the branch logic in `resolveHomeBranch`. `HomeScreen` keeps `load`/`renderBody`/`useHomeRealtime`; the wrapper only owns the canvas color, header row, and scroll container.
-
-```tsx
-// app/components/HomeDashboard.tsx — sketch, not created in this pass
-import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { theme } from '../lib/theme';
-
-interface HomeDashboardProps {
-  headerRight: ReactNode;
-  children: ReactNode;
-  contentTopInset: number;
-}
-
-export function HomeDashboard({ headerRight, children, contentTopInset }: HomeDashboardProps) {
-  return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[styles.content, { paddingTop: contentTopInset }]}
-    >
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Home</Text>
-        {headerRight}
-      </View>
-      {children}
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  screen: {
-    backgroundColor: theme.colors.background, // or colors.canvas — see §1
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: theme.spacing.lg2,
-    paddingVertical: theme.spacing.xl,
-  },
-  headerRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: theme.spacing.sm,
-  },
-  title: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.title.size,
-    fontWeight: theme.type.title.weight,
-  },
-});
-```
+`app/components/HomeDashboard.tsx` pulls layout chrome out of `HomeScreen` (`app/app/(app)/index.tsx`) without touching data fetching, WebSocket wiring, or the branch logic in `resolveHomeBranch`. `HomeScreen` keeps `load`/`renderBody`/`useHomeRealtime`; the wrapper only owns the screen background, header row, scroll container, and pull-to-refresh (`refreshing`/`onRefresh` props — one addition beyond the original sketch, needed because Home's cold-start fetch has to be user-retriggerable). The header row's "Settings" link uses `TextButton`'s muted tone rather than the default accent tone, so it doesn't compete with the CTA below it for attention.
 
 State 1 still composes the existing cards inside it — the wrapper does not become a multi-column command center on phone:
 
@@ -250,8 +205,8 @@ flowchart TB
 
 | Zone                                                            | Today                                                                                   | Spec treatment                                                                                                                                                               |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Onboarding streaming (`app/app/(app)/onboarding-streaming.tsx`) | Pill chips, `radii.pill`, accent fill when selected (`:104-116`)                        | Larger block variant: unselected = `surface` fill + muted icon; selected = 2px `accentBorder` wrap + `textPrimary` icon. Same data (`STREAMING_SERVICES`), no new fields     |
-| Home (`app/app/(app)/index.tsx`)                                | Five branch-selected cards, no shared wrapper                                           | `HomeDashboard` wrapper (§6); State 1 gets the degraded field gauge (§3.1) and possession glow (§3.3)                                                                        |
+| Onboarding streaming (`app/app/(app)/onboarding-streaming.tsx`) | Pill chips, `radii.pill`, accent fill when selected (`:104-116`)                        | Larger block variant: unselected = `surface` fill + muted icon; selected = 2px `accentBorder` wrap + `textPrimary` icon. Same data (`STREAMING_SERVICES`), no new fields — still unshipped     |
+| Home (`app/app/(app)/index.tsx`)                                | **Shipped** — `HomeDashboard` wrapper (§6), State 1's numbered field gauge (§3.1) and possession glow (§3.3), outlined reason chip, situation-card "Also flagged" row | See `PLAN.md` §10 for the current State 1 description — this row is historical                                                                        |
 | Settings (`app/app/(app)/settings.tsx`)                         | Grouped `SectionCard`s: Account, Notifications, Streaming, Leagues, Star players, About | Groupings unchanged. Switches get `SWITCH_THUMB`/`SWITCH_TRACK` amber tinting (already partially wired per `settings.tsx:358-360`); no sync slider added — §3.2 explains why |
 
 
@@ -271,15 +226,11 @@ flowchart TB
 
 AI-generated preview renders, not app assets — this app has no `app/assets/` directory (see `AUDIT-UI-POLISH.md` §4.3), and these live in `docs/ui-spec/` specifically so they aren't mistaken for one. They're illustrative only: exact spacing/type came from `theme.ts` and the components cited below, but the renders themselves aren't pixel-accurate simulator output, and the Settings render's placeholder league names ("Premier League", "NBA") are render noise — this app only has Sleeper NFL leagues.
 
-### Home, State 1 — today vs. proposed
+### Home, State 1 — SHIPPED, matches the proposed mockup
 
-Same content (`NowActiveCard`, `app/components/NowActiveCard.tsx`), same accent color, same copy. The difference is entirely the material/border/glow treatment from §2, plus the field gauge from §3.1, which needs the data-model change noted there before it can be real:
+`docs/ui-spec/home-proposed.png` is no longer aspirational — it's what `NowActiveCard` + `FieldGauge` + `AlsoFlaggedRow` render today. `docs/ui-spec/home-current.png` is kept only as the historical "before" reference (flat `surface` fill, no border/glow, plain clock strip, no also-flagged row below the hero).
 
-
-| Current (`theme.ts` as shipped)                                                                                                                                                                                                                                                                             | Proposed (this spec)                                                                                                                                                                                                                                                                                                                               |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Home today](docs/ui-spec/home-current.png)                                                                                                                                                                                                                                                                | ![Home proposed](docs/ui-spec/home-proposed.png)                                                                                                                                                                                                                                                                                                   |
-| Flat `surface` fill (`#1A1A20`), no border, no shadow. Plain text clock strip (`Q2 · 7:14`, `NowActiveCard.tsx:64-66`). Nothing below the hero — State 1's `renderBody` (`app/app/(app)/index.tsx:371-379`) only returns `NowActiveCard`; the "also flagged" row from `PLAN.md` Section 10 was never built. | 1px `accentBorder` stroke + `panelGlow` (§5). Clock strip replaced by the degraded three-zone field indicator (§3.1) — bar segments and the red-zone highlight are illustrative pending the `yards_to_endzone` field this needs. "Also flagged" row shown as a preview of the still-unbuilt Section 10 spec, not a claim that this pass builds it. |
+Shipped, matching the mockup: 1px `accentBorder` stroke + `panelGlow` on the hero card; accent-colored "NOW ACTIVE" eyebrow; uppercase team nicknames (`COLTS @ TITANS`); the numbered field gauge from §3.1 (real yardline data, always-on red-zone geography, no illustrative placeholder); an outlined (not filled) reason chip; and the "Also flagged" row as situation cards (color-dot team rows + clock/position/down-distance, accent-outlined Switch) rather than the bare matchup+score+Switch cards it originally shipped with. No team logos on either card — a deliberate non-goal, not a gap; team identity is the color dot + abbreviation. See `PLAN.md` §10 for the maintained State 1 description going forward.
 
 
 
