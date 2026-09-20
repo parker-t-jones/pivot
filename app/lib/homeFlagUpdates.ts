@@ -32,8 +32,7 @@ export interface HomeFlagSlice {
   liveStakeGames: LiveGame[];
   weekGames: ScheduleGame[];
   lineupGroups: LineupGameGroup[];
-  nextGame: ScheduleGame | null;
-  nextGamePlayerCount: number;
+  upcomingGames: LineupGameGroup[];
   countdownMs: number;
   branch: HomeBranch;
 }

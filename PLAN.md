@@ -221,9 +221,17 @@ priority = (active_players × 2)
 
 ### Monetization
 
-**v1:** Free tier only. Single-game viewing. No billing infrastructure.
+**v1:** Free App Store download + optional Pro in-app subscription (RevenueCat / StoreKit).
 
-**v1.5:** Subscription tier (target $9.99–14.99/month) unlocks split-screen multi-stream, auto-switch, unlimited leagues, star players, ad-free.
+| | Free | Pro (`pivot_pro_monthly`, target $9.99/mo) |
+|---|---|---|
+| Connected leagues | Max **3** | Unlimited |
+| Watched leagues (Active Lineup) | Exactly **1** | **1+** multi-select + Select all |
+| Manual lineup size | Max **9** players | Unlimited |
+
+- `users.subscription_tier`: `'free' | 'pro'` (default `'free'`). Synced from RevenueCat webhooks (`POST /billing/revenuecat`) and refreshed client-side after purchase/restore.
+- Preferences include `watchedLeagueIds` (league UUIDs). Home stake + engine `user_lineup_cache` rebuild from the watched set only (`rebuildUserLineupCache`).
+- Annual SKU, family sharing edge cases, and win-back offers deferred.
 
 ---
 
@@ -236,7 +244,8 @@ priority = (active_players × 2)
 - Email + Apple Sign In auth
 - Sleeper API lineup integration
 - Manual lineup entry
-- One league per user
+- Up to 3 leagues on Free; unlimited on Pro (IAP)
+- Watched-league Active Lineup (Free: 1; Pro: multi-select)
 - Real-time play-by-play ingestion (production data source not yet chosen — see Section 5 / Open Questions #1)
 - Switching engine with possession-level flag detection
 - Priority scoring with red-zone and close-game bonuses
@@ -256,7 +265,6 @@ priority = (active_players × 2)
 - Multi-stream / split-screen viewing
 - Auto-switch primary (toggle stored but disabled)
 - Star players in priority scoring (UI exists, engine doesn't use yet)
-- Multiple leagues per user
 - ESPN, Yahoo, NFL Fantasy, CBS lineup integrations
 - Android, web, TV apps
 - Stat overlays, projections, advanced analytics
@@ -265,7 +273,7 @@ priority = (active_players × 2)
 - Special handling for kickers (they inherit team offense)
 - Other sports (NBA, MLB, NHL, soccer)
 - Sportsbook or DFS integration
-- Subscription tier / billing
+- Annual Pro SKU / family-sharing edge cases
 - Notification batching
 
 ---
@@ -335,13 +343,13 @@ Single Fly.io app for v1. Three processes: API server (handles REST + WebSocket)
 |---|---|---|
 | `id` | uuid | PK |
 | `email` | text | unique, indexed |
-| `preferences` | jsonb | notification mode, quiet hours, auto-switch |
+| `preferences` | jsonb | notification mode, quiet hours, auto-switch, watchedLeagueIds |
 | `subscription_tier` | text | `'free' \| 'pro'`, default `'free'` |
 | `expo_push_token` | text | nullable |
 | `created_at` | timestamptz | default `now()` |
 | `updated_at` | timestamptz | default `now()` |
 
-> **Sprint 5 addition:** `preferences` — jsonb, parsed via `preferencesSchema` in `shared/src/types/preferences.ts`. Shape: `{ notificationMode: 'all' | 'high_leverage_only' | 'off', quietHours: { enabled, startHour, endHour, timezone }, autoSwitch: boolean }`. All fields default; existing `'{}'` rows parse to defaults.
+> **Sprint 5 addition:** `preferences` — jsonb, parsed via `preferencesSchema` in `shared/src/types/preferences.ts`. Shape: `{ notificationMode: 'all' | 'high_leverage_only' | 'off', quietHours: { enabled, startHour, endHour, timezone }, autoSwitch: boolean, watchedLeagueIds: string[] }`. `watchedLeagueIds` drives Home Active Players / upcoming cards and the engine lineup cache rebuild across watched leagues only. Free: at most one id; Pro: any subset. All fields default; existing `'{}'` rows parse to defaults.
 
 #### `user_app_presence`
 | Column | Type | Notes |
@@ -1014,11 +1022,12 @@ Follow-up to the stream synchronization research above. The padded-delay model i
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/me` | Get current user + preferences |
-| `PATCH` | `/me/preferences` | Update notification mode, quiet hours, etc. |
+| `PATCH` | `/me/preferences` | Update notification mode, quiet hours, watchedLeagueIds, etc. |
 | `POST` | `/me/push-token` | Register/update Expo push token |
 | `DELETE` | `/me/push-token` | Unregister push token |
 | `POST` | `/me/app-presence` | Set which streaming services user has |
 | `DELETE` | `/me` | Account deletion |
+| `POST` | `/billing/revenuecat` | RevenueCat webhook → `subscription_tier` (auth header, not user JWT) |
 
 **`POST /me/app-presence` body:**
 ```typescript
@@ -1358,16 +1367,17 @@ check in the route handler, not an RLS policy) — the same service-role-plus-ch
 
 ### Navigation
 
-Three-tab bottom navigation (spec):
+Three-tab bottom navigation:
 1. **Home** — live games dashboard (opens here on launch)
-2. **Lineup** — fantasy team and live points
-3. **Settings** — preferences, leagues, account
+2. **Lineup** — fantasy hub (leagues + roster + stars)
+3. **Settings** — account, notifications, streaming, about
 
-**Shipped Expo Router screens** (`app/app/(app)/`, headerless stack; Settings is modal):
-- `index` — Home
-- `settings` — Settings (modal)
+**Shipped Expo Router screens** (`app/app/(app)/`, headerless stack over Tabs):
+- `(tabs)/index` — Home
+- `(tabs)/lineup` — Lineup (fantasy hub)
+- `(tabs)/settings` — Settings (tab, not modal)
 - `connect-team` — Connect Sleeper / Add manually (create). Manual create uses shared `PlayerPicker` (`app/components/PlayerPicker.tsx`) after `POST /leagues/manual`.
-- `edit-manual-lineup?leagueId=` — Edit lineup for an existing `platform: 'manual'` league (Settings entry). Same shared `PlayerPicker`, pre-filled from `GET /leagues/:id/lineup`; saves via `PUT /leagues/:id/lineup`. Not the create flow — does not `POST /leagues/manual`.
+- `edit-manual-lineup?leagueId=` — Edit lineup for an existing `platform: 'manual'` league (Lineup tab entry). Same shared `PlayerPicker`, pre-filled from `GET /leagues/:id/lineup`; saves via `PUT /leagues/:id/lineup`. Not the create flow — does not `POST /leagues/manual`.
 - `onboarding-streaming`, `notifications-permission`, `onboarding-all-set` — post-connect onboarding chain
 
 `PlayerPicker` is create+edit shared, not create-only.
@@ -1380,7 +1390,7 @@ Three-tab bottom navigation (spec):
 
 **3. Connect fantasy team.** Two options:
 - *Connect Sleeper* — username input → league picker → persist
-- *Add manually* — name league → `PlayerPicker` (shared with Settings edit-lineup) → `PUT` lineup
+- *Add manually* — name league → `PlayerPicker` (shared with Lineup edit-lineup) → `PUT` lineup
 
 **4. Streaming services.** Multi-select grid of services (YouTube TV/Sunday Ticket, ESPN+, Paramount+, Peacock, Prime, NFL+, Hulu, Fubo, DIRECTV, broadcast TV). Writes to `user_app_presence`.
 
@@ -1407,14 +1417,17 @@ Top to bottom:
 
 #### State 3: Pre-game (Sunday morning, Thursday afternoon)
 
-- Top: "First flag in 2h 14m" countdown
-- Below: user's lineup grouped by game, sorted by kickoff
+- Top: amber eyebrow + "First flag in {countdown}" title (not a gray surface hero card)
+- Body: same upcoming-game cards as State 4 — kickoff timestamp, `AWAY | HOME`,
+  `Active Players: …` (starter/flex only), shared `UpcomingStakeGameList`
 - Subtle "Test notifications" link
 
 #### State 4: Off-day (Tue–Thu morning)
 
-- Top: this week's matchup preview
-- Mid: "Next game: Thursday 8:20pm ET — your players in it: 2"
+- Top: "WEEK {n} — Upcoming games:"
+- Body: every remaining stake game this week, chronological by kickoff — each with its
+  start time, matchup, and "Active Players: …" line (starter/flex only — bench excluded)
+  via the same card treatment as State 3
 - Bottom: optional content area (v2)
 
 ##### State 4a: Offseason / preseason idle (three-way `display_phase` branch).
@@ -1441,25 +1454,24 @@ For `'off'`/`'pre'`, Home short-circuits — skips `/games` and `/flags/current`
 
 ### Lineup screen
 
-- **Top:** league selector (static label in v1, dropdown in v1.5)
-- **Body:** lineup grouped by position
-  - Player name + team + opponent
-  - Live fantasy points
-  - Game state indicator (team color dot + offense/defense icon)
-  - Star toggle (small star icon, tappable)
-- **Pull-to-refresh** triggers Sleeper sync
-- **Tap player** opens detail sheet with recent game logs
+Fantasy hub (owns leagues + roster + stars):
+
+- **Top:** league switcher (label if one league; chip picker if multiple) + manage actions (Connect another, Sync / Edit lineup / Rename, Disconnect). Non-watched leagues show a "Not watching" caption (watching is gated by Active Lineup / `watchedLeagueIds`; Lineup tab still manages all connected leagues).
+- **Body:** current-week roster for the selected league, in Sleeper roster order
+  - Slot label from `position_in_lineup` (QB, RB1, FLEX1, KICKER, DEFENSE, …)
+  - Player name + NFL position + team
+  - Star toggle per row (`POST /leagues/:id/stars`)
+- **Pull-to-refresh** triggers Sleeper sync (sleeper leagues) then reloads lineup
+- **Deferred:** live fantasy points, opponent line, offense/defense indicators, player detail sheet
 
 ### Settings screen
 
-iOS grouped list:
+iOS grouped list (prefs / account only — no leagues or stars):
 
 - **Account** — email, sign out, delete account
-- **Notifications** — master toggle, mode picker, quiet hours, auto-switch toggle (disabled "Coming soon" in v1)
+- **Notifications** — mode picker, quiet hours, auto-switch toggle (disabled "Coming soon" in v1)
 - **Streaming services** — re-edit `user_app_presence`
-- **Leagues** — list of connected leagues with refresh/rename/disconnect
-- **Star players** — grid view with toggles
-- **About** — version, terms, privacy, support, feedback
+- **About** — version, terms, privacy, support, test notification
 
 ### Notification UX
 
@@ -1674,7 +1686,7 @@ Issues that need resolution but don't block the build:
    obtain per-broadcast content IDs at scale, per provider?" — a data-sourcing and possibly
    partnership problem, not a client-engineering one. Section 15's partnership work is the most
    plausible unlock; it would also make this moot for any partner whose video we embed directly.
-3. **v1.5 subscription price point.** Suggested range $9.99–14.99/month, defer to market research.
+3. **Pro annual SKU / price research.** Monthly Pro is `$9.99` via RevenueCat (`pivot_pro_monthly`); annual and packaging experiments deferred.
 4. **Pivot trademark clearance.** Informal web searches turned up nothing conflicting with
    the name, but that is not formal clearance. A real search (e.g. USPTO TESS) and/or legal counsel
    review is still outstanding before App Store Connect listing and any trademark filing. Do not
@@ -2112,7 +2124,7 @@ Why it is unproven, and what would need designing:
 ### Architecture changes
  
 - New `PlaybackSource` modes for split-screen rendering
-- Billing integration via Supabase Edge Functions or RevenueCat
+- Billing integration via RevenueCat (`POST /billing/revenuecat` + iOS `react-native-purchases`)
 - WebSocket message: `flag_batch` for combined events
 - Multi-league lineup cache: `user_lineup_cache:{user_id}:{week}:{league_id}`
 - Push receipt-polling worker + a persisted-ticket-id table (new state, `expo_push_token` cleared on confirmed `DeviceNotRegistered`)

@@ -5,7 +5,8 @@ import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
 
 interface HomeDashboardProps {
-  headerRight: ReactNode;
+  /** Optional trailing header control — omitted when Settings lives in the tab bar. */
+  headerRight?: ReactNode;
   children: ReactNode;
   contentTopInset: number;
   refreshing: boolean;

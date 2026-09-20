@@ -17,7 +17,12 @@ export const ZERO_LEAGUES_ALLOWLIST = new Set([
 ]);
 
 export function isHomeRouteLeaf(routeLeaf: string | undefined): boolean {
-  return routeLeaf === undefined || routeLeaf === '(app)' || routeLeaf === 'index';
+  return (
+    routeLeaf === undefined ||
+    routeLeaf === '(app)' ||
+    routeLeaf === '(tabs)' ||
+    routeLeaf === 'index'
+  );
 }
 
 export function isOnZeroLeaguesAllowlist(routeLeaf: string | undefined): boolean {

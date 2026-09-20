@@ -1,5 +1,4 @@
 import Constants from 'expo-constants';
-import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Alert,
@@ -13,37 +12,28 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ErrorState } from '../../components/ErrorState';
-import { LoadingState } from '../../components/LoadingState';
-import { SecondaryButton } from '../../components/SecondaryButton';
-import { TextButton } from '../../components/TextButton';
-import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
-import { useSession } from '../../contexts/SessionContext';
-import { ApiRequestError } from '../../lib/apiClient';
+import { ErrorState } from '../../../components/ErrorState';
+import { LoadingState } from '../../../components/LoadingState';
+import { SecondaryButton } from '../../../components/SecondaryButton';
+import { TextButton } from '../../../components/TextButton';
+import { useSession } from '../../../contexts/SessionContext';
+import { useUpgradeSheet } from '../../../contexts/UpgradeSheetContext';
+import { ApiRequestError } from '../../../lib/apiClient';
 import {
   NotificationsDisabledError,
   scheduleTestFlagNotificationAsync,
-} from '../../lib/devNotifications';
-import {
-  disconnectLeague,
-  fetchAllLineups,
-  renameManualLeague,
-  setStarPlayer,
-  syncLeague,
-  type LeagueSummary,
-  type LineupResponse,
-} from '../../lib/leagues';
+} from '../../../lib/devNotifications';
 import {
   deleteAccount,
   fetchMe,
   patchPreferences,
   setAppPresence,
   type MeResponse,
-} from '../../lib/me';
-import { unregisterPushNotificationsAsync } from '../../lib/pushNotifications';
-import { STREAMING_SERVICES, streamingServiceLabel } from '../../lib/streamingServices';
-import { supabase } from '../../lib/supabase';
-import { theme } from '../../lib/theme';
+} from '../../../lib/me';
+import { unregisterPushNotificationsAsync } from '../../../lib/pushNotifications';
+import { STREAMING_SERVICES, streamingServiceLabel } from '../../../lib/streamingServices';
+import { supabase } from '../../../lib/supabase';
+import { theme } from '../../../lib/theme';
 
 const NOTIFICATION_MODES: {
   value: MeResponse['preferences']['notificationMode'];
@@ -69,34 +59,24 @@ function openExternalUrl(url: string, failedMessage: string): void {
 }
 
 /**
- * PLAN.md Section 10 Settings screen — Sprint 9 Phase 2. Reads/writes `GET /me`,
- * `PATCH /me/preferences`, and `POST /me/app-presence`, all added this phase alongside this screen
- * (see report) — before now, nothing in the client called any of the three. Leagues/star players
- * reuse `leagues.ts`, whose endpoints (Sections 9) already existed and were simply unused by the
- * client.
- *
- * No tab bar exists yet (no Lineup screen — out of this phase's scope), so this is reached via a
- * plain header button on Home, not a persistent tab. See report for that scope note.
+ * PLAN.md §10 Settings tab — Account / Notifications / Streaming / About only.
+ * Leagues, star players, and Edit lineup live on the Lineup tab.
  */
 export default function SettingsScreen() {
-  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useSession();
-  const { leagues, leaguesRevision, refreshLeagues, deferConnect } = useLeaguesGate();
 
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
-  const [lineups, setLineups] = useState<LineupResponse[]>([]);
 
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
-  const load = useCallback(async (leagueRows: LeagueSummary[]) => {
+  const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const meResponse = await fetchMe();
-      setMe(meResponse);
-      setLineups(await fetchAllLineups(leagueRows));
+      setMe(await fetchMe());
     } catch (error) {
       setLoadError(error instanceof ApiRequestError ? error.message : 'Could not load settings.');
     }
@@ -104,10 +84,8 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     setIsLoading(true);
-    void load(leagues).finally(() => setIsLoading(false));
-    // Intentionally keyed on leaguesRevision — leagues from this render match that revision.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- leagues paired with revision
-  }, [load, leaguesRevision]);
+    void load().finally(() => setIsLoading(false));
+  }, [load]);
 
   const onSignOut = async () => {
     setIsSigningOut(true);
@@ -144,8 +122,8 @@ export default function SettingsScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.screen}>
-        <SettingsHeader onBack={() => router.back()} />
+      <View style={[styles.screen, { paddingTop: insets.top + theme.spacing.lg }]}>
+        <Text style={styles.headerTitle}>Settings</Text>
         <LoadingState message="Loading settings…" />
       </View>
     );
@@ -153,14 +131,12 @@ export default function SettingsScreen() {
 
   if (loadError || !me) {
     return (
-      <View style={styles.screen}>
-        <SettingsHeader onBack={() => router.back()} />
+      <View style={[styles.screen, { paddingTop: insets.top + theme.spacing.lg }]}>
+        <Text style={[styles.headerTitle, styles.headerTitlePad]}>Settings</Text>
         <ErrorState
           message={loadError ?? 'Could not load settings.'}
           onRetry={() => {
-            void refreshLeagues()
-              .then((rows) => load(rows))
-              .catch(() => undefined);
+            void load();
           }}
         />
       </View>
@@ -168,8 +144,17 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <SettingsHeader onBack={() => router.back()} />
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: insets.top + theme.spacing.lg,
+          paddingBottom: insets.bottom + theme.spacing.huge,
+        },
+      ]}
+    >
+      <Text style={styles.headerTitle}>Settings</Text>
 
       <AccountSection
         email={me.email}
@@ -198,40 +183,6 @@ export default function SettingsScreen() {
         }}
       />
 
-      <LeaguesSection
-        leagues={leagues}
-        onConnectAnother={() => router.push('/(app)/connect-team')}
-        onEditLineup={(leagueId) =>
-          router.push(`/(app)/edit-manual-lineup?leagueId=${encodeURIComponent(leagueId)}`)
-        }
-        onRename={async (leagueId, name) => {
-          await renameManualLeague(leagueId, name);
-          const rows = await refreshLeagues();
-          await load(rows);
-        }}
-        onSync={async (leagueId) => {
-          await syncLeague(leagueId);
-          const rows = await refreshLeagues();
-          await load(rows);
-        }}
-        onDisconnect={async (leagueId) => {
-          await disconnectLeague(leagueId);
-          const rows = await refreshLeagues();
-          // Last league removed: land on Home State 5, do not immediately force connect-team.
-          if (rows.length === 0) {
-            deferConnect();
-          }
-          await load(rows);
-        }}
-      />
-
-      <StarPlayersSection
-        lineups={lineups}
-        onToggleStar={async () => {
-          await load(leagues);
-        }}
-      />
-
       <AboutSection />
     </ScrollView>
   );
@@ -241,20 +192,6 @@ function errorMessage(error: unknown): string {
   return error instanceof ApiRequestError ? error.message : 'Something went wrong.';
 }
 
-function SettingsHeader({ onBack }: { onBack: () => void }) {
-  const insets = useSafeAreaInsets();
-  return (
-    <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
-      <TextButton label="Close" onPress={onBack} />
-      <Text style={styles.headerTitle}>Settings</Text>
-      <View style={styles.headerSpacer} />
-    </View>
-  );
-}
-
-/** UI-SPEC.md §9 ("Settings — proposed only"): every section card gets the §2 accentBorder +
- *  panelGlow treatment, same as NowActiveCard — the mockup's only real delta from the shipped
- *  screen besides the switch tinting (already wired via SWITCH_THUMB/SWITCH_TRACK below). */
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
     <View style={styles.section}>
@@ -279,10 +216,33 @@ function AccountSection({
   onSignOut: () => void;
   onDeleteAccount: () => void;
 }) {
+  const { openUpgrade } = useUpgradeSheet();
+  const isPro = subscriptionTier === 'pro';
+
   return (
     <SectionCard title="Account">
       <Text style={styles.rowLabel}>{email}</Text>
-      <Text style={styles.rowSubtext}>{subscriptionTier === 'pro' ? 'Pro' : 'Free'} plan</Text>
+      <Text style={styles.rowSubtext}>{isPro ? 'Pro' : 'Free'} plan</Text>
+
+      {isPro ? (
+        <TextButton
+          hitArea="padding"
+          label="Manage subscription"
+          onPress={() => {
+            void Linking.openURL('https://apps.apple.com/account/subscriptions').catch(() => {
+              Alert.alert('Could not open', 'Open Settings → Apple ID → Subscriptions.');
+            });
+          }}
+          size="smallStrong"
+          style={styles.accountButton}
+        />
+      ) : (
+        <SecondaryButton
+          label="Upgrade to Pro"
+          onPress={openUpgrade}
+          style={styles.accountButton}
+        />
+      )}
 
       <SecondaryButton
         disabled={isSigningOut}
@@ -437,198 +397,6 @@ function StreamingServicesSection({
   );
 }
 
-function LeaguesSection({
-  leagues,
-  onConnectAnother,
-  onEditLineup,
-  onRename,
-  onSync,
-  onDisconnect,
-}: {
-  leagues: LeagueSummary[];
-  onConnectAnother: () => void;
-  onEditLineup: (leagueId: string) => void;
-  onRename: (leagueId: string, name: string) => Promise<void>;
-  onSync: (leagueId: string) => Promise<void>;
-  onDisconnect: (leagueId: string) => Promise<void>;
-}) {
-  const [busyLeagueId, setBusyLeagueId] = useState<string | null>(null);
-
-  const promptRename = (league: LeagueSummary) => {
-    Alert.prompt(
-      'Rename league',
-      undefined,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Save',
-          onPress: (value?: string) => {
-            const next = value?.trim() ?? '';
-            if (next.length === 0 || next === league.name) return;
-            void (async () => {
-              setBusyLeagueId(league.league_id);
-              try {
-                await onRename(league.league_id, next);
-              } catch (error) {
-                Alert.alert('Could not rename', errorMessage(error));
-              } finally {
-                setBusyLeagueId(null);
-              }
-            })();
-          },
-        },
-      ],
-      'plain-text',
-      league.name,
-    );
-  };
-
-  return (
-    <SectionCard title="Leagues">
-      {leagues.length === 0 ? (
-        <Text style={styles.rowSubtext}>No leagues connected yet.</Text>
-      ) : (
-        leagues.map((league) => (
-          <View key={league.league_id} style={styles.leagueRow}>
-            <View style={styles.leagueRowInfo}>
-              <Text style={styles.rowLabel}>{league.name}</Text>
-              <Text style={styles.rowSubtext}>
-                {league.platform === 'sleeper' ? 'Sleeper' : 'Manual'} · {league.season_year}
-              </Text>
-            </View>
-            <View style={styles.leagueRowActions}>
-              {league.platform === 'sleeper' ? (
-                <TextButton
-                  disabled={busyLeagueId === league.league_id}
-                  label="Sync"
-                  onPress={async () => {
-                    setBusyLeagueId(league.league_id);
-                    try {
-                      await onSync(league.league_id);
-                    } catch (error) {
-                      Alert.alert('Sync failed', errorMessage(error));
-                    } finally {
-                      setBusyLeagueId(null);
-                    }
-                  }}
-                  size="smallStrong"
-                />
-              ) : (
-                <>
-                  <TextButton
-                    disabled={busyLeagueId === league.league_id}
-                    label="Edit lineup"
-                    onPress={() => onEditLineup(league.league_id)}
-                    size="smallStrong"
-                  />
-                  <TextButton
-                    disabled={busyLeagueId === league.league_id}
-                    label="Rename"
-                    onPress={() => promptRename(league)}
-                    size="smallStrong"
-                  />
-                </>
-              )}
-              <TextButton
-                disabled={busyLeagueId === league.league_id}
-                label="Disconnect"
-                onPress={() =>
-                  Alert.alert('Disconnect league?', `Remove "${league.name}" from Pivot?`, [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Disconnect',
-                      style: 'destructive',
-                      onPress: async () => {
-                        setBusyLeagueId(league.league_id);
-                        try {
-                          await onDisconnect(league.league_id);
-                        } catch (error) {
-                          Alert.alert('Could not disconnect', errorMessage(error));
-                        } finally {
-                          setBusyLeagueId(null);
-                        }
-                      },
-                    },
-                  ])
-                }
-                size="smallStrong"
-                tone="danger"
-              />
-            </View>
-          </View>
-        ))
-      )}
-
-      <SecondaryButton
-        label="Connect another team"
-        onPress={onConnectAnother}
-        style={styles.accountButton}
-      />
-    </SectionCard>
-  );
-}
-
-/**
- * Star players — Sprint 9 Phase 2 scope note (see report): "data layer only" per this phase's
- * instructions, so this is a flat list with a toggle per player (backed by the real
- * `POST /leagues/:id/stars`, already implemented server-side and previously unused), not Section
- * 10's "grid view" visual treatment. Grouped by league since a player's star status is scoped to
- * `(league_id, week, player_id)`.
- */
-function StarPlayersSection({
-  lineups,
-  onToggleStar,
-}: {
-  lineups: LineupResponse[];
-  onToggleStar: () => Promise<void>;
-}) {
-  const [savingSlotId, setSavingSlotId] = useState<string | null>(null);
-
-  const allSlots = lineups.flatMap((lineup) => lineup.slots.map((slot) => ({ lineup, slot })));
-
-  return (
-    <SectionCard title="Star players">
-      <Text style={styles.sectionHint}>
-        Starring a player raises how urgently we flag their games, even in a close but
-        not-yet-critical moment.
-      </Text>
-      {allSlots.length === 0 ? (
-        <Text style={styles.rowSubtext}>No lineup yet — connect a team to set star players.</Text>
-      ) : (
-        allSlots.map(({ lineup, slot }) => (
-          <View key={slot.slot_id} style={styles.toggleRow}>
-            <View>
-              <Text style={styles.rowLabel}>
-                {slot.player.first_name} {slot.player.last_name}
-              </Text>
-              <Text style={styles.rowSubtext}>
-                {slot.player.position} · {slot.player.team?.abbreviation ?? '—'}
-              </Text>
-            </View>
-            <Switch
-              disabled={savingSlotId === slot.slot_id}
-              onValueChange={async (value) => {
-                setSavingSlotId(slot.slot_id);
-                try {
-                  await setStarPlayer(lineup.league_id, lineup.week, slot.player.player_id, value);
-                  await onToggleStar();
-                } catch (error) {
-                  Alert.alert('Could not update star', errorMessage(error));
-                } finally {
-                  setSavingSlotId(null);
-                }
-              }}
-              thumbColor={SWITCH_THUMB}
-              trackColor={SWITCH_TRACK}
-              value={slot.is_star}
-            />
-          </View>
-        ))
-      )}
-    </SectionCard>
-  );
-}
-
 function promptEnableNotifications(): void {
   Alert.alert(
     'Notifications are off',
@@ -698,9 +466,6 @@ function AboutSection() {
         size="small"
         style={styles.aboutLink}
       />
-
-      {/* Moved here from Home (Sprint 9 Phase 2) — same dev/QA utility, just relocated now that
-       *  Home no longer carries any account/debug chrome. */}
       <TextButton
         disabled={isSendingTest}
         label={isSendingTest ? 'Sending in 2s…' : 'Send test notification'}
@@ -721,45 +486,19 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: theme.spacing.lg2,
-    paddingBottom: theme.spacing.huge,
     paddingHorizontal: theme.spacing.lg2,
   },
   deleteAccount: {
     alignItems: 'center',
     marginTop: theme.spacing.sm,
   },
-  header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg2,
-  },
-  headerSpacer: {
-    width: theme.spacing.huge,
-  },
   headerTitle: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.heading.size,
     fontWeight: theme.type.heading.weight,
   },
-  leagueRow: {
-    borderTopColor: theme.colors.surfaceRaised,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: theme.spacing.md,
-  },
-  leagueRowActions: {
-    flexDirection: 'row',
-    flexShrink: 1,
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-    justifyContent: 'flex-end',
-  },
-  leagueRowInfo: {
-    flex: 1,
-    // TODO: confirm visual — was gap: 2
-    gap: theme.spacing.xs,
+  headerTitlePad: {
+    paddingHorizontal: theme.spacing.lg2,
   },
   rowLabel: {
     color: theme.colors.textPrimary,
@@ -769,7 +508,6 @@ const styles = StyleSheet.create({
   rowSubtext: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.caption.size,
-    // TODO: confirm visual — was marginTop: 2
     marginTop: theme.spacing.xs,
   },
   screen: {

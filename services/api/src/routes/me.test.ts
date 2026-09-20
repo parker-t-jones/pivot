@@ -384,6 +384,7 @@ describe('GET /me', () => {
         notificationMode: 'all',
         quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
         autoSwitch: false,
+        watchedLeagueIds: [],
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
     });
@@ -426,6 +427,7 @@ describe('PATCH /me/preferences', () => {
       notificationMode: 'high_leverage_only',
       quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
       autoSwitch: true, // untouched by this PATCH
+      watchedLeagueIds: [],
     });
   });
 

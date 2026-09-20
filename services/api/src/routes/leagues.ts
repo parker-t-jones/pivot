@@ -1,5 +1,6 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { FREE_MAX_LEAGUES, FREE_MAX_MANUAL_LINEUP_SLOTS } from '@pivot/shared';
 import '../plugins/services.js';
 import { requireUser } from '../plugins/auth.js';
 import { ApiError } from '../lib/errors.js';
@@ -7,12 +8,46 @@ import { getOwnedLeagueOrThrow } from '../lib/get-owned-league.js';
 import {
   buildLineupResponse,
   getLineupSyncContext,
+  rebuildUserLineupCache,
   refreshLineupCache,
   syncLeagueLineup,
 } from '../lib/lineup-sync.js';
+import { onLeagueConnected, onLeagueDisconnected } from '../lib/watched-leagues.js';
 import { sleeperProvider } from '../providers/index.js';
 
 const SLOT_TYPES = ['starter', 'bench', 'flex', 'idp'] as const;
+
+async function assertCanConnectLeague(
+  supabase: Parameters<typeof getOwnedLeagueOrThrow>[0],
+  userId: string,
+): Promise<{ subscriptionTier: string }> {
+  const { data: userRow, error: userError } = await supabase
+    .from('users')
+    .select('subscription_tier')
+    .eq('id', userId)
+    .single();
+  if (userError) throw userError;
+
+  if (userRow.subscription_tier === 'pro') {
+    return { subscriptionTier: userRow.subscription_tier };
+  }
+
+  const { count, error: countError } = await supabase
+    .from('leagues')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId);
+  if (countError) throw countError;
+
+  if ((count ?? 0) >= FREE_MAX_LEAGUES) {
+    throw new ApiError(
+      403,
+      'league_limit_free',
+      `Free accounts can connect up to ${FREE_MAX_LEAGUES} leagues. Upgrade to Pro for unlimited leagues.`,
+    );
+  }
+
+  return { subscriptionTier: userRow.subscription_tier };
+}
 
 function leagueSummary(league: {
   id: string;
@@ -73,6 +108,14 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         .maybeSingle();
       if (existingError) throw existingError;
 
+      const { data: userRow, error: userTierError } = await fastify.supabase
+        .from('users')
+        .select('subscription_tier')
+        .eq('id', userId)
+        .single();
+      if (userTierError) throw userTierError;
+      const subscriptionTier = userRow.subscription_tier;
+
       let league = existing;
       if (league) {
         const { data: updated, error: updateError } = await fastify.supabase
@@ -89,6 +132,7 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         if (updateError) throw updateError;
         league = updated;
       } else {
+        await assertCanConnectLeague(fastify.supabase, userId);
         const { data: inserted, error: insertError } = await fastify.supabase
           .from('leagues')
           .insert({
@@ -140,6 +184,8 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         fastify.log.warn({ err: syncError, leagueId: league.id }, 'Initial Sleeper sync failed');
       }
 
+      await onLeagueConnected(fastify.supabase, userId, league.id, subscriptionTier);
+
       return reply.status(201).send(leagueSummary(league));
     },
   );
@@ -156,10 +202,12 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
     },
     async (request, reply) => {
       const { name, season_year } = request.body;
+      const userId = requireUser(request).id;
+      const { subscriptionTier } = await assertCanConnectLeague(fastify.supabase, userId);
       const { data: league, error } = await fastify.supabase
         .from('leagues')
         .insert({
-          user_id: requireUser(request).id,
+          user_id: userId,
           platform: 'manual',
           name,
           sport: 'nfl',
@@ -168,6 +216,8 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         .select('*')
         .single();
       if (error) throw error;
+
+      await onLeagueConnected(fastify.supabase, userId, league.id, subscriptionTier);
 
       return reply.status(201).send(leagueSummary(league));
     },
@@ -182,8 +232,25 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         requireUser(request).id,
         request.params.id,
       );
+      const userId = league.user_id;
       const { error } = await fastify.supabase.from('leagues').delete().eq('id', league.id);
       if (error) throw error;
+
+      await onLeagueDisconnected(fastify.supabase, userId, league.id);
+      try {
+        const syncContext = await getLineupSyncContext({
+          supabase: fastify.supabase,
+          lineupCache: fastify.lineupCache,
+        });
+        await rebuildUserLineupCache(
+          { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
+          userId,
+          syncContext.week,
+        );
+      } catch (rebuildError) {
+        fastify.log.warn({ err: rebuildError, userId }, 'Cache rebuild after disconnect failed');
+      }
+
       return reply.status(204).send();
     },
   );
@@ -316,6 +383,23 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       }
 
       const { week, slots } = request.body;
+
+      const { data: userRow, error: tierError } = await fastify.supabase
+        .from('users')
+        .select('subscription_tier')
+        .eq('id', requireUser(request).id)
+        .single();
+      if (tierError) throw tierError;
+      if (
+        userRow.subscription_tier !== 'pro' &&
+        slots.length > FREE_MAX_MANUAL_LINEUP_SLOTS
+      ) {
+        throw new ApiError(
+          403,
+          'manual_lineup_limit_free',
+          `Free accounts can have up to ${FREE_MAX_MANUAL_LINEUP_SLOTS} players on a manual lineup. Upgrade to Pro for unlimited roster size.`,
+        );
+      }
 
       const playerIds = slots.map((slot) => slot.player_id);
       const duplicatePlayerIds = playerIds.filter((id, index) => playerIds.indexOf(id) !== index);

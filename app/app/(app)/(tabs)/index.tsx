@@ -3,61 +3,60 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AlsoFlaggedRow } from '../../components/AlsoFlaggedRow';
-import { EmptyState } from '../../components/EmptyState';
-import { ErrorState } from '../../components/ErrorState';
-import { HomeDashboard } from '../../components/HomeDashboard';
-import { HomeLiveIdleCard } from '../../components/HomeLiveIdleCard';
-import { HomeOffDayCard } from '../../components/HomeOffDayCard';
-import { HomePregameCard } from '../../components/HomePregameCard';
-import { IdleHomeCard } from '../../components/IdleHomeCard';
-import { LoadingState } from '../../components/LoadingState';
-import { NowActiveCard } from '../../components/NowActiveCard';
-import { TextButton } from '../../components/TextButton';
-import { useSwitching } from '../../contexts/SwitchingContext';
-import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
-import { ApiRequestError, apiClient } from '../../lib/apiClient';
-import type { FlagEventPayload } from '../../lib/flagEventPayload';
+import { ActiveLineupPicker } from '../../../components/ActiveLineupPicker';
+import { AlsoFlaggedRow } from '../../../components/AlsoFlaggedRow';
+import { EmptyState } from '../../../components/EmptyState';
+import { ErrorState } from '../../../components/ErrorState';
+import { HomeDashboard } from '../../../components/HomeDashboard';
+import { HomeLiveIdleCard } from '../../../components/HomeLiveIdleCard';
+import { HomeOffDayCard } from '../../../components/HomeOffDayCard';
+import { HomePregameCard } from '../../../components/HomePregameCard';
+import { IdleHomeCard } from '../../../components/IdleHomeCard';
+import { LoadingState } from '../../../components/LoadingState';
+import { NowActiveCard } from '../../../components/NowActiveCard';
+import { useSwitching } from '../../../contexts/SwitchingContext';
+import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
+import { ApiRequestError, apiClient } from '../../../lib/apiClient';
+import type { FlagEventPayload } from '../../../lib/flagEventPayload';
 import {
   pickPreferredBroadcast,
   type CurrentFlag,
   type FlagsCurrentResponse,
   type GameBroadcast,
   type GameBroadcastsResponse,
-} from '../../lib/gameDisplay';
+} from '../../../lib/gameDisplay';
 import {
   applyFlagEventToHome,
   reconcileHomeWithFlagsCurrent,
   type HomeFlagSlice,
-} from '../../lib/homeFlagUpdates';
+} from '../../../lib/homeFlagUpdates';
 import {
-  countStakePlayersInGame,
   filterLiveStakeGames,
-  findNextStakeGame,
   groupLineupByGame,
   nextStakeKickoff,
   resolveHomeBranch,
   stakeTeamAbbreviations,
+  upcomingStakeGameGroups,
   type HomeBranch,
   type LineupGameGroup,
-} from '../../lib/homeState';
+} from '../../../lib/homeState';
 import {
   buildPlayerTeamMap,
   fetchAllLineups,
   type LeagueSummary,
   type LineupResponse,
-} from '../../lib/leagues';
-import { fetchNflState, type NflStateResponse } from '../../lib/nflState';
+} from '../../../lib/leagues';
+import { fetchMe, type MeResponse } from '../../../lib/me';
+import { fetchNflState, type NflStateResponse } from '../../../lib/nflState';
 import {
   fetchGamesLive,
   fetchGamesWeek,
   type LiveGame,
   type ScheduleGame,
-} from '../../lib/schedule';
-import { resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../../lib/teamDisplay';
-import { fonts } from '../../lib/fonts';
-import { theme } from '../../lib/theme';
-import { useHomeRealtime } from '../../lib/useHomeRealtime';
+} from '../../../lib/schedule';
+import { resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../../../lib/teamDisplay';
+import { theme } from '../../../lib/theme';
+import { useHomeRealtime } from '../../../lib/useHomeRealtime';
 
 interface HomeData {
   hasLeagues: boolean;
@@ -74,8 +73,7 @@ interface HomeData {
   liveStakeGames: LiveGame[];
   weekGames: ScheduleGame[];
   lineupGroups: LineupGameGroup[];
-  nextGame: ScheduleGame | null;
-  nextGamePlayerCount: number;
+  upcomingGames: LineupGameGroup[];
   countdownMs: number;
 }
 
@@ -94,8 +92,7 @@ function toFlagSlice(data: HomeData): HomeFlagSlice {
     liveStakeGames: data.liveStakeGames,
     weekGames: data.weekGames,
     lineupGroups: data.lineupGroups,
-    nextGame: data.nextGame,
-    nextGamePlayerCount: data.nextGamePlayerCount,
+    upcomingGames: data.upcomingGames,
     countdownMs: data.countdownMs,
     branch: data.branch,
   };
@@ -114,8 +111,7 @@ function emptyHome(partial: Partial<HomeData> & Pick<HomeData, 'hasLeagues' | 'b
     liveStakeGames: [],
     weekGames: [],
     lineupGroups: [],
-    nextGame: null,
-    nextGamePlayerCount: 0,
+    upcomingGames: [],
     countdownMs: 0,
     ...partial,
   };
@@ -131,6 +127,7 @@ export default function HomeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [homeData, setHomeData] = useState<HomeData | null>(null);
+  const [me, setMe] = useState<MeResponse | null>(null);
 
   const applyBroadcasts = useCallback(async (gameId: string) => {
     try {
@@ -199,6 +196,7 @@ export default function HomeScreen() {
     setLoadError(null);
     try {
       if (leagueRows.length === 0) {
+        setMe(null);
         setHomeData(
           emptyHome({
             hasLeagues: false,
@@ -207,6 +205,9 @@ export default function HomeScreen() {
         );
         return;
       }
+
+      const meResponse = await fetchMe();
+      setMe(meResponse);
 
       // FIRST calendar call — decides the display_phase branch before any games/flags fetch.
       const nflState = await fetchNflState();
@@ -231,12 +232,18 @@ export default function HomeScreen() {
         return;
       }
 
-      const [lineups, flagsResponse, liveResponse, weekResponse] = await Promise.all([
+      const [allLineups, flagsResponse, liveResponse, weekResponse] = await Promise.all([
         fetchAllLineups(leagueRows),
         apiClient.get<FlagsCurrentResponse>('/flags/current'),
         fetchGamesLive(),
         fetchGamesWeek(nflState.week),
       ]);
+
+      const watchedIds = new Set(meResponse.preferences.watchedLeagueIds ?? []);
+      const lineups =
+        watchedIds.size > 0
+          ? allLineups.filter((row) => watchedIds.has(row.league_id))
+          : allLineups;
 
       const playerTeamMap = buildPlayerTeamMap(lineups);
       const stakeTeams = stakeTeamAbbreviations(playerTeamMap);
@@ -269,10 +276,7 @@ export default function HomeScreen() {
         }
       }
 
-      const nextGame = findNextStakeGame(weekGames, stakeTeams, now);
-      const nextGamePlayerCount = nextGame
-        ? countStakePlayersInGame(lineups, nextGame.home_team, nextGame.away_team)
-        : 0;
+      const upcomingGames = upcomingStakeGameGroups(weekGames, lineups, stakeTeams);
       const lineupGroups = groupLineupByGame(weekGames, lineups, stakeTeams);
       const countdownMs = kickoff ? Math.max(0, kickoff.getTime() - now.getTime()) : 0;
 
@@ -290,8 +294,7 @@ export default function HomeScreen() {
         liveStakeGames,
         weekGames,
         lineupGroups,
-        nextGame,
-        nextGamePlayerCount,
+        upcomingGames,
         countdownMs,
       });
     } catch (error) {
@@ -429,33 +432,41 @@ export default function HomeScreen() {
         return <HomeLiveIdleCard liveGames={homeData.liveStakeGames} />;
       case 'state3':
         return (
-          <HomePregameCard countdownMs={homeData.countdownMs} groups={homeData.lineupGroups} />
+          <HomePregameCard
+            countdownMs={homeData.countdownMs}
+            groups={homeData.lineupGroups}
+            week={homeData.nflState?.week ?? 0}
+          />
         );
       case 'state4':
         return (
           <HomeOffDayCard
-            nextGame={homeData.nextGame}
-            playerCount={homeData.nextGamePlayerCount}
+            upcomingGames={homeData.upcomingGames}
             week={homeData.nflState?.week ?? 0}
           />
         );
     }
   }
 
+  const handleMeUpdated = useCallback(
+    (updated: MeResponse) => {
+      setMe(updated);
+      void loadHome(leagues);
+    },
+    [loadHome, leagues],
+  );
+
+  const headerRight =
+    me && leagues.length > 0 ? (
+      <ActiveLineupPicker leagues={leagues} me={me} onMeUpdated={handleMeUpdated} />
+    ) : undefined;
+
   return (
     <HomeDashboard
       contentTopInset={insets.top + theme.spacing.lg}
       onRefresh={onRefresh}
       refreshing={isRefreshing}
-      headerRight={
-        <TextButton
-          accessibilityLabel="Settings"
-          label="Settings"
-          labelStyle={styles.settingsLabel}
-          onPress={() => router.push('/(app)/settings')}
-          tone="muted"
-        />
-      }
+      headerRight={headerRight}
     >
       {isLoading ? (
         <LoadingState message="Loading…" />
@@ -469,10 +480,6 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  settingsLabel: {
-    fontFamily: fonts.monoBold,
-    fontWeight: '400',
-  },
   state1: {
     gap: theme.spacing.lg,
   },

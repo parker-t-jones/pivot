@@ -17,6 +17,7 @@ import { apiErrorHandler } from './lib/errors.js';
 import { createSupabaseServiceClient, type SupabaseServiceClient } from './lib/supabase.js';
 import authPlugin from './plugins/auth.js';
 import servicesPlugin from './plugins/services.js';
+import billingRoutes from './routes/billing.js';
 import flagsRoutes from './routes/flags.js';
 import gamesRoutes from './routes/games.js';
 import leaguesRoutes from './routes/leagues.js';
@@ -88,6 +89,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
   await fastify.register(gamesRoutes);
   await fastify.register(sessionRoutes);
   await fastify.register(meRoutes);
+  await fastify.register(billingRoutes);
   await fastify.register(realtimeRoutes, {});
 
   fastify.addHook('onClose', async () => {

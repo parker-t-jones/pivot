@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -19,6 +19,7 @@ import { SecondaryButton } from '../../components/SecondaryButton';
 import { TextButton } from '../../components/TextButton';
 import { TextField } from '../../components/TextField';
 import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
+import { useUpgradeSheet } from '../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../lib/apiClient';
 import {
   connectManualLeague,
@@ -30,6 +31,8 @@ import {
 } from '../../lib/leagues';
 import { navigateAfterConnect } from '../../lib/navigateAfterConnect';
 import type { PlayerSearchResult } from '../../lib/players';
+import { fetchMe, FREE_MAX_MANUAL_LINEUP_SLOTS } from '../../lib/me';
+import { promptUpgradeForCapError } from '../../lib/upgradePrompt';
 import { theme } from '../../lib/theme';
 
 type Mode = 'choose' | 'sleeper' | 'manual';
@@ -97,6 +100,7 @@ function ChooseProvider({ onChoose }: { onChoose: (mode: Mode) => void }) {
 }
 
 function ConnectSleeper({ onConnected }: { onConnected: () => void | Promise<void> }) {
+  const { openUpgrade } = useUpgradeSheet();
   const [username, setUsername] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [leagues, setLeagues] = useState<SleeperLeagueOption[] | null>(null);
@@ -130,6 +134,10 @@ function ConnectSleeper({ onConnected }: { onConnected: () => void | Promise<voi
       await connectSleeperLeague(username.trim(), league.league_id);
       await onConnected();
     } catch (error) {
+      if (promptUpgradeForCapError(error, openUpgrade)) {
+        setConnectingLeagueId(null);
+        return;
+      }
       setErrorMessage(
         error instanceof ApiRequestError ? error.message : 'Could not connect league.',
       );
@@ -181,12 +189,24 @@ function ConnectSleeper({ onConnected }: { onConnected: () => void | Promise<voi
 }
 
 function ConnectManual({ onConnected }: { onConnected: () => void | Promise<void> }) {
+  const { openUpgrade } = useUpgradeSheet();
   const [name, setName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [league, setLeague] = useState<{ league_id: string; week: number } | null>(null);
   const [roster, setRoster] = useState<PlayerSearchResult[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [freeCap, setFreeCap] = useState<number | undefined>(FREE_MAX_MANUAL_LINEUP_SLOTS);
+
+  useEffect(() => {
+    void fetchMe()
+      .then((me) => {
+        setFreeCap(me.subscription_tier === 'pro' ? undefined : FREE_MAX_MANUAL_LINEUP_SLOTS);
+      })
+      .catch(() => {
+        setFreeCap(FREE_MAX_MANUAL_LINEUP_SLOTS);
+      });
+  }, []);
 
   const onCreateLeague = async () => {
     if (name.trim().length === 0) return;
@@ -197,6 +217,9 @@ function ConnectManual({ onConnected }: { onConnected: () => void | Promise<void
       const lineup = await fetchLineup(created.league_id);
       setLeague({ league_id: created.league_id, week: lineup.week });
     } catch (error) {
+      if (promptUpgradeForCapError(error, openUpgrade)) {
+        return;
+      }
       setErrorMessage(
         error instanceof ApiRequestError ? error.message : 'Could not create league.',
       );
@@ -213,6 +236,9 @@ function ConnectManual({ onConnected }: { onConnected: () => void | Promise<void
       await putManualLineup(league.league_id, league.week, roster);
       await onConnected();
     } catch (error) {
+      if (promptUpgradeForCapError(error, openUpgrade)) {
+        return;
+      }
       setErrorMessage(error instanceof ApiRequestError ? error.message : 'Could not save lineup.');
     } finally {
       setIsSaving(false);
@@ -237,13 +263,27 @@ function ConnectManual({ onConnected }: { onConnected: () => void | Promise<void
   return (
     <PlayerPicker
       roster={roster}
-      onAdd={(player) => setRoster((current) => [...current, player])}
+      onAdd={(player) => {
+        if (freeCap != null && roster.length >= freeCap) {
+          promptUpgradeForCapError(
+            new ApiRequestError(
+              403,
+              'manual_lineup_limit_free',
+              `Free accounts can add up to ${freeCap} players. Upgrade to Pro for unlimited.`,
+            ),
+            openUpgrade,
+          );
+          return;
+        }
+        setRoster((current) => [...current, player]);
+      }}
       onRemove={(playerId) =>
         setRoster((current) => current.filter((p) => p.player_id !== playerId))
       }
       onSave={onSaveLineup}
       isSaving={isSaving}
       errorMessage={errorMessage}
+      maxRosterSize={freeCap}
     />
   );
 }

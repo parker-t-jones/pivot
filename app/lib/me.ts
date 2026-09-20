@@ -12,6 +12,8 @@ export interface Preferences {
   notificationMode: 'all' | 'high_leverage_only' | 'off';
   quietHours: QuietHours;
   autoSwitch: boolean;
+  /** Leagues Home + the engine stake from. Free: at most one. */
+  watchedLeagueIds: string[];
 }
 
 export interface AppPresenceEntry {
@@ -19,7 +21,7 @@ export interface AppPresenceEntry {
   has_subscription: boolean;
 }
 
-/** `GET /me` response (Section 9, added Sprint 9 Phase 2 — see report). */
+/** `GET /me` response (Section 9). */
 export interface MeResponse {
   user_id: string;
   email: string;
@@ -36,6 +38,7 @@ export async function patchPreferences(patch: {
   notificationMode?: Preferences['notificationMode'];
   quietHours?: Partial<QuietHours>;
   autoSwitch?: boolean;
+  watchedLeagueIds?: string[];
 }): Promise<MeResponse> {
   return await apiClient.patch<MeResponse>('/me/preferences', patch);
 }
@@ -49,3 +52,8 @@ export async function setAppPresence(
 export async function deleteAccount(): Promise<void> {
   await apiClient.delete('/me');
 }
+
+/** Free-tier caps (mirrored from `@pivot/shared`). */
+export const FREE_MAX_LEAGUES = 3;
+export const FREE_MAX_WATCHED_LEAGUES = 1;
+export const FREE_MAX_MANUAL_LINEUP_SLOTS = 9;

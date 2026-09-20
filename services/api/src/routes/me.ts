@@ -1,7 +1,8 @@
-import { parsePreferences } from '@pivot/shared';
+import { parsePreferences, FREE_MAX_WATCHED_LEAGUES } from '@pivot/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
+import { getLineupSyncContext, rebuildUserLineupCache } from '../lib/lineup-sync.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
 
@@ -92,6 +93,7 @@ const preferencesPatchBody = z.object({
     })
     .optional(),
   autoSwitch: z.boolean().optional(),
+  watchedLeagueIds: z.array(z.string().uuid()).optional(),
 });
 
 const appPresenceBody = z.object({
@@ -151,16 +153,48 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       const { data: existingRow, error: existingError } = await fastify.supabase
         .from('users')
-        .select('preferences')
+        .select('preferences, subscription_tier')
         .eq('id', user.id)
         .single();
       if (existingError) throw existingError;
 
       const current = parsePreferences(existingRow.preferences);
+      let nextWatched = request.body.watchedLeagueIds ?? current.watchedLeagueIds;
+
+      if (request.body.watchedLeagueIds !== undefined) {
+        const { data: owned, error: ownedError } = await fastify.supabase
+          .from('leagues')
+          .select('id')
+          .eq('user_id', user.id);
+        if (ownedError) throw ownedError;
+        const ownedIds = new Set((owned ?? []).map((l) => l.id));
+        const invalid = request.body.watchedLeagueIds.filter((id) => !ownedIds.has(id));
+        if (invalid.length > 0) {
+          throw new ApiError(
+            400,
+            'invalid_watched_league',
+            'watchedLeagueIds must refer to leagues you own.',
+            { league_ids: invalid },
+          );
+        }
+        nextWatched = request.body.watchedLeagueIds;
+        if (
+          existingRow.subscription_tier !== 'pro' &&
+          nextWatched.length > FREE_MAX_WATCHED_LEAGUES
+        ) {
+          throw new ApiError(
+            403,
+            'watched_league_limit_free',
+            `Free accounts can watch ${FREE_MAX_WATCHED_LEAGUES} league at a time. Upgrade to Pro to watch multiple.`,
+          );
+        }
+      }
+
       const merged = parsePreferences({
         ...current,
         ...request.body,
         quietHours: { ...current.quietHours, ...request.body.quietHours },
+        watchedLeagueIds: nextWatched,
       });
 
       const { data, error } = await fastify.supabase
@@ -170,6 +204,22 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
         .select('id, email, preferences, subscription_tier')
         .single();
       if (error) throw error;
+
+      if (request.body.watchedLeagueIds !== undefined) {
+        try {
+          const syncContext = await getLineupSyncContext({
+            supabase: fastify.supabase,
+            lineupCache: fastify.lineupCache,
+          });
+          await rebuildUserLineupCache(
+            { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
+            user.id,
+            syncContext.week,
+          );
+        } catch (rebuildError) {
+          fastify.log.warn({ err: rebuildError, userId: user.id }, 'Cache rebuild after watch change failed');
+        }
+      }
 
       const { data: presenceRows, error: presenceError } = await fastify.supabase
         .from('user_app_presence')

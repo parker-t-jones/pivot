@@ -19,6 +19,8 @@ export interface PlayerPickerProps {
   title?: string;
   subtitle?: string;
   saveLabel?: string;
+  /** When set, shown in the roster heading (free-tier hint). */
+  maxRosterSize?: number;
 }
 
 /**
@@ -35,6 +37,7 @@ export function PlayerPicker({
   title = 'Add your players',
   subtitle = 'Search for the players on your roster.',
   saveLabel = 'Save lineup',
+  maxRosterSize,
 }: PlayerPickerProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PlayerSearchResult[]>([]);
@@ -54,6 +57,11 @@ export function PlayerPicker({
       setIsSearching(false);
     }
   };
+
+  const rosterHeading =
+    maxRosterSize != null
+      ? `Your roster (${roster.length}/${maxRosterSize})`
+      : `Your roster (${roster.length})`;
 
   return (
     <View style={styles.content}>
@@ -77,7 +85,7 @@ export function PlayerPicker({
         style={styles.resultsList}
       />
 
-      <Text style={styles.rosterHeading}>Your roster ({roster.length})</Text>
+      <Text style={styles.rosterHeading}>{rosterHeading}</Text>
       <FlatList
         data={roster}
         keyExtractor={(item) => item.player_id}

@@ -5,9 +5,11 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { ErrorState } from '../../components/ErrorState';
 import { NotificationBannerHost } from '../../components/NotificationBannerHost';
 import { NotificationResponseHandler } from '../../components/NotificationResponseHandler';
+import { UpgradeSheet } from '../../components/UpgradeSheet';
 import { LeaguesGateProvider, useLeaguesGate } from '../../contexts/LeaguesGateContext';
 import { PushPermissionProvider, usePushPermission } from '../../contexts/PushPermissionContext';
 import { SwitchingProvider } from '../../contexts/SwitchingContext';
+import { UpgradeSheetProvider } from '../../contexts/UpgradeSheetContext';
 import { isConnectDeferredForSession } from '../../lib/connectDeferredSession';
 import { resolveAppGate, type PushGateStatus } from '../../lib/navigationGates';
 import { resetToHomeRoot } from '../../lib/navigateAfterConnect';
@@ -23,14 +25,12 @@ function LoadingState({ message }: { message: string }) {
 }
 
 /**
- * Sprint 10 Phase 4 — leagues gate (zero → connect) then push catch-all (only when count >= 1
- * and on Home). Decisions live in `resolveAppGate` so ordering/async waits stay testable.
+ * Sprint 10 Phase 4 — leagues gate then push catch-all. Tabs live under `(tabs)`; connect /
+ * onboarding / edit-lineup remain stack siblings so they cover the tab bar.
  */
 function AppNavigator() {
   const { status: pushStatusRaw } = usePushPermission();
   const { status: leaguesStatus, leagueCount, errorMessage, refreshLeagues } = useLeaguesGate();
-  // Read the session module directly in the gate path so a Close → replace race cannot see a
-  // stale React snapshot of connectDeferred (Bug 1). Context still owns deferConnect / re-renders.
   const connectDeferred = isConnectDeferredForSession();
   const segments = useSegments();
   const router = useRouter();
@@ -71,7 +71,6 @@ function AppNavigator() {
       default:
         break;
     }
-    // decisionKey collapses equivalent decisions so we don't re-replace every render.
   }, [decisionKey, decision, router]);
 
   if (decision.action === 'wait') {
@@ -101,9 +100,8 @@ function AppNavigator() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
+      <Stack.Screen name="(tabs)" />
       <Stack.Screen name="notifications-permission" />
-      <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
       <Stack.Screen name="connect-team" />
       <Stack.Screen name="edit-manual-lineup" />
       <Stack.Screen name="onboarding-streaming" />
@@ -117,9 +115,12 @@ export default function AppGroupLayout() {
     <PushPermissionProvider>
       <LeaguesGateProvider>
         <SwitchingProvider>
-          <AppNavigator />
-          <NotificationBannerHost />
-          <NotificationResponseHandler />
+          <UpgradeSheetProvider>
+            <AppNavigator />
+            <NotificationBannerHost />
+            <NotificationResponseHandler />
+            <UpgradeSheet />
+          </UpgradeSheetProvider>
         </SwitchingProvider>
       </LeaguesGateProvider>
     </PushPermissionProvider>

@@ -16,11 +16,13 @@ describe('isHomeRouteLeaf', () => {
   it('treats app group / index as Home', () => {
     expect(isHomeRouteLeaf(undefined)).toBe(true);
     expect(isHomeRouteLeaf('(app)')).toBe(true);
+    expect(isHomeRouteLeaf('(tabs)')).toBe(true);
     expect(isHomeRouteLeaf('index')).toBe(true);
   });
 
-  it('does not treat settings or onboarding as Home', () => {
+  it('does not treat settings, lineup, or onboarding as Home', () => {
     expect(isHomeRouteLeaf('settings')).toBe(false);
+    expect(isHomeRouteLeaf('lineup')).toBe(false);
     expect(isHomeRouteLeaf('connect-team')).toBe(false);
     expect(isHomeRouteLeaf('onboarding-streaming')).toBe(false);
   });

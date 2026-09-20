@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { supabase } from '../lib/supabase';
+import { configurePurchases } from '../lib/purchases';
 
 type SessionContextValue = {
   isLoading: boolean;
@@ -38,6 +39,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
       setSession(data.session ?? null);
       setIsLoading(false);
+
+      if (data.session?.user?.id) {
+        void configurePurchases(data.session.user.id);
+      }
     };
 
     hydrateSession().catch((error: unknown) => {
@@ -54,6 +59,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
     } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
       setIsLoading(false);
+      if (currentSession?.user?.id) {
+        void configurePurchases(currentSession.user.id);
+      }
     });
 
     return () => {

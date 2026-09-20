@@ -8,9 +8,16 @@ import { LoadingState } from '../../components/LoadingState';
 import { PlayerPicker } from '../../components/PlayerPicker';
 import { TextButton } from '../../components/TextButton';
 import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
+import { useUpgradeSheet } from '../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../lib/apiClient';
 import { fetchLineup, putManualLineup } from '../../lib/leagues';
+import {
+  fetchMe,
+  FREE_MAX_MANUAL_LINEUP_SLOTS,
+  type MeResponse,
+} from '../../lib/me';
 import type { PlayerSearchResult } from '../../lib/players';
+import { promptUpgradeForCapError } from '../../lib/upgradePrompt';
 import { theme } from '../../lib/theme';
 
 /**
@@ -23,14 +30,18 @@ export default function EditManualLineupScreen() {
   const params = useLocalSearchParams<{ leagueId?: string }>();
   const leagueId = typeof params.leagueId === 'string' ? params.leagueId : null;
   const { leagues, refreshLeagues } = useLeaguesGate();
+  const { openUpgrade } = useUpgradeSheet();
 
   const [week, setWeek] = useState<number | null>(null);
   const [roster, setRoster] = useState<PlayerSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [me, setMe] = useState<MeResponse | null>(null);
 
   const league = leagues.find((row) => row.league_id === leagueId) ?? null;
+  const freeCap =
+    me && me.subscription_tier !== 'pro' ? FREE_MAX_MANUAL_LINEUP_SLOTS : undefined;
 
   const load = useCallback(async () => {
     if (!leagueId) {
@@ -53,7 +64,8 @@ export default function EditManualLineupScreen() {
         return;
       }
 
-      const lineup = await fetchLineup(leagueId);
+      const [lineup, meResponse] = await Promise.all([fetchLineup(leagueId), fetchMe()]);
+      setMe(meResponse);
       setWeek(lineup.week);
       setRoster(
         lineup.slots.map((slot) => ({
@@ -85,9 +97,12 @@ export default function EditManualLineupScreen() {
       if (router.canGoBack()) {
         router.back();
       } else {
-        router.replace('/(app)/settings');
+        router.replace('/(app)/(tabs)/lineup');
       }
     } catch (error) {
+      if (promptUpgradeForCapError(error, openUpgrade)) {
+        return;
+      }
       setErrorMessage(error instanceof ApiRequestError ? error.message : 'Could not save lineup.');
     } finally {
       setIsSaving(false);
@@ -101,7 +116,7 @@ export default function EditManualLineupScreen() {
           label="Back"
           onPress={() => {
             if (router.canGoBack()) router.back();
-            else router.replace('/(app)/settings');
+            else router.replace('/(app)/(tabs)/lineup');
           }}
         />
         {league ? <Text style={styles.headerTitle}>{league.name}</Text> : null}
@@ -119,7 +134,20 @@ export default function EditManualLineupScreen() {
       ) : (
         <PlayerPicker
           roster={roster}
-          onAdd={(player) => setRoster((current) => [...current, player])}
+          onAdd={(player) => {
+            if (freeCap != null && roster.length >= freeCap) {
+              promptUpgradeForCapError(
+                new ApiRequestError(
+                  403,
+                  'manual_lineup_limit_free',
+                  `Free accounts can add up to ${freeCap} players. Upgrade to Pro for unlimited.`,
+                ),
+                openUpgrade,
+              );
+              return;
+            }
+            setRoster((current) => [...current, player]);
+          }}
           onRemove={(playerId) =>
             setRoster((current) => current.filter((p) => p.player_id !== playerId))
           }
@@ -128,6 +156,7 @@ export default function EditManualLineupScreen() {
           errorMessage={errorMessage}
           title="Edit your lineup"
           subtitle="Add or remove players, then save."
+          maxRosterSize={freeCap}
         />
       )}
     </View>

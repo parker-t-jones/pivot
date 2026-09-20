@@ -34,12 +34,66 @@ const unusedLineupCache = new Proxy(
 
 function makeLeague(overrides: Partial<LeagueRow> = {}): LeagueRow {
   return {
-    id: 'league-1',
+    id: '11111111-1111-4111-8111-111111111111',
     user_id: 'user-1',
     platform: 'sleeper',
     external_league_id: 'ext-league-1',
     external_roster_id: '2',
     ...overrides,
+  };
+}
+
+/** Tables + cache methods needed after sync for `rebuildUserLineupCache`. */
+function rebuildAwareLineupCache() {
+  return {
+    setLineupCache: vi.fn().mockResolvedValue(undefined),
+    addUserStake: vi.fn().mockResolvedValue(undefined),
+    getLineupCache: vi.fn().mockResolvedValue(null),
+    removeUserStake: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+const TEST_LEAGUE_ID = '11111111-1111-4111-8111-111111111111';
+
+function usersAndLeaguesForRebuild(
+  leagueId = TEST_LEAGUE_ID,
+  lineupSource: string | null = 'matchup',
+) {
+  return {
+    users: {
+      select: () => ({
+        eq: () => ({
+          single: () =>
+            Promise.resolve({
+              data: {
+                preferences: { watchedLeagueIds: [leagueId] },
+                subscription_tier: 'free',
+              },
+              error: null,
+            }),
+        }),
+      }),
+      update: () => ({
+        eq: () => Promise.resolve({ error: null }),
+      }),
+    },
+    leaguesSelect: {
+      select: () => ({
+        eq: () => ({
+          order: () =>
+            Promise.resolve({
+              data: [
+                {
+                  id: leagueId,
+                  lineup_source: lineupSource,
+                  fallback_roster: lineupSource === 'roster_fallback' ? ['p-qb', 'p-rb'] : null,
+                },
+              ],
+              error: null,
+            }),
+        }),
+      }),
+    },
   };
 }
 
@@ -100,11 +154,12 @@ describe('syncLeagueLineup', () => {
     });
 
     const leagueUpdates: unknown[] = [];
-    const setLineupCache = vi.fn().mockResolvedValue(undefined);
-    const addUserStake = vi.fn().mockResolvedValue(undefined);
+    const lineupCache = rebuildAwareLineupCache();
+    const rebuild = usersAndLeaguesForRebuild(TEST_LEAGUE_ID, 'roster_fallback');
 
     const supabase = {
       from: (table: string) => {
+        if (table === 'users') return rebuild.users;
         if (table === 'players') {
           return {
             select: () => ({
@@ -121,6 +176,7 @@ describe('syncLeagueLineup', () => {
         }
         if (table === 'leagues') {
           return {
+            ...rebuild.leaguesSelect,
             update: (payload: unknown) => {
               leagueUpdates.push(payload);
               return {
@@ -136,7 +192,7 @@ describe('syncLeagueLineup', () => {
     const result = await syncLeagueLineup(
       {
         supabase,
-        lineupCache: { setLineupCache, addUserStake } as never,
+        lineupCache: lineupCache as never,
       },
       makeLeague(),
       { week: 0, displayPhase: 'pre' },
@@ -156,18 +212,17 @@ describe('syncLeagueLineup', () => {
       lineup_source: 'roster_fallback',
       fallback_roster: ['p-qb', 'p-rb'],
     });
-    expect(setLineupCache).toHaveBeenCalledWith(
+    expect(lineupCache.setLineupCache).toHaveBeenCalledWith(
       'user-1',
       0,
       expect.objectContaining({
         playerToTeam: expect.any(Map),
       }),
     );
-    const cacheArg = setLineupCache.mock.calls[0]?.[2] as
+    const cacheArg = lineupCache.setLineupCache.mock.calls[0]?.[2] as
       | { playerToTeam: Map<string, string>; teamPositions: Map<string, Set<string>> }
       | undefined;
     expect(cacheArg).toBeDefined();
-    // Every fallback player is startable (both in the cache).
     expect([...cacheArg!.playerToTeam.keys()].sort()).toEqual(['p-qb', 'p-rb']);
     expect(cacheArg!.teamPositions.size).toBe(2);
   });
@@ -213,10 +268,33 @@ describe('syncLeagueLineup', () => {
     });
 
     const leagueUpdates: unknown[] = [];
-    const setLineupCache = vi.fn().mockResolvedValue(undefined);
-    const addUserStake = vi.fn().mockResolvedValue(undefined);
+    const lineupCache = rebuildAwareLineupCache();
+    const rebuild = usersAndLeaguesForRebuild(TEST_LEAGUE_ID, 'roster_fallback');
+    // Empty draft — no players in fallback.
+    const emptyRebuild = {
+      ...rebuild,
+      leaguesSelect: {
+        select: () => ({
+          eq: () => ({
+            order: () =>
+              Promise.resolve({
+                data: [
+                  {
+                    id: TEST_LEAGUE_ID,
+                    lineup_source: 'roster_fallback',
+                    fallback_roster: [],
+                  },
+                ],
+                error: null,
+              }),
+          }),
+        }),
+      },
+    };
+
     const supabase = {
       from: (table: string) => {
+        if (table === 'users') return emptyRebuild.users;
         if (table === 'players') {
           return {
             select: () => ({
@@ -226,6 +304,7 @@ describe('syncLeagueLineup', () => {
         }
         if (table === 'leagues') {
           return {
+            ...emptyRebuild.leaguesSelect,
             update: (payload: unknown) => {
               leagueUpdates.push(payload);
               return { eq: () => Promise.resolve({ error: null }) };
@@ -237,7 +316,7 @@ describe('syncLeagueLineup', () => {
     } as unknown as SupabaseServiceClient;
 
     const result = await syncLeagueLineup(
-      { supabase, lineupCache: { setLineupCache, addUserStake } as never },
+      { supabase, lineupCache: lineupCache as never },
       makeLeague(),
       { week: 0, displayPhase: 'off' },
     );
@@ -263,11 +342,12 @@ describe('syncLeagueLineup', () => {
 
     const leagueUpdates: unknown[] = [];
     const upserts: unknown[] = [];
-    const setLineupCache = vi.fn().mockResolvedValue(undefined);
-    const addUserStake = vi.fn().mockResolvedValue(undefined);
+    const lineupCache = rebuildAwareLineupCache();
+    const rebuild = usersAndLeaguesForRebuild(TEST_LEAGUE_ID, 'matchup');
 
     const supabaseWithRefresh = {
       from: (table: string) => {
+        if (table === 'users') return rebuild.users;
         if (table === 'players') {
           return {
             select: () => ({
@@ -309,6 +389,7 @@ describe('syncLeagueLineup', () => {
         }
         if (table === 'leagues') {
           return {
+            ...rebuild.leaguesSelect,
             update: (payload: unknown) => {
               leagueUpdates.push(payload);
               return {
@@ -324,7 +405,7 @@ describe('syncLeagueLineup', () => {
     const result = await syncLeagueLineup(
       {
         supabase: supabaseWithRefresh,
-        lineupCache: { setLineupCache, addUserStake } as never,
+        lineupCache: lineupCache as never,
       },
       makeLeague(),
       { week: 1, displayPhase: 'regular' },
@@ -339,7 +420,7 @@ describe('syncLeagueLineup', () => {
     });
     expect(upserts[0]).toEqual([
       {
-        league_id: 'league-1',
+        league_id: TEST_LEAGUE_ID,
         week: 1,
         player_id: 'p-qb',
         slot_type: 'starter',

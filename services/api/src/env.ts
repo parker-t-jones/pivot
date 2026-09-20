@@ -13,6 +13,8 @@ const envSchema = z.object({
   // Phase 4 / sprint decision #1: the `/v1/realtime` fan-out subscriber needs a persistent TCP
   // connection (`ioredis`) — the REST client above can't hold a `(P)SUBSCRIBE`.
   UPSTASH_REDIS_TCP_URL: z.string().optional(),
+  /** Authorization value RevenueCat sends on webhook POSTs (optional until billing is wired). */
+  REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
   PORT: z.coerce.number().int().positive().default(3000),
 });
 

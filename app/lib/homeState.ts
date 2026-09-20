@@ -12,6 +12,14 @@ import type { PlayerTeamMap } from './teamDisplay';
 /** How close a kickoff must be (same local day OR within this window) to count as State 3 pre-game. */
 const PREGAME_WINDOW_MS = 12 * 60 * 60 * 1000;
 
+/**
+ * Starters + flex only — matches engine stake and Sleeper "active roster."
+ * Bench (and IDP, out of v1 scope) never appear under Active Players.
+ */
+export function isActiveRosterSlot(slot: { slot_type: string }): boolean {
+  return slot.slot_type === 'starter' || slot.slot_type === 'flex';
+}
+
 export type HomeBranch =
   | { branch: 'no_leagues' }
   | { branch: 'season_idle'; variant: 'off' | 'pre' }
@@ -151,19 +159,70 @@ export function findNextStakeGame(
   stakeTeams: Set<string>,
   now: Date,
 ): ScheduleGame | null {
-  let best: ScheduleGame | null = null;
-  let bestTime = Infinity;
+  const games = findNextStakeGames(weekGames, stakeTeams, now);
+  return games[0] ?? null;
+}
+
+/**
+ * All stake games in the soonest kickoff *window* (e.g. every Sunday 1pm slate game the
+ * user has players in), sorted by away@home for stable UI order.
+ *
+ * NFL early/late windows are not byte-identical timestamps — ESPN often stores 1:00 vs 1:05
+ * PM ET as different `scheduled_start`s — so we bucket by proximity to the soonest kickoff
+ * rather than requiring an exact match.
+ *
+ * `in_progress` is intentionally included when the kickoff is still in the upcoming window:
+ * Postgres status can flip before Redis live state exists (or in demo/frozen data), and the
+ * user still expects every stake game at that slot — not only rows still marked `scheduled`.
+ */
+export function findNextStakeGames(
+  weekGames: ScheduleGame[],
+  stakeTeams: Set<string>,
+  now: Date,
+): ScheduleGame[] {
+  const nowMs = now.getTime();
+  const candidates: Array<{ game: ScheduleGame; kickoffMs: number }> = [];
   for (const game of weekGames) {
-    if (game.status === 'final' || game.status === 'in_progress') continue;
+    if (game.status === 'final') continue;
     if (!gameHasStake(game.home_team, game.away_team, stakeTeams)) continue;
-    const kickoff = new Date(game.scheduled_start).getTime();
-    if (Number.isNaN(kickoff) || kickoff < now.getTime()) continue;
-    if (kickoff < bestTime) {
-      bestTime = kickoff;
-      best = game;
-    }
+    const kickoffMs = new Date(game.scheduled_start).getTime();
+    if (Number.isNaN(kickoffMs)) continue;
+    candidates.push({ game, kickoffMs });
   }
-  return best;
+  if (candidates.length === 0) return [];
+
+  // Anchor on the soonest kickoff that hasn't passed yet (clock), ignoring status.
+  const future = candidates.filter(({ kickoffMs }) => kickoffMs >= nowMs);
+  let anchorMs: number;
+  if (future.length > 0) {
+    anchorMs = Math.min(...future.map(({ kickoffMs }) => kickoffMs));
+  } else {
+    // Entire slate already kicked off — keep games whose kickoff is still inside the
+    // current TV window (started at most ~75m ago).
+    const recent = candidates.filter(
+      ({ kickoffMs }) => nowMs - kickoffMs <= KICKOFF_SLOT_TOLERANCE_MS,
+    );
+    if (recent.length === 0) return [];
+    anchorMs = Math.min(...recent.map(({ kickoffMs }) => kickoffMs));
+  }
+
+  return candidates
+    .filter(({ kickoffMs }) => sameKickoffSlot(anchorMs, kickoffMs))
+    .map(({ game }) => game)
+    .sort((a, b) =>
+      `${a.away_team}@${a.home_team}`.localeCompare(`${b.away_team}@${b.home_team}`),
+    );
+}
+
+/**
+ * NFL TV windows (1pm / 4pm / primetime) — games within this span of the window's earliest
+ * kickoff count as the same slot. Wide enough for 1:00–1:25 and 4:05–4:25; narrow enough
+ * that a 1pm game does not pull in a 4pm game (~3h later).
+ */
+const KICKOFF_SLOT_TOLERANCE_MS = 75 * 60 * 1000;
+
+export function sameKickoffSlot(aMs: number, bMs: number): boolean {
+  return Math.abs(aMs - bMs) <= KICKOFF_SLOT_TOLERANCE_MS;
 }
 
 export function countStakePlayersInGame(
@@ -171,16 +230,90 @@ export function countStakePlayersInGame(
   homeTeam: string,
   awayTeam: string,
 ): number {
-  const ids = new Set<string>();
+  return listStakePlayersInGame(lineups, homeTeam, awayTeam).length;
+}
+
+/** Distinct *active-roster* players (starter/flex) whose NFL team is in this matchup. */
+export function listStakePlayersInGame(
+  lineups: LineupResponse[],
+  homeTeam: string,
+  awayTeam: string,
+): Array<{
+  player_id: string;
+  first_name: string;
+  last_name: string;
+  position: string;
+  team_abbreviation: string;
+}> {
+  const byId = new Map<
+    string,
+    {
+      player_id: string;
+      first_name: string;
+      last_name: string;
+      position: string;
+      team_abbreviation: string;
+    }
+  >();
   for (const lineup of lineups) {
     for (const slot of lineup.slots) {
+      if (!isActiveRosterSlot(slot)) continue;
       const abbr = slot.player.team?.abbreviation;
-      if (abbr === homeTeam || abbr === awayTeam) {
-        ids.add(slot.player.player_id);
-      }
+      if (abbr !== homeTeam && abbr !== awayTeam) continue;
+      if (byId.has(slot.player.player_id)) continue;
+      byId.set(slot.player.player_id, {
+        player_id: slot.player.player_id,
+        first_name: slot.player.first_name,
+        last_name: slot.player.last_name,
+        position: slot.player.position,
+        team_abbreviation: abbr,
+      });
     }
   }
-  return ids.size;
+  return [...byId.values()];
+}
+
+/**
+ * State 4 player line: "Active Players: Josh Allen, James Cook".
+ */
+export function formatPlayersActiveInGame(
+  players: Array<{ first_name: string; last_name: string }>,
+): string {
+  const names = players.map((p) => `${p.first_name} ${p.last_name}`.trim()).filter(Boolean);
+  if (names.length === 0) return 'Active Players: —';
+  return `Active Players: ${names.join(', ')}`;
+}
+
+/**
+ * Stake games at the soonest kickoff, each with the user's players in that matchup.
+ * Empty when there is no upcoming stake game.
+ */
+export function nextStakeGameGroups(
+  weekGames: ScheduleGame[],
+  lineups: LineupResponse[],
+  stakeTeams: Set<string>,
+  now: Date,
+): LineupGameGroup[] {
+  return findNextStakeGames(weekGames, stakeTeams, now)
+    .map((game) => ({
+      game,
+      players: listStakePlayersInGame(lineups, game.home_team, game.away_team),
+    }))
+    .filter((group) => group.players.length > 0);
+}
+
+/**
+ * Every non-final stake game this week with rostered players, chronological by kickoff.
+ * Used by Home State 4 "Upcoming games" — not limited to a single TV window.
+ */
+export function upcomingStakeGameGroups(
+  weekGames: ScheduleGame[],
+  lineups: LineupResponse[],
+  stakeTeams: Set<string>,
+): LineupGameGroup[] {
+  return groupLineupByGame(weekGames, lineups, stakeTeams).filter(
+    (group) => group.game.status !== 'final',
+  );
 }
 
 export interface LineupGameGroup {
@@ -194,7 +327,7 @@ export interface LineupGameGroup {
   }>;
 }
 
-/** Lineup slots grouped under stake games, sorted by kickoff ascending. */
+/** Active-roster (starter/flex) slots grouped under stake games, sorted by kickoff ascending. */
 export function groupLineupByGame(
   weekGames: ScheduleGame[],
   lineups: LineupResponse[],
@@ -213,6 +346,7 @@ export function groupLineupByGame(
 
   for (const lineup of lineups) {
     for (const slot of lineup.slots) {
+      if (!isActiveRosterSlot(slot)) continue;
       const abbr = slot.player.team?.abbreviation;
       if (!abbr) continue;
       const list = playersByTeam.get(abbr) ?? [];

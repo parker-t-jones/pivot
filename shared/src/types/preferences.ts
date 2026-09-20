@@ -1,13 +1,10 @@
 import { z } from 'zod';
 
 /**
- * `users.preferences` jsonb shape (PLAN.md Section 7 — schema referenced here per sprint decision
- * #5; Section 7's column doc note points at this file rather than the migration). Section 8's
- * dispatcher (`shouldRateLimit`, `decideAction`) and Section 10's Settings screen are the only
- * readers/writers of this shape; both consume `Preferences`, never the raw jsonb.
+ * `users.preferences` jsonb shape (PLAN.md Section 7).
  *
- * Every existing row's `preferences = '{}'::jsonb` (the users migration's default) parses to the
- * defaults below via `parsePreferences`, so this schema is additive over the current DB state.
+ * `watchedLeagueIds` — leagues the engine + Home stake from. Free: at most one.
+ * Pro: any subset (client "Select all" writes the full list).
  */
 export const preferencesSchema = z.object({
   notificationMode: z.enum(['all', 'high_leverage_only', 'off']).default('all'),
@@ -20,6 +17,7 @@ export const preferencesSchema = z.object({
     })
     .default({ enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' }),
   autoSwitch: z.boolean().default(false),
+  watchedLeagueIds: z.array(z.string().uuid()).default([]),
 });
 
 export type Preferences = z.infer<typeof preferencesSchema>;
@@ -28,3 +26,8 @@ export type Preferences = z.infer<typeof preferencesSchema>;
 export function parsePreferences(raw: unknown): Preferences {
   return preferencesSchema.parse(raw ?? {});
 }
+
+/** Free-tier entitlement caps (PLAN.md Active Lineup + Pro). */
+export const FREE_MAX_LEAGUES = 3;
+export const FREE_MAX_WATCHED_LEAGUES = 1;
+export const FREE_MAX_MANUAL_LINEUP_SLOTS = 9;

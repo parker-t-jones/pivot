@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
   filterLiveStakeGames,
+  findNextStakeGames,
   formatCountdown,
   formatDateOnlyLabel,
+  formatPlayersActiveInGame,
   isLiveDisplayPhase,
   isPregameWindow,
+  listStakePlayersInGame,
   resolveHomeBranch,
   seasonIdleCopy,
+  upcomingStakeGameGroups,
 } from './homeState';
-import type { LiveGame } from './schedule';
+import type { LineupResponse, LineupSlot } from './leagues';
+import type { LiveGame, ScheduleGame } from './schedule';
 
 const NOW = new Date('2026-09-13T14:00:00-04:00'); // Sunday afternoon ET-ish
 
@@ -259,5 +264,178 @@ describe('filterLiveStakeGames', () => {
 
   it('keeps only games matching stake team abbreviations', () => {
     expect(filterLiveStakeGames(live, new Set(['KC'])).map((g) => g.game_id)).toEqual(['g1']);
+  });
+});
+
+describe('findNextStakeGames / formatPlayersActiveInGame', () => {
+  const kickoff1pm = '2026-09-14T17:00:00.000Z';
+  const kickoff4pm = '2026-09-14T20:00:00.000Z';
+
+  function scheduleGame(
+    gameId: string,
+    away: string,
+    home: string,
+    start: string,
+  ): ScheduleGame {
+    return {
+      game_id: gameId,
+      status: 'scheduled',
+      scheduled_start: start,
+      home_team: home,
+      away_team: away,
+      home_team_name: home,
+      away_team_name: away,
+      home_team_primary_color: '',
+      home_team_secondary_color: '',
+      away_team_primary_color: '',
+      away_team_secondary_color: '',
+      broadcasts: [],
+    };
+  }
+
+  function slotPlayer(
+    playerId: string,
+    first: string,
+    last: string,
+    position: string,
+    team: string,
+    slotType: LineupSlot['slot_type'] = 'starter',
+  ): LineupSlot {
+    return {
+      slot_id: playerId,
+      slot_type: slotType,
+      position_in_lineup: position,
+      is_star: false,
+      player: {
+        player_id: playerId,
+        first_name: first,
+        last_name: last,
+        position,
+        team: { teamId: team, abbreviation: team, name: team },
+      },
+    };
+  }
+
+  it('returns every stake game at the soonest kickoff (1pm window)', () => {
+    const games = [
+      scheduleGame('g-mia', 'MIA', 'NE', kickoff1pm),
+      scheduleGame('g-buf', 'BUF', 'NYJ', kickoff1pm),
+      scheduleGame('g-kc', 'LV', 'KC', kickoff4pm),
+      scheduleGame('g-other', 'DAL', 'PHI', kickoff1pm),
+    ];
+    const stake = new Set(['BUF', 'MIA', 'KC']);
+    const now = new Date('2026-09-14T12:00:00.000Z');
+
+    expect(findNextStakeGames(games, stake, now).map((g) => g.game_id)).toEqual([
+      'g-buf',
+      'g-mia',
+    ]);
+  });
+
+  it('includes 1pm-window games even when scheduled_start differs by a few minutes', () => {
+    // ESPN-style variance: 1:00 PM ET vs 1:05 PM ET are different timestamps.
+    const games = [
+      scheduleGame('g-buf', 'BUF', 'NYJ', '2026-09-14T17:00:00.000Z'),
+      scheduleGame('g-phi', 'PHI', 'KC', '2026-09-14T17:05:00.000Z'),
+      scheduleGame('g-dal', 'DAL', 'NYG', '2026-09-14T17:00:00.000Z'),
+      scheduleGame('g-late', 'LV', 'DEN', '2026-09-14T20:25:00.000Z'),
+    ];
+    const stake = new Set(['BUF', 'PHI', 'DEN']);
+    const now = new Date('2026-09-14T12:00:00.000Z');
+
+    expect(findNextStakeGames(games, stake, now).map((g) => g.game_id)).toEqual([
+      'g-buf',
+      'g-phi',
+    ]);
+  });
+
+  it('includes in_progress games in the upcoming window (status can flip before live Redis)', () => {
+    const games = [
+      scheduleGame('g-buf', 'BUF', 'NYJ', '2026-09-20T17:00:00.000Z'),
+      {
+        ...scheduleGame('g-phi', 'PHI', 'TEN', '2026-09-20T17:00:00.000Z'),
+        status: 'in_progress',
+      },
+      scheduleGame('g-late', 'LV', 'DEN', '2026-09-20T20:25:00.000Z'),
+    ];
+    const stake = new Set(['BUF', 'PHI']);
+    const now = new Date('2026-09-19T23:30:00.000Z');
+
+    expect(findNextStakeGames(games, stake, now).map((g) => g.game_id)).toEqual([
+      'g-buf',
+      'g-phi',
+    ]);
+  });
+
+  it('upcomingStakeGameGroups lists every non-final stake game chronologically', () => {
+    const games = [
+      scheduleGame('g-late', 'LV', 'DEN', '2026-09-20T20:25:00.000Z'),
+      scheduleGame('g-buf', 'BUF', 'NYJ', '2026-09-20T17:00:00.000Z'),
+      {
+        ...scheduleGame('g-done', 'MIA', 'NE', '2026-09-18T17:00:00.000Z'),
+        status: 'final',
+      },
+      scheduleGame('g-phi', 'PHI', 'TEN', '2026-09-20T17:00:00.000Z'),
+    ];
+    const lineups: LineupResponse[] = [
+      {
+        league_id: 'l1',
+        week: 2,
+        last_synced_at: null,
+        slots: [
+          slotPlayer('p-buf', 'Josh', 'Allen', 'QB', 'BUF'),
+          slotPlayer('p-phi', 'Saquon', 'Barkley', 'RB', 'PHI'),
+          slotPlayer('p-den', 'Bo', 'Nix', 'QB', 'DEN'),
+          slotPlayer('p-mia', 'Tyreek', 'Hill', 'WR', 'MIA'),
+        ],
+      },
+    ];
+    const stake = new Set(['BUF', 'PHI', 'DEN', 'MIA']);
+    expect(
+      upcomingStakeGameGroups(games, lineups, stake).map((g) => g.game.game_id),
+    ).toEqual(['g-buf', 'g-phi', 'g-late']);
+  });
+
+  it('excludes bench players from Active Players / upcoming stake groups', () => {
+    const games = [
+      scheduleGame('g-ten', 'TEN', 'SEA', '2026-09-20T17:00:00.000Z'),
+      scheduleGame('g-buf', 'BUF', 'NYJ', '2026-09-20T17:00:00.000Z'),
+    ];
+    const lineups: LineupResponse[] = [
+      {
+        league_id: 'l1',
+        week: 2,
+        last_synced_at: null,
+        slots: [
+          slotPlayer('p-buf', 'Josh', 'Allen', 'QB', 'BUF', 'starter'),
+          slotPlayer('p-pollard', 'Tony', 'Pollard', 'RB', 'TEN', 'bench'),
+          slotPlayer('p-flex', 'James', 'Cook', 'RB', 'BUF', 'flex'),
+        ],
+      },
+    ];
+    const stake = new Set(['BUF', 'TEN']);
+    const groups = upcomingStakeGameGroups(games, lineups, stake);
+    expect(groups.map((g) => g.game.game_id)).toEqual(['g-buf']);
+    expect(groups[0]?.players.map((p) => p.last_name).sort()).toEqual(['Allen', 'Cook']);
+    expect(listStakePlayersInGame(lineups, 'TEN', 'SEA')).toEqual([]);
+  });
+
+  it('formats Active Players copy', () => {
+    expect(
+      formatPlayersActiveInGame([{ first_name: 'Josh', last_name: 'Allen' }]),
+    ).toBe('Active Players: Josh Allen');
+    expect(
+      formatPlayersActiveInGame([
+        { first_name: 'Josh', last_name: 'Allen' },
+        { first_name: 'James', last_name: 'Cook' },
+      ]),
+    ).toBe('Active Players: Josh Allen, James Cook');
+    expect(
+      formatPlayersActiveInGame([
+        { first_name: 'Josh', last_name: 'Allen' },
+        { first_name: 'James', last_name: 'Cook' },
+        { first_name: 'Stefon', last_name: 'Diggs' },
+      ]),
+    ).toBe('Active Players: Josh Allen, James Cook, Stefon Diggs');
   });
 });
