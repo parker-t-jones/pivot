@@ -30,29 +30,28 @@ scope rename.
 
 **Deliberately kept on the old name — do not "fix" these:**
 
-- **Bundle ID `com.fantasyfocus.app`.** Not user-visible (the name under the icon is
-  `CFBundleDisplayName`, from `app.json` `name`), and nothing in the repo derives behavior
-  from the string — the dispatcher reaches APNs through Expo's push service, so no APNs
-  topic is hardcoded anywhere. Changing it would mean a new Apple App ID, new provisioning,
-  reassigning the APNs key, and a new APNs device token — staling the `device_tokens` rows
-  B1 was verified against, for zero user-visible gain.
-- **Expo project slug `fantasy-focus` / `@parkertjones/fantasy-focus`.** Permanently kept,
-  not deferred — confirmed Aug 26, 2026 (B3.0) that this was never actually a deferrable
-  rename. A project's slug is bound to its `extra.eas.projectId` at creation and cannot be
-  changed: editing `app.json`'s `slug` to `pivot` broke `eas project:info` immediately
-  (`Slug for project identified by "extra.eas.projectId" ... does not match the "slug"
-  field`). The only path to a different slug is a brand-new EAS project — a new UUID,
-  requiring B1's verified APNs key to be reassigned and device push tokens re-registered —
-  for an identifier that never appears in the app UI, only in `@account/slug` URLs on
-  expo.dev and EAS CLI output. Not worth that cost. (Push itself was never at risk either
-  way: tokens are issued against `projectId`, not the slug — that part of the original
-  reasoning held up.)
-- **`supabase/config.toml` `project_id = "FantasyFocusApp"`.** That string names the local
-  Docker containers. Renaming it makes `supabase start` build a fresh empty stack and orphan
-  the current volume — seeded players, the corrected deep-link URLs from the Open Question #2
-  audit, the test user, and the verified push token — silently, with no error.
-- **`scripts/seed-test-user.ts` defaults** (`test@fantasyfocus.dev`). Env-overridable;
-  renaming orphans the existing local auth user for no benefit.
+- **Bundle ID** `com.fantasyfocus.app`**.** Not user-visible (the name under the icon is
+`CFBundleDisplayName`, from `app.json` `name`), and nothing in the repo derives behavior
+from the string — the dispatcher reaches APNs through Expo's push service, so no APNs
+topic is hardcoded anywhere. Changing it would mean a new Apple App ID, new provisioning,
+reassigning the APNs key, and a new APNs device token — staling the `device_tokens` rows
+B1 was verified against, for zero user-visible gain.
+- **Expo project slug** `fantasy-focus` **/** `@parkertjones/fantasy-focus`**.** Permanently kept,
+not deferred — confirmed Aug 26, 2026 (B3.0) that this was never actually a deferrable
+rename. A project's slug is bound to its `extra.eas.projectId` at creation and cannot be
+changed: editing `app.json`'s `slug` to `pivot` broke `eas project:info` immediately
+(`Slug for project identified by "extra.eas.projectId" ... does not match the "slug" field`). The only path to a different slug is a brand-new EAS project — a new UUID,
+requiring B1's verified APNs key to be reassigned and device push tokens re-registered —
+for an identifier that never appears in the app UI, only in `@account/slug` URLs on
+expo.dev and EAS CLI output. Not worth that cost. (Push itself was never at risk either
+way: tokens are issued against `projectId`, not the slug — that part of the original
+reasoning held up.)
+- `supabase/config.toml` ****`project_id = "FantasyFocusApp"`**.** That string names the local
+Docker containers. Renaming it makes `supabase start` build a fresh empty stack and orphan
+the current volume — seeded players, the corrected deep-link URLs from the Open Question #2
+audit, the test user, and the verified push token — silently, with no error.
+- `scripts/seed-test-user.ts` **defaults** (`test@fantasyfocus.dev`). Env-overridable;
+renaming orphans the existing local auth user for no benefit.
 - **The repo directory** `.../projects/pivot` (the GitHub repo is `pivot`).
 
 Still outstanding: the `fantasyfocus.app` support/terms/privacy URLs in Settings — see Open
@@ -105,6 +104,8 @@ build: the home-screen icon label and the Expo Dev Launcher's own title both rea
 
 ---
 
+
+
 ## Table of Contents
 
 1. [Executive Summary](#1-executive-summary)
@@ -122,9 +123,12 @@ build: the home-screen icon label and the Expo Dev Launcher's own title both rea
 13. [Open Questions](#13-open-questions)
 14. [v1.5 Roadmap](#14-v15-roadmap)
 15. [Phase 2 Strategy](#15-phase-2-strategy)
+
 - [Known Issues](#known-issues)
 
 ---
+
+
 
 ## 1. Executive Summary
 
@@ -142,7 +146,11 @@ build: the home-screen icon label and the Expo Dev Launcher's own title both rea
 
 ---
 
+
+
 ## 2. Strategic Approach
+
+
 
 ### The streaming rights problem
 
@@ -184,7 +192,11 @@ When new implementations are added, the rest of the codebase doesn't change.
 
 ---
 
+
+
 ## 3. Product Specification
+
+
 
 ### Target user
 
@@ -193,6 +205,7 @@ Engaged fantasy football player in 1–2 leagues. Watches multiple games on Sund
 ### Core mechanic — "active player" rule
 
 A game is **flagged** for a user when either condition is true:
+
 - The user has any **offensive starter** (QB, RB, WR, TE, K, FLEX) on the team currently in possession with offense on the field.
 - The user has the **defense** of the team currently defending while the opposing offense is on the field.
 
@@ -219,15 +232,19 @@ priority = (active_players × 2)
         + (star_player_bonus: +5 per star player active)
 ```
 
+
+
 ### Monetization
 
 **v1:** Free App Store download + optional Pro in-app subscription (RevenueCat / StoreKit).
 
-| | Free | Pro (`pivot_pro_monthly`, target $9.99/mo) |
-|---|---|---|
-| Connected leagues | Max **3** | Unlimited |
-| Watched leagues (Active Lineup) | Exactly **1** | **1+** multi-select + Select all |
-| Manual lineup size | Max **9** players | Unlimited |
+
+|                                 | Free              | Pro (`pivot_pro_monthly`, target $9.99/mo) |
+| ------------------------------- | ----------------- | ------------------------------------------ |
+| Connected leagues               | Max **3**         | Unlimited                                  |
+| Watched leagues (Active Lineup) | Exactly **1**     | **1+** multi-select + Select all           |
+| Manual lineup size              | Max **9** players | Unlimited                                  |
+
 
 - `users.subscription_tier`: `'free' | 'pro'` (default `'free'`). Synced from RevenueCat webhooks (`POST /billing/revenuecat`) and refreshed client-side after purchase/restore.
 - Preferences include `watchedLeagueIds` (league UUIDs). Home stake + engine `user_lineup_cache` rebuild from the watched set only (`rebuildUserLineupCache`).
@@ -235,7 +252,11 @@ priority = (active_players × 2)
 
 ---
 
+
+
 ## 4. v1 Scope
+
+
 
 ### In scope
 
@@ -260,6 +281,8 @@ priority = (active_players × 2)
 - Stream-lag-aware deferred notification firing
 - Dark mode (default)
 
+
+
 ### Explicitly out of scope for v1
 
 - Multi-stream / split-screen viewing
@@ -278,24 +301,32 @@ priority = (active_players × 2)
 
 ---
 
+
+
 ## 5. Tech Stack
 
-| Layer | Technology | Rationale |
-|---|---|---|
-| Client | React Native + Expo + TypeScript | Cross-platform, AI-friendly, fast iteration, ships Android in v1.5 |
-| Backend | Node.js + Fastify + TypeScript | Same language as client, excellent WebSocket support |
-| Database | Supabase (Postgres + Auth) | Managed Postgres + auth + storage + realtime in one service |
-| Hot state | Upstash Redis | Serverless Redis, minimal ops, ideal for game state cache |
-| Push | Expo Notifications | Wraps APNs (and FCM for v1.5), free tier sufficient |
-| Hosting | Fly.io | Strong WebSocket support, global edge presence |
-| Data | ESPN unofficial site API (`site.api.espn.com`) | Committed as the production real-time (and schedule) data source — `@pivot/ingestion`'s `EspnPlaySource` (Section 8). Sportradar (sub-second push feed) was the original pick but is enterprise-tier pricing, not viable at current budget, and was ruled out before commitment. ESPN's API is free but unofficial/undocumented (no SLA, could change without notice) — an accepted risk, not an open question. See Open Questions #1 |
-| Fantasy | Sleeper API | Free, well-documented, no auth ceremony |
-| Cast | ~~react-native-google-cast~~ + native AirPlay (local Expo module) | Cast cut in v1 — no video rights (Section 2). `react-native-google-cast` was never added; the AirPlay module exists but is dormant |
-| Monitoring | Sentry (ESPN ingestion shape-failure reporting only so far — `@pivot/shared`'s `ErrorReporter`/`initSentry`, Section 8) + Axiom (not yet integrated) | Errors + structured logs |
+
+| Layer      | Technology                                                                                                                                           | Rationale                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client     | React Native + Expo + TypeScript                                                                                                                     | Cross-platform, AI-friendly, fast iteration, ships Android in v1.5                                                                                                                                                                                                                                                                                                                                                                    |
+| Backend    | Node.js + Fastify + TypeScript                                                                                                                       | Same language as client, excellent WebSocket support                                                                                                                                                                                                                                                                                                                                                                                  |
+| Database   | Supabase (Postgres + Auth)                                                                                                                           | Managed Postgres + auth + storage + realtime in one service                                                                                                                                                                                                                                                                                                                                                                           |
+| Hot state  | Upstash Redis                                                                                                                                        | Serverless Redis, minimal ops, ideal for game state cache                                                                                                                                                                                                                                                                                                                                                                             |
+| Push       | Expo Notifications                                                                                                                                   | Wraps APNs (and FCM for v1.5), free tier sufficient                                                                                                                                                                                                                                                                                                                                                                                   |
+| Hosting    | Fly.io                                                                                                                                               | Strong WebSocket support, global edge presence                                                                                                                                                                                                                                                                                                                                                                                        |
+| Data       | ESPN unofficial site API (`site.api.espn.com`)                                                                                                       | Committed as the production real-time (and schedule) data source — `@pivot/ingestion`'s `EspnPlaySource` (Section 8). Sportradar (sub-second push feed) was the original pick but is enterprise-tier pricing, not viable at current budget, and was ruled out before commitment. ESPN's API is free but unofficial/undocumented (no SLA, could change without notice) — an accepted risk, not an open question. See Open Questions #1 |
+| Fantasy    | Sleeper API                                                                                                                                          | Free, well-documented, no auth ceremony                                                                                                                                                                                                                                                                                                                                                                                               |
+| Cast       | ~~react-native-google-cast~~ + native AirPlay (local Expo module)                                                                                    | Cast cut in v1 — no video rights (Section 2). `react-native-google-cast` was never added; the AirPlay module exists but is dormant                                                                                                                                                                                                                                                                                                    |
+| Monitoring | Sentry (ESPN ingestion shape-failure reporting only so far — `@pivot/shared`'s `ErrorReporter`/`initSentry`, Section 8) + Axiom (not yet integrated) | Errors + structured logs                                                                                                                                                                                                                                                                                                                                                                                                              |
+
 
 ---
 
+
+
 ## 6. Architecture Overview
+
+
 
 ### Data flow
 
@@ -319,6 +350,8 @@ Real-time data feed (ESPN unofficial site API — Section 5)
 [AirPlay]    [Chromecast]    [Deep-link]   [Embedded — Phase 2]
 ```
 
+
+
 ### Services
 
 - **Ingestion service** — persistent connection to ESPN's unofficial site API (Section 5), the committed production real-time data feed. Writes game state to Redis on every play. Mirrors to `game_state_history` table every 30s.
@@ -328,37 +361,53 @@ Real-time data feed (ESPN unofficial site API — Section 5)
 - **Realtime server** — WebSocket connections. Same process as API server in v1 for simplicity.
 - **Lineup sync worker** — background job, syncs Sleeper lineups every 5 minutes during active game windows.
 
+
+
 ### Deployment topology
 
 Single Fly.io app for v1. Three processes: API server (handles REST + WebSocket), ingestion service (1 instance), engine + dispatcher (1 instance). Scales horizontally on stake-based sharding when needed.
 
 ---
 
+
+
 ## 7. Data Model
+
+
 
 ### Core user entities
 
+
+
 #### `users`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `email` | text | unique, indexed |
-| `preferences` | jsonb | notification mode, quiet hours, auto-switch, watchedLeagueIds |
-| `subscription_tier` | text | `'free' \| 'pro'`, default `'free'` |
-| `expo_push_token` | text | nullable |
-| `created_at` | timestamptz | default `now()` |
-| `updated_at` | timestamptz | default `now()` |
+
+
+| Column              | Type        | Notes                                                         |
+| ------------------- | ----------- | ------------------------------------------------------------- |
+| `id`                | uuid        | PK                                                            |
+| `email`             | text        | unique, indexed                                               |
+| `preferences`       | jsonb       | notification mode, quiet hours, auto-switch, watchedLeagueIds |
+| `subscription_tier` | text        | `'free' | 'pro'`, default `'free'`                            |
+| `expo_push_token`   | text        | nullable                                                      |
+| `created_at`        | timestamptz | default `now()`                                               |
+| `updated_at`        | timestamptz | default `now()`                                               |
+
 
 > **Sprint 5 addition:** `preferences` — jsonb, parsed via `preferencesSchema` in `shared/src/types/preferences.ts`. Shape: `{ notificationMode: 'all' | 'high_leverage_only' | 'off', quietHours: { enabled, startHour, endHour, timezone }, autoSwitch: boolean, watchedLeagueIds: string[] }`. `watchedLeagueIds` drives Home Active Players / upcoming cards and the engine lineup cache rebuild across watched leagues only. Free: at most one id; Pro: any subset. All fields default; existing `'{}'` rows parse to defaults.
 
+
+
 #### `user_app_presence`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `user_id` | uuid | FK → users, indexed |
-| `service` | text | enum (see below) |
-| `has_subscription` | boolean | |
-| `detected_at` | timestamptz | default `now()` |
+
+
+| Column             | Type        | Notes               |
+| ------------------ | ----------- | ------------------- |
+| `id`               | uuid        | PK                  |
+| `user_id`          | uuid        | FK → users, indexed |
+| `service`          | text        | enum (see below)    |
+| `has_subscription` | boolean     |                     |
+| `detected_at`      | timestamptz | default `now()`     |
+
 
 `service` enum: `'sunday_ticket' \| 'espn_plus' \| 'paramount_plus' \| 'peacock' \| 'amazon_prime' \| 'nfl_plus' \| 'nfl_network' \| 'hulu' \| 'fubo' \| 'directv' \| 'fox' \| 'cbs' \| 'nbc' \| 'abc'`
 
@@ -367,148 +416,185 @@ Single Fly.io app for v1. Three processes: API server (handles REST + WebSocket)
 Unique constraint: `(user_id, service)`.
 
 #### `viewing_sessions`
-| Column | Type | Notes |
-|---|---|---|
-| `user_id` | uuid | PK, FK → users |
-| `primary_game_id` | uuid | FK → games, nullable |
-| `primary_source` | text | `'deeplink' \| 'airplay' \| 'chromecast' \| 'embedded'`, nullable |
-| `primary_priority_score` | numeric | nullable |
-| `thumbnail_game_ids` | uuid[] | reserved for v1.5 |
-| `device_info` | jsonb | device model, OS version, etc. |
-| `started_at` | timestamptz | |
-| `last_updated_at` | timestamptz | |
+
+
+| Column                   | Type        | Notes                                                          |
+| ------------------------ | ----------- | -------------------------------------------------------------- |
+| `user_id`                | uuid        | PK, FK → users                                                 |
+| `primary_game_id`        | uuid        | FK → games, nullable                                           |
+| `primary_source`         | text        | `'deeplink' | 'airplay' | 'chromecast' | 'embedded'`, nullable |
+| `primary_priority_score` | numeric     | nullable                                                       |
+| `thumbnail_game_ids`     | uuid[]      | reserved for v1.5                                              |
+| `device_info`            | jsonb       | device model, OS version, etc.                                 |
+| `started_at`             | timestamptz |                                                                |
+| `last_updated_at`        | timestamptz |                                                                |
+
 
 One row per user, upserted as session changes.
 
 ### Fantasy entities
 
+
+
 #### `leagues`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `user_id` | uuid | FK → users, indexed |
-| `platform` | text | `'sleeper' \| 'manual' \| 'espn' \| 'yahoo' \| 'nfl_fantasy' \| 'cbs'` |
-| `external_league_id` | text | nullable (Sleeper league ID, etc.) |
-| `external_owner_id` | text | nullable; Sleeper `user_id` of the league owner/roster (Sprint 3 addition — needed to resolve which roster in a Sleeper league belongs to this user) |
-| `external_roster_id` | text | nullable; Sleeper numeric roster ID within the league (Sprint 3 addition — needed so subsequent lineup syncs know which roster to fetch) |
-| `name` | text | |
-| `sport` | text | `'nfl'` for v1 |
-| `season_year` | int | |
-| `last_synced_at` | timestamptz | nullable |
-| `lineup_source` | text | nullable; `'matchup' \| 'roster_fallback'` — which source `GET /leagues/:id/lineup` composes from |
-| `fallback_roster` | jsonb | nullable; UUID `player_id[]` when `lineup_source = 'roster_fallback'` (off/pre — not written to `lineup_slots`) |
-| `created_at` | timestamptz | |
+
+
+| Column               | Type        | Notes                                                                                                                                                |
+| -------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                 | uuid        | PK                                                                                                                                                   |
+| `user_id`            | uuid        | FK → users, indexed                                                                                                                                  |
+| `platform`           | text        | `'sleeper' | 'manual' | 'espn' | 'yahoo' | 'nfl_fantasy' | 'cbs'`                                                                                    |
+| `external_league_id` | text        | nullable (Sleeper league ID, etc.)                                                                                                                   |
+| `external_owner_id`  | text        | nullable; Sleeper `user_id` of the league owner/roster (Sprint 3 addition — needed to resolve which roster in a Sleeper league belongs to this user) |
+| `external_roster_id` | text        | nullable; Sleeper numeric roster ID within the league (Sprint 3 addition — needed so subsequent lineup syncs know which roster to fetch)             |
+| `name`               | text        |                                                                                                                                                      |
+| `sport`              | text        | `'nfl'` for v1                                                                                                                                       |
+| `season_year`        | int         |                                                                                                                                                      |
+| `last_synced_at`     | timestamptz | nullable                                                                                                                                             |
+| `lineup_source`      | text        | nullable; `'matchup' | 'roster_fallback'` — which source `GET /leagues/:id/lineup` composes from                                                     |
+| `fallback_roster`    | jsonb       | nullable; UUID `player_id[]` when `lineup_source = 'roster_fallback'` (off/pre — not written to `lineup_slots`)                                      |
+| `created_at`         | timestamptz |                                                                                                                                                      |
+
 
 > **Sprint 3 divergence:** `external_owner_id` and `external_roster_id` were added during Sprint 3 implementation. They weren't in the original spec but are required to map a connected Sleeper account to the correct roster within a league (a league has many rosters; only one belongs to the connecting user). Both are `NULL` for `platform = 'manual'` leagues.
 
 > **Offseason roster fallback:** `lineup_source` / `fallback_roster` store a static roster when `display_phase` is `'off'`/`'pre'` so we never invent week-scoped starter/bench rows in `lineup_slots` before matchups exist. Cleared when sync flips to `'matchup'`.
 
+
+
 #### `lineup_slots`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `league_id` | uuid | FK → leagues, indexed |
-| `week` | int | |
-| `player_id` | uuid | FK → players |
-| `slot_type` | text | `'starter' \| 'bench' \| 'flex' \| 'idp'` |
-| `position_in_lineup` | text | `'QB' \| 'RB1' \| 'WR2' \| 'FLEX' \| 'DEF'` etc. |
-| `is_star` | boolean | default `false` |
-| `created_at` | timestamptz | |
+
+
+| Column               | Type        | Notes                                        |
+| -------------------- | ----------- | -------------------------------------------- |
+| `id`                 | uuid        | PK                                           |
+| `league_id`          | uuid        | FK → leagues, indexed                        |
+| `week`               | int         |                                              |
+| `player_id`          | uuid        | FK → players                                 |
+| `slot_type`          | text        | `'starter' | 'bench' | 'flex' | 'idp'`       |
+| `position_in_lineup` | text        | `'QB' | 'RB1' | 'WR2' | 'FLEX' | 'DEF'` etc. |
+| `is_star`            | boolean     | default `false`                              |
+| `created_at`         | timestamptz |                                              |
+
 
 Composite index: `(league_id, week)`.
 
 > **Sprint 3 divergence:** added `UNIQUE (league_id, week, player_id)`. The lineup sync worker upserts on this key rather than delete-and-reinsert, so `is_star` (set independently via `POST /leagues/:id/stars`) survives repeated syncs instead of being clobbered every 5 minutes.
 
+
+
 ### NFL reference entities
 
+
+
 #### `teams`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `sportradar_id` | text | unique, indexed |
-| `abbreviation` | text | unique, e.g. `'IND'` |
-| `name` | text | |
-| `city` | text | |
-| `conference` | text | `'AFC' \| 'NFC'` |
-| `division` | text | |
-| `primary_color` | text | hex |
-| `secondary_color` | text | hex |
+
+
+| Column            | Type | Notes                |
+| ----------------- | ---- | -------------------- |
+| `id`              | uuid | PK                   |
+| `sportradar_id`   | text | unique, indexed      |
+| `abbreviation`    | text | unique, e.g. `'IND'` |
+| `name`            | text |                      |
+| `city`            | text |                      |
+| `conference`      | text | `'AFC' | 'NFC'`      |
+| `division`        | text |                      |
+| `primary_color`   | text | hex                  |
+| `secondary_color` | text | hex                  |
+
 
 Seeded once. 32 rows.
 
 #### `players`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `sportradar_id` | text | unique, indexed |
-| `sleeper_id` | text | unique, indexed, nullable |
-| `first_name` | text | |
-| `last_name` | text | |
-| `position` | text | `'QB' \| 'RB' \| 'WR' \| 'TE' \| 'K' \| 'DEF'` |
-| `team_id` | uuid | FK → teams |
-| `active` | boolean | default `true` |
-| `jersey_number` | int | nullable |
+
+
+| Column          | Type    | Notes                                     |
+| --------------- | ------- | ----------------------------------------- |
+| `id`            | uuid    | PK                                        |
+| `sportradar_id` | text    | unique, indexed                           |
+| `sleeper_id`    | text    | unique, indexed, nullable                 |
+| `first_name`    | text    |                                           |
+| `last_name`     | text    |                                           |
+| `position`      | text    | `'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF'` |
+| `team_id`       | uuid    | FK → teams                                |
+| `active`        | boolean | default `true`                            |
+| `jersey_number` | int     | nullable                                  |
+
 
 Composite index: `(team_id, position)`.
 
 #### `games`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `sportradar_id` | text | unique, indexed |
-| `season_year` | int | |
-| `season_type` | text | `'pre' \| 'regular' \| 'post'` — disambiguates week N across phases (Sprint 10 Phase 2.5) |
-| `week` | int | indexed |
-| `scheduled_start` | timestamptz | indexed |
-| `home_team_id` | uuid | FK → teams |
-| `away_team_id` | uuid | FK → teams |
-| `status` | text | `'scheduled' \| 'in_progress' \| 'final' \| 'postponed'` |
-| `venue` | text | nullable |
+
+
+| Column            | Type        | Notes                                                                                   |
+| ----------------- | ----------- | --------------------------------------------------------------------------------------- |
+| `id`              | uuid        | PK                                                                                      |
+| `sportradar_id`   | text        | unique, indexed                                                                         |
+| `season_year`     | int         |                                                                                         |
+| `season_type`     | text        | `'pre' | 'regular' | 'post'` — disambiguates week N across phases (Sprint 10 Phase 2.5) |
+| `week`            | int         | indexed                                                                                 |
+| `scheduled_start` | timestamptz | indexed                                                                                 |
+| `home_team_id`    | uuid        | FK → teams                                                                              |
+| `away_team_id`    | uuid        | FK → teams                                                                              |
+| `status`          | text        | `'scheduled' | 'in_progress' | 'final' | 'postponed'`                                   |
+| `venue`           | text        | nullable                                                                                |
+
 
 Composite index: `(season_type, scheduled_start)` — covers opener `MIN(scheduled_start)` queries per phase.
 
 #### `game_broadcasts`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `game_id` | uuid | FK → games, indexed |
-| `service` | text | same enum as `user_app_presence.service` |
-| `deep_link_url` | text | |
-| `requires_subscription` | boolean | |
+
+
+| Column                  | Type    | Notes                                    |
+| ----------------------- | ------- | ---------------------------------------- |
+| `id`                    | uuid    | PK                                       |
+| `game_id`               | uuid    | FK → games, indexed                      |
+| `service`               | text    | same enum as `user_app_presence.service` |
+| `deep_link_url`         | text    |                                          |
+| `requires_subscription` | boolean |                                          |
+
 
 Multiple rows per game (e.g., FOX broadcast + Sunday Ticket simulcast).
 
 ### Event entities
 
+
+
 #### `flag_events`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `user_id` | uuid | FK → users |
-| `game_id` | uuid | FK → games |
-| `event_type` | text | `'flag_added' \| 'flag_removed' \| 'priority_increased' \| 'priority_decreased'` |
-| `triggering_play_id` | text | nullable, provider-specific play ID (data source TBD — Section 5) |
-| `priority_score` | numeric | |
-| `reasons` | jsonb | array of reason objects |
-| `fired_at` | timestamptz | |
-| `delivered_at` | timestamptz | nullable |
-| `user_action` | text | `'switched' \| 'added_to_split' \| 'dismissed' \| 'ignored' \| null` |
+
+
+| Column               | Type        | Notes                                                                         |
+| -------------------- | ----------- | ----------------------------------------------------------------------------- |
+| `id`                 | uuid        | PK                                                                            |
+| `user_id`            | uuid        | FK → users                                                                    |
+| `game_id`            | uuid        | FK → games                                                                    |
+| `event_type`         | text        | `'flag_added' | 'flag_removed' | 'priority_increased' | 'priority_decreased'` |
+| `triggering_play_id` | text        | nullable, provider-specific play ID (data source TBD — Section 5)             |
+| `priority_score`     | numeric     |                                                                               |
+| `reasons`            | jsonb       | array of reason objects                                                       |
+| `fired_at`           | timestamptz |                                                                               |
+| `delivered_at`       | timestamptz | nullable                                                                      |
+| `user_action`        | text        | `'switched' | 'added_to_split' | 'dismissed' | 'ignored' | null`              |
+
 
 Composite index: `(user_id, fired_at DESC)`.
 
 #### `game_state_history`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `game_id` | uuid | FK → games |
-| `possession_team_id` | uuid | nullable |
-| `unit_on_field` | text | `'offense' \| 'defense' \| 'special_teams' \| 'none'` |
-| `score_home` | int | |
-| `score_away` | int | |
-| `quarter` | int | |
-| `time_remaining_sec` | int | |
-| `in_red_zone` | boolean | |
-| `recorded_at` | timestamptz | |
+
+
+| Column               | Type        | Notes                                              |
+| -------------------- | ----------- | -------------------------------------------------- |
+| `id`                 | uuid        | PK                                                 |
+| `game_id`            | uuid        | FK → games                                         |
+| `possession_team_id` | uuid        | nullable                                           |
+| `unit_on_field`      | text        | `'offense' | 'defense' | 'special_teams' | 'none'` |
+| `score_home`         | int         |                                                    |
+| `score_away`         | int         |                                                    |
+| `quarter`            | int         |                                                    |
+| `time_remaining_sec` | int         |                                                    |
+| `in_red_zone`        | boolean     |                                                    |
+| `recorded_at`        | timestamptz |                                                    |
+
 
 Snapshot every 30 seconds from Redis. Used for replay/debugging.
 
@@ -545,6 +631,8 @@ user_notifications:{user_id}      sorted set → { event_id : delivered_at_times
                                   (sliding 60s window for rate limiting)
 ```
 
+
+
 ### Required indexes
 
 - `users(email)` unique
@@ -563,7 +651,11 @@ user_notifications:{user_id}      sorted set → { event_id : delivered_at_times
 
 ---
 
+
+
 ## 8. Switching Engine Specification
+
+
 
 ### Overview
 
@@ -630,6 +722,8 @@ interface FlagEvent {
 }
 ```
 
+
+
 ### Play event handler (entry point)
 
 ```typescript
@@ -664,6 +758,8 @@ async function onPlayEvent(play: PlayEvent): Promise<void> {
 }
 ```
 
+
+
 ### Interesting state change filter
 
 ```typescript
@@ -681,6 +777,8 @@ function isInterestingStateChange(old: GameState | null, neu: GameState): boolea
 }
 ```
 
+
+
 ### User candidate selection
 
 ```typescript
@@ -694,6 +792,8 @@ async function getActiveUsersWithStakeIn(state: GameState): Promise<string[]> {
   return [...stakeholders].filter(u => active.includes(u));
 }
 ```
+
+
 
 ### Flag state computation (pure function)
 
@@ -760,6 +860,8 @@ function isCloseLateGame(s: GameState): boolean {
 }
 ```
 
+
+
 ### Diff to event
 
 ```typescript
@@ -782,6 +884,8 @@ function diffFlagStates(
   return null;
 }
 ```
+
+
 
 ### Deferred event scheduling
 
@@ -813,6 +917,8 @@ const BROADCAST_LAG_SECONDS: Record<string, number> = {
   'abc': 8,
 };
 ```
+
+
 
 ### Dispatcher worker
 
@@ -846,6 +952,8 @@ async function flagEventDispatcher(): Promise<void> {
 }
 ```
 
+
+
 ### Rate limiting
 
 ```typescript
@@ -873,6 +981,8 @@ async function shouldRateLimit(event: FlagEvent): Promise<boolean> {
   return false;
 }
 ```
+
+
 
 ### Delivery & action decision
 
@@ -924,6 +1034,8 @@ function decideAction(user: User, session: ViewingSession, event: FlagEvent): Ac
 }
 ```
 
+
+
 ### Cold start resolver
 
 ```typescript
@@ -954,14 +1066,18 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 }
 ```
 
+
+
 ### Edge cases
 
 - **Special teams plays.** v1 treats `'special_teams'` as not triggering flags. Kickers inherit team offense flag.
 - **Overtime.** Quarter 5 always triggers `close_game` bonus regardless of score margin. `isCloseLateGame` should be extended.
 - **User has players on both teams.** Both offense and defense reasons can be active simultaneously. Priority scores accumulate.
-- **Lineup changes mid-game.** On `lineup_slots` update, invalidate `user_lineup_cache:{user_id}:{week}` and `users_with_stake:*` indexes. Schedule a recomputation.
+- **Lineup changes mid-game.** On `lineup_slots` update, invalidate `user_lineup_cache:{user_id}:{week}` and `users_with_stake:`* indexes. Schedule a recomputation.
 - **Live data feed disconnect.** Mark game states older than 90s as stale. Engine stops flagging from stale state. Reconnect re-syncs.
 - **Game ends.** On `status → 'final'`, fire `flag_removed` for every user flagged on this game.
+
+
 
 ### Stream synchronization research (Aug 29, 2026)
 
@@ -973,7 +1089,7 @@ async function resolveColdStartView(userId: string): Promise<ColdStartView> {
 
 **Empirical finding: ~28-32s baseline delay vs. YouTube TV.** Measured live via a throwaway script (`experiments/espn-latency-probe.ts`) against the Colts @ Lions game. Two independent methods — hand stopwatch, and world-clock-vs-terminal-timestamp corrected for ~2.5s clock drift — converged within ~3 seconds of each other, landing on a **~28-32 second delay** between ESPN's play-by-play data and the YouTube TV broadcast.
 
-**Overturned hypothesis, recorded as a lesson (same category as the `display_phase`/`season_type` lesson in Known Issues).**
+**Overturned hypothesis, recorded as a lesson (same category as the** `display_phase`**/**`season_type` **lesson in Known Issues).**
 **Hypothesis:** a fumble's possession-change log appeared to fire in under 5 seconds — suggesting ESPN might fast-track "exciting" plays (turnovers, scores) ahead of routine ones.
 **What the log actually showed:** the fast-looking line was a false read — the moment officials confirmed the ruling on the broadcast actually lined up with a *second*, later log entry, not the fast first one.
 **Correction:** both ESPN's data and the broadcast are gated by the same real-world confirmation delay (officials/replay review), not by ESPN prioritizing play types. Confirmed by punts, kickoffs, and a touchdown all separately measuring in the same ~30s range — no fast lane exists. Caution against pattern-matching a "special case" from a single early data point.
@@ -988,14 +1104,15 @@ Follow-up to the stream synchronization research above. The padded-delay model i
 
 **Classification rule — two layers.** The watcher's category logic doesn't key off ESPN's `type.id` directly. It's split so a future provider swap only requires a new adapter, not a rewrite of the validated algorithm:
 
-- **Provider-agnostic layer (`@pivot/engine`'s `resumptionWatcher.ts`).** `classifyPlayType` sorts a normalized `PlayType` (the same enum `PlayEvent`/`applyPlayToState` use) into one of three categories:
-  - **`SKIP_AND_WAIT`** — `timeout`, `end_period`. Procedural, expected to be followed by real action soon; the watcher keeps scanning forward past these.
-  - **`ABORT`** — `end_half`, `end_game`. Structurally different from a timeout — halftime runs far longer than the ~2:50 timeout pattern — so the watcher cancels outright rather than waiting through it. A fresh possession-change event at the start of the next half restarts the flow naturally; no special-cased "resume after halftime" logic is needed.
-  - **`REAL_ACTION`** — every other `PlayType`. This is the default/fallback, not an explicit allow-list, so an unknown type fails toward firing rather than silently waiting forever.
+- **Provider-agnostic layer (**`@pivot/engine`**'s** `resumptionWatcher.ts`**).** `classifyPlayType` sorts a normalized `PlayType` (the same enum `PlayEvent`/`applyPlayToState` use) into one of three categories:
+  - `SKIP_AND_WAIT` — `timeout`, `end_period`. Procedural, expected to be followed by real action soon; the watcher keeps scanning forward past these.
+  - `ABORT` — `end_half`, `end_game`. Structurally different from a timeout — halftime runs far longer than the ~2:50 timeout pattern — so the watcher cancels outright rather than waiting through it. A fresh possession-change event at the start of the next half restarts the flow naturally; no special-cased "resume after halftime" logic is needed.
+  - `REAL_ACTION` — every other `PlayType`. This is the default/fallback, not an explicit allow-list, so an unknown type fails toward firing rather than silently waiting forever.
   - **Safety ceiling** — ~4 minutes of continuous `SKIP_AND_WAIT` with no `REAL_ACTION` or `ABORT` falls back to firing anyway. The mechanism can never go silent indefinitely even if a play type is misclassified or the feed does something unexpected.
-- **ESPN-specific layer (`@pivot/ingestion`'s `espnPlayTypeMap.ts`).** A lookup table maps ESPN's `type.id` onto the normalized `PlayType` above — e.g. `74` (Official Timeout) / `21` (Timeout) / `75` (Two-minute warning) → `timeout`; `2` (End Period) → `end_period`; `65` (End of Half) → `end_half`; `66` (End of Game) → `end_game`; everything else observed (`run`, `pass`, `punt`, `kickoff`, `sack`, etc.) → its corresponding `PlayType`, all landing in `REAL_ACTION` once classified. This table was built and verified against a 17-game survey (2026 preseason, 2025 regular season, 2025 postseason), not just the single Colts @ Lions game the backtest below replays — 26 distinct `type.id` values observed. Extra points and two-point attempts are not separately observable from this source (ESPN folds them into the scoring play's own text) and are documented as an accepted gap rather than a mapped case, since the app never computes fantasy scoring and so nothing depends on their accuracy.
+- **ESPN-specific layer (**`@pivot/ingestion`**'s** `espnPlayTypeMap.ts`**).** A lookup table maps ESPN's `type.id` onto the normalized `PlayType` above — e.g. `74` (Official Timeout) / `21` (Timeout) / `75` (Two-minute warning) → `timeout`; `2` (End Period) → `end_period`; `65` (End of Half) → `end_half`; `66` (End of Game) → `end_game`; everything else observed (`run`, `pass`, `punt`, `kickoff`, `sack`, etc.) → its corresponding `PlayType`, all landing in `REAL_ACTION` once classified. This table was built and verified against a 17-game survey (2026 preseason, 2025 regular season, 2025 postseason), not just the single Colts @ Lions game the backtest below replays — 26 distinct `type.id` values observed. Extra points and two-point attempts are not separately observable from this source (ESPN folds them into the scoring play's own text) and are documented as an accepted gap rather than a mapped case, since the app never computes fantasy scoring and so nothing depends on their accuracy.
 
 **Anchor-timing subtlety.** `poss:` (the possession field the watcher keys off of) only flips on the new team's first tracked play, not on the play that actually ended the old team's possession — e.g. a punt's `poss:` still shows the kicking team; it's the return team's first offensive snap that first shows the new possession. An earlier version of the watcher treated that first-differing play as a pure "change occurred" marker and started scanning strictly after it, which meant that when the revealing play was itself already real action (a punt return's first snap), the watcher skipped past the true trigger looking for a "next" one and picked up an unrelated later play instead (fixed in commit 25eb470). The corrected logic classifies the revealing play *before* deciding whether to keep scanning:
+
 - If the revealing play is `REAL_ACTION`, it's the trigger, and elapsed time is measured from the **preceding play** (the actual moment possession changed) — not from the revealing play itself, which would trivially always measure zero.
 - If the revealing play is procedural (`SKIP_AND_WAIT`, e.g. a timeout announcement), elapsed time is measured from that revealing play, and the watcher continues scanning forward for the next `REAL_ACTION` entry, exactly as before.
 
@@ -1005,7 +1122,11 @@ Follow-up to the stream synchronization research above. The padded-delay model i
 
 ---
 
+
+
 ## 9. API Contracts
+
+
 
 ### Conventions
 
@@ -1015,44 +1136,56 @@ Follow-up to the stream synchronization research above. The padded-delay model i
 - **Idempotency:** Optional `Idempotency-Key` header for mutations, cached 24h
 - **Pagination:** Cursor-based: `{ data: [...], next_cursor: string | null }`
 
+
+
 ### REST endpoints
+
+
 
 #### Auth & user
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/me` | Get current user + preferences |
-| `PATCH` | `/me/preferences` | Update notification mode, quiet hours, watchedLeagueIds, etc. |
-| `POST` | `/me/push-token` | Register/update Expo push token |
-| `DELETE` | `/me/push-token` | Unregister push token |
-| `POST` | `/me/app-presence` | Set which streaming services user has |
-| `DELETE` | `/me` | Account deletion |
-| `POST` | `/billing/revenuecat` | RevenueCat webhook → `subscription_tier` (auth header, not user JWT) |
 
-**`POST /me/app-presence` body:**
+| Method   | Path                  | Purpose                                                              |
+| -------- | --------------------- | -------------------------------------------------------------------- |
+| `GET`    | `/me`                 | Get current user + preferences                                       |
+| `PATCH`  | `/me/preferences`     | Update notification mode, quiet hours, watchedLeagueIds, etc.        |
+| `POST`   | `/me/push-token`      | Register/update Expo push token                                      |
+| `DELETE` | `/me/push-token`      | Unregister push token                                                |
+| `POST`   | `/me/app-presence`    | Set which streaming services user has                                |
+| `DELETE` | `/me`                 | Account deletion                                                     |
+| `POST`   | `/billing/revenuecat` | RevenueCat webhook → `subscription_tier` (auth header, not user JWT) |
+
+
+`POST /me/app-presence` **body:**
+
 ```typescript
 {
   services: Array<{ service: string, has_subscription: boolean }>
 }
 ```
 
+
+
 #### Leagues & lineups
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/sleeper/leagues?username={u}` | Fetch Sleeper user's leagues (no persist) |
-| `GET` | `/leagues` | List user's leagues |
-| `POST` | `/leagues/sleeper` | Connect Sleeper league |
-| `POST` | `/leagues/manual` | Create manual league |
-| `DELETE` | `/leagues/:id` | Delete league |
-| `PATCH` | `/leagues/:id` | Rename manual league (`{ name }`; `manual_league_only` for Sleeper) |
-| `POST` | `/leagues/:id/sync` | Force refresh from Sleeper |
-| `GET` | `/leagues/:id/lineup?week={w}` | Get lineup for week |
-| `PUT` | `/leagues/:id/lineup` | Replace lineup for week |
-| `GET` | `/players/search?q={q}&position={p}` | Player autocomplete via `search_players` RPC (word-prefix AND across tokens; team city/name/abbrev only on `DEF` rows) |
-| `POST` | `/leagues/:id/stars` | Set star players |
 
-**`GET /leagues/:id/lineup` response:**
+| Method   | Path                                 | Purpose                                                                                                                |
+| -------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/sleeper/leagues?username={u}`      | Fetch Sleeper user's leagues (no persist)                                                                              |
+| `GET`    | `/leagues`                           | List user's leagues                                                                                                    |
+| `POST`   | `/leagues/sleeper`                   | Connect Sleeper league                                                                                                 |
+| `POST`   | `/leagues/manual`                    | Create manual league                                                                                                   |
+| `DELETE` | `/leagues/:id`                       | Delete league                                                                                                          |
+| `PATCH`  | `/leagues/:id`                       | Rename manual league (`{ name }`; `manual_league_only` for Sleeper)                                                    |
+| `POST`   | `/leagues/:id/sync`                  | Force refresh from Sleeper                                                                                             |
+| `GET`    | `/leagues/:id/lineup?week={w}`       | Get lineup for week                                                                                                    |
+| `PUT`    | `/leagues/:id/lineup`                | Replace lineup for week                                                                                                |
+| `GET`    | `/players/search?q={q}&position={p}` | Player autocomplete via `search_players` RPC (word-prefix AND across tokens; team city/name/abbrev only on `DEF` rows) |
+| `POST`   | `/leagues/:id/stars`                 | Set star players                                                                                                       |
+
+
+`GET /leagues/:id/lineup` **response:**
+
 ```typescript
 {
   league_id: string,
@@ -1076,17 +1209,22 @@ Follow-up to the stream synchronization research above. The padded-delay model i
 }
 ```
 
+
+
 #### Games & state
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/state/nfl` | Current NFL calendar (season / week / season_type) |
-| `GET` | `/games?week={w}` | This week's schedule with broadcasts |
-| `GET` | `/games/:id` | One game with current state |
-| `GET` | `/games/live` | All games in progress |
-| `GET` | `/games/:id/broadcasts` | Broadcast sources filtered by user's app presence |
 
-**`GET /state/nfl` response (Sprint 10):**
+| Method | Path                    | Purpose                                            |
+| ------ | ----------------------- | -------------------------------------------------- |
+| `GET`  | `/state/nfl`            | Current NFL calendar (season / week / season_type) |
+| `GET`  | `/games?week={w}`       | This week's schedule with broadcasts               |
+| `GET`  | `/games/:id`            | One game with current state                        |
+| `GET`  | `/games/live`           | All games in progress                              |
+| `GET`  | `/games/:id/broadcasts` | Broadcast sources filtered by user's app presence  |
+
+
+`GET /state/nfl` **response (Sprint 10):**
+
 ```typescript
 {
   season: string,                              // e.g. "2026"
@@ -1107,7 +1245,8 @@ fetch. Sleeper fields via `getCurrentNflState` (`current_nfl_state`); phase open
 is null). Home keys off `display_phase`, not `season_type`. No `postseason_start` — postseason is
 not seeded in v1. Home supplies `week` from this response into `GET /games?week=`.
 
-**`GET /games?week={w}` response (Sprint 10):**
+`GET /games?week={w}` **response (Sprint 10):**
+
 ```typescript
 {
   week: number,                                // echoed from the required query param
@@ -1140,7 +1279,8 @@ score/clock (those live on `GET /games/live`). Broadcasts are ranked via eligibi
 `rankBroadcasts` (Section 2 `BroadcastResolver`), with **one** `user_app_presence` load reused
 across the whole slate — not `pickBroadcastSource` (timing / lag-only among subscribed services).
 
-**`GET /games/live` response (Sprint 10):**
+`GET /games/live` **response (Sprint 10):**
+
 ```typescript
 {
   games: Array<{
@@ -1173,7 +1313,8 @@ zeros) any in-progress row with no Redis live-state — a wrong score claim is w
 spoiler-safe app. No `broadcasts` list (use `GET /games/:id/broadcasts` when switching). No
 `season_type` — that lives on `GET /state/nfl`.
 
-**`GET /games/:id/broadcasts` response:**
+`GET /games/:id/broadcasts` **response:**
+
 ```typescript
 {
   game_id: string,
@@ -1188,17 +1329,22 @@ spoiler-safe app. No `broadcasts` list (use `GET /games/:id/broadcasts` when swi
 }
 ```
 
+
+
 #### Viewing session
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/session` | Current viewing session |
-| `PUT` | `/session/primary` | Set primary game |
-| `DELETE` | `/session/primary` | Clear primary |
-| `POST` | `/session/start` | Begin session (app foreground) |
-| `POST` | `/session/heartbeat` | Keep-alive every 30s |
 
-**`PUT /session/primary` body:**
+| Method   | Path                 | Purpose                        |
+| -------- | -------------------- | ------------------------------ |
+| `GET`    | `/session`           | Current viewing session        |
+| `PUT`    | `/session/primary`   | Set primary game               |
+| `DELETE` | `/session/primary`   | Clear primary                  |
+| `POST`   | `/session/start`     | Begin session (app foreground) |
+| `POST`   | `/session/heartbeat` | Keep-alive every 30s           |
+
+
+`PUT /session/primary` **body:**
+
 ```typescript
 {
   game_id: string,
@@ -1206,15 +1352,20 @@ spoiler-safe app. No `broadcasts` list (use `GET /games/:id/broadcasts` when swi
 }
 ```
 
+
+
 #### Flag events
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/flags/current` | Currently flagged games ordered by priority |
-| `POST` | `/flags/:event_id/action` | Record user's response to notification |
-| `GET` | `/flags/history?since={ts}` | Recent flag events |
 
-**`GET /flags/current` response:**
+| Method | Path                        | Purpose                                     |
+| ------ | --------------------------- | ------------------------------------------- |
+| `GET`  | `/flags/current`            | Currently flagged games ordered by priority |
+| `POST` | `/flags/:event_id/action`   | Record user's response to notification      |
+| `GET`  | `/flags/history?since={ts}` | Recent flag events                          |
+
+
+`GET /flags/current` **response:**
+
 ```typescript
 {
   flags: Array<{
@@ -1237,14 +1388,16 @@ spoiler-safe app. No `broadcasts` list (use `GET /games/:id/broadcasts` when swi
 }
 ```
 
-**`POST /flags/:event_id/action` body:**
+`POST /flags/:event_id/action` **body:**
+
 ```typescript
 {
   action: 'switched' | 'added_to_split' | 'dismissed' | 'ignored'
 }
 ```
 
-**`POST /flags/:event_id/action` response (200):**
+`POST /flags/:event_id/action` **response (200):**
+
 ```typescript
 {
   event_id: string,
@@ -1262,6 +1415,7 @@ check in the route handler, not an RLS policy) — the same service-role-plus-ch
 **Connection:** `wss://api.{domain}.com/v1/realtime?token=<jwt>`
 
 **Message envelope (both directions):**
+
 ```typescript
 {
   id: string,
@@ -1271,26 +1425,35 @@ check in the route handler, not an RLS policy) — the same service-role-plus-ch
 }
 ```
 
+
+
 #### Server → client
 
-| Type | Payload | When |
-|---|---|---|
-| `flag_event` | `{ user_id, game_id, event_type, old_state, new_state, action, game_summary, flagged_players }` | Engine dispatcher fires after deferral |
-| `game_state_update` | `{ game_state }` | State change for subscribed game, throttled 1/2s |
-| `lineup_synced` | `{ league_id, week, slot_count }` | After background Sleeper sync |
-| `session_invalidated` | `{ reason }` | Session changed elsewhere |
-| `pong` | `{}` | Reply to client ping |
-| `error` | `{ code, message }` | Recoverable error |
+
+| Type                  | Payload                                                                                         | When                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flag_event`          | `{ user_id, game_id, event_type, old_state, new_state, action, game_summary, flagged_players }` | Engine dispatcher fires after deferral           |
+| `game_state_update`   | `{ game_state }`                                                                                | State change for subscribed game, throttled 1/2s |
+| `lineup_synced`       | `{ league_id, week, slot_count }`                                                               | After background Sleeper sync                    |
+| `session_invalidated` | `{ reason }`                                                                                    | Session changed elsewhere                        |
+| `pong`                | `{}`                                                                                            | Reply to client ping                             |
+| `error`               | `{ code, message }`                                                                             | Recoverable error                                |
+
+
+
 
 #### Client → server
 
-| Type | Payload | Purpose |
-|---|---|---|
-| `ping` | `{}` | Every 25s; client reconnects if no pong within 10s |
-| `subscribe_game` | `{ game_id }` | Subscribe to state updates for this game |
-| `unsubscribe_game` | `{ game_id }` | Stop receiving state updates |
 
-**Full `flag_event` payload shape:**
+| Type               | Payload       | Purpose                                            |
+| ------------------ | ------------- | -------------------------------------------------- |
+| `ping`             | `{}`          | Every 25s; client reconnects if no pong within 10s |
+| `subscribe_game`   | `{ game_id }` | Subscribe to state updates for this game           |
+| `unsubscribe_game` | `{ game_id }` | Stop receiving state updates                       |
+
+
+**Full** `flag_event` **payload shape:**
+
 ```typescript
 {
   id: string,
@@ -1354,6 +1517,8 @@ check in the route handler, not an RLS policy) — the same service-role-plus-ch
 }
 ```
 
+
+
 ### Key design notes
 
 - `/flags/current` is the cold-start endpoint, not the streaming one. Use the WebSocket for deltas.
@@ -1363,16 +1528,22 @@ check in the route handler, not an RLS policy) — the same service-role-plus-ch
 
 ---
 
+
+
 ## 10. UX Specification
+
+
 
 ### Navigation
 
 Three-tab bottom navigation:
+
 1. **Home** — live games dashboard (opens here on launch)
 2. **Lineup** — fantasy hub (leagues + roster + stars)
 3. **Settings** — account, notifications, streaming, about
 
 **Shipped Expo Router screens** (`app/app/(app)/`, headerless stack over Tabs):
+
 - `(tabs)/index` — Home
 - `(tabs)/lineup` — Lineup (fantasy hub)
 - `(tabs)/settings` — Settings (tab, not modal)
@@ -1389,6 +1560,7 @@ Three-tab bottom navigation:
 **2. Sign up / sign in.** Email + password + Sign in with Apple.
 
 **3. Connect fantasy team.** Two options:
+
 - *Connect Sleeper* — username input → league picker → persist
 - *Add manually* — name league → `PlayerPicker` (shared with Lineup edit-lineup) → `PUT` lineup
 
@@ -1400,6 +1572,8 @@ Three-tab bottom navigation:
 
 ### Home screen — five states
 
+
+
 #### State 1: Active games with flags (Sunday afternoon)
 
 Top to bottom:
@@ -1409,48 +1583,60 @@ Top to bottom:
 - **"Other live games"**: list of live games with user stake but no current flag
 - **"Today's other games"** (collapsible): rest of the slate
 
+
+
 #### State 2: Live games, no flags right now
 
 - Top hero: "Possession changing — your next flag is incoming"
-- Below: user's stake games with live scores
+- Below: user's stake games, each rendered with the same field-aligned scoreboard as State 1's
+hero card (team-color-washed name+score chips split by a divider) plus the numbered field
+gauge — just without the reason chip or CTA
 - Auto-updates via WebSocket when next flag fires
+
+
 
 #### State 3: Pre-game (Sunday morning, Thursday afternoon)
 
 - Top: amber eyebrow + "First flag in {countdown}" title (not a gray surface hero card)
 - Body: same upcoming-game cards as State 4 — kickoff timestamp, `AWAY | HOME`,
-  `Active Players: …` (starter/flex only), shared `UpcomingStakeGameList`
+`Active Players: …` (starter/flex only), shared `UpcomingStakeGameList`
 - Subtle "Test notifications" link
+
+
 
 #### State 4: Off-day (Tue–Thu morning)
 
 - Top: "WEEK {n} — Upcoming games:"
 - Body: every remaining stake game this week, chronological by kickoff — each with its
-  start time, matchup, and "Active Players: …" line (starter/flex only — bench excluded)
-  via the same card treatment as State 3
+start time, matchup, and "Active Players: …" line (starter/flex only — bench excluded)
+via the same card treatment as State 3
 - Bottom: optional content area (v2)
 
+
+
 ##### State 4a: Offseason / preseason idle (three-way `display_phase` branch).
+
 Home branches on `GET /state/nfl`'s `display_phase` (schedule-derived) — **not** Sleeper
 `season_type` (which runs ahead of actual games). Do **not** collapse `'pre'` into `'off'`:
 
 - `'off'` → Offseason panel: "Preseason begins {preseason_start}" when `preseason_start` is present;
-  otherwise date-free fallback. Connected-league status. No sync-on-renewal promise.
+otherwise date-free fallback. Connected-league status. No sync-on-renewal promise.
 - `'pre'` → Preseason panel (same structure, distinct copy): "Regular season begins
-  {regular_season_start}" when present; otherwise date-free fallback. Idle-by-design in v1 (no
-  fantasy preseason lineup / betting — Section 14). Distinct from `'off'` so a future stake source
-  can promote `'pre'` into the live machine without a Home rewrite.
+{regular_season_start}" when present; otherwise date-free fallback. Idle-by-design in v1 (no
+fantasy preseason lineup / betting — Section 14). Distinct from `'off'` so a future stake source
+can promote `'pre'` into the live machine without a Home rewrite.
 - `'regular'` | `'post'` → live state machine (States 1–4).
 
 Opener dates are schedule-derived (`preseason_start` / `regular_season_start` on `/state/nfl`),
 formatted timezone-safely from date-only strings. Never render Sleeper's `season_start_date`.
 For `'off'`/`'pre'`, Home short-circuits — skips `/games` and `/flags/current`.
 
-
 #### State 5: No setup yet
 
 - Centered prompt: "Connect your fantasy team to get started"
 - Two buttons: "Connect Sleeper" / "Add manually"
+
+
 
 ### Lineup screen
 
@@ -1464,6 +1650,8 @@ Fantasy hub (owns leagues + roster + stars):
 - **Pull-to-refresh** triggers Sleeper sync (sleeper leagues) then reloads lineup
 - **Deferred:** live fantasy points, opponent line, offense/defense indicators, player detail sheet
 
+
+
 ### Settings screen
 
 iOS grouped list (prefs / account only — no leagues or stars):
@@ -1473,9 +1661,12 @@ iOS grouped list (prefs / account only — no leagues or stars):
 - **Streaming services** — re-edit `user_app_presence`
 - **About** — version, terms, privacy, support, test notification
 
+
+
 ### Notification UX
 
 **Push notification format:**
+
 - Title: `Jonathan Taylor active`
 - Body: `Colts have the ball — Q2, 7:14. Tap to watch.`
 - Action buttons: `Switch` and `Dismiss`
@@ -1483,6 +1674,7 @@ iOS grouped list (prefs / account only — no leagues or stars):
 - `Switch` quick-action skips app, triggers deep-link/cast directly from notification handler
 
 **In-app banner (foregrounded):**
+
 - Slides down from top
 - Same content as push
 - Auto-dismisses after 12s if no action (records `ignored`)
@@ -1496,23 +1688,28 @@ iOS grouped list (prefs / account only — no leagues or stars):
 ### Empty / loading / error states
 
 **Empty:**
+
 - Lineup with no players: "Add your starting lineup"
 - Home with no leagues: see State 5
 - Star list when none set: "Tap any player to mark them as a star"
 
 **Loading:**
+
 - Cold start: splash with "Pulling up today's games..." (max 1.5s before partial render)
 - Pull-to-refresh: standard iOS animation
 - Deep-link in flight: "Switching to..." overlay
 - WebSocket reconnecting: 2px colored bar at top of Home with "Reconnecting..." text
 
 **Error:**
+
 - No internet: persistent top banner with retry, cached lineup visible
 - Sleeper sync failed: inline message with retry, last lineup preserved
 - Deep-link target not installed: sheet with alternate broadcast or "Get [app]" App Store link
 - ~~Cast target unreachable: "Couldn't reach your Apple TV..." with retry~~ — moot in v1, no cast flow (Section 2)
 - Live data feed stale: grey indicator on game card + "Live data delayed"
 - Catastrophic backend: maintenance screen with "Try again"
+
+
 
 ### Interaction patterns
 
@@ -1524,46 +1721,64 @@ iOS grouped list (prefs / account only — no leagues or stars):
 
 ---
 
+
+
 ## 11. Build Order
 
 Nine sprints, each ~2–3 weeks for a solo dev with AI assistance. Total target: 4–6 months. Launch target: early September (start of NFL season).
 
 ### Sprint 1: Skeleton
+
 - Initialize Supabase project, set up auth
 - Create core data model migrations (users, teams, players, games)
 - Initialize Expo client, scaffold home screen
 - Sign-in flow working end-to-end
 - Goal: empty app you can log into
 
+
+
 ### Sprint 2: Data ingestion in isolation
+
 - Stand up ingestion service
 - Connect to a real-time data feed sandbox (provider TBD — Section 5; Sportradar was the original candidate)
 - Implement `applyPlayToState` and Redis game state writer
 - Add structured logging
 - Goal: backend logs possession changes in real time from a recorded game
 
+
+
 ### Sprint 3: Fantasy lineup ingestion
+
 - Sleeper API client + persistence
 - Manual lineup entry endpoint and validation
 - Player search endpoint
 - Lineup sync worker (every 5 min during games)
 - Goal: lineups in DB, materialized to `user_lineup_cache` in Redis
 
+
+
 ### Sprint 4: The switching engine
+
 - Implement `computeFlagState` as pure function with unit tests
 - Implement `onPlayEvent`, `getActiveUsersWithStakeIn`, `diffFlagStates`
 - Implement priority scoring with all bonuses
 - Test against recorded game data + test lineups
 - Goal: engine fires correct flag events for known scenarios
 
+
+
 ### Sprint 5: Realtime delivery
+
 - Build event dispatcher with deferred firing queue
 - Implement WebSocket server (Fastify + websockets plugin)
 - Build client WebSocket connection with auto-reconnect
 - Minimal client debug screen showing incoming events
 - Goal: events stream from engine to client
 
+
+
 ### Sprint 6: Notifications
+
 - Expo Push integration on backend
 - Push token registration + storage
 - iOS notification handling (foreground + background)
@@ -1571,8 +1786,12 @@ Nine sprints, each ~2–3 weeks for a solo dev with AI assistance. Total target:
 - Rate limiting + quiet hours
 - Goal: real notifications surface to user
 
+
+
 ### Sprint 7: Playback abstraction + deep-link
+
 Shipped:
+
 - `PlaybackSource` interface + `DeepLinkPlaybackSource` (`app/playback/`); `AirPlayPlaybackSource`/`ChromecastPlaybackSource` ship as `canPlay: false` stubs (real implementations are Sprint 8), and the `'embedded'` id is carried ahead of Phase 2
 - `resolvePlaybackSource` registry (pure) + the `resolveSwitch` client helper (`app/lib/switching.ts`)
 - `BroadcastResolver` server-side logic — `rankBroadcasts`/`resolveBroadcasts` (`services/dispatcher/src/broadcastResolver.ts`), kept independent of the lag-timing `pickBroadcastSource` and sharing only the `lagSecondsFor` primitive
@@ -1583,8 +1802,11 @@ Shipped:
 - Goal met: tapping "Switch" opens the correct streaming app at the correct game via deep link (cast handoff is Sprint 8)
 
 Deferred:
+
 - Real AirPlay/Chromecast sources → Sprint 8
 - Section 10 fidelity gaps (reason-chip player names, team-color flash, possessing-team overlay label, alternate-broadcast/"Get app" error sheet, live Home WebSocket updates) → Sprint 9 polish (see Known Issues)
+
+
 
 ### Sprint 8: AirPlay + Chromecast sources — NOT ACHIEVABLE AS SCOPED (Sprint 10 Track B)
 
@@ -1592,14 +1814,18 @@ Every bullet below assumed v1 could cast video it does not own. It cannot — th
 root cause is Section 2's rights constraint, not a missing implementation. See
 Known Issues for the hardware verification.
 
-- ~~`AirPlayPlaybackSource` via native iOS APIs~~ → **built, then made dormant.** The native module (`app/modules/airplay-route/`, `AVRouteDetector` + `AVRoutePickerView`) and the source both work and are tested; the source is deliberately left out of `createPlaybackSources()` rather than deleted, so it becomes useful the moment Phase 2 rights land.
-- ~~`ChromecastPlaybackSource` via react-native-google-cast~~ → **not built.** Same wall, so the `canPlay: false` stub stays and `react-native-google-cast` is not added as a dependency. No point proving the same constraint twice.
+- `AirPlayPlaybackSource` ~~via native iOS APIs~~ → **built, then made dormant.** The native module (`app/modules/airplay-route/`, `AVRouteDetector` + `AVRoutePickerView`) and the source both work and are tested; the source is deliberately left out of `createPlaybackSources()` rather than deleted, so it becomes useful the moment Phase 2 rights land.
+- `ChromecastPlaybackSource` ~~via react-native-google-cast~~ → **not built.** Same wall, so the `canPlay: false` stub stays and `react-native-google-cast` is not added as a dependency. No point proving the same constraint twice.
 - ~~Cast target detection on app launch~~ → works (this part was never the problem — a Mac AirPlay receiver was detected reliably on device).
 - ~~"Cast to TV" CTA on Home when target detected~~ → **not shipped.** The CTA would have been dishonest copy: the picker offers only an audio route, and nothing about that route follows the user into the streaming app.
 - ~~Goal: phone-as-remote experience works~~ → **goal retired for v1.** Phase 2 destination; see Section 14 for the Screen Mirroring reframe, which is a different product idea rather than this one rescheduled.
 
+
+
 ### Sprint 9: Polish & shipping
+
 Shipped:
+
 - Server-side enrichment closing three Section 10 fidelity gaps (Section 9): `flagged_players` (full `{ player_id, first_name, last_name, position }` objects, replacing `flagged_player_ids`) on `GET /flags/current`; team colors (`home_team_primary_color`/`home_team_secondary_color`/`away_team_primary_color`/`away_team_secondary_color`) on `game_summary`, in both `GET /flags/current` and the `flag_event` payload; `possession_team` on the `flag_event` payload's `new_state` (`old_state.possession_team` is unconditionally `null` by design — see Section 9)
 - The four Section 10 fidelity fixes consuming the above: reason chip with player names (`app/lib/teamDisplay.ts`'s `reasonChipCopy`), the switching-transition team-color flash, the possessing-team overlay label, and a deep-link error state with an alternate-broadcast picker + "Get app" App Store links (see Known Issues for the multi-player reason chip copy convention this needed and didn't have a spec to follow)
 - `GET /me`, `PATCH /me/preferences`, `POST /me/app-presence`, `DELETE /me` — not originally scoped as Phase 2 "client-side" work, added as necessary infrastructure once Settings/onboarding needed them
@@ -1611,38 +1837,45 @@ Shipped:
 - Infra hygiene: `pnpm seed:test-user` fixture script, and the `services/dispatcher` → `services/api` `dist/` source-mode fix (TypeScript project references + `tsc -b` — see Known Issues, resolved)
 
 Deferred:
+
 - Home States 2–4 (live score/countdown) plus the State 4a offseason variant → Sprint 10, alongside `GET /state/nfl`, schedule endpoints (`GET /games?week=`/`GET /games/live`), and the Home WebSocket subscription work
 - Star player grid view → a later sprint, alongside making star players functional in the switching engine's priority scoring (both currently stored/toggleable but not yet visually or functionally "real")
 - Real-world Sunday preseason testing and App Store submission → Sprint 10, pending Apple Developer Program enrollment
 
 ---
 
+
+
 ## 12. External Dependencies
+
+
 
 ### Procurement required before launch
 
 1. **Production real-time play-by-play data provider — not yet selected**
-   - Sportradar was the original pick (sub-second push feed) but its enterprise-tier pricing (est. $3K–25K+/month) is not viable at current budget — ruled out as a default, not procured
-   - ESPN's unofficial site API is in use for prototyping/calibration only (Section 8), not production
-   - Evaluate lower-cost alternatives (e.g. Tank01, MySportsFeeds — see Stream synchronization research, Section 8) before committing; see Open Questions #1
-
+  - Sportradar was the original pick (sub-second push feed) but its enterprise-tier pricing (est. $3K–25K+/month) is not viable at current budget — ruled out as a default, not procured
+  - ESPN's unofficial site API is in use for prototyping/calibration only (Section 8), not production
+  - Evaluate lower-cost alternatives (e.g. Tank01, MySportsFeeds — see Stream synchronization research, Section 8) before committing; see Open Questions #1
 2. **Apple Developer account** — $99/year, instant
-
 3. **Streaming service deep-link audit**
-   - Confirm deep-link schemes for each: Sunday Ticket (YouTube TV), ESPN+, Paramount+, Peacock, Prime Video, NFL+, NBC Sports, FOX, CBS
-   - Some will support game-level deep links; some only app-level
-   - Build for graceful degradation when deep-link fails
+  - Confirm deep-link schemes for each: Sunday Ticket (YouTube TV), ESPN+, Paramount+, Peacock, Prime Video, NFL+, NBC Sports, FOX, CBS
+  - Some will support game-level deep links; some only app-level
+  - Build for graceful degradation when deep-link fails
+
+
 
 ### Managed services (sign-up needed)
 
-| Service | Purpose | Cost estimate |
-|---|---|---|
-| Supabase | DB + auth + storage | $25/mo Pro tier |
-| Upstash Redis | Hot state | $0–10/mo low volume |
-| Fly.io | Backend hosting | $20–50/mo |
-| Expo / EAS | Build + push | $99/mo Production tier |
-| Sentry | Error monitoring | Free tier |
-| Axiom | Logs | Free tier |
+
+| Service       | Purpose             | Cost estimate          |
+| ------------- | ------------------- | ---------------------- |
+| Supabase      | DB + auth + storage | $25/mo Pro tier        |
+| Upstash Redis | Hot state           | $0–10/mo low volume    |
+| Fly.io        | Backend hosting     | $20–50/mo              |
+| Expo / EAS    | Build + push        | $99/mo Production tier |
+| Sentry        | Error monitoring    | Free tier              |
+| Axiom         | Logs                | Free tier              |
+
 
 Total managed services: ~$150/mo — excludes the production real-time data provider. ESPN's unofficial site API (Section 5 / Open Questions #1) is committed and free, so this line item — which dominated budget projections back when Sportradar's enterprise-tier pricing was the assumed default — did not end up materializing.
 
@@ -1654,57 +1887,55 @@ Total managed services: ~$150/mo — excludes the production real-time data prov
 
 ---
 
+
+
 ## 13. Open Questions
 
 Issues that need resolution but don't block the build:
 
 1. **Production real-time data provider — RESOLVED.** ESPN's unofficial site API (`site.api.espn.com`) is the committed production source for both live play-by-play and schedule data, implemented in `@pivot/ingestion` (`EspnPlaySource`, Section 5/6/8). Sportradar (sub-second push feed) was the original aspirational pick, but its enterprise-tier pricing was not viable at current budget and it was ruled out before commitment. Residual accepted risk, not an open question: ESPN's API is undocumented/unofficial (no SLA, could change without notice) — the same risk category already accepted for the v2 ESPN fantasy integration (Section 15).
 2. **Deep-link availability per service.** Partly answered in Sprint 10 Track B; the remaining
-   unknown is narrower and different in kind from what this question originally assumed. Two
+  unknown is narrower and different in kind from what this question originally assumed. Two
    sub-questions, and conflating them is what let broken links ship for three sprints:
-
    **(a) Will a URL open the provider's app at all?** Audited for all 11 services against their live
    `apple-app-site-association` files, matching production app IDs only (dev/QA builds claim paths the
    shipping app does not). Nine work; `cbs` and `nbc` serve no usable AASA and can never open an app
    (see Known Issues). Cheap to re-check — one `curl` per domain — and worth re-running periodically,
    since providers change these files without notice.
-
    **(b) Can we deep-link to a specific game, not just the app?** For YouTube TV: **yes, and it works
    well** — verified on a physical iPhone in Track B. `https://tv.youtube.com/watch/<videoId>` opened
    the YouTube TV app directly into the live game, already playing. The hand-off mechanism is not the
    obstacle; it is genuinely excellent, and it means the deep-link mode this product actually ships
    (see Section 2) has a strong best case rather than a compromised one.
-
    The obstacle is purely **content-ID acquisition**. That `videoId` is an opaque 11-character
    YouTube identifier, unique per broadcast, and is not derivable from a matchup, team, date, or
    anything else in our schema. Getting it requires a provider-side source — a partner API, an
    authenticated listing endpoint, or scraping — per service, and scraping in particular is fragile
    and legally uncertain. Until then `game_broadcasts.deep_link_url` stays app-level, which lands the
    user in the right app on a generic screen and leaves them to find the game.
-
    So the real open question is no longer "is game-level deep linking possible?" but "how do we
    obtain per-broadcast content IDs at scale, per provider?" — a data-sourcing and possibly
    partnership problem, not a client-engineering one. Section 15's partnership work is the most
    plausible unlock; it would also make this moot for any partner whose video we embed directly.
 3. **Pro annual SKU / price research.** Monthly Pro is `$9.99` via RevenueCat (`pivot_pro_monthly`); annual and packaging experiments deferred.
 4. **Pivot trademark clearance.** Informal web searches turned up nothing conflicting with
-   the name, but that is not formal clearance. A real search (e.g. USPTO TESS) and/or legal counsel
+  the name, but that is not formal clearance. A real search (e.g. USPTO TESS) and/or legal counsel
    review is still outstanding before App Store Connect listing and any trademark filing. Do not
    treat the PLAN.md rename note (Aug 21, 2026) as having closed this.
 5. **Rename items after the Aug 21, Aug 23, and Aug 26, 2026 code-level passes.** The
-   packages, docs, `app.json` `name`/`scheme`, and in-app UI strings are done for all three
+  packages, docs, `app.json` `name`/`scheme`, and in-app UI strings are done for all three
    passes; see the rename notes at the top for what is deliberately kept on the old name —
    that list now includes the EAS project slug, resolved Aug 26, 2026 as a permanent
    won't-fix rather than a deferred rename (it isn't actually possible without minting a
    new EAS project; see the rename note for why). Two items remain:
-   - **A real domain with live `/terms` and `/privacy`.** Settings still links
-     `support@fantasyfocus.app`, `https://fantasyfocus.app/terms`, and `.../privacy`. This is a
-     **B3 submission blocker regardless of the rename** — App Store Connect requires a reachable
-     privacy policy URL — and it needs a registered domain serving two real pages, not a string
-     swap. Left pointing at the old name on purpose: an honestly-outdated URL is better than a
-     renamed one that 404s during review, which would fail silently until rejection. Overlaps
-     Open Question #8 (lawyer review of the policy text itself); this is the hosting half.
-   - **Trademark clearance**, still open as Open Question #4 above.
+  - **A real domain with live** `/terms` **and** `/privacy`**.** Settings still links
+  `support@fantasyfocus.app`, `https://fantasyfocus.app/terms`, and `.../privacy`. This is a
+  **B3 submission blocker regardless of the rename** — App Store Connect requires a reachable
+  privacy policy URL — and it needs a registered domain serving two real pages, not a string
+  swap. Left pointing at the old name on purpose: an honestly-outdated URL is better than a
+  renamed one that 404s during review, which would fail silently until rejection. Overlaps
+  Open Question #8 (lawyer review of the policy text itself); this is the hosting half.
+  - **Trademark clearance**, still open as Open Question #4 above.
 6. **Launch marketing strategy.** Out of scope for this plan.
 7. **TestFlight beta cohort.** Likely 50–100 users for August preseason testing.
 8. **Terms of service & privacy policy.** Lawyer review needed before App Store submission.
@@ -1712,7 +1943,11 @@ Issues that need resolution but don't block the build:
 
 ---
 
+
+
 ## Known Issues
+
+
 
 ### Disconnect league returned 500 (empty JSON body + Content-Type) — RESOLVED Aug 16, 2026
 
@@ -1837,6 +2072,7 @@ Issues that need resolution but don't block the build:
 **Root cause:** Section 2's rights constraint, surfacing at the API layer. `AVRoutePickerView` routes media belonging to *the process presenting it*. v1 owns no video, so there is no `AVPlayer` in our process and iOS correctly offers only the audio session as routable. Routes are also per-app: a route chosen in our app does not transfer to a different app, and whether a third-party streaming app casts its own video is that app's decision. The only cross-app mechanism is system-wide Screen Mirroring, which the user invokes from Control Center and an app cannot trigger on the user's behalf. This was a specification error, not an implementation defect — the plan treated "phone-as-remote" as independent of rights when it is downstream of them.
 
 **Fix (applied):** Cut from v1 rather than worked around, because there is nothing to work around.
+
 1. `createPlaybackSources()` is deep-link only, so production behaviour matches what shipped before Sprint 8's sources existed.
 2. `AirPlayPlaybackSource` and its native module are kept implemented, tested and dormant — not deleted. They are correct code sitting behind a wrong assumption, and they become useful unchanged if Phase 2 lands rights. A test asserts a discoverable target cannot pull the source back into the default registry, and a second asserts re-adding it restores cast-first priority.
 3. Chromecast was not built. The Cast SDK would hit the identical wall, so the stub stays honest and `react-native-google-cast` is not added.
@@ -1850,7 +2086,7 @@ Issues that need resolution but don't block the build:
 
 **Symptom:** Tapping "Switch" on a real device opened `tv.youtube.com` in Safari rather than the installed YouTube TV app. Not specific to YouTube TV: of the 11 `BROADCAST_TEMPLATES` entries, exactly one (`paramount_plus`) would have opened its app, and `paramount_plus` is never seeded into any game by `buildBroadcastRows`. Every broadcast row in the database landed in Safari.
 
-**Root cause:** Ours, and it was the seed data. Not `Linking.openURL` — that reaches `UIApplication.open`, which honors universal links correctly. Not a missing provider AASA either; the providers' files are mostly fine. The seeded URLs were bare marketing homepages, and providers deliberately exclude those from universal links so signup/marketing stays on the web. YouTube TV's AASA claims `*` after 102 deny rules, one of which is a literal `NOT /` — so `https://tv.youtube.com/` was the single worst path we could have chosen, while `/watch/*` and `/live` open the app. Other services were near-misses of the same kind: Fox claims `/live/*` and we sent `/live`; Prime Video's AASA is on `primevideo.com`, not `amazon.com/gp/video`. This was placeholder fixture data (flagged `⚠️ UNVERIFIED` in `seed-broadcasts.ts` since Sprint 7) finally being exercised on hardware, not a regression.
+**Root cause:** Ours, and it was the seed data. Not `Linking.openURL` — that reaches `UIApplication.open`, which honors universal links correctly. Not a missing provider AASA either; the providers' files are mostly fine. The seeded URLs were bare marketing homepages, and providers deliberately exclude those from universal links so signup/marketing stays on the web. YouTube TV's AASA claims `*` after 102 deny rules, one of which is a literal `NOT /` — so `https://tv.youtube.com/` was the single worst path we could have chosen, while `/watch/`* and `/live` open the app. Other services were near-misses of the same kind: Fox claims `/live/*` and we sent `/live`; Prime Video's AASA is on `primevideo.com`, not `amazon.com/gp/video`. This was placeholder fixture data (flagged `⚠️ UNVERIFIED` in `seed-broadcasts.ts` since Sprint 7) finally being exercised on hardware, not a regression.
 
 **Fix (applied):** Every fixable template now uses a path verified as claimed by the provider's **production** app ID. Matching on production specifically matters — dev/QA/dogfood builds routinely claim paths the shipping app does not, and ESPN is a live example: `com.espn.ScoreCenterDogfood` claims `/nfl/scoreboard` while shipping `com.espn.ScoreCenter` does not. `sunday_ticket` was additionally confirmed on a physical iPhone: `/library` opened the YouTube TV app through the same code path that had sent `/` to Safari minutes earlier.
 
@@ -1901,8 +2137,10 @@ Issues that need resolution but don't block the build:
 **Root cause:** The timing resolver has no information about which broadcast the user is actively watching for a given game — only which services they're subscribed to in aggregate. Sunday afternoon simulcasts are the modal case for this app's usage (every 1pm and 4pm ET game, every week), and Sunday Ticket subscribers are the engaged fantasy power users the product is built for, so the failure mode disproportionately hits the target audience. The exclusive-window games (Thursday/Sunday/Monday night, most international slots) are unaffected because there's no ambiguity to guess wrong about.
 
 **Fix (v1.5):** Combine a user-declared preference with per-session recorded intent:
+
 1. Add a "preferred streaming service" field to users.preferences (single default sufficient for v1.5; per-broadcast-window granularity — Thursday / Sunday afternoon / Sunday night / Monday — as an eventual refinement). Surface it in Settings alongside the existing "Streaming services" list. resolveLikelyBroadcastSource uses it as a strong tiebreak: if the user's preferred service carries the game, pick it regardless of lag.
 2. When the user taps "Switch" on a game with multiple eligible broadcasts, GET /games/:id/broadcasts already returns the full ranked menu — present a picker instead of dispatching immediately. Record the chosen service via PUT /session/primary (source field already exists). For the remainder of that viewing session, the timing resolver reads the recorded choice for this specific game rather than falling back to preference or heuristic.
+
 The recorded choice is authoritative because it reflects what the user is watching, not what they might watch — which is exactly the input the spoiler-safety guarantee needs.
 **Impact if unfixed:** Sprint 7's recommended_source is being made lag-consistent with the timing calculation (both driven by resolveLikelyBroadcastSource), so the app's internal recommendation and timing are self-consistent — but "self-consistent" doesn't mean "correct." For a Sunday Ticket subscriber watching a Sunday afternoon simulcast, both the fire time and the "Watch on CBS" recommendation will be wrong in the same direction: the notification arrives 60+ seconds before the play on their actual stream, and the CTA points at a broadcast they weren't watching. Exclusive-window games are unaffected. Also relevant to the fourth patent novelty point (stream-lag-aware deferred firing as spoiler-safe): the claim is architecturally sound — the mechanism does what it says — but the input the mechanism operates on is currently a guess for the multi-broadcast case, which is worth being precise about in the specification. Deferred to v1.5 rather than v1 because (a) the fix touches Settings UI, a new preferences field, session-recording semantics, and the timing resolver simultaneously, and (b) exclusive-window games (which are unaffected) are still the majority of prime-time viewing, so the failure mode, while pointed, isn't universal.
 
@@ -2070,19 +2308,22 @@ The recorded choice is authoritative because it reflects what the user is watchi
 
 ---
 
+
+
 ## 14. v1.5 Roadmap
 
 Target: 3 months after v1 ships (mid-season).
  
+
 ### Features
- 
+
 - **Multi-stream split-screen view** (1 + 2 thumbnails on mobile)
 - **Subscription billing** (StoreKit integration, Pro tier)
 - **Multi-league support** (lineup tab gets league selector)
 - **Multi-platform fantasy providers** (Yahoo, ESPN) — see the "Multi-platform
-  fantasy" subsection below for the per-provider integration reality and the
-  Yahoo-vs-ESPN priority discussion; these are NOT equal-difficulty and each
-  is effectively its own sprint, prioritized by v1 user demand.
+fantasy" subsection below for the per-provider integration reality and the
+Yahoo-vs-ESPN priority discussion; these are NOT equal-difficulty and each
+is effectively its own sprint, prioritized by v1 user demand.
 - **Auto-switch toggle** (functional in settings)
 - **Star players** (functional in switching engine, not just stored)
 - **Notification batching** (collapse multiple events in 10s window)
@@ -2090,7 +2331,9 @@ Target: 3 months after v1 ships (mid-season).
 - **Android version** (same React Native codebase)
 - **Missed plays screen** (replay history of flag events)
 - **Screen Mirroring reframe** (idea only — not committed, needs UX design first).
-  See below.
+See below.
+
+
 
 ### Screen Mirroring reframe (unbuilt idea, needs its own UX design)
 
@@ -2106,50 +2349,56 @@ we are then free to compose, since we are only ever routing our own UI. The app
 would stop trying to control the TV and instead be worth looking at on one.
 
 Why it is unproven, and what would need designing:
+
 - It rests on the user having already enabled mirroring. An app cannot start it,
-  so the whole flow depends on an instruction step outside our control — the
-  most likely place for it to fail as a product.
+so the whole flow depends on an instruction step outside our control — the
+most likely place for it to fail as a product.
 - Mirroring shows our UI, so this only pays off if there is something worth
-  showing on a TV. That is a new screen design (a lean-back multi-game board?),
-  not a setting.
+showing on a TV. That is a new screen design (a lean-back multi-game board?),
+not a setting.
 - Interaction model is unresolved: mirrored means the phone shows exactly what
-  the TV shows, so the "remote" and the "display" are the same surface. Making
-  the phone a distinct controller needs a second output path, which is a
-  materially larger piece of work.
+the TV shows, so the "remote" and the "display" are the same surface. Making
+the phone a distinct controller needs a second output path, which is a
+materially larger piece of work.
 - Deep-linking into a streaming app ends the mirrored experience — that app
-  takes over the screen. So this idea and the shipping deep-link flow may be
-  mutually exclusive modes rather than complementary, which is a product
-  decision before it is an engineering one.
+takes over the screen. So this idea and the shipping deep-link flow may be
+mutually exclusive modes rather than complementary, which is a product
+decision before it is an engineering one.
+
+
 
 ### Architecture changes
- 
+
 - New `PlaybackSource` modes for split-screen rendering
 - Billing integration via RevenueCat (`POST /billing/revenuecat` + iOS `react-native-purchases`)
 - WebSocket message: `flag_batch` for combined events
 - Multi-league lineup cache: `user_lineup_cache:{user_id}:{week}:{league_id}`
 - Push receipt-polling worker + a persisted-ticket-id table (new state, `expo_push_token` cleared on confirmed `DeviceNotRegistered`)
+
+
+
 ### Multi-platform fantasy
- 
+
 v1 ships Sleeper + manual entry only. Sleeper was chosen first because its API
 is public, keyless, and username-addressable (`/v1/user/{username}/leagues/...`)
 — a new provider like that is trivial behind the existing `FantasyProvider`
 interface (Section 6). The other two platforms are NOT like Sleeper, and are
 listed here in rough order of integration feasibility:
- 
+
 - **Yahoo Fantasy** — official API, but requires full OAuth 2.0 three-legged
-  auth (registered app credentials, per-user token storage + refresh). Real
-  infrastructure, but a sanctioned and stable path.
+auth (registered app credentials, per-user token storage + refresh). Real
+infrastructure, but a sanctioned and stable path.
 - **ESPN Fantasy** — no official public API. Integration relies on undocumented
-  endpoints (via the `cwendt94/espn-api` wrapper) and cookie-based auth
-  (`espn_s2` / `SWID` cookies the user extracts from their browser). Brittle
-  (breaks on ESPN changes without notice, has been observed deleting
-  historical league data) and a rough onboarding UX (asking users to paste
-  browser cookies). Higher risk, higher maintenance than Yahoo per-integration.
-  **Additional cost not shared with Yahoo/Sleeper:** the wrapper is Python-only
-  with no Node equivalent, so this provider can't be pure "another
-  `FantasyProvider` implementation" inside the existing Fastify/Node backend —
-  it requires standing up a second, ESPN-only runtime (Section 6's deployment
-  topology has no Python process today) that the Node backend calls into.
+endpoints (via the `cwendt94/espn-api` wrapper) and cookie-based auth
+(`espn_s2` / `SWID` cookies the user extracts from their browser). Brittle
+(breaks on ESPN changes without notice, has been observed deleting
+historical league data) and a rough onboarding UX (asking users to paste
+browser cookies). Higher risk, higher maintenance than Yahoo per-integration.
+**Additional cost not shared with Yahoo/Sleeper:** the wrapper is Python-only
+with no Node equivalent, so this provider can't be pure "another
+`FantasyProvider` implementation" inside the existing Fastify/Node backend —
+it requires standing up a second, ESPN-only runtime (Section 6's deployment
+topology has no Python process today) that the Node backend calls into.
 **Priority reversal (flagged mid-2026, not yet acted on):** the original
 "Yahoo first, ESPN second" ordering above was ranked by integration quality
 (sanctioned auth beats cookie-scraping). That ordering predates ESPN Fantasy
@@ -2159,10 +2408,10 @@ its user base to ESPN, making ESPN the largest platform by a wide margin.
 User-base size is a real argument for building ESPN first despite the worse
 integration path and the added Python-runtime cost above. This is captured
 here as an open decision, not resolved — see sequencing rationale below.
- 
+
 NFL Fantasy is removed from this list: it no longer exists as a standalone
 platform (retired into ESPN, per above).
- 
+
 Sequencing rationale: multi-platform fantasy is deliberately deferred out of
 v1 (and out of the Sprint 10 shipping sprint) so v1 validates the core
 switching-engine thesis with real users on Sleeper first. Provider priority
@@ -2175,30 +2424,31 @@ dispatcher, or UI. Each provider is scoped as its own sprint when demand
 justifies it; revisit the Yahoo-vs-ESPN ordering at that point with real
 usage data rather than deciding it now.
  
+
 ### Future stake sources (incl. sports betting) — post-v1, requires legal + partnership review
- 
+
 Reframe: this app's core mechanic is not fantasy-specific — the engine flags
 live game moments a user has a STAKE in. Fantasy lineup is v1's only stake
 source; the same engine can be driven by other stake types. Multi-platform
 fantasy (Yahoo/ESPN/NFL, see previous subsection) is one axis. A second,
 higher-value-but-harder axis is **sports betting slips**:
- 
+
 - **DraftKings / FanDuel / etc.** — link a user's placed bets so the app flags
-  games those bets are live in ("your same-game parlay is playing out now").
-  This is what makes PRESEASON meaningful: Sleeper has no preseason lineup, so
-  fantasy can't drive preseason flags, but betting stakes can if the eventual
-  real-time data provider covers preseason games (Sportradar, the original
-  candidate, does — but the production provider is still undecided; see
-  Section 5 / Open Questions #1).
+games those bets are live in ("your same-game parlay is playing out now").
+This is what makes PRESEASON meaningful: Sleeper has no preseason lineup, so
+fantasy can't drive preseason flags, but betting stakes can if the eventual
+real-time data provider covers preseason games (Sportradar, the original
+candidate, does — but the production provider is still undecided; see
+Section 5 / Open Questions #1).
 Hard constraints — why this is post-v1, not near-term:
 - **API access is closed/partner-gated.** DraftKings and FanDuel do not offer
-  open public read APIs for a user's bets; access likely requires a commercial
-  partnership or is unavailable. Categorically harder than Yahoo OAuth.
+open public read APIs for a user's bets; access likely requires a commercial
+partnership or is unavailable. Categorically harder than Yahoo OAuth.
 - **Regulatory exposure.** Ingesting bets and pushing "your bet is live"
-  notifications moves the app into gambling-adjacent territory: state-by-state
-  gambling regs, responsible-gambling requirements, age verification, stricter
-  App Store review for real-money-gambling-adjacent apps. Requires legal review
-  BEFORE any build — this is not an engineering-only decision.
+notifications moves the app into gambling-adjacent territory: state-by-state
+gambling regs, responsible-gambling requirements, age verification, stricter
+App Store review for real-money-gambling-adjacent apps. Requires legal review
+BEFORE any build — this is not an engineering-only decision.
 Architecture note (do now, cheaply): the engine's input type should generalize
 so a betting stake isn't awkward to add later. Today `UserLineupCache`
 (Section 8) is fantasy-shaped (teamPositions / playerToTeam / starPlayerIds)
@@ -2212,6 +2462,8 @@ engine's core types than they already have.
 
 ---
 
+
+
 ## 15. Phase 2 Strategy
 
 Target: Year 2. Goal is to replace deep-link/cast with native embedded streaming.
@@ -2219,20 +2471,20 @@ Target: Year 2. Goal is to replace deep-link/cast with native embedded streaming
 ### Partnership priorities (in order)
 
 1. **Sportsbook integration** — DraftKings, FanDuel, ESPN Bet, Caesars
-   - These have limited NFL streaming embedded in their products
-   - Hungry for engagement-driving integrations
-   - Most realistic path
-   - Revenue model: rev share on bet activity driven from app
-
+  - These have limited NFL streaming embedded in their products
+  - Hungry for engagement-driving integrations
+  - Most realistic path
+  - Revenue model: rev share on bet activity driven from app
 2. **NFL+ partnership** — NFL-owned streaming product
-   - Needs differentiation, lacks fantasy-aware features
-   - Complementary positioning
-   - Revenue model: licensing fee or subscriber rev share
-
+  - Needs differentiation, lacks fantasy-aware features
+  - Complementary positioning
+  - Revenue model: licensing fee or subscriber rev share
 3. **YouTube TV / Sunday Ticket** — Google
-   - Home run partnership
-   - Requires significant traction to even open the conversation
-   - Revenue model: licensing or integration fee
+  - Home run partnership
+  - Requires significant traction to even open the conversation
+  - Revenue model: licensing or integration fee
+
+
 
 ### Architecture changes for Phase 2
 
@@ -2258,6 +2510,7 @@ Register new source. Update `decideAction` to prefer embedded sources. UI gets a
 ### Validation metrics for partnership pitch
 
 After v1 ships, track:
+
 - Weekly active users during NFL season
 - Average notifications acted on per user per Sunday
 - Average switches per user per Sunday
@@ -2267,9 +2520,14 @@ Aim for 30K+ WAU and 60%+ retention through the season to have a credible partne
 
 ---
 
+
+
 ## Appendix: Quick Reference
 
+
+
 ### Stack at a glance
+
 - iOS: React Native + Expo + TypeScript
 - Backend: Node.js + Fastify + TypeScript
 - DB: Supabase Postgres
@@ -2279,7 +2537,10 @@ Aim for 30K+ WAU and 60%+ retention through the season to have a credible partne
 - Data: ESPN unofficial site API (Section 5 / Open Questions #1), Sleeper (fantasy)
 - Cast: cut in v1 (no video rights — Section 2); native AirPlay module present but dormant
 
+
+
 ### Key files / modules (expected)
+
 - `services/ingestion/` — ESPN consumer (`@pivot/ingestion`; Section 5/8)
 - `services/engine/` — switching engine
 - `services/dispatcher/` — deferred event firing
@@ -2288,7 +2549,10 @@ Aim for 30K+ WAU and 60%+ retention through the season to have a credible partne
 - `app/playback/` — `PlaybackSource` implementations
 - `shared/types/` — shared TS types
 
+
+
 ### Critical constants
+
 - Stream lag table: see Section 8
 - Priority scoring: see Section 3
 - Rate limit: max 3 notifications/minute/user

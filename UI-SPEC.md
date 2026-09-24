@@ -4,6 +4,8 @@ Read-only, no-op pass: no `PLAN.md` or `app/` edits happened alongside this file
 
 **Status update (Sept 18, 2026): Home State 1 shipped.** §3.1 (field gauge), §3.3 (possession glow), §6 (`HomeDashboard`), and the Home State 1 row of §7/§9 below described proposals; those are now implemented (`app/components/FieldGauge.tsx`, `NowActiveCard.tsx`, `AlsoFlaggedRow.tsx`, `HomeDashboard.tsx`) and folded into `PLAN.md` §10's State 1 description, which is the source of truth for that screen going forward — the sections below are left in place as a historical record of the proposal, marked shipped inline, rather than deleted, since they still explain *why* each choice was made. Settings (§2 switch tinting, §3.2 sync slider) and the layout/web/TV notes (§4) remain live, unshipped proposals.
 
+**Status update (Sept 23, 2026): Home State 2 scoreboard parity shipped.** Until now, `HomeLiveIdleCard` (State 2) only inherited the field gauge stick from State 1 (per §3.1 below) — its matchup line was still plain `AWAY @ HOME` text with a small inline score. It now also renders each live row with the same `fieldAlignedMatchup` scoreboard (team-color-washed name+score chips split by a divider) as `NowActiveCard`'s hero card. Folded into `PLAN.md` §10's State 2 description, which is the source of truth for that screen going forward.
+
 ## 0. Stack correction
 
 The source brief was written against Tailwind CSS, `backdrop-filter`, `box-shadow`, and three CSS breakpoints. This is an Expo / React Native client with dark-only design tokens in `app/lib/theme.ts`, styled via `StyleSheet.create`, no CSS engine, and (`PLAN.md` §4) **no web or TV app in v1**. Every recipe below is restated in that vocabulary. Where the brief assumes a capability this repo doesn't have (blur, motion, a settings field, live yardage data), that's called out as a gap rather than quietly implemented as if it already existed.
@@ -14,12 +16,10 @@ The source brief was written against Tailwind CSS, `backdrop-filter`, `box-shado
 | Tailwind utility classes                    | `theme.colors` / `theme.spacing` / `theme.radii` / `theme.type` tokens, consumed via `StyleSheet.create` and the shared recipes in `[app/lib/controlRecipes.ts](app/lib/controlRecipes.ts)` |
 | `backdrop-filter: blur(20px)` glassmorphism | Not free on RN. Deferred — see §2                                                                                                                                                           |
 | `box-shadow` amber glow                     | iOS `shadow*` props / Android `elevation` on `View`, both platforms via `StyleSheet`                                                                                                        |
-| Geometric sans / monospace ticker           | System UI font today (no font files in the repo); a reserved `theme.type.ticker` slot for later `fontFamily`, not a font asset added in this pass                                           |
+| Geometric sans / monospace ticker           | Shipped for real (Sept 18–19, 2026) — Plus Jakarta Sans + JetBrains Mono + Space Grotesk via `expo-font`, baked into `theme.type.*`'s `fontFamily` fields. See §2.4                         |
 | React/TypeScript components                 | Same — this app already is React Native + TypeScript strict, see `[app/components/](app/components)`                                                                                        |
 | `lg:` breakpoint / 3-column web             | Out of v1 per `PLAN.md` §4 ("Android, web, TV apps"). Documented as future-web notes only, §4 below                                                                                         |
 | TV / AirPlay billboard mode                 | Maps to `PLAN.md` §14's unbuilt Screen Mirroring reframe, not a v1 presentation flag. See §4                                                                                                |
-
-
 
 
 ## 1. Palette: what already matches, what's new
@@ -55,8 +55,6 @@ No new hue is introduced. `danger` (`#FF5A5A`) and `success` (`#3ECf8E`) are unt
 
 ## 2. Material traits, translated
 
-
-
 ### 2.1 Borders
 
 "Thin 1px stroke, semi-transparent amber to charcoal gradient" → RN `View` doesn't do gradient borders without an extra dependency (no `expo-linear-gradient` in this repo today). Ship the flat version first: `borderWidth: 1, borderColor: theme.colors.accentBorder` on panels that should read as "active" (e.g. the Now Active card border when a flag is live). A true gradient stroke is a `expo-linear-gradient`-add, out of scope for this pass.
@@ -67,8 +65,6 @@ No new hue is introduced. `danger` (`#FF5A5A`) and `success` (`#3ECf8E`) are unt
 
 - **Flat approximation (recommended default):** `surface` fill + `accentBorder` stroke + the glow in §2.3. This is what the mockups in §9 render.
 - **Real blur:** `expo-blur`'s `BlurView` over a translucent scrim, only over content that's genuinely layered above something (e.g. the switching overlay's scrim in `app/contexts/SwitchingContext.tsx`, which already uses `rgba(0,0,0,0.72)`). This would be a new dependency and a real perf check on device, not a drop-in swap for the app's static cards, which don't sit above other content.
-
-
 
 ### 2.3 Amber glow
 
@@ -87,27 +83,25 @@ panelGlow: {
 
 Apply to `NowActiveCard`'s outer `View` when a flag is active, and to whichever live-game row in `HomeLiveIdleCard` matches the current possessing team.
 
-### 2.4 Typography — implemented, system font only
+### 2.4 Typography — real bundled fonts, not system font (updated Sept 23, 2026)
 
-`theme.type` already has a full scale (`title`/`heading`/`body`/`bodyStrong`/`caption`/`button`/`small`/`smallStrong`/`eyebrow` — `app/lib/theme.ts`). The brief's "geometric sans" was tried for real with a bundled font (`expo-font` + `@expo-google-fonts/manrope`) and then **reverted** — the mockups' bolder look turned out to just be the system font (SF Pro on iOS) at a heavier weight with tighter tracking, not a distinct typeface; a real custom font is a much bigger footprint (new deps, native rebuild, per-weight static files) for a difference nobody could actually see next to the system font at these sizes. Shipped instead, system-font-only:
+`theme.type` already has a full scale (`title`/`heading`/`body`/`bodyStrong`/`caption`/`button`/`small`/`smallStrong`/`eyebrow`/`ticker`/`score` — `app/lib/theme.ts`). The brief's "geometric sans" was first tried with `@expo-google-fonts/manrope` (Sept 13, 2026) and **reverted** — at Manrope's weight/tracking the difference from the system font (SF Pro on iOS) wasn't visible enough to justify a new dependency + native rebuild.
 
-- `theme.type.title` is now `weight: '700'` (was `'600'`) with `letterSpacing: -0.3` — "Home"-style screen titles read as bold/tight, matching the mockups, with zero font asset.
-- `NowActiveCard`/`HomeLiveIdleCard`/`AlsoFlaggedRow`'s matchup line (`"COLTS @ TITANS"`) locally overrides to `fontWeight: '700', letterSpacing: -0.2` rather than bumping the shared `heading` token (which stays lighter for plain screen headers elsewhere).
-- `theme.type.score` (already `22/700`) gains `letterSpacing: -0.2` and `fontVariant: ['tabular-nums']` — the score digits are bold/tight and don't reflow as they change width.
-- `theme.type.ticker` (the quarter/clock line, `Q2 · 7:14`) gains `fontVariant: ['tabular-nums']` for the same reason — the clock doesn't jitter as digits change width. Still system font, no mono asset.
+A second pass (Sept 18–19, 2026) tried a three-family combo instead and **kept it this time** — this superseded the Manrope revert above rather than confirming it. `theme.type.title`/`heading`/`eyebrow`/`ticker`/`score` now bake in real `fontFamily` values (`app/lib/theme.ts`), loaded via `expo-font` + `@expo-google-fonts/plus-jakarta-sans`, `@expo-google-fonts/jetbrains-mono`, and `@expo-google-fonts/space-grotesk` (registered in `app/lib/fonts.ts`'s `displayFontMap`, consumed by the root layout's `useFonts` call). This is **not** system-font-only:
+
+- **Plus Jakarta Sans** (Bold/SemiBold) — screen titles (`theme.type.title`/`heading`), team nicknames, and score digits (`theme.type.score`, plus `NowActiveCard`/`HomeLiveIdleCard`'s local `teamName` style — both now share the same field-aligned scoreboard, §3.1/§9).
+- **JetBrains Mono** (Bold/SemiBold/Medium) — eyebrows ("NOW ACTIVE", `theme.type.eyebrow`), the clock/field-position ticker (`theme.type.ticker`), and the reason chip text.
+- **Space Grotesk** (Bold) — the "Watch on {service}" CTA label only (`fonts.teamNickname` in `app/lib/fonts.ts` — misleading key name, see its inline comment).
+- `theme.type.score`/`ticker` both carry `fontVariant: ['tabular-nums']` regardless of family, so digits don't reflow as they change width.
 - `AlsoFlaggedRow`'s "ALSO FLAGGED" label uses the `eyebrow` token directly (same family as "NOW ACTIVE"), not a separate smaller style.
 
-
-
 ## 3. Advanced visualizations: mapped to real data, or marked as gaps
-
-
 
 ### 3.1 Linear field gauge — SHIPPED
 
 `GameSummary` (`app/lib/flagEventPayload.ts`) and `LiveGame` (`app/lib/schedule.ts`) both already carry `yards_to_endzone`, `down`, and `distance` alongside `quarter`/`time_remaining_sec`/`possession_team` — the data gap this section originally described (no yardline on any client-facing wire type) no longer exists; a later pass added the field before this visual work started. Building the real gauge was therefore a pure display change, not a Section 9 API change.
 
-`app/components/FieldGauge.tsx` renders a numbered 100-yard stick — tick-labeled yard lines (`10 20 30 40 50 40 30 20 10`, flat fill only, no `expo-linear-gradient`), an **always-on** red-zone geography on the opponent's 20 with a "RED ZONE" caption (not gated behind a red-zone check — the geography is always there, just like a real broadcast graphic; only the ball's position changes), a gold possession marker (`fieldGaugeMarkerPercent`), and a field-position caption (`IND 32`) under the marker. The clock line (`Q2 · 7:14`, appending down/distance when present via `gameClockLine`) always renders, including when `yards_to_endzone` is null (kickoff/timeout) — in that case the stick itself is omitted but the clock stays, so `NowActiveCard` never loses the clock the way the pre-gauge version did. `HomeLiveIdleCard` (State 2) mounts the same component, so it inherited the richer stick for free.
+`app/components/FieldGauge.tsx` renders a numbered 100-yard stick — tick-labeled yard lines (`10 20 30 40 50 40 30 20 10`, flat fill only, no `expo-linear-gradient`), an **always-on** red-zone geography on the opponent's 20 with a "RED ZONE" caption (not gated behind a red-zone check — the geography is always there, just like a real broadcast graphic; only the ball's position changes), a gold possession marker (`fieldGaugeMarkerPercent`), and a field-position caption (`IND 32`) under the marker. The clock line (`Q2 · 7:14`, appending down/distance when present via `gameClockLine`) always renders, including when `yards_to_endzone` is null (kickoff/timeout) — in that case the stick itself is omitted but the clock stays, so `NowActiveCard` never loses the clock the way the pre-gauge version did. `HomeLiveIdleCard` (State 2) mounts the same component, so it inherited the richer stick for free — and (Sept 23, 2026) also mounts the same `fieldAlignedMatchup` scoreboard treatment described in §9 below, so State 2's live rows match State 1's hero card instead of falling back to plain `AWAY @ HOME` text.
 
 No team logos anywhere on Home — `GameSummary`/`LiveGame` carry no logo field, and adding one is out of scope for this pass; team identity on the "Also flagged" cards is a color dot (`*_team_primary_color`) plus abbreviation instead.
 
@@ -171,8 +165,6 @@ effects: {
 },
 ```
 
-
-
 ## 6. `HomeDashboard` wrapper — SHIPPED
 
 `app/components/HomeDashboard.tsx` pulls layout chrome out of `HomeScreen` (`app/app/(app)/index.tsx`) without touching data fetching, WebSocket wiring, or the branch logic in `resolveHomeBranch`. `HomeScreen` keeps `load`/`renderBody`/`useHomeRealtime`; the wrapper only owns the screen background, header row, scroll container, and pull-to-refresh (`refreshing`/`onRefresh` props — one addition beyond the original sketch, needed because Home's cold-start fetch has to be user-retriggerable). The header row's "Settings" link uses `TextButton`'s muted tone rather than the default accent tone, so it doesn't compete with the CTA below it for attention.
@@ -198,18 +190,14 @@ flowchart TB
 
 
 
-
-
 ## 7. Zone-by-zone mapping
 
 
-| Zone                                                            | Today                                                                                   | Spec treatment                                                                                                                                                               |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Onboarding streaming (`app/app/(app)/onboarding-streaming.tsx`) | Pill chips, `radii.pill`, accent fill when selected (`:104-116`)                        | Larger block variant: unselected = `surface` fill + muted icon; selected = 2px `accentBorder` wrap + `textPrimary` icon. Same data (`STREAMING_SERVICES`), no new fields — still unshipped     |
-| Home (`app/app/(app)/index.tsx`)                                | **Shipped** — `HomeDashboard` wrapper (§6), State 1's numbered field gauge (§3.1) and possession glow (§3.3), outlined reason chip, situation-card "Also flagged" row | See `PLAN.md` §10 for the current State 1 description — this row is historical                                                                        |
-| Settings (`app/app/(app)/settings.tsx`)                         | Grouped `SectionCard`s: Account, Notifications, Streaming, Leagues, Star players, About | Groupings unchanged. Switches get `SWITCH_THUMB`/`SWITCH_TRACK` amber tinting (already partially wired per `settings.tsx:358-360`); no sync slider added — §3.2 explains why |
-
-
+| Zone                                                            | Today                                                                                                                                                                 | Spec treatment                                                                                                                                                                             |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Onboarding streaming (`app/app/(app)/onboarding-streaming.tsx`) | Pill chips, `radii.pill`, accent fill when selected (`:104-116`)                                                                                                      | Larger block variant: unselected = `surface` fill + muted icon; selected = 2px `accentBorder` wrap + `textPrimary` icon. Same data (`STREAMING_SERVICES`), no new fields — still unshipped |
+| Home (`app/app/(app)/index.tsx`)                                | **Shipped** — `HomeDashboard` wrapper (§6), State 1's numbered field gauge (§3.1) and possession glow (§3.3), outlined reason chip, situation-card "Also flagged" row | See `PLAN.md` §10 for the current State 1 description — this row is historical                                                                                                             |
+| Settings (`app/app/(app)/settings.tsx`)                         | Grouped `SectionCard`s: Account, Notifications, Streaming, Leagues, Star players, About                                                                               | Groupings unchanged. Switches get `SWITCH_THUMB`/`SWITCH_TRACK` amber tinting (already partially wired per `settings.tsx:358-360`); no sync slider added — §3.2 explains why               |
 
 
 ## 8. Explicitly not in this pass
@@ -219,8 +207,6 @@ flowchart TB
 - No Tailwind, no web layout, no TV presentation flag.
 - No new dependencies (`expo-blur`, `expo-linear-gradient`, Reanimated) added — each is called out above as a future option, not installed here.
 - No user-facing stream-delay preference invented.
-
-
 
 ## 9. Mockups: current vs. proposed
 
@@ -232,8 +218,9 @@ AI-generated preview renders, not app assets — this app has no `app/assets/` d
 
 Shipped, matching the mockup: 1px `accentBorder` stroke + `panelGlow` on the hero card; accent-colored "NOW ACTIVE" eyebrow; uppercase team nicknames (`COLTS @ TITANS`); the numbered field gauge from §3.1 (real yardline data, always-on red-zone geography, no illustrative placeholder); an outlined (not filled) reason chip; and the "Also flagged" row as situation cards (color-dot team rows + clock/position/down-distance, accent-outlined Switch) rather than the bare matchup+score+Switch cards it originally shipped with. No team logos on either card — a deliberate non-goal, not a gap; team identity is the color dot + abbreviation. See `PLAN.md` §10 for the maintained State 1 description going forward.
 
+### Home, State 2 — SHIPPED (Sept 23, 2026), scoreboard parity with State 1
 
-
+No separate mockup was rendered for this state — the only visual delta from State 1's hero card is the missing reason chip/CTA (State 2 has no active flag to react to). `HomeLiveIdleCard` renders each live stake-game row with the identical `fieldAlignedMatchup` scoreboard from State 1 above (team-color-washed name+score chips split by a divider) plus the numbered field gauge, replacing the plain `AWAY @ HOME` text + small inline score it shipped with originally. See `PLAN.md` §10 for the maintained State 2 description going forward.
 
 ### Settings — proposed only
 
