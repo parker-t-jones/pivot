@@ -74,12 +74,14 @@ No new hue is introduced. `danger` (`#FF5A5A`) and `success` (`#3ECf8E`) are unt
 
 ### 2.3 Amber glow
 
-Direct RN mapping — no gap here:
+Direct RN mapping — no gap here. **Shipped:** `theme.effects.panelGlow` is real, and the live-only
+`flareGlow` alongside it is specified in PIVOT-STAKES-PLAN.md §11.1. Read `app/lib/theme.ts` for the
+actual values; the sketch below is kept for its rationale only.
 
 ```ts
 // sketch — proposed theme.effects, see §5
 panelGlow: {
-  shadowColor: '#FFB020',
+  shadowColor: theme.colors.accent,
   shadowOffset: { width: 0, height: 0 },
   shadowOpacity: 0.15,
   shadowRadius: 20,
@@ -143,6 +145,13 @@ No `lg:` breakpoint, no CSS grid — this is a paragraph, not a component.
 
 ## 5. Sketch: `theme.ts` additions (documentation only — not applied)
 
+**Superseded by PIVOT-STAKES-PLAN.md §11.** Every key below except `canvas` has shipped, and the
+amber ladder (`ember`, `emberSolid`, `brass`, `flare`, `well`, `wellBorder`, `rowDivider`,
+`flareGlow`) was added in U1. The literal values in this sketch are stale — `accentBorder` and
+`accentGlow` shipped as `rgba(245, 160, 24, …)`, derived from the real accent `#F5A018`, not from
+the canvas hex this sketch was drawn against. `app/lib/theme.ts` and its pinning test are the
+source of truth; this block is kept for its rationale only.
+
 Additive only. Nothing here changes an existing hex that `app/lib/theme.test.ts` currently pins (`background`, `surface`, `accent`, etc.) — a real visual pass would update both the token file and its test in the same diff, not sneak a palette shift in under this spec.
 
 ```ts
@@ -162,7 +171,7 @@ type: {
 effects: {
   panelBorderWidth: 1,
   panelGlow: {
-    shadowColor: '#FFB020',
+    shadowColor: theme.colors.accent,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.15,
     shadowRadius: 20,

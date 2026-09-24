@@ -1600,7 +1600,7 @@ gauge — just without the reason chip or CTA
 - Top: amber eyebrow + "First flag in {countdown}" title (not a gray surface hero card)
 - Body: same upcoming-game cards as State 4 — kickoff timestamp, `AWAY | HOME`,
 `Active Players: …` (starter/flex only), shared `UpcomingStakeGameList`
-- Subtle "Test notifications" link
+- "Test notifications" lives in Settings → About, not on Home
 
 
 
