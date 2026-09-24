@@ -46,6 +46,7 @@ const freeUser: DispatchUser = {
     notificationMode: 'all',
     quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
     autoSwitch: false,
+    watchedLeagueIds: [],
   },
   // No token by default — most of these tests predate push and shouldn't inadvertently exercise it.
   // The "push" describe block below builds its own user fixture with a token set.

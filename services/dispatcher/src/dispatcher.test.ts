@@ -47,6 +47,7 @@ const freeUser: DispatchUser = {
     notificationMode: 'all',
     quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
     autoSwitch: false,
+    watchedLeagueIds: [],
   },
   expoPushToken: null, // push isn't this file's concern — see delivery.test.ts's "push" block
 };

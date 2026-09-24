@@ -72,7 +72,7 @@ const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
       },
     },
     async (request) => {
-      const expected = process.env.REVENUECAT_WEBHOOK_SECRET;
+      const expected = process.env['REVENUECAT_WEBHOOK_SECRET'];
       if (!expected) {
         throw new ApiError(503, 'billing_unconfigured', 'RevenueCat webhook secret is not configured.');
       }

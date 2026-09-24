@@ -542,6 +542,7 @@ function makeUser(id: string, expoPushToken: string | null): DispatchUser {
       // leaving it on would make an evening run silently drop everything.
       quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
       autoSwitch: false,
+      watchedLeagueIds: [],
     },
     expoPushToken,
   };
