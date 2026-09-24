@@ -27,12 +27,12 @@ import {
 } from '../../../lib/gameDisplay';
 import {
   applyFlagEventToHome,
-  reconcileHomeWithFlagsCurrent,
   type HomeFlagSlice,
 } from '../../../lib/homeFlagUpdates';
 import {
   filterLiveStakeGames,
   groupLineupByGame,
+  isLiveDisplayPhase,
   nextStakeKickoff,
   resolveHomeBranch,
   stakeTeamAbbreviations,
@@ -78,6 +78,10 @@ interface HomeData {
 }
 
 const EMPTY_TEAM_MAP: PlayerTeamMap = new Map();
+
+/** Silent Home re-fetch while States 1–4 are active. Flag WS only carries flag_event; live slate
+ *  (`/games/live`, week statuses) would otherwise stay frozen at cold-start until pull-to-refresh. */
+const HOME_LIVE_REFRESH_MS = 30_000;
 
 function toFlagSlice(data: HomeData): HomeFlagSlice {
   return {
@@ -156,32 +160,6 @@ export default function HomeScreen() {
     },
     [applyBroadcasts],
   );
-
-  const onReconcileFlags = useCallback(async () => {
-    try {
-      const response = await apiClient.get<FlagsCurrentResponse>('/flags/current');
-      let broadcastGameId: string | null = null;
-      setHomeData((prev) => {
-        if (!prev || !prev.nflState) return prev;
-        const result = reconcileHomeWithFlagsCurrent(toFlagSlice(prev), response);
-        broadcastGameId = result.needsBroadcastFetch ? result.broadcastGameId : null;
-        return { ...prev, ...result.slice };
-      });
-      if (broadcastGameId) {
-        await applyBroadcasts(broadcastGameId);
-      }
-    } catch (error) {
-      console.warn('[home] flag reconcile failed', error);
-    }
-  }, [applyBroadcasts]);
-
-  useHomeRealtime({
-    displayPhase: homeData?.nflState?.display_phase ?? null,
-    hasLeagues: homeData?.hasLeagues ?? false,
-    homeReady: !isLoading && homeData !== null && loadError === null,
-    onFlagEvent,
-    onReconcile: onReconcileFlags,
-  });
 
   /**
    * Section 10 Home cold-start (Sprint 10 Phase 2). Order matters:
@@ -276,7 +254,7 @@ export default function HomeScreen() {
         }
       }
 
-      const upcomingGames = upcomingStakeGameGroups(weekGames, lineups, stakeTeams);
+      const upcomingGames = upcomingStakeGameGroups(weekGames, lineups, stakeTeams, now);
       const lineupGroups = groupLineupByGame(weekGames, lineups, stakeTeams);
       const countdownMs = kickoff ? Math.max(0, kickoff.getTime() - now.getTime()) : 0;
 
@@ -303,6 +281,35 @@ export default function HomeScreen() {
       setLoadError(message);
     }
   }, []);
+
+  const onReconcileHome = useCallback(async () => {
+    try {
+      // Full Home reload — not flags-only. Foreground / WS reconnect must pick up games that
+      // flipped to live while the socket was down; `/flags/current` alone cannot enter State 2.
+      await loadHome(leagues);
+    } catch (error) {
+      console.warn('[home] reconcile failed', error);
+    }
+  }, [loadHome, leagues]);
+
+  useHomeRealtime({
+    displayPhase: homeData?.nflState?.display_phase ?? null,
+    hasLeagues: homeData?.hasLeagues ?? false,
+    homeReady: !isLoading && homeData !== null && loadError === null,
+    onFlagEvent,
+    onReconcile: onReconcileHome,
+  });
+
+  const displayPhase = homeData?.nflState?.display_phase ?? null;
+
+  useEffect(() => {
+    if (leaguesStatus !== 'ready') return;
+    if (displayPhase === null || !isLiveDisplayPhase(displayPhase)) return;
+    const id = setInterval(() => {
+      void loadHome(leagues);
+    }, HOME_LIVE_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [leaguesStatus, displayPhase, leagues, loadHome]);
 
   useEffect(() => {
     if (leaguesStatus !== 'ready') {

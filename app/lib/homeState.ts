@@ -303,17 +303,26 @@ export function nextStakeGameGroups(
 }
 
 /**
- * Every non-final stake game this week with rostered players, chronological by kickoff.
+ * Remaining stake games this week with rostered players, chronological by kickoff.
  * Used by Home State 4 "Upcoming games" — not limited to a single TV window.
+ *
+ * PLAN.md Section 10 State 4: "every remaining stake game this week". Remaining means kickoff
+ * has not passed yet. Status-only filtering (`!== 'final'`) would keep Sunday's slate listed as
+ * "upcoming" on Monday night when ingest has not flipped rows to `final` / `in_progress`.
  */
 export function upcomingStakeGameGroups(
   weekGames: ScheduleGame[],
   lineups: LineupResponse[],
   stakeTeams: Set<string>,
+  now: Date,
 ): LineupGameGroup[] {
-  return groupLineupByGame(weekGames, lineups, stakeTeams).filter(
-    (group) => group.game.status !== 'final',
-  );
+  const nowMs = now.getTime();
+  return groupLineupByGame(weekGames, lineups, stakeTeams).filter((group) => {
+    if (group.game.status === 'final') return false;
+    const kickoffMs = new Date(group.game.scheduled_start).getTime();
+    if (Number.isNaN(kickoffMs)) return false;
+    return kickoffMs >= nowMs;
+  });
 }
 
 export interface LineupGameGroup {

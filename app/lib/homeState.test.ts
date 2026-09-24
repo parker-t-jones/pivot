@@ -367,7 +367,7 @@ describe('findNextStakeGames / formatPlayersActiveInGame', () => {
     ]);
   });
 
-  it('upcomingStakeGameGroups lists every non-final stake game chronologically', () => {
+  it('upcomingStakeGameGroups lists every remaining non-final stake game chronologically', () => {
     const games = [
       scheduleGame('g-late', 'LV', 'DEN', '2026-09-20T20:25:00.000Z'),
       scheduleGame('g-buf', 'BUF', 'NYJ', '2026-09-20T17:00:00.000Z'),
@@ -391,9 +391,37 @@ describe('findNextStakeGames / formatPlayersActiveInGame', () => {
       },
     ];
     const stake = new Set(['BUF', 'PHI', 'DEN', 'MIA']);
+    const now = new Date('2026-09-20T12:00:00.000Z');
     expect(
-      upcomingStakeGameGroups(games, lineups, stake).map((g) => g.game.game_id),
+      upcomingStakeGameGroups(games, lineups, stake, now).map((g) => g.game.game_id),
     ).toEqual(['g-buf', 'g-phi', 'g-late']);
+  });
+
+  it('upcomingStakeGameGroups excludes games whose kickoff has already passed', () => {
+    const games = [
+      scheduleGame('g-sun', 'BUF', 'NYJ', '2026-09-20T17:00:00.000Z'),
+      scheduleGame('g-mnf', 'NYG', 'LAR', '2026-09-22T00:15:00.000Z'),
+      {
+        ...scheduleGame('g-stale-live', 'PHI', 'TEN', '2026-09-20T17:00:00.000Z'),
+        status: 'in_progress',
+      },
+    ];
+    const lineups: LineupResponse[] = [
+      {
+        league_id: 'l1',
+        week: 2,
+        last_synced_at: null,
+        slots: [
+          slotPlayer('p-buf', 'Josh', 'Allen', 'QB', 'BUF'),
+          slotPlayer('p-nyg', 'Malik', 'Nabers', 'WR', 'NYG'),
+          slotPlayer('p-phi', 'Saquon', 'Barkley', 'RB', 'PHI'),
+        ],
+      },
+    ];
+    const stake = new Set(['BUF', 'NYG', 'PHI']);
+    // Monday night, MNF already kicked off — nothing remaining this week.
+    const now = new Date('2026-09-22T00:45:00.000Z');
+    expect(upcomingStakeGameGroups(games, lineups, stake, now)).toEqual([]);
   });
 
   it('excludes bench players from Active Players / upcoming stake groups', () => {
@@ -414,7 +442,12 @@ describe('findNextStakeGames / formatPlayersActiveInGame', () => {
       },
     ];
     const stake = new Set(['BUF', 'TEN']);
-    const groups = upcomingStakeGameGroups(games, lineups, stake);
+    const groups = upcomingStakeGameGroups(
+      games,
+      lineups,
+      stake,
+      new Date('2026-09-19T12:00:00.000Z'),
+    );
     expect(groups.map((g) => g.game.game_id)).toEqual(['g-buf']);
     expect(groups[0]?.players.map((p) => p.last_name).sort()).toEqual(['Allen', 'Cook']);
     expect(listStakePlayersInGame(lineups, 'TEN', 'SEA')).toEqual([]);
