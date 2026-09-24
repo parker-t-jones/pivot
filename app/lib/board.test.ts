@@ -134,6 +134,24 @@ describe('groupWindow', () => {
     expect(groupWindow(new Date('2026-09-22T00:15:00Z'))).toBe('MONDAY'); // Mon 8:15pm ET
   });
 
+  it('never returns a blank label for a real week of kickoffs', () => {
+    // Regression guard. The first cut read the weekday via `formatToParts`, which Hermes tags
+    // `type: 'literal'` rather than `type: 'weekday'`. Every lookup missed, every kickoff got the
+    // label '', and the whole slate collapsed into one unlabelled group on device while these
+    // tests stayed green under Node.
+    const week = [
+      '2026-09-18T00:15:00Z', // Thu night
+      '2026-09-20T13:30:00Z', // Sun morning (international)
+      '2026-09-20T17:00:00Z', // Sun early
+      '2026-09-20T20:25:00Z', // Sun late
+      '2026-09-21T00:20:00Z', // Sun primetime
+      '2026-09-22T00:15:00Z', // Mon night
+    ];
+    const labels = week.map((iso) => groupWindow(new Date(iso)));
+    expect(labels.every((label) => label.length > 0)).toBe(true);
+    expect(new Set(labels).size).toBe(week.length);
+  });
+
   it('groups by Eastern time across the DST transition', () => {
     // Both are 1:00pm ET Sunday kickoffs, but the UTC offset differs (EDT vs. EST) because DST
     // ends Nov 1. A naive UTC-hour split would file these in different windows.

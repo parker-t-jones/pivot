@@ -101,25 +101,31 @@ export type WindowLabel =
   | 'TUESDAY'
   | 'WEDNESDAY';
 
+const ET_TIME_ZONE = 'America/New_York';
+
 /**
  * Broadcast windows are defined in Eastern time no matter where the device is, so a phone in
  * Los Angeles groups Sunday's 1pm ET slate under SUNDAY · EARLY rather than splitting it at
  * 10am local. Displayed kickoff times stay device-local; only the grouping is pinned to ET.
+ *
+ * Deliberately not `Intl.DateTimeFormat.formatToParts`, which is how `rateLimiter.ts` and
+ * `shared/etCalendarDate.ts` read ET on the server: Hermes tags the weekday part `type: 'literal'`
+ * instead of `type: 'weekday'`, so a parts lookup finds nothing on device and collapses the whole
+ * slate into one unlabelled group. Those two callers are server-only, so they're unaffected — but
+ * anything in `app/` has to read ET this way. `toLocaleDateString` / `toLocaleString` honor
+ * `timeZone` identically on Hermes and Node.
  */
-const ET_WEEKDAY_HOUR = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/New_York',
-  weekday: 'long',
-  hour: 'numeric',
-  hour12: false,
-});
-
 function easternWeekdayAndHour(date: Date): { weekday: string; hour: number } {
-  const parts = ET_WEEKDAY_HOUR.formatToParts(date);
-  const weekday = parts.find((part) => part.type === 'weekday')?.value ?? '';
-  const hour = parts.find((part) => part.type === 'hour')?.value ?? '0';
+  const weekday = date.toLocaleDateString('en-US', {
+    timeZone: ET_TIME_ZONE,
+    weekday: 'long',
+  });
+  const hour = Number(
+    date.toLocaleString('en-US', { timeZone: ET_TIME_ZONE, hour: 'numeric', hour12: false }),
+  );
   // Some ICU builds render midnight as "24" under hour12:false — same normalization the
   // dispatcher's quiet-hours check uses.
-  return { weekday, hour: Number(hour) % 24 };
+  return { weekday, hour: Number.isFinite(hour) ? hour % 24 : 0 };
 }
 
 export function groupWindow(kickoff: Date): WindowLabel {
