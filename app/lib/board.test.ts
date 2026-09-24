@@ -3,12 +3,14 @@ import {
   buildBoardRows,
   flattenRows,
   groupWindow,
+  isPregameBranch,
   networkLabel,
   nextKickoff,
   pickFeaturedGame,
   type StakeRef,
 } from './board';
 import type { GameBroadcast } from './gameDisplay';
+import { resolveHomeBranch, type HomeBranch } from './homeState';
 import type { ScheduleGame } from './schedule';
 import { STREAMING_SERVICES } from './streamingServices';
 
@@ -299,6 +301,46 @@ describe('pickFeaturedGame', () => {
   it('returns null once every staked game has kicked off', () => {
     const refs: StakeRef[] = [{ gameId: 'g1', teamId: 'KC' }];
     expect(pickFeaturedGame(rowsFor(refs), new Date('2026-09-23T00:00:00Z'))).toBeNull();
+  });
+});
+
+describe('isPregameBranch', () => {
+  it('covers exactly the two branches that share the pre-game view', () => {
+    const everyBranch: HomeBranch['branch'][] = [
+      'no_leagues',
+      'season_idle',
+      'state1',
+      'state2',
+      'state3',
+      'state4',
+    ];
+    expect(everyBranch.filter(isPregameBranch)).toEqual(['state3', 'state4']);
+  });
+
+  it('is false before a branch has resolved', () => {
+    expect(isPregameBranch(null)).toBe(false);
+  });
+
+  it('routes both real pre-game branches to the same view', () => {
+    // Same inputs apart from the kickoff: one inside the pre-game window, one with nothing
+    // scheduled. `resolveHomeBranch` still distinguishes them; the presentation does not.
+    const base = {
+      hasLeagues: true,
+      displayPhase: 'regular' as const,
+      hasFlags: false,
+      hasLiveStakeGames: false,
+      now: new Date('2026-09-20T12:00:00Z'),
+    };
+    const inWindow = resolveHomeBranch({
+      ...base,
+      nextStakeKickoff: new Date('2026-09-20T17:00:00Z'),
+    });
+    const offDay = resolveHomeBranch({ ...base, nextStakeKickoff: null });
+
+    expect(inWindow.branch).toBe('state3');
+    expect(offDay.branch).toBe('state4');
+    expect(isPregameBranch(inWindow.branch)).toBe(true);
+    expect(isPregameBranch(offDay.branch)).toBe(true);
   });
 });
 

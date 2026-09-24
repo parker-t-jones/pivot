@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,14 +9,24 @@ import { EmptyState } from '../../../components/EmptyState';
 import { ErrorState } from '../../../components/ErrorState';
 import { HomeDashboard } from '../../../components/HomeDashboard';
 import { HomeLiveIdleCard } from '../../../components/HomeLiveIdleCard';
-import { HomeOffDayCard } from '../../../components/HomeOffDayCard';
-import { HomePregameCard } from '../../../components/HomePregameCard';
+import {
+  HomePregameView,
+  type PregameHero,
+} from '../../../components/HomePregameView';
 import { IdleHomeCard } from '../../../components/IdleHomeCard';
 import { LoadingState } from '../../../components/LoadingState';
 import { NowActiveCard } from '../../../components/NowActiveCard';
 import { useSwitching } from '../../../contexts/SwitchingContext';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
 import { ApiRequestError, apiClient } from '../../../lib/apiClient';
+import {
+  buildBoardRows,
+  flattenRows,
+  isPregameBranch,
+  nextKickoff,
+  pickFeaturedGame,
+  type StakeRef,
+} from '../../../lib/board';
 import type { FlagEventPayload } from '../../../lib/flagEventPayload';
 import {
   pickPreferredBroadcast,
@@ -83,6 +93,9 @@ const EMPTY_TEAM_MAP: PlayerTeamMap = new Map();
  *  (`/games/live`, week statuses) would otherwise stay frozen at cold-start until pull-to-refresh. */
 const HOME_LIVE_REFRESH_MS = 30_000;
 
+/** Pre-game countdown tick. Drives display only — it never reloads Home or changes the branch. */
+const PREGAME_TICK_MS = 1_000;
+
 function toFlagSlice(data: HomeData): HomeFlagSlice {
   return {
     hasLeagues: data.hasLeagues,
@@ -132,6 +145,7 @@ export default function HomeScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [homeData, setHomeData] = useState<HomeData | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [pregameNowMs, setPregameNowMs] = useState(() => Date.now());
 
   const applyBroadcasts = useCallback(async (gameId: string) => {
     try {
@@ -394,6 +408,69 @@ export default function HomeScreen() {
     [homeData, switchToGame],
   );
 
+  const isPregame = isPregameBranch(homeData?.branch.branch ?? null);
+
+  /**
+   * Countdown tick, focused-only. `useFocusEffect` tears the interval down on blur, so Home
+   * isn't re-rendering once a second behind another tab. Only `pregameNowMs` changes here —
+   * `loadHome` and the branch are untouched, and still move only on the 30s reload or a
+   * WebSocket reconcile.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      if (!isPregame) return;
+      setPregameNowMs(Date.now());
+      const id = setInterval(() => setPregameNowMs(Date.now()), PREGAME_TICK_MS);
+      return () => clearInterval(id);
+    }, [isPregame]),
+  );
+
+  /** One ref per active starter, so `buildBoardRows` can take real stakes after stakes Phase 1. */
+  const stakeRefs = useMemo<StakeRef[]>(
+    () =>
+      (homeData?.lineupGroups ?? []).flatMap((group) =>
+        group.players.map((player) => ({
+          gameId: group.game.game_id,
+          teamId: player.team_abbreviation,
+        })),
+      ),
+    [homeData?.lineupGroups],
+  );
+
+  // Derived in render rather than in `loadHome`: the board is a pure function of the week's
+  // schedule plus the lineups that callback already fetches.
+  const boardGroups = useMemo(
+    () => buildBoardRows(homeData?.weekGames ?? [], stakeRefs),
+    [homeData?.weekGames, stakeRefs],
+  );
+
+  const { hero: pregameHero, countdownMs: pregameCountdownMs } = useMemo(() => {
+    const rows = flattenRows(boardGroups);
+    const now = new Date(pregameNowMs);
+    const next = nextKickoff(rows, now);
+    const featured = pickFeaturedGame(rows, now);
+    const target = featured ?? next;
+    const countdownMs = next ? Math.max(0, next.kickoff.getTime() - pregameNowMs) : null;
+
+    if (!target) return { hero: null, countdownMs };
+
+    const game = homeData?.weekGames.find((row) => row.game_id === target.gameId) ?? null;
+    if (!game) return { hero: null, countdownMs };
+
+    // Falling back to `nextKickoff` means the user has nothing riding on this game, so it gets
+    // the NEXT KICKOFF eyebrow and no player chips.
+    const hero: PregameHero =
+      featured === null
+        ? { game, players: [], eyebrow: 'NEXT KICKOFF' }
+        : {
+            game,
+            players:
+              homeData?.lineupGroups.find((group) => group.game.game_id === target.gameId)
+                ?.players ?? [],
+          };
+    return { hero, countdownMs };
+  }, [boardGroups, pregameNowMs, homeData?.weekGames, homeData?.lineupGroups]);
+
   function renderBody() {
     if (!homeData) return null;
 
@@ -437,18 +514,16 @@ export default function HomeScreen() {
         ) : null;
       case 'state2':
         return <HomeLiveIdleCard liveGames={homeData.liveStakeGames} />;
+      // One pre-game presentation for both branches (PIVOT-STAKES-PLAN.md §11.3). The branches
+      // stay distinct in `resolveHomeBranch` because they still differ in whether a kickoff is
+      // close enough to arm the live machine.
       case 'state3':
-        return (
-          <HomePregameCard
-            countdownMs={homeData.countdownMs}
-            groups={homeData.lineupGroups}
-            week={homeData.nflState?.week ?? 0}
-          />
-        );
       case 'state4':
         return (
-          <HomeOffDayCard
-            upcomingGames={homeData.upcomingGames}
+          <HomePregameView
+            countdownMs={pregameCountdownMs}
+            groups={boardGroups}
+            hero={pregameHero}
             week={homeData.nflState?.week ?? 0}
           />
         );

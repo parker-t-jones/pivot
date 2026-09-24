@@ -6,8 +6,20 @@
  * the screen calls these in render via `useMemo` over data it already has.
  */
 import { serviceLabel, type GameBroadcast } from './gameDisplay';
+import type { HomeBranch } from './homeState';
 import type { ScheduleGame } from './schedule';
 import { STREAMING_SERVICES, type StreamingService } from './streamingServices';
+
+/**
+ * The two Home branches that share the pre-game presentation (PIVOT-STAKES-PLAN.md §11.3).
+ *
+ * They stay separate in `resolveHomeBranch` — `state3` means a stake kickoff is close enough to
+ * arm the live machine and `state4` means it isn't — but they render identically, so this is the
+ * one place that says so.
+ */
+export function isPregameBranch(branch: HomeBranch['branch'] | null): boolean {
+  return branch === 'state3' || branch === 'state4';
+}
 
 function isStreamingService(service: string): service is StreamingService {
   return (STREAMING_SERVICES as readonly string[]).includes(service);
