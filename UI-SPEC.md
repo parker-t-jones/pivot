@@ -24,15 +24,15 @@ The source brief was written against Tailwind CSS, `backdrop-filter`, `box-shado
 
 ## 1. Palette: what already matches, what's new
 
-The amber/dark palette in the brief is already this app's palette. `PLAN.md`'s Known Issues (the "competing accent colors" entry, resolved pre-Sprint-10) records `#FFB020` as the chosen accent specifically because no NFL team owns it as a primary — this pass doesn't change that decision, it proposes a harder-contrast variant of the same system.
+The amber/dark palette in the brief is already this app's palette. `PLAN.md`'s Known Issues (the "competing accent colors" entry, resolved pre-Sprint-10) recorded `#FFB020` as the chosen accent because no NFL team owns it as a primary; that hue was later warmed to **`#F5A018`** (commit `2f78a67`), which is what `app/lib/theme.ts` pins today. This pass doesn't change that decision.
 
 **Already in** `app/lib/theme.ts`**, unchanged:**
 
 
 | Token                  | Value     |
 | ---------------------- | --------- |
-| `colors.accent`        | `#FFB020` |
-| `colors.accentPressed` | `#E09A10` |
+| `colors.accent`        | `#F5A018` |
+| `colors.accentPressed` | `#D68C10` |
 | `colors.onAccent`      | `#412402` |
 | `colors.textPrimary`   | `#FFFFFF` |
 
@@ -46,12 +46,18 @@ The amber/dark palette in the brief is already this app's palette. `PLAN.md`'s K
 | `colors.surface` (revised)       | `#121417`                  | Today `#1A1A20`                                                                            |
 | `colors.surfaceRaised` (revised) | `#1A1C20`                  | Today `#22222A`                                                                            |
 | `colors.textSecondary` (revised) | `#94A3B8`                  | Today `#9A9AA3` — close enough that this is a nice-to-have, not a fix                      |
-| `colors.accentBorder`            | `rgba(255, 176, 32, 0.25)` | New — glass-panel stroke                                                                   |
-| `colors.accentGlow`              | `rgba(255, 176, 32, 0.15)` | New — shadow color for the "active" glow in §2.3                                           |
-| `colors.dangerMuted`             | `rgba(255, 90, 90, 0.14)`  | Already hand-rolled inline at `app/app/(app)/settings.tsx:816` — this just gives it a name |
+| `colors.accentBorder`            | `rgba(245, 160, 24, 0.25)` | Shipped — glass-panel stroke                                                               |
+| `colors.accentGlow`              | `rgba(245, 160, 24, 0.15)` | Shipped — shadow color for the "active" glow in §2.3                                       |
+| `colors.dangerMuted`             | `rgba(255, 90, 90, 0.14)`  | Already hand-rolled inline at `app/app/(app)/(tabs)/settings.tsx` — this just gives it a name |
 
 
 No new hue is introduced. `danger` (`#FF5A5A`) and `success` (`#3ECf8E`) are untouched.
+
+**Color rules (PIVOT-STAKES-PLAN.md §11.1, shipped with the amber ladder in U1):**
+- Amber never means warning or error. Danger stays `#FF5A5A`, and the field gauge's red zone stays red.
+- Flare (`#FFC94D`) and its glow appear only when something is live. Stillness means nothing is happening.
+- Team colors are the second accent. Use them only as stripes, bands or washes, never as text color on black.
+- **Flare exception:** `flare` is a deliberate, scoped exception to the single-accent rule. It is the accent's highlight, used only while something is live, and never for CTAs, borders or resting states. `accent` (`#F5A018`) stays the single interactive color.
 
 ## 2. Material traits, translated
 
@@ -167,7 +173,7 @@ effects: {
 
 ## 6. `HomeDashboard` wrapper — SHIPPED
 
-`app/components/HomeDashboard.tsx` pulls layout chrome out of `HomeScreen` (`app/app/(app)/index.tsx`) without touching data fetching, WebSocket wiring, or the branch logic in `resolveHomeBranch`. `HomeScreen` keeps `load`/`renderBody`/`useHomeRealtime`; the wrapper only owns the screen background, header row, scroll container, and pull-to-refresh (`refreshing`/`onRefresh` props — one addition beyond the original sketch, needed because Home's cold-start fetch has to be user-retriggerable). The header row's "Settings" link uses `TextButton`'s muted tone rather than the default accent tone, so it doesn't compete with the CTA below it for attention.
+`app/components/HomeDashboard.tsx` pulls layout chrome out of `HomeScreen` (`app/app/(app)/(tabs)/index.tsx`) without touching data fetching, WebSocket wiring, or the branch logic in `resolveHomeBranch`. `HomeScreen` keeps `load`/`renderBody`/`useHomeRealtime`; the wrapper only owns the screen background, header row, scroll container, and pull-to-refresh (`refreshing`/`onRefresh` props — one addition beyond the original sketch, needed because Home's cold-start fetch has to be user-retriggerable). The header row's "Settings" link uses `TextButton`'s muted tone rather than the default accent tone, so it doesn't compete with the CTA below it for attention.
 
 State 1 still composes the existing cards inside it — the wrapper does not become a multi-column command center on phone:
 
@@ -196,8 +202,8 @@ flowchart TB
 | Zone                                                            | Today                                                                                                                                                                 | Spec treatment                                                                                                                                                                             |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Onboarding streaming (`app/app/(app)/onboarding-streaming.tsx`) | Pill chips, `radii.pill`, accent fill when selected (`:104-116`)                                                                                                      | Larger block variant: unselected = `surface` fill + muted icon; selected = 2px `accentBorder` wrap + `textPrimary` icon. Same data (`STREAMING_SERVICES`), no new fields — still unshipped |
-| Home (`app/app/(app)/index.tsx`)                                | **Shipped** — `HomeDashboard` wrapper (§6), State 1's numbered field gauge (§3.1) and possession glow (§3.3), outlined reason chip, situation-card "Also flagged" row | See `PLAN.md` §10 for the current State 1 description — this row is historical                                                                                                             |
-| Settings (`app/app/(app)/settings.tsx`)                         | Grouped `SectionCard`s: Account, Notifications, Streaming, Leagues, Star players, About                                                                               | Groupings unchanged. Switches get `SWITCH_THUMB`/`SWITCH_TRACK` amber tinting (already partially wired per `settings.tsx:358-360`); no sync slider added — §3.2 explains why               |
+| Home (`app/app/(app)/(tabs)/index.tsx`)                          | **Shipped** — `HomeDashboard` wrapper (§6), State 1's numbered field gauge (§3.1) and possession glow (§3.3), outlined reason chip, situation-card "Also flagged" row | See `PLAN.md` §10 for the current State 1 description — this row is historical                                                                                                             |
+| Settings (`app/app/(app)/(tabs)/settings.tsx`)                   | Grouped `SectionCard`s: Account, Notifications, Streaming, Leagues, Star players, About                                                                               | Groupings unchanged. Switches get `SWITCH_THUMB`/`SWITCH_TRACK` amber tinting (already partially wired per `settings.tsx`); no sync slider added — §3.2 explains why                       |
 
 
 ## 8. Explicitly not in this pass
@@ -224,7 +230,7 @@ No separate mockup was rendered for this state — the only visual delta from St
 
 ### Settings — proposed only
 
-No "current" render for Settings: the existing screen (`app/app/(app)/settings.tsx`) already matches this structurally (grouped `SectionCard`s for Account / Notifications / Leagues, etc.), so the delta is the border/glow treatment from §2 and amber-tinted switch tracks, not a layout change worth a side-by-side.
+No "current" render for Settings: the existing screen (`app/app/(app)/(tabs)/settings.tsx`) already matches this structurally (grouped `SectionCard`s for Account / Notifications / Leagues, etc.), so the delta is the border/glow treatment from §2 and amber-tinted switch tracks, not a layout change worth a side-by-side.
 
 ![Settings proposed](docs/ui-spec/settings-proposed.png)
 

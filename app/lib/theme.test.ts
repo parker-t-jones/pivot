@@ -110,4 +110,22 @@ describe('theme', () => {
       elevation: 8,
     });
   });
+
+  it('adds the amber-ladder tokens (PIVOT-STAKES-PLAN.md §11.1)', () => {
+    expect(theme.colors.ember).toBe('rgba(245, 160, 24, 0.05)');
+    expect(theme.colors.emberSolid).toBe('#17120F');
+    expect(theme.colors.brass).toBe('#A07C38');
+    expect(theme.colors.flare).toBe('#FFC94D');
+    expect(theme.colors.well).toBe('#070709');
+    expect(theme.colors.wellBorder).toBe('#1E1E25');
+    expect(theme.colors.rowDivider).toBe('#16161B');
+
+    expect(theme.effects.flareGlow).toEqual({
+      shadowColor: '#FFC94D',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.25,
+      shadowRadius: 24,
+      elevation: 10,
+    });
+  });
 });

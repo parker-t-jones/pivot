@@ -24,6 +24,20 @@ export const theme = {
     accentBorder: 'rgba(245, 160, 24, 0.25)',
     /** Accent at 15% opacity — shadow color for panelGlow below (UI-SPEC.md §2.3). */
     accentGlow: 'rgba(245, 160, 24, 0.15)',
+    /** Translucent accent tint for board rows with a stake (PIVOT-STAKES-PLAN.md §11.1). */
+    ember: 'rgba(245, 160, 24, 0.05)',
+    /** Opaque ember (`ember` over `background`), for surfaces that can't be translucent. */
+    emberSolid: '#17120F',
+    /** Eyebrows, secondary labels, countdowns — never body text (contrast ~5:1). */
+    brass: '#A07C38',
+    /** Live-only highlight: LIVE eyebrow dot, Now Active eyebrow, possession marker. */
+    flare: '#FFC94D',
+    /** Recessed surfaces (board, segmented-control track). */
+    well: '#070709',
+    /** Stroke on wells. */
+    wellBorder: '#1E1E25',
+    /** Hairlines between board rows. */
+    rowDivider: '#16161B',
   },
   spacing: {
     xs: 4,
@@ -58,6 +72,14 @@ export const theme = {
       shadowOpacity: 0.15,
       shadowRadius: 20,
       elevation: 8,
+    },
+    /** Live hero card only — same shape as panelGlow (PIVOT-STAKES-PLAN.md §11.1). */
+    flareGlow: {
+      shadowColor: '#FFC94D',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.25,
+      shadowRadius: 24,
+      elevation: 10,
     },
   },
   type: {
