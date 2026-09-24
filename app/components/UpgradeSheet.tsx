@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from './PrimaryButton';
 import { SecondaryButton } from './SecondaryButton';
+import { Slip } from './Slip';
 import { TextButton } from './TextButton';
 import { useSession } from '../contexts/SessionContext';
 import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
@@ -162,7 +163,15 @@ export function UpgradeSheet() {
         pointerEvents="box-none"
       >
         {/* Stops backdrop-dismiss taps from also passing through the card itself. */}
-        <Pressable onPress={() => {}} style={styles.card}>
+        <Slip
+          onPress={() => {}}
+          style={{
+            maxHeight: '80%',
+            paddingBottom: theme.spacing.lg,
+            paddingTop: theme.spacing.md,
+            width: '100%',
+          }}
+        >
           <View style={styles.cardHeader}>
             <Text style={styles.eyebrow}>PIVOT PRO</Text>
             <TextButton hitArea="padding" label="Close" onPress={closeUpgrade} size="smallStrong" />
@@ -218,7 +227,7 @@ export function UpgradeSheet() {
               {!isPro ? <TextButton label="Not now" onPress={closeUpgrade} tone="muted" /> : null}
             </View>
           </ScrollView>
-        </Pressable>
+        </Slip>
       </View>
     </Modal>
   );
@@ -230,17 +239,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.monoMedium,
     fontSize: theme.type.caption.size,
     marginBottom: theme.spacing.sm,
-  },
-  card: {
-    backgroundColor: theme.colors.background,
-    borderColor: theme.colors.accentBorder,
-    borderRadius: theme.radii.lg,
-    borderWidth: theme.effects.panelBorderWidth,
-    maxHeight: '80%',
-    paddingBottom: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    width: '100%',
-    ...theme.effects.panelGlow,
   },
   cardHeader: {
     alignItems: 'center',
