@@ -524,6 +524,7 @@ export default function HomeScreen() {
             countdownMs={pregameCountdownMs}
             groups={boardGroups}
             hero={pregameHero}
+            lineupGroups={homeData.lineupGroups}
             week={homeData.nflState?.week ?? 0}
           />
         );
