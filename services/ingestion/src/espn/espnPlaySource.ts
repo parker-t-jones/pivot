@@ -6,6 +6,13 @@ import { mapEspnPlay, resolveGameContext, type EspnGameContext } from './mapEspn
 import type { EspnDrive, EspnPlay, EspnSummary } from './espnTypes.js';
 
 const DEFAULT_POLL_INTERVAL_MS = 5000;
+/** First failed poll waits 10s (`5s * 2^1`), then 20s, 40s, then the cap. */
+const BACKOFF_BASE_MS = 5_000;
+const BACKOFF_CAP_MS = 60_000;
+
+function backoffMs(consecutiveFailures: number): number {
+  return Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** consecutiveFailures);
+}
 
 export interface EspnPlaySourceOptions {
   /** ESPN's event id for the game to poll (e.g. `'401873308'`). Resolving our own `gameId` to this
@@ -68,6 +75,7 @@ export class EspnPlaySource implements PlaySource {
   private readonly errorReporter: ErrorReporter;
   private readonly client: Pick<EspnClient, 'getSummary'>;
   private readonly shapeFailureThrottle: ShapeFailureReportThrottle;
+  private consecutiveFailures = 0;
 
   constructor(private readonly options: EspnPlaySourceOptions) {
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
@@ -98,7 +106,7 @@ export class EspnPlaySource implements PlaySource {
         } else {
           console.error(`[espn-ingestion] ${result.reason}, retrying...`);
         }
-        await this.sleep();
+        await this.sleepAfterFailure();
         continue;
       }
 
@@ -116,10 +124,12 @@ export class EspnPlaySource implements PlaySource {
             },
             this.shapeFailureThrottle,
           );
-          await this.sleep();
+          await this.sleepAfterFailure();
           continue;
         }
       }
+
+      this.consecutiveFailures = 0;
 
       const gameIsFinal = isFinal(summary);
       const flattened = flattenPlays(summary);
@@ -145,6 +155,15 @@ export class EspnPlaySource implements PlaySource {
   }
 
   private sleep(): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
+    return this.delay(this.pollIntervalMs);
+  }
+
+  private sleepAfterFailure(): Promise<void> {
+    this.consecutiveFailures += 1;
+    return this.delay(backoffMs(this.consecutiveFailures));
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

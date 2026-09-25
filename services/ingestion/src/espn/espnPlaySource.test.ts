@@ -54,6 +54,21 @@ function makeFakeClient(results: EspnFetchResult<EspnSummary>[]): {
   };
 }
 
+/** Failure retries wait `5s * 2^failures` (10s the first time). Fake timers skip that wait. */
+async function subscribeThroughBackoff(
+  source: EspnPlaySource,
+  handler: (play: PlayEvent) => Promise<void>,
+): Promise<void> {
+  vi.useFakeTimers();
+  try {
+    const done = source.subscribe(handler);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await done;
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
 function makeCapturingReporter(): { reporter: ErrorReporter; calls: unknown[][] } {
   const calls: unknown[][] = [];
   return { reporter: { captureException: (...args) => calls.push(args) }, calls };
@@ -160,7 +175,7 @@ describe('EspnPlaySource', () => {
       client,
       errorReporter: reporter,
     });
-    await source.subscribe(async (play) => {
+    await subscribeThroughBackoff(source, async (play) => {
       seen.push(play.playId);
     });
 
@@ -191,7 +206,7 @@ describe('EspnPlaySource', () => {
       client,
       errorReporter: reporter,
     });
-    await source.subscribe(async () => undefined);
+    await subscribeThroughBackoff(source, async () => undefined);
 
     expect(reporterCalls).toHaveLength(0);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -222,7 +237,7 @@ describe('EspnPlaySource', () => {
       client,
       errorReporter: reporter,
     });
-    await source.subscribe(async (play) => {
+    await subscribeThroughBackoff(source, async (play) => {
       seen.push(play.playId);
     });
 
@@ -319,6 +334,8 @@ describe('EspnPlaySource', () => {
       expect(fetchCalls).toBe(1);
       vi.advanceTimersByTime(1);
       await vi.advanceTimersByTimeAsync(0);
+      expect(fetchCalls).toBe(1);
+      await vi.advanceTimersByTimeAsync(10_000);
       await done;
       expect(fetchCalls).toBe(2);
       expect(seen).toEqual(['p1']);
@@ -328,6 +345,67 @@ describe('EspnPlaySource', () => {
     } finally {
       consoleErrorSpy.mockRestore();
       vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not let one game's failures increase the other game's backoff", async () => {
+    vi.useFakeTimers();
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const calls = { a: 0, b: 0 };
+    const failure: EspnFetchResult<EspnSummary> = {
+      ok: false,
+      kind: 'network_error',
+      reason: 'down',
+    };
+    const success: EspnFetchResult<EspnSummary> = {
+      ok: true,
+      data: summary({
+        drives: {
+          previous: [{ team: { abbreviation: 'IND' }, plays: [{ id: 'p1', type: { id: '5' } }] }],
+        },
+        header: finalHeader(),
+      }),
+    };
+    const sourceA = new EspnPlaySource({
+      eventId: '401873308',
+      pollIntervalMs: 0,
+      client: {
+        async getSummary(): Promise<EspnFetchResult<EspnSummary>> {
+          calls.a += 1;
+          return calls.a < 3 ? failure : success;
+        },
+      },
+    });
+    const sourceB = new EspnPlaySource({
+      eventId: '401873309',
+      pollIntervalMs: 0,
+      client: {
+        async getSummary(): Promise<EspnFetchResult<EspnSummary>> {
+          calls.b += 1;
+          return calls.b < 2 ? failure : success;
+        },
+      },
+    });
+    const doneA = sourceA.subscribe(async () => undefined);
+    const doneB = sourceB.subscribe(async () => undefined);
+
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(calls).toEqual({ a: 1, b: 1 });
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(calls).toEqual({ a: 2, b: 2 });
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(calls.a).toBe(2);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(calls.a).toBe(3);
+      await doneA;
+      await doneB;
+    } finally {
+      consoleErrorSpy.mockRestore();
       vi.useRealTimers();
     }
   });
