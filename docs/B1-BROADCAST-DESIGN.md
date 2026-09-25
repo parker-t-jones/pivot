@@ -171,12 +171,15 @@ CarriageEntry {
   windows?: WindowLabel[]  // default: all
   marketRule: 'any' | 'in_market' | 'out_of_market'
   requiresSubscription: true  // every user-service is paid in this model
+  confirmed: boolean          // expansion uses only confirmed entries (B1.1)
 }
 ```
 
-Starting map. Rows marked **confirm** must not ship as `any` until the
-carriage probe in §3.8 says so. Unconfirmed entries stay out of the map;
-a missing entry means "we do not claim this service carries that network."
+Starting map. Rows with `confirmed: false` are never emitted by
+`expandWatchOptions`. Mark `confirmed: true` only from
+`experiments/carriage-confirm.md` (provider lineup pages) or from the
+high-confidence standalone / Ticket rows. Sling stays empty. Unconfirmed
+entries stay in the map for documentation but do not affect ranking.
 
 | Service | Networks | Windows | Market rule | Confidence |
 |---|---|---|---|---|
@@ -542,29 +545,31 @@ Sunday 4:25 national designation moving from one CBS game to another
 will look identical to ESPN (both already `National`). Ingest cannot
 fix that. See §4.
 
-### 3.6 Where it runs — no backend is deployed
+### 3.6 Where it runs
 
-Facts, from the recon and `PIVOT-STAKES-PLAN.md` §0:
+Facts as of the design pass (2026-09-24 / recon):
 
 - `services/api/src/worker.ts` only syncs lineups, every 5 minutes.
 - `services/ingestion/src/index.ts` re-exports the ESPN play client. It
   does not run a process.
 - The only ESPN → notification path is `experiments/live-sunday-harness.ts`.
-- `B3-HANDOFF.md`: "There is no deployed backend. At all." Local
-  `services/api/.env` points at `127.0.0.1`.
-- Fly `pivot-api.fly.dev` resolves and returns edge 404s. Secrets were
-  **not** listed (`fly auth whoami` failed). Do not treat "no production
-  Supabase" as closed.
+- Local `services/api/.env` pointed at `127.0.0.1`.
 
-So broadcast ingest has nowhere production to live today. That is fine.
-It is not play-by-play. It must not go inside `EspnPlaySource.subscribe()`.
+**Update (2026-09-25):** As of that morning, no Fly app or hosted
+Supabase existed. Parker has since created a Fly account. Deploy config
+(`Dockerfile`, `fly.toml`, `GET /health`, worker start scripts, remote-
+safety seed guards) lives in `docs/D1-DEPLOY-RUNBOOK.md`. D1.1 config is
+in the repo; **no `fly deploy` / secrets yet** — Parker owns hosted
+steps. Broadcast ingest still has no production runner to ride until P0
+(+ hosted DB secrets). It is not play-by-play. It must not go inside
+`EspnPlaySource.subscribe()`.
 
-**Until P0 + a hosted DB**
+**Until P0 + a hosted DB with secrets**
 
 - Rebuild local `game_airings` from a saved or live scoreboard via the
   same mapping module (`pnpm seed:broadcasts` rewritten, §6).
 - The simulator board is the verification surface.
-- No Fly job. No cron on a laptop pretending to be prod.
+- No Fly job for broadcasts yet. Follow D1 for when the app is hosted.
 
 **Once P0's production runner exists**
 
@@ -914,15 +919,15 @@ Thu/Sun/Mon.
 | Phase | Scope | Migration? | Baseline | Verify | Model |
 |---|---|---|---|---|---|
 | **B1.0** | This doc + §9 decisions | No | — | Parker signed off 2026-09-25 | Opus 5, High, MAX (done) |
-| **B1.1** | Pure mapping + carriage + `asNetwork` over networks. Tests against the Week 3 dump. No DB, no UI. Unmapped names log and skip. Ticket-over-MVPD ranking rule as a pure function. | No | `pnpm test` count | New tests: every Week 3 event maps to the recon table; `"XYZ Sports"` is unmapped; MNF → `{espn, abc}`; **ESPN** wins `networkLabel`. Regional Sunday: Ticket preferred over YTTV when both eligible; local route stays second. | Sonnet 5 High |
-| **B1.2** | Rewrite `seed-broadcasts` to run B1.1 over the saved JSON (or `--live`). Still writes **old** `game_broadcasts` as network-only rows (no synthetic Ticket/NFL+). | No | Local board screenshot *before* (TNF = CBS) | Re-seed local Supabase. TNF ATL@GB is Prime. MNF lists ESPN+ABC networks; board label ESPN. `pnpm test`. Simulator board screenshot *after*. | Sonnet 5 High |
+| **B1.1** | Pure mapping + carriage + `asNetwork` over networks. Tests against the Week 3 dump. No DB, no UI. Unmapped names log and skip. Ticket-over-MVPD ranking rule as a pure function. | No | `pnpm test` count | New tests: every Week 3 event maps to the recon table; `"XYZ Sports"` is unmapped; MNF → `{espn, abc}`; **ESPN** wins `networkLabel`. Regional Sunday: Ticket preferred over YTTV when both eligible; local route stays second. | Auto |
+| **B1.2** | Rewrite `seed-broadcasts` to run B1.1 over the saved JSON (or `--live`). Still writes **old** `game_broadcasts` as network-only rows (no synthetic Ticket/NFL+). | No | Local board screenshot *before* (TNF = CBS) | Re-seed local Supabase. TNF ATL@GB is Prime. MNF lists ESPN+ABC networks; board label ESPN. `pnpm test`. Simulator board screenshot *after*. | Auto |
 | **B1.3** | Enum split + presence remap. New CHECKs, `game_airings` table, one-shot remap+delete of old keys, pickers show the new service list (incl. Sling key, no Antenna), `SERVICE_LABELS` / `STREAMING_SERVICE_INFO` / onboarding / Settings. **No API compat shims for old keys. No market preference.** | **Yes** (one SQL: two CHECK functions, new table, presence UPDATE/DELETE) | `pnpm test`; dump `user_app_presence` for the local test user | After remap: a row that was `sunday_ticket=true` is `youtube_tv=true` and `sunday_ticket` is absent. `hulu` → `hulu_live`. OTA keys and `nfl_network` gone. POST of `cbs` or old-meaning `sunday_ticket` → 400. `pnpm typecheck`. On device: Settings list is the new labels; toggling YouTube TV persists; Sunday Ticket is a separate toggle. | Opus 5, High, MAX |
 | **B1.4** | Readers use airings. `rankBroadcasts` + `pickBroadcastSource` take expanded options (incl. Ticket-over-MVPD + second-option label). `GET /games` grows `airings`. `networkLabel` input switches. Drop the compat `game_broadcasts` write. Delivery / harness catalogs updated. Lag table gains new service keys. Empty presence → plain **"On FOX"**, no button. | Optional drop of `game_broadcasts` **in this commit or B1.4b** — prefer a second commit so a revert does not restore the mixed enum | `pnpm test`; Week 3 board screenshot from B1.2 | Same board labels. Switch CTA on TNF with only Prime selected: "Watch on Prime Video." Sunday FOX with Ticket+YTTV: Ticket preferred, YTTV second with in-market label. User with no presence: **"On FOX"**, no CTA. All previous `rankBroadcasts` tests rewritten. | Opus 5, High, MAX |
-| **B1.4b** | Drop `game_broadcasts` + old CHECK if not done in B1.4. Update `database.types.ts`. | **Yes** | `pnpm test` after B1.4 | No remaining `from('game_broadcasts')`. Types regenerate. | Sonnet 5 High |
-| **B1.5** | Deep-link table as `(service, network)`. YTTV search path. **Device-test three query forms** against a real upcoming game: `ATL vs GB`, `Falcons Packers`, `FOX`. Keep the winner. Unverified rows flagged in comments. | No | Device: current `/live` YouTube TV hand-off still works | Device: each of the three `/search/{query}` forms opens YTTV; record which lands closest to the game. Do not claim game-level for anyone else. | Sonnet 5 High |
-| **B1.6** | Ingest writer: scoreboard fetch → map → upsert `game_airings`. Runnable as `pnpm seed:broadcasts --live` and as a function P0 can call. 15-min / daily cadence is a parameter, not a Fly cron. | No | Local DB airings from B1.2 | `--live` against the current week produces the same rows as running the mapper over a freshly saved JSON. Flex delete: hand-edit a fixture to swap FOX→NBC, re-run, FOX row gone. | Opus 5, High, MAX |
-| **B1.7** | Hook B1.6 into P0's runner as a sibling cycle. **Blocked on P0 design + hosted DB.** Parker is running the Fly secrets check separately. | No | P0 runner green on a weekday | One hosted cycle on a Tue/Wed writes `source='espn_scoreboard'` rows that match the local mapping. Fly secrets checked first (recon §1). | Opus 5, High, MAX |
-| **B1.8** | Regional hedge copy (option A) + `experiments/espn-broadcast-market-probe.ts` report. **No user-market / ZIP setting.** | No | Board / Switch screenshots | Hedge appears on Sunday regional FOX/CBS sheets only, not on TNF/SNF/MNF. Ticket users do not see the hedge on the preferred CTA; the second (local) option still carries the in-market label. Probe report committed under `experiments/`. | Sonnet 5 High |
+| **B1.4b** | Drop `game_broadcasts` + old CHECK if not done in B1.4. Update `database.types.ts`. | **Yes** | `pnpm test` after B1.4 | No remaining `from('game_broadcasts')`. Types regenerate. | Auto |
+| **B1.5** | Deep-link table as `(service, network)`. YTTV search path. **Device-test three query forms** against a real upcoming game: `ATL vs GB`, `Falcons Packers`, `FOX`. Keep the winner. Unverified rows flagged in comments. | No | Device: current `/live` YouTube TV hand-off still works | Device: each of the three `/search/{query}` forms opens YTTV; record which lands closest to the game. Do not claim game-level for anyone else. | Auto |
+| **B1.6** | Ingest writer: scoreboard fetch → map → upsert `game_airings`. Runnable as `pnpm seed:broadcasts --live` and as a function P0 can call. 15-min / daily cadence is a parameter, not a Fly cron. | No | Local DB airings from B1.2 | `--live` against the current week produces the same rows as running the mapper over a freshly saved JSON. Flex delete: hand-edit a fixture to swap FOX→NBC, re-run, FOX row gone. | Auto |
+| **B1.7** | Hook B1.6 into P0's runner as a sibling cycle. **Blocked on P0 design + hosted DB.** | No | P0 runner green on a weekday | One hosted cycle on a Tue/Wed writes `source='espn_scoreboard'` rows that match the local mapping. Fly secrets / D1 hosted steps first (recon §1, `docs/D1-DEPLOY-RUNBOOK.md`). | Opus 5, High, MAX |
+| **B1.8** | Regional hedge copy (option A) + `experiments/espn-broadcast-market-probe.ts` report. **No user-market / ZIP setting.** | No | Board / Switch screenshots | Hedge appears on Sunday regional FOX/CBS sheets only, not on TNF/SNF/MNF. Ticket users do not see the hedge on the preferred CTA; the second (local) option still carries the in-market label. Probe report committed under `experiments/`. | Auto |
 
 §9 is decided. B1.1 can start. B1.7 cannot start before P0.
 
@@ -960,8 +965,10 @@ explicit plan change.
    `experiments/espn-broadcast-market-probe.ts` (and save dumps under
    `experiments/logs/`).
 
-7. **Hosted Supabase.** Parker is running the Fly check. B1.1–B1.6 stay
-   local regardless.
+7. **Hosted Supabase / Fly.** As of 2026-09-25 morning, no Fly app or
+   hosted Supabase existed. Parker has since created a Fly account;
+   deploy config is in `docs/D1-DEPLOY-RUNBOOK.md` (D1.1 in repo, no
+   deploy/secrets yet). B1.1–B1.6 stay local regardless.
 
 8. **YTTV search query.** Do not lock the format yet. B1.5 must test
    three forms on a phone against a real upcoming game: `ATL vs GB`,
