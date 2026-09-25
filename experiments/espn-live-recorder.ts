@@ -6,15 +6,17 @@
  *
  * Scoreboard: once at startup, then every 60s.
  * Summaries: every game that is in progress, or within 15 minutes of kickoff, at the same
- * 5s default `EspnPlaySource` uses. `--event <id>` records that game even if it is already
- * final (tonight's dry run). A game stops after ESPN reports it final and one more poll has
- * been saved. The process exits when every game of the day is final, or on SIGINT/SIGTERM
- * after in-flight writes finish.
+ * 5s default `EspnPlaySource` uses. `--per-window <n>` keeps at most n games in each
+ * `groupWindow` kickoff window (earliest kickoff, then lowest event id). `--event <id>`
+ * records that game even if it is already final or outside the cap. A game stops after ESPN
+ * reports it final and one more poll has been saved. The process exits when every game of
+ * the day is final, or on SIGINT/SIGTERM after in-flight writes finish.
  *
  * Each fetch has a 10s timeout. A failure is logged and indexed; it does not stop other games.
  *
  *   npx tsx experiments/espn-live-recorder.ts
- *   npx tsx experiments/espn-live-recorder.ts --event 401872948
+ *   npx tsx experiments/espn-live-recorder.ts --per-window 2
+ *   npx tsx experiments/espn-live-recorder.ts --per-window 1 --event 401872948
  *
  * Files (under experiments/logs/, which is gitignored):
  *   recordings/<YYYY-MM-DD>/<eventId>/<receivedAtISO>.json.gz
@@ -28,6 +30,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { gunzipSync, gzip } from 'node:zlib';
+import { groupWindow } from '@pivot/shared';
 
 const gzipAsync = promisify(gzip);
 
@@ -102,6 +105,8 @@ interface SummaryMeta {
 
 const games = new Map<string, TrackedGame>();
 let forcedEventId: string | null = null;
+/** Null records every game. A number caps each `groupWindow` kickoff window. */
+let perWindow: number | null = null;
 let outputDir = RECORDINGS_ROOT;
 let indexPath = path.join(RECORDINGS_ROOT, 'index.jsonl');
 let stopRequested = false;
@@ -114,6 +119,7 @@ let scoreboardHashLoaded = false;
 let persistChain: Promise<void> = Promise.resolve();
 const inflight = new Set<Promise<void>>();
 let wakeSleep: (() => void) | null = null;
+let selectionAnnounced = false;
 
 function message(error: unknown): string {
   if (error instanceof Error && error.name === 'AbortError') return 'timeout after 10s';
@@ -180,17 +186,114 @@ function installSignals(): void {
 function parseArgs(argv: readonly string[]): void {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] ?? '';
-    if (arg !== '--event') throw new Error(`unknown argument: ${arg}`);
-    const value = argv[i + 1];
-    if (value === undefined || value.startsWith('--')) {
-      throw new Error('--event requires an ESPN event id');
+    if (arg === '--event') {
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith('--')) {
+        throw new Error('--event requires an ESPN event id');
+      }
+      if (!/^[A-Za-z0-9]+$/.test(value)) {
+        throw new Error('--event must be an ESPN event id');
+      }
+      forcedEventId = value;
+      i += 1;
+      continue;
     }
-    if (!/^[A-Za-z0-9]+$/.test(value)) {
-      throw new Error('--event must be an ESPN event id');
+    if (arg === '--per-window') {
+      const value = argv[i + 1];
+      if (value === undefined || !/^[1-9]\d*$/.test(value)) {
+        throw new Error('--per-window requires a positive integer');
+      }
+      perWindow = Number(value);
+      i += 1;
+      continue;
     }
-    forcedEventId = value;
-    i += 1;
+    throw new Error(`unknown argument: ${arg}`);
   }
+}
+
+function compareEventId(a: string, b: string): number {
+  if (/^\d+$/.test(a) && /^\d+$/.test(b) && a.length !== b.length) return a.length - b.length;
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+function windowLabel(game: TrackedGame): string {
+  if (game.kickoffMs === null) return 'unknown';
+  return groupWindow(new Date(game.kickoffMs));
+}
+
+interface RankedGame {
+  game: TrackedGame;
+  windowLabel: string;
+  selected: boolean;
+}
+
+/** Earliest kickoff, then lowest event id, at most `perWindow` games in each window. */
+function rankGames(): RankedGame[] {
+  const groups = new Map<string, TrackedGame[]>();
+  for (const game of games.values()) {
+    const label = windowLabel(game);
+    const list = groups.get(label);
+    if (list) list.push(game);
+    else groups.set(label, [game]);
+  }
+
+  const labels = [...groups.keys()].sort((a, b) => {
+    const amin = Math.min(
+      ...(groups.get(a) ?? []).map((game) => game.kickoffMs ?? Number.POSITIVE_INFINITY),
+    );
+    const bmin = Math.min(
+      ...(groups.get(b) ?? []).map((game) => game.kickoffMs ?? Number.POSITIVE_INFINITY),
+    );
+    if (amin !== bmin) return amin - bmin;
+    return a.localeCompare(b);
+  });
+
+  const ranked: RankedGame[] = [];
+  for (const label of labels) {
+    const list = [...(groups.get(label) ?? [])].sort((a, b) => {
+      const ak = a.kickoffMs ?? Number.POSITIVE_INFINITY;
+      const bk = b.kickoffMs ?? Number.POSITIVE_INFINITY;
+      if (ak !== bk) return ak - bk;
+      return compareEventId(a.eventId, b.eventId);
+    });
+    list.forEach((game, index) => {
+      ranked.push({
+        game,
+        windowLabel: label,
+        selected: perWindow === null || index < perWindow,
+      });
+    });
+  }
+  return ranked;
+}
+
+function isSelected(game: TrackedGame): boolean {
+  if (perWindow === null) return true;
+  if (game.eventId === forcedEventId) return true;
+  return rankGames().some((row) => row.game.eventId === game.eventId && row.selected);
+}
+
+let lastSelectionPrint = '';
+
+function printSelection(): void {
+  if (perWindow === null) return;
+  const lines = [`[recorder] per-window ${perWindow}`];
+  for (const row of rankGames()) {
+    const mark = row.selected ? 'selected' : 'skipped';
+    lines.push(
+      `[recorder] ${mark} ${row.windowLabel}  ${row.game.eventId}  ${row.game.away} @ ${row.game.home}`,
+    );
+  }
+  const forced = rankGames().find((row) => row.game.eventId === forcedEventId);
+  if (forcedEventId !== null && forced && !forced.selected) {
+    lines.push(`[recorder] forcing event ${forcedEventId} (outside the cap, still recorded)`);
+  }
+  const text = lines.join('\n');
+  if (text === lastSelectionPrint) return;
+  lastSelectionPrint = text;
+  console.log(text);
 }
 
 function isGameFinal(game: TrackedGame): boolean {
@@ -201,6 +304,7 @@ function shouldPoll(game: TrackedGame, now: number): boolean {
   if (forcedEventId !== null && game.eventId !== forcedEventId) return false;
   if (game.phase === 'done') return false;
   if (game.phase === 'polling' || game.phase === 'extra') return true;
+  if (!isSelected(game)) return false;
   if (forcedEventId !== null && game.eventId === forcedEventId) return true;
   if (isGameFinal(game)) return false;
   if (game.state === 'in') return true;
@@ -496,6 +600,7 @@ async function pollScoreboard(): Promise<void> {
   console.log(
     `[recorder] scoreboard games=${games.size} bytes=${outcome.body.length} changed=${changed}`,
   );
+  if (selectionAnnounced) printSelection();
 }
 
 function noteFinalProgress(game: TrackedGame, meta: SummaryMeta): void {
@@ -622,6 +727,7 @@ function millisUntilWake(now: number): number {
   let wait = scoreboardNextDue - now;
   for (const game of games.values()) {
     if (forcedEventId !== null && game.eventId !== forcedEventId) continue;
+    if (perWindow !== null && !isSelected(game)) continue;
     if (game.phase === 'done' || game.inFlight) continue;
     if (shouldPoll(game, now)) {
       wait = Math.min(wait, game.nextDue - now);
@@ -658,6 +764,8 @@ function printStartup(now: number): void {
   console.log(`[recorder] games found: ${ordered.length}`);
   for (const game of ordered) console.log(formatGame(game, now));
   if (forcedEventId !== null) console.log(`[recorder] forcing event ${forcedEventId}`);
+  printSelection();
+  selectionAnnounced = true;
 }
 
 async function removeOwnPid(): Promise<void> {

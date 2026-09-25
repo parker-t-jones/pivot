@@ -4,7 +4,7 @@
 # A closed terminal must not stop the recorder: the process is started under nohup,
 # and caffeinate -i keeps the Mac from idle-sleeping while that process is alive.
 #
-#   experiments/recorder.sh start [--event <id>]
+#   experiments/recorder.sh start [--event <id>] [--per-window <n>]
 #   experiments/recorder.sh status
 #   experiments/recorder.sh stop
 
@@ -146,7 +146,7 @@ cmd_stop() {
 }
 
 usage() {
-  echo "usage: experiments/recorder.sh start [--event <id>] | status | stop" >&2
+  echo "usage: experiments/recorder.sh start [--event <id>] [--per-window <n>] | status | stop" >&2
   exit 1
 }
 
