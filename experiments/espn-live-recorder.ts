@@ -160,6 +160,9 @@ function sleep(ms: number): Promise<void> {
 }
 
 function installSignals(): void {
+  // Node resets SIGHUP to "terminate" on startup, which undoes nohup. Ignore it so closing
+  // the terminal does not kill a detached recorder. SIGINT/SIGTERM still flush and exit.
+  process.on('SIGHUP', () => undefined);
   const onSignal = (name: string): void => {
     signalCount += 1;
     if (signalCount >= 2) {
@@ -671,7 +674,6 @@ async function removeOwnPid(): Promise<void> {
 
 async function main(): Promise<void> {
   parseArgs(process.argv.slice(2));
-  installSignals();
 
   const date = newYorkDate(new Date());
   outputDir = path.join(RECORDINGS_ROOT, date);
@@ -702,6 +704,8 @@ async function main(): Promise<void> {
     stopRequested ? '[recorder] stopped (signal)' : '[recorder] stopped (every game final)',
   );
 }
+
+installSignals();
 
 main().catch((error: unknown) => {
   console.error(`[recorder] fatal: ${message(error)}`);
