@@ -10,12 +10,11 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { config as loadEnv } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import type { NflScheduleFile, ScheduleGameRecord } from './fetch-nfl-schedule.js';
+import { bootstrapSeedScript, RemoteSafetyError } from './remoteSafety.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-loadEnv({ path: path.resolve(__dirname, '../services/api/.env'), quiet: true });
 
 const SEASON_YEAR = 2026;
 const SCHEDULE_PATH = path.resolve(__dirname, `../data/nfl-schedule-${SEASON_YEAR}.json`);
@@ -111,8 +110,14 @@ export async function seedSchedule(
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) {
-  seedSchedule().catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+  try {
+    bootstrapSeedScript({ argv: process.argv.slice(2), scriptName: 'seed:schedule' });
+    seedSchedule().catch((error: unknown) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+  } catch (error: unknown) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = error instanceof RemoteSafetyError ? error.exitCode : 1;
+  }
 }

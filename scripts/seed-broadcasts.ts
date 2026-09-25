@@ -33,12 +33,8 @@
  * Usage: `pnpm seed:broadcasts` from the repo root.
  */
 import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-import { config as loadEnv } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-loadEnv({ path: path.resolve(__dirname, '../services/api/.env'), quiet: true });
+import { bootstrapSeedScript, RemoteSafetyError } from './remoteSafety.js';
 
 export interface ServiceTemplate {
   /** Matches the `game_broadcasts.service` / `user_app_presence.service` enum (Section 7). */
@@ -160,8 +156,18 @@ export async function seedBroadcasts(): Promise<void> {
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) {
-  seedBroadcasts().catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+  try {
+    bootstrapSeedScript({
+      argv: process.argv.slice(2),
+      scriptName: 'seed:broadcasts',
+      forbidRemoteAlways: true,
+    });
+    seedBroadcasts().catch((error: unknown) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+  } catch (error: unknown) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = error instanceof RemoteSafetyError ? error.exitCode : 1;
+  }
 }

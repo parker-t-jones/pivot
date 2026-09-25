@@ -11,15 +11,9 @@
  * Usage: `pnpm seed:players` from the repo root.
  */
 import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-import { config as loadEnv } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import type { Position } from '@pivot/shared';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Service role key / URL live in services/api/.env (see services/api/.env.example).
-// `quiet: true` suppresses dotenv's console "tip" ads (added in v17+).
-loadEnv({ path: path.resolve(__dirname, '../services/api/.env'), quiet: true });
+import { bootstrapSeedScript, RemoteSafetyError } from './remoteSafety.js';
 
 const SLEEPER_PLAYERS_URL = 'https://api.sleeper.app/v1/players/nfl';
 
@@ -201,8 +195,14 @@ export async function seedPlayers(): Promise<void> {
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) {
-  seedPlayers().catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+  try {
+    bootstrapSeedScript({ argv: process.argv.slice(2), scriptName: 'seed:players' });
+    seedPlayers().catch((error: unknown) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+  } catch (error: unknown) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = error instanceof RemoteSafetyError ? error.exitCode : 1;
+  }
 }

@@ -2,6 +2,7 @@ node_modules
 dist
 *.tsbuildinfo
 .env
+.env.production
 .expo
 *.log
 .DS_Store

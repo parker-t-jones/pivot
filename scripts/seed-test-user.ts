@@ -29,18 +29,19 @@
  * Override the fixture identity with `SEED_TEST_USER_EMAIL` / `SEED_TEST_USER_PASSWORD`.
  */
 import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-import { config as loadEnv } from 'dotenv';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Position, SlotType } from '@pivot/shared';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-loadEnv({ path: path.resolve(__dirname, '../services/api/.env'), quiet: true });
+import { bootstrapSeedScript, RemoteSafetyError } from './remoteSafety.js';
 
 const SLEEPER_STATE_URL = 'https://api.sleeper.app/v1/state/nfl';
 
-const TEST_EMAIL = process.env['SEED_TEST_USER_EMAIL'] ?? 'test@fantasyfocus.dev';
-const TEST_PASSWORD = process.env['SEED_TEST_USER_PASSWORD'] ?? 'FantasyFocusTest123!';
+// Resolved after bootstrapSeedScript loads dotenv (main only). Defaults keep unit imports safe.
+function testEmail(): string {
+  return process.env['SEED_TEST_USER_EMAIL'] ?? 'test@fantasyfocus.dev';
+}
+function testPassword(): string {
+  return process.env['SEED_TEST_USER_PASSWORD'] ?? 'FantasyFocusTest123!';
+}
 const TEST_LEAGUE_NAME = 'Test League';
 
 interface SleeperNflState {
@@ -155,11 +156,11 @@ export async function seedTestUser(): Promise<void> {
   }
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  console.log(`Looking up existing test user ${TEST_EMAIL}...`);
+  console.log(`Looking up existing test user ${testEmail()}...`);
   const { data: existingUser, error: existingUserError } = await supabase
     .from('users')
     .select('id')
-    .eq('email', TEST_EMAIL)
+    .eq('email', testEmail())
     .maybeSingle();
   if (existingUserError) throw existingUserError;
 
@@ -168,14 +169,14 @@ export async function seedTestUser(): Promise<void> {
     userId = existingUser.id;
     console.log(`Found existing user ${userId}. Resetting password to the fixture value...`);
     const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
-      password: TEST_PASSWORD,
+      password: testPassword(),
     });
     if (updateError) throw updateError;
   } else {
     console.log('No existing user found. Creating one...');
     const { data: created, error: createError } = await supabase.auth.admin.createUser({
-      email: TEST_EMAIL,
-      password: TEST_PASSWORD,
+      email: testEmail(),
+      password: testPassword(),
       email_confirm: true,
     });
     if (createError) throw createError;
@@ -257,15 +258,21 @@ export async function seedTestUser(): Promise<void> {
   if (presenceError) throw presenceError;
 
   console.log('\nDone. Sign in with:');
-  console.log(`  email:    ${TEST_EMAIL}`);
-  console.log(`  password: ${TEST_PASSWORD}`);
+  console.log(`  email:    ${testEmail()}`);
+  console.log(`  password: ${testPassword()}`);
   console.log(`League: ${leagueId} (week ${week}, ${roster.size} roster spots, 1 star player)`);
 }
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) {
-  seedTestUser().catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+  try {
+    bootstrapSeedScript({ argv: process.argv.slice(2), scriptName: 'seed:test-user' });
+    seedTestUser().catch((error: unknown) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+  } catch (error: unknown) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = error instanceof RemoteSafetyError ? error.exitCode : 1;
+  }
 }
