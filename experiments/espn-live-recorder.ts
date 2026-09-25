@@ -10,7 +10,8 @@
  * `groupWindow` kickoff window (earliest kickoff, then lowest event id). `--event <id>`
  * records that game even if it is already final or outside the cap. A game stops after ESPN
  * reports it final and one more poll has been saved. The process exits when every game of
- * the day is final, or on SIGINT/SIGTERM after in-flight writes finish.
+ * the day is final, when the output volume has less than 3 GB free, or on SIGINT/SIGTERM
+ * after in-flight writes finish.
  *
  * Each fetch has a 10s timeout. A failure is logged and indexed; it does not stop other games.
  *
@@ -25,7 +26,16 @@
  */
 
 import { createHash } from 'node:crypto';
-import { appendFile, mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  statfs,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -46,6 +56,7 @@ const SUMMARY_INTERVAL_MS = 5000;
 const SCOREBOARD_INTERVAL_MS = 60_000;
 const FETCH_TIMEOUT_MS = 10_000;
 const KICKOFF_WINDOW_MS = 15 * 60 * 1000;
+const DISK_GUARD_BYTES = 3 * 1024 * 1024 * 1024;
 const SCOREBOARD_EVENT_ID = 'scoreboard';
 const NY_TIME_ZONE = 'America/New_York';
 
@@ -120,6 +131,7 @@ let persistChain: Promise<void> = Promise.resolve();
 const inflight = new Set<Promise<void>>();
 let wakeSleep: (() => void) | null = null;
 let selectionAnnounced = false;
+let diskGuardReason: string | null = null;
 
 function message(error: unknown): string {
   if (error instanceof Error && error.name === 'AbortError') return 'timeout after 10s';
@@ -137,6 +149,33 @@ function newYorkDate(now: Date): string {
 
 function hashBody(body: Buffer): string {
   return createHash('sha256').update(body).digest('hex');
+}
+
+function formatFreeGb(bytes: number): string {
+  const truncated = Math.floor((bytes / (1024 * 1024 * 1024)) * 10) / 10;
+  return truncated.toFixed(1);
+}
+
+/** `RECORDER_FREE_BYTES` overrides statfs so a dry run can trip the guard. */
+async function freeBytes(dir: string): Promise<number> {
+  const override = process.env['RECORDER_FREE_BYTES'];
+  if (override !== undefined && override !== '') {
+    const parsed = Number(override);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  const stats = await statfs(dir);
+  return Number(stats.bavail) * Number(stats.bsize);
+}
+
+async function guardDisk(): Promise<boolean> {
+  if (diskGuardReason !== null) return false;
+  const free = await freeBytes(outputDir);
+  if (free >= DISK_GUARD_BYTES) return true;
+  diskGuardReason = `disk guard: ${formatFreeGb(free)} GB free, recording stopped`;
+  console.log(`[recorder] ${diskGuardReason}`);
+  stopRequested = true;
+  nudge();
+  return false;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -471,7 +510,8 @@ async function latestBodyHash(dir: string): Promise<string | null> {
   return hashBody(raw);
 }
 
-async function writeGzip(dir: string, receivedAt: string, body: Buffer): Promise<void> {
+async function writeGzip(dir: string, receivedAt: string, body: Buffer): Promise<boolean> {
+  if (!(await guardDisk())) return false;
   await mkdir(dir, { recursive: true });
   const gz = await gzipAsync(body);
   const target = path.join(dir, `${receivedAt}.json.gz`);
@@ -481,6 +521,7 @@ async function writeGzip(dir: string, receivedAt: string, body: Buffer): Promise
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
     await writeFile(path.join(dir, `${receivedAt}-${process.pid}.json.gz`), gz, { flag: 'wx' });
   }
+  return true;
 }
 
 function persist(task: () => Promise<void>): Promise<void> {
@@ -494,8 +535,10 @@ function persist(task: () => Promise<void>): Promise<void> {
   return run;
 }
 
-async function appendIndex(line: PollIndexLine): Promise<void> {
+async function appendIndex(line: PollIndexLine): Promise<boolean> {
+  if (!(await guardDisk())) return false;
   await appendFile(indexPath, `${JSON.stringify(line)}\n`, 'utf8');
+  return true;
 }
 
 async function writeStatusFile(): Promise<void> {
@@ -503,6 +546,7 @@ async function writeStatusFile(): Promise<void> {
     outputDir,
     gamesRecording: recordingIds(),
     lastSuccessfulPollAt,
+    stopReason: diskGuardReason,
   };
   const tmp = `${STATUS_FILE}.${process.pid}.tmp`;
   await mkdir(RECORDINGS_ROOT, { recursive: true });
@@ -538,12 +582,15 @@ async function fetchRaw(url: string): Promise<FetchOutcome> {
   }
 }
 
-async function recordPoll(line: PollIndexLine, success: boolean): Promise<void> {
+async function recordPoll(line: PollIndexLine, success: boolean): Promise<boolean> {
+  let wrote = false;
   await persist(async () => {
-    await appendIndex(line);
+    wrote = await appendIndex(line);
+    if (!wrote) return;
     if (success) markSuccess(line.receivedAt);
     await writeStatusFile();
   });
+  return wrote;
 }
 
 async function pollScoreboard(): Promise<void> {
@@ -583,20 +630,24 @@ async function pollScoreboard(): Promise<void> {
   }
   const hash = hashBody(outcome.body);
   const changed = hash !== scoreboardHash;
-  if (changed) await writeGzip(dir, receivedAt, outcome.body);
+  if (changed && !(await writeGzip(dir, receivedAt, outcome.body))) return;
   scoreboardHash = hash;
-  await recordPoll(
-    {
-      receivedAt,
-      eventId: SCOREBOARD_EVENT_ID,
-      kind: 'scoreboard',
-      status: jsonOk ? 'ok' : 'unknown',
-      playCount: 0,
-      bytes: outcome.body.length,
-      changed,
-    },
-    true,
-  );
+  if (
+    !(await recordPoll(
+      {
+        receivedAt,
+        eventId: SCOREBOARD_EVENT_ID,
+        kind: 'scoreboard',
+        status: jsonOk ? 'ok' : 'unknown',
+        playCount: 0,
+        bytes: outcome.body.length,
+        changed,
+      },
+      true,
+    ))
+  ) {
+    return;
+  }
   console.log(
     `[recorder] scoreboard games=${games.size} bytes=${outcome.body.length} changed=${changed}`,
   );
@@ -658,22 +709,26 @@ async function pollSummary(game: TrackedGame): Promise<void> {
   }
   const hash = hashBody(outcome.body);
   const changed = hash !== game.lastHash;
-  if (changed) await writeGzip(dir, receivedAt, outcome.body);
+  if (changed && !(await writeGzip(dir, receivedAt, outcome.body))) return;
   game.lastHash = hash;
   const status = meta?.state ?? 'unknown';
   const playCount = countPlays(meta);
-  await recordPoll(
-    {
-      receivedAt,
-      eventId: game.eventId,
-      kind: 'summary',
-      status,
-      playCount,
-      bytes: outcome.body.length,
-      changed,
-    },
-    true,
-  );
+  if (
+    !(await recordPoll(
+      {
+        receivedAt,
+        eventId: game.eventId,
+        kind: 'summary',
+        status,
+        playCount,
+        bytes: outcome.body.length,
+        changed,
+      },
+      true,
+    ))
+  ) {
+    return;
+  }
   console.log(
     `[recorder] summary ${game.eventId} ${game.away} @ ${game.home} state=${status} plays=${playCount} bytes=${outcome.body.length} changed=${changed}`,
   );
@@ -808,9 +863,9 @@ async function main(): Promise<void> {
   await persistChain;
   await writeStatusFile();
   await removeOwnPid();
-  console.log(
-    stopRequested ? '[recorder] stopped (signal)' : '[recorder] stopped (every game final)',
-  );
+  const exitLabel =
+    diskGuardReason !== null ? 'disk guard' : stopRequested ? 'signal' : 'every game final';
+  console.log(`[recorder] stopped (${exitLabel})`);
 }
 
 installSignals();

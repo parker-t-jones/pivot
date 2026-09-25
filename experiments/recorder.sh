@@ -93,29 +93,62 @@ PY
   echo "log $log"
 }
 
-cmd_status() {
-  if ! is_running; then
-    echo "not running"
-    return 0
-  fi
-
-  local pid
-  pid="$(read_pid)"
-  echo "running (pid $pid)"
-  if [[ ! -f "$STATUS_FILE" ]]; then
-    echo "games recording: unknown"
-    echo "last successful poll: unknown"
-    return 0
-  fi
-
+print_stop_reason() {
+  [[ -f "$STATUS_FILE" ]] || return 0
   node -e '
     const fs = require("fs");
     const status = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    const games = Array.isArray(status.gamesRecording) ? status.gamesRecording.length : 0;
-    const last = status.lastSuccessfulPollAt == null ? "none" : status.lastSuccessfulPollAt;
-    console.log("games recording: " + games);
-    console.log("last successful poll: " + last);
+    if (typeof status.stopReason === "string" && status.stopReason.length > 0) {
+      console.log(status.stopReason);
+    }
   ' "$STATUS_FILE"
+}
+
+print_recording_size() {
+  local dir="$RECORDINGS"
+  if [[ -f "$STATUS_FILE" ]]; then
+    local from_status
+    from_status="$(
+      node -e '
+        const fs = require("fs");
+        const status = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+        if (typeof status.outputDir === "string") process.stdout.write(status.outputDir);
+      ' "$STATUS_FILE"
+    )"
+    if [[ -n "$from_status" && -d "$from_status" ]]; then
+      dir="$from_status"
+    fi
+  fi
+  if [[ -d "$dir" ]]; then
+    local size
+    size="$(du -sh "$dir" | awk '{print $1}')"
+    echo "recordings: ${size}"
+  fi
+}
+
+cmd_status() {
+  if is_running; then
+    local pid
+    pid="$(read_pid)"
+    echo "running (pid $pid)"
+    if [[ ! -f "$STATUS_FILE" ]]; then
+      echo "games recording: unknown"
+      echo "last successful poll: unknown"
+    else
+      node -e '
+        const fs = require("fs");
+        const status = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+        const games = Array.isArray(status.gamesRecording) ? status.gamesRecording.length : 0;
+        const last = status.lastSuccessfulPollAt == null ? "none" : status.lastSuccessfulPollAt;
+        console.log("games recording: " + games);
+        console.log("last successful poll: " + last);
+      ' "$STATUS_FILE"
+    fi
+  else
+    echo "not running"
+  fi
+  print_stop_reason
+  print_recording_size
 }
 
 cmd_stop() {
