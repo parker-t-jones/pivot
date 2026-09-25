@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBoardRows,
+  buildMyCardGames,
   flattenRows,
   groupWindow,
   isPregameBranch,
@@ -10,7 +11,7 @@ import {
   type StakeRef,
 } from './board';
 import type { GameBroadcast } from './gameDisplay';
-import { resolveHomeBranch, type HomeBranch } from './homeState';
+import { resolveHomeBranch, type HomeBranch, type LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
 import { STREAMING_SERVICES } from './streamingServices';
 
@@ -385,5 +386,124 @@ describe('nextKickoff', () => {
   it('returns null when the slate is done', () => {
     expect(nextKickoff(rows, new Date('2026-09-23T00:00:00Z'))).toBeNull();
     expect(nextKickoff([], new Date('2026-09-20T12:00:00Z'))).toBeNull();
+  });
+});
+
+function lineupGroup(
+  g: ScheduleGame,
+  players: LineupGameGroup['players'],
+): LineupGameGroup {
+  return { game: g, players };
+}
+
+function starter(
+  playerId: string,
+  first: string,
+  last: string,
+  position: string,
+  team: string,
+): LineupGameGroup['players'][number] {
+  return {
+    player_id: playerId,
+    first_name: first,
+    last_name: last,
+    position,
+    team_abbreviation: team,
+  };
+}
+
+describe('buildMyCardGames', () => {
+  const early = game('g2', '2026-09-21T17:00:00Z', {
+    home_team: 'MIA',
+    away_team: 'KC',
+    broadcasts: [broadcast('abc')],
+  });
+  const late = game('g10', '2026-09-21T17:00:00Z', {
+    home_team: 'BUF',
+    away_team: 'LAC',
+    broadcasts: [broadcast('cbs')],
+  });
+  const night = game('g1', '2026-09-20T00:15:00Z', {
+    home_team: 'GB',
+    away_team: 'ATL',
+    status: 'final',
+    broadcasts: [broadcast('amazon_prime')],
+  });
+  const noStake = game('g9', '2026-09-21T20:25:00Z', {
+    home_team: 'DAL',
+    away_team: 'BAL',
+    broadcasts: [broadcast('nbc')],
+  });
+
+  const slate = [early, late, night, noStake];
+  const stakeRefs: StakeRef[] = [
+    { gameId: 'g2', teamId: 'KC' },
+    { gameId: 'g10', teamId: 'BUF' },
+    { gameId: 'g1', teamId: 'ATL' },
+  ];
+  const rows = flattenRows(buildBoardRows(slate, stakeRefs));
+
+  it('excludes games with no rostered starters', () => {
+    const groups = [
+      lineupGroup(early, [starter('p1', 'Rashee', 'Rice', 'WR', 'KC')]),
+      lineupGroup(night, [starter('p2', 'Bijan', 'Robinson', 'RB', 'ATL')]),
+    ];
+    const card = buildMyCardGames(rows, groups);
+    expect(card.map((g) => g.gameId)).toEqual(['g1', 'g2']);
+    expect(card.find((g) => g.gameId === 'g9')).toBeUndefined();
+    expect(card.find((g) => g.gameId === 'g10')).toBeUndefined();
+  });
+
+  it('orders by kickoff, then by game id on a tie', () => {
+    // early and late share 17:00Z; g10 must sort after g2 despite arriving later in the slate.
+    const groups = [
+      lineupGroup(late, [starter('p3', 'Josh', 'Allen', 'QB', 'BUF')]),
+      lineupGroup(early, [starter('p1', 'Rashee', 'Rice', 'WR', 'KC')]),
+      lineupGroup(night, [starter('p2', 'Bijan', 'Robinson', 'RB', 'ATL')]),
+    ];
+    expect(buildMyCardGames(rows, groups).map((g) => g.gameId)).toEqual(['g1', 'g2', 'g10']);
+  });
+
+  it('keeps a final game so MY CARD still lists games already played this week', () => {
+    const groups = [lineupGroup(night, [starter('p2', 'Bijan', 'Robinson', 'RB', 'ATL')])];
+    const card = buildMyCardGames(rows, groups);
+    expect(card).toHaveLength(1);
+    expect(card[0]?.status).toBe('final');
+    expect(card[0]?.network).toBe('PRIME');
+  });
+
+  it('carries FANTASY lines and board header fields from the matching row', () => {
+    const groups = [
+      lineupGroup(early, [
+        starter('p1', 'Rashee', 'Rice', 'WR', 'KC'),
+        starter('p4', 'Travis', 'Kelce', 'TE', 'KC'),
+      ]),
+    ];
+    const [card] = buildMyCardGames(rows, groups);
+    expect(card).toMatchObject({
+      gameId: 'g2',
+      awayTeamId: 'KC',
+      homeTeamId: 'MIA',
+      network: 'ABC',
+      stripeSide: 'away',
+      stakes: [
+        { tag: 'FANTASY', label: 'Rashee Rice', value: 'WR' },
+        { tag: 'FANTASY', label: 'Travis Kelce', value: 'TE' },
+      ],
+    });
+  });
+
+  it('matches lineupGroups dedupe: one line per player_id, not once per league', () => {
+    // groupLineupByGame / listStakePlayersInGame already collapse the same player across
+    // leagues by player_id. buildMyCardGames consumes that shape as-is.
+    const groups = [
+      lineupGroup(early, [starter('p1', 'Rashee', 'Rice', 'WR', 'KC')]),
+    ];
+    const [card] = buildMyCardGames(rows, groups);
+    expect(card?.stakes).toEqual([{ tag: 'FANTASY', label: 'Rashee Rice', value: 'WR' }]);
+  });
+
+  it('returns [] when the lineup is empty', () => {
+    expect(buildMyCardGames(rows, [])).toEqual([]);
   });
 });

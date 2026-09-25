@@ -6,7 +6,7 @@
  * the screen calls these in render via `useMemo` over data it already has.
  */
 import { serviceLabel, type GameBroadcast } from './gameDisplay';
-import type { HomeBranch } from './homeState';
+import type { HomeBranch, LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
 import { STREAMING_SERVICES, type StreamingService } from './streamingServices';
 
@@ -285,4 +285,75 @@ export function nextKickoff(rows: BoardRowData[], now: Date): BoardRowData | nul
     }
   }
   return soonest;
+}
+
+/** One stake line on MY CARD. Fantasy-only in U3; PROP / SPREAD / … arrive with stakes Phase 1+. */
+export interface MyCardStakeLine {
+  tag: 'FANTASY';
+  label: string;
+  value: string;
+}
+
+/**
+ * One stake game on MY CARD (PIVOT-STAKES-PLAN.md §11.3). Header fields mirror the board row so
+ * the segment doesn't re-derive network / stripe; `stakes` are the per-player FANTASY lines.
+ */
+export interface MyCardGame {
+  gameId: string;
+  kickoff: Date;
+  status: ScheduleGame['status'];
+  awayTeamId: string;
+  homeTeamId: string;
+  awayTeamColor: string;
+  homeTeamColor: string;
+  network: string | null;
+  stripeSide: 'home' | 'away' | null;
+  stakes: MyCardStakeLine[];
+}
+
+/**
+ * The week's games the user has at least one rostered starter in, kickoff-ascending
+ * (game-id tie-break). Includes finals so MY CARD keeps a record of games already played.
+ *
+ * Player lines come from `lineupGroups` as-is. That helper already dedupes by `player_id` across
+ * leagues (`groupLineupByGame` / `listStakePlayersInGame`), so a player on two rosters appears
+ * once per game — not once per league.
+ */
+export function buildMyCardGames(
+  rows: BoardRowData[],
+  lineupGroups: LineupGameGroup[],
+): MyCardGame[] {
+  if (lineupGroups.length === 0) return [];
+
+  const playersByGame = new Map(
+    lineupGroups.map((group) => [group.game.game_id, group.players] as const),
+  );
+
+  const games: MyCardGame[] = [];
+  for (const row of rows) {
+    const players = playersByGame.get(row.gameId);
+    if (!players || players.length === 0) continue;
+
+    games.push({
+      gameId: row.gameId,
+      kickoff: row.kickoff,
+      status: row.status,
+      awayTeamId: row.awayTeamId,
+      homeTeamId: row.homeTeamId,
+      awayTeamColor: row.awayTeamColor,
+      homeTeamColor: row.homeTeamColor,
+      network: row.network,
+      stripeSide: row.stripeSide,
+      stakes: players.map((player) => ({
+        tag: 'FANTASY',
+        label: `${player.first_name} ${player.last_name}`.trim(),
+        value: player.position,
+      })),
+    });
+  }
+
+  return games.sort((a, b) => {
+    const byKickoff = a.kickoff.getTime() - b.kickoff.getTime();
+    return byKickoff !== 0 ? byKickoff : compareGameIds(a.gameId, b.gameId);
+  });
 }
