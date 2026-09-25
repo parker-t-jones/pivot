@@ -139,7 +139,9 @@ export function bootstrapSeedScript(options: BootstrapSeedScriptOptions): Script
   assertDbTargetAllowed({
     supabaseUrl: process.env['SUPABASE_URL'],
     allowRemote: cli.allowRemote,
-    forbidRemoteAlways: options.forbidRemoteAlways,
+    ...(options.forbidRemoteAlways !== undefined
+      ? { forbidRemoteAlways: options.forbidRemoteAlways }
+      : {}),
     scriptName: options.scriptName,
   });
   return cli;
