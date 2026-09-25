@@ -1,0 +1,32 @@
+# Build context hygiene — keep secrets and non-API trees out of the image.
+.git
+.github
+.cursor
+.expo
+.vscode
+
+.env
+.env.*
+**/.env
+**/.env.*
+
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+
+app/
+docs/
+experiments/logs/
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.webp
+
+coverage
+*.log
+.DS_Store
+
+# Local / device env and seeds Parker may keep at the repo root
+.env.production
+supabase/.temp
