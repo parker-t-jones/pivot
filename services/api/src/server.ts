@@ -20,6 +20,7 @@ import servicesPlugin from './plugins/services.js';
 import billingRoutes from './routes/billing.js';
 import flagsRoutes from './routes/flags.js';
 import gamesRoutes from './routes/games.js';
+import healthRoutes from './routes/health.js';
 import leaguesRoutes from './routes/leagues.js';
 import meRoutes from './routes/me.js';
 import playersRoutes from './routes/players.js';
@@ -81,6 +82,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
   });
   await fastify.register(websocketPlugin);
 
+  await fastify.register(healthRoutes);
   await fastify.register(sleeperRoutes);
   await fastify.register(leaguesRoutes);
   await fastify.register(playersRoutes);
