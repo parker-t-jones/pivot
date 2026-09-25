@@ -1,0 +1,519 @@
+{
+  "season": {
+    "type": 2,
+    "year": 2026
+  },
+  "week": {
+    "number": 3
+  },
+  "events": [
+    {
+      "id": "401872948",
+      "shortName": "ATL @ GB",
+      "date": "2026-09-25T00:15Z",
+      "competitions": [
+        {
+          "broadcast": "Prime Video",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "Prime Video"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "Streaming"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "Prime Video"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872953",
+      "shortName": "LAC @ BUF",
+      "date": "2026-09-27T17:00Z",
+      "competitions": [
+        {
+          "broadcast": "FOX",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "FOX"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "FOX"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872949",
+      "shortName": "CAR @ CLE",
+      "date": "2026-09-27T17:00Z",
+      "competitions": [
+        {
+          "broadcast": "FOX",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "FOX"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "FOX"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872954",
+      "shortName": "NYJ @ DET",
+      "date": "2026-09-27T17:00Z",
+      "competitions": [
+        {
+          "broadcast": "FOX",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "FOX"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "FOX"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872951",
+      "shortName": "HOU @ IND",
+      "date": "2026-09-27T17:00Z",
+      "competitions": [
+        {
+          "broadcast": "CBS",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "CBS"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "CBS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872952",
+      "shortName": "KC @ MIA",
+      "date": "2026-09-27T17:00Z",
+      "competitions": [
+        {
+          "broadcast": "CBS",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "CBS"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "CBS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872956",
+      "shortName": "TEN @ NYG",
+      "date": "2026-09-27T17:00Z",
+      "competitions": [
+        {
+          "broadcast": "CBS",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "CBS"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "CBS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872950",
+      "shortName": "CIN @ PIT",
+      "date": "2026-09-27T17:00Z",
+      "competitions": [
+        {
+          "broadcast": "CBS",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "CBS"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "CBS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872955",
+      "shortName": "SEA @ WSH",
+      "date": "2026-09-27T17:00Z",
+      "competitions": [
+        {
+          "broadcast": "FOX",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "FOX"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "FOX"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872957",
+      "shortName": "NE @ JAX",
+      "date": "2026-09-27T17:00Z",
+      "competitions": [
+        {
+          "broadcast": "CBS",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "CBS"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "CBS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872958",
+      "shortName": "ARI @ SF",
+      "date": "2026-09-27T20:05Z",
+      "competitions": [
+        {
+          "broadcast": "FOX",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "FOX"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "FOX"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872959",
+      "shortName": "MIN @ TB",
+      "date": "2026-09-27T20:05Z",
+      "competitions": [
+        {
+          "broadcast": "FOX",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "FOX"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "FOX"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872960",
+      "shortName": "BAL VS DAL",
+      "date": "2026-09-27T20:25Z",
+      "competitions": [
+        {
+          "broadcast": "CBS",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "CBS"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "CBS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872961",
+      "shortName": "LV @ NO",
+      "date": "2026-09-27T20:25Z",
+      "competitions": [
+        {
+          "broadcast": "CBS",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "CBS"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "CBS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872962",
+      "shortName": "LAR @ DEN",
+      "date": "2026-09-28T00:20Z",
+      "competitions": [
+        {
+          "broadcast": "NBC",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "NBC"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "NBC"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872963",
+      "shortName": "PHI @ CHI",
+      "date": "2026-09-29T00:15Z",
+      "competitions": [
+        {
+          "broadcast": "ESPN/ABC",
+          "broadcasts": [
+            {
+              "market": "national",
+              "names": [
+                "ESPN",
+                "ABC"
+              ]
+            }
+          ],
+          "geoBroadcasts": [
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "ESPN"
+              }
+            },
+            {
+              "type": {
+                "shortName": "TV"
+              },
+              "market": {
+                "type": "National"
+              },
+              "media": {
+                "shortName": "ABC"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
