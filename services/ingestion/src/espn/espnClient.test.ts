@@ -72,6 +72,7 @@ describe('espnClient', () => {
       expect(result.ok).toBe(true);
       expect(fetchMock).toHaveBeenCalledWith(
         'https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401873308',
+        { signal: expect.any(AbortSignal) },
       );
       if (result.ok) {
         expect(result.data.header?.week).toBe(4);
@@ -144,6 +145,7 @@ describe('espnClient', () => {
       expect(result.ok).toBe(true);
       expect(fetchMock).toHaveBeenCalledWith(
         'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
+        { signal: expect.any(AbortSignal) },
       );
       if (result.ok) {
         expect(result.data.events?.[0]?.id).toBe('401873308');

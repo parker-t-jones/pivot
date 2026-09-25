@@ -265,4 +265,70 @@ describe('EspnPlaySource', () => {
   it('reports the id "espn"', () => {
     expect(new EspnPlaySource({ eventId: '1' }).id).toBe('espn');
   });
+
+  it('aborts a fetch that never resolves and then polls again', async () => {
+    vi.useFakeTimers();
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let fetchCalls = 0;
+    vi.stubGlobal('fetch', (_url: string, init?: { signal?: AbortSignal }) => {
+      fetchCalls += 1;
+      if (fetchCalls === 1) {
+        return new Promise<Response>((_resolve, reject) => {
+          const abort = (): void => {
+            const error = new Error('The operation was aborted');
+            error.name = 'AbortError';
+            reject(error);
+          };
+          if (init?.signal?.aborted) abort();
+          else init?.signal?.addEventListener('abort', abort, { once: true });
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          header: {
+            week: 4,
+            competitions: [
+              {
+                competitors: [
+                  { id: '11', homeAway: 'home', team: { abbreviation: 'IND' } },
+                  { id: '8', homeAway: 'away', team: { abbreviation: 'DET' } },
+                ],
+                status: { type: { state: 'post', completed: true } },
+              },
+            ],
+          },
+          drives: {
+            previous: [{ team: { abbreviation: 'IND' }, plays: [{ id: 'p1', type: { id: '5' } }] }],
+          },
+        }),
+      } as Response);
+    });
+
+    const seen: string[] = [];
+    const source = new EspnPlaySource({ eventId: '401873308', pollIntervalMs: 0 });
+    const done = source.subscribe(async (play) => {
+      seen.push(play.playId);
+    });
+
+    try {
+      expect(fetchCalls).toBe(1);
+      vi.advanceTimersByTime(7_999);
+      expect(fetchCalls).toBe(1);
+      vi.advanceTimersByTime(1);
+      await vi.advanceTimersByTimeAsync(0);
+      await done;
+      expect(fetchCalls).toBe(2);
+      expect(seen).toEqual(['p1']);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('ESPN request aborted after 8000ms'),
+      );
+    } finally {
+      consoleErrorSpy.mockRestore();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
 });

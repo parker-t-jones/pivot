@@ -10,6 +10,9 @@ const BASE_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl';
 const SCOREBOARD_URL = `${BASE_URL}/scoreboard`;
 const summaryUrl = (eventId: string): string => `${BASE_URL}/summary?event=${eventId}`;
 
+/** Bounds one ESPN `fetch`. An abort is a `network_error`; the poll loop retries. */
+const FETCH_TIMEOUT_MS = 8_000;
+
 export type EspnFetchFailureKind = 'network_error' | 'http_error' | 'invalid_shape';
 
 export interface EspnFetchFailure {
@@ -37,15 +40,22 @@ export type EspnFetchResult<T> = { ok: true; data: T } | EspnFetchFailure;
  * should never take down the loop.
  */
 async function fetchAndValidate<T>(url: string, schema: z.ZodType<T>): Promise<EspnFetchResult<T>> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetch(url);
+    response = await fetch(url, { signal: controller.signal });
   } catch (error) {
+    const aborted = controller.signal.aborted;
     return {
       ok: false,
       kind: 'network_error',
-      reason: `ESPN request threw: ${error instanceof Error ? error.message : String(error)}`,
+      reason: aborted
+        ? `ESPN request aborted after ${FETCH_TIMEOUT_MS}ms`
+        : `ESPN request threw: ${error instanceof Error ? error.message : String(error)}`,
     };
+  } finally {
+    clearTimeout(timer);
   }
 
   if (!response.ok) {
