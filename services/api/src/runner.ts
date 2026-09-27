@@ -21,11 +21,12 @@ import {
   tcpLineupCache,
   tcpRateLimit,
   tcpRealtimeBus,
+  tcpRedisUrl,
   tcpResumptionOpenStore,
   tcpSeenPlays,
 } from './runner/tcpRedis.js';
 
-const redisUrls = [env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_TCP_URL, process.env['REDIS_URL']];
+const redisUrls = [env.REDIS_URL, env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_TCP_URL];
 const blocked = guardRunnerStart({
   cacheDriver: env.CACHE_DRIVER,
   nodeEnv: process.env['NODE_ENV'],
@@ -37,9 +38,9 @@ if (blocked !== null) {
   process.exit(1);
 }
 
-const tcpUrl = env.UPSTASH_REDIS_TCP_URL;
+const tcpUrl = tcpRedisUrl(env);
 if (tcpUrl === undefined) {
-  console.error('[runner] UPSTASH_REDIS_TCP_URL is required');
+  console.error('[runner] REDIS_URL or UPSTASH_REDIS_TCP_URL is required');
   process.exit(1);
 }
 

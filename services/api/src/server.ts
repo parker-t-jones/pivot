@@ -13,6 +13,7 @@ import {
 } from 'fastify-type-provider-zod';
 import { createLineupCacheProvider, type LineupCacheProvider } from './cache/index.js';
 import type { Env } from './env.js';
+import { createTcpRedis, tcpGameState } from './runner/tcpRedis.js';
 import { apiErrorHandler } from './lib/errors.js';
 import { createSupabaseServiceClient, type SupabaseServiceClient } from './lib/supabase.js';
 import authPlugin from './plugins/auth.js';
@@ -42,13 +43,20 @@ function redisConfig(env: Env) {
     upstashRestUrl: env.UPSTASH_REDIS_REST_URL,
     upstashRestToken: env.UPSTASH_REDIS_REST_TOKEN,
     upstashTcpUrl: env.UPSTASH_REDIS_TCP_URL,
+    redisUrl: env.REDIS_URL,
   };
 }
 
 export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
   const supabase = deps.supabase ?? createSupabaseServiceClient(env);
-  const lineupCache = deps.lineupCache ?? createLineupCacheProvider(env);
-  const gameStateStore = deps.gameStateStore ?? createGameStateStore(redisConfig(env));
+  const commandRedis =
+    env.CACHE_DRIVER === 'redis' && env.REDIS_URL && (!deps.lineupCache || !deps.gameStateStore)
+      ? createTcpRedis(env.REDIS_URL, 'api')
+      : undefined;
+  const lineupCache = deps.lineupCache ?? createLineupCacheProvider(env, commandRedis);
+  const gameStateStore =
+    deps.gameStateStore ??
+    (commandRedis ? tcpGameState(commandRedis) : createGameStateStore(redisConfig(env)));
 
   // Only own (and later close) the realtime channels' network connection if the caller didn't
   // inject its own subscriber (tests inject an `InMemoryRealtimeBus`, which needs no teardown).
@@ -96,6 +104,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
 
   fastify.addHook('onClose', async () => {
     await closeRealtimeChannels();
+    if (commandRedis) await commandRedis.quit();
   });
 
   return fastify;

@@ -32,13 +32,21 @@ end
 return 0
 `;
 
-/** TCP client for Docker Redis. Do not point `@upstash/redis` at this port. */
-export function createTcpRedis(url: string): Redis {
+/** TCP client for Docker Redis or Upstash's TCP URL. Do not point `@upstash/redis` at this port. */
+export function createTcpRedis(url: string, label = 'runner'): Redis {
   const redis = new Redis(url, { maxRetriesPerRequest: 2 });
   redis.on('error', (error: Error) => {
-    console.error(`[runner] redis: ${error.message}`);
+    console.error(`[${label}] redis: ${error.message}`);
   });
   return redis;
+}
+
+/** `REDIS_URL` when set, otherwise the Upstash TCP URL used by the REST fallback. */
+export function tcpRedisUrl(env: {
+  REDIS_URL?: string | undefined;
+  UPSTASH_REDIS_TCP_URL?: string | undefined;
+}): string | undefined {
+  return env.REDIS_URL ?? env.UPSTASH_REDIS_TCP_URL;
 }
 
 export function tcpLeaderLock(redis: Redis): LeaderLockRedis {

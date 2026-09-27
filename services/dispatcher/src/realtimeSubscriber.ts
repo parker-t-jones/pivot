@@ -29,7 +29,10 @@ export class RedisRealtimeSubscriber implements RealtimeSubscriber {
   private readonly patternHandlers = new Map<string, Set<RealtimeMessageHandler>>();
 
   constructor(tcpUrl: string) {
-    this.redis = new IORedis(tcpUrl);
+    this.redis = new IORedis(tcpUrl, { maxRetriesPerRequest: 2 });
+    this.redis.on('error', (error: Error) => {
+      console.error(`[realtime] redis: ${error.message}`);
+    });
     this.redis.on('message', (channel: string, raw: string) => {
       for (const handler of this.exactHandlers.get(channel) ?? []) {
         handler(channel, safeParse(raw));
@@ -58,7 +61,10 @@ export class RedisRealtimeSubscriber implements RealtimeSubscriber {
     };
   }
 
-  async psubscribe(pattern: string, handler: RealtimeMessageHandler): Promise<RealtimeSubscription> {
+  async psubscribe(
+    pattern: string,
+    handler: RealtimeMessageHandler,
+  ): Promise<RealtimeSubscription> {
     const handlers = this.patternHandlers.get(pattern) ?? new Set();
     handlers.add(handler);
     this.patternHandlers.set(pattern, handlers);
@@ -90,6 +96,8 @@ export interface RealtimeChannelsConfig {
   /** The `rediss://` TCP connection string (Upstash dashboard) — required only for `psubscribe`, since
    *  the REST client can't hold a persistent subscription (decision #1). */
   upstashTcpUrl?: string | undefined;
+  /** When set, publish and subscribe both use ioredis on this URL. REST credentials are not required. */
+  redisUrl?: string | undefined;
 }
 
 export interface RealtimeChannels {
@@ -100,9 +108,29 @@ export interface RealtimeChannels {
 }
 
 /** Mirrors `createGameStateStore` (Phase 1): `cacheDriver` selects the implementation at boot. The
- *  in-memory pair is a single `InMemoryRealtimeBus` instance serving both roles (see its docstring);
- *  the Redis pair is two distinct clients (REST for publish, TCP for subscribe). */
+ *  in-memory pair is a single `InMemoryRealtimeBus` instance serving both roles (see its docstring).
+ *  `redisUrl` uses ioredis for both publish and subscribe. Without it, the Redis pair is REST for
+ *  publish and TCP for subscribe. */
 export function createRealtimeChannels(config: RealtimeChannelsConfig): RealtimeChannels {
+  if (config.cacheDriver === 'redis' && config.redisUrl) {
+    const publisher = new IORedis(config.redisUrl, { maxRetriesPerRequest: 2 });
+    publisher.on('error', (error: Error) => {
+      console.error(`[realtime] redis: ${error.message}`);
+    });
+    const subscriber = new RedisRealtimeSubscriber(config.redisUrl);
+    return {
+      bus: {
+        async publish(channel: string, message: unknown): Promise<void> {
+          await publisher.publish(channel, JSON.stringify(message));
+        },
+      },
+      subscriber,
+      close: async () => {
+        await subscriber.close();
+        await publisher.quit();
+      },
+    };
+  }
   if (config.cacheDriver === 'redis') {
     if (!config.upstashRestUrl || !config.upstashRestToken || !config.upstashTcpUrl) {
       throw new Error(

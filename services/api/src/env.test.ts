@@ -23,6 +23,22 @@ describe('PUSH_DRIVER env', () => {
     expect(createPushNotifier({ pushDriver: env.PUSH_DRIVER }).id).toBe('none');
   });
 
+  it('accepts CACHE_DRIVER=redis with REDIS_URL and no Upstash REST credentials', async () => {
+    const { loadAndValidateEnv } = await loadEnvModule();
+    const env = loadAndValidateEnv({
+      ...required,
+      CACHE_DRIVER: 'redis',
+      REDIS_URL: 'redis://127.0.0.1:6379',
+    });
+    expect(env.REDIS_URL).toBe('redis://127.0.0.1:6379');
+    expect(env.UPSTASH_REDIS_REST_URL).toBeUndefined();
+  });
+
+  it('still requires Upstash REST and TCP when CACHE_DRIVER=redis and REDIS_URL is unset', async () => {
+    const { loadAndValidateEnv } = await loadEnvModule();
+    expect(() => loadAndValidateEnv({ ...required, CACHE_DRIVER: 'redis' })).toThrow(/REDIS_URL/);
+  });
+
   it('accepts expo without EXPO_ACCESS_TOKEN and still constructs ExpoPushNotifier', async () => {
     const { loadAndValidateEnv } = await loadEnvModule();
     const env = loadAndValidateEnv({ ...required, PUSH_DRIVER: 'expo' });

@@ -2,6 +2,17 @@ import { createLineupCacheProvider } from './cache/index.js';
 import { env } from './env.js';
 import { createSupabaseServiceClient } from './lib/supabase.js';
 import { runWorkerCycle, type WorkerCycleState } from './lib/worker-cycle.js';
+import { productionRedisRefusal } from './runner/redisGuard.js';
+
+const blocked = productionRedisRefusal({
+  urls: [env.REDIS_URL, env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_TCP_URL],
+  productionHost: process.env['PRODUCTION_REDIS_HOST'],
+  nodeEnv: process.env['NODE_ENV'],
+});
+if (blocked !== null) {
+  console.error(`[worker] ${blocked}`);
+  process.exit(1);
+}
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
 

@@ -13,6 +13,12 @@ const envSchema = z.object({
   // Phase 4 / sprint decision #1: the `/v1/realtime` fan-out subscriber needs a persistent TCP
   // connection (`ioredis`) — the REST client above can't hold a `(P)SUBSCRIBE`.
   UPSTASH_REDIS_TCP_URL: z.string().optional(),
+  /**
+   * ioredis URL for API, worker, and runner (`redis://` locally, Upstash `rediss://` in production).
+   * When set, those processes use this TCP client. The Upstash REST URL and token are only the
+   * fallback when this is unset.
+   */
+  REDIS_URL: z.string().min(1).optional(),
   /** Authorization value RevenueCat sends on webhook POSTs (optional until billing is wired). */
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
   /** `none` logs and does not hit the network. `expo` constructs `ExpoPushNotifier`. */
@@ -29,14 +35,14 @@ export function loadAndValidateEnv(source: NodeJS.ProcessEnv = process.env): Env
   if (!parsed.success) {
     throw new Error(`Invalid environment configuration:\n${parsed.error.message}`);
   }
-  if (parsed.data.CACHE_DRIVER === 'redis') {
+  if (parsed.data.CACHE_DRIVER === 'redis' && !parsed.data.REDIS_URL) {
     if (
       !parsed.data.UPSTASH_REDIS_REST_URL ||
       !parsed.data.UPSTASH_REDIS_REST_TOKEN ||
       !parsed.data.UPSTASH_REDIS_TCP_URL
     ) {
       throw new Error(
-        'CACHE_DRIVER=redis requires UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, and UPSTASH_REDIS_TCP_URL.',
+        'CACHE_DRIVER=redis requires REDIS_URL, or UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, and UPSTASH_REDIS_TCP_URL.',
       );
     }
   }

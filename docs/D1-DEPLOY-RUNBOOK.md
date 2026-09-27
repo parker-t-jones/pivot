@@ -76,10 +76,11 @@ Config loaders: `services/api/src/env.ts` (zod + dotenv), `services/ingestion/sr
 | `SUPABASE_URL` | API, worker, seeds | **Required** | Hosted Supabase → Settings → API → Project URL | No (URL) | Must be `https://<ref>.supabase.co`, not `127.0.0.1`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | API, worker, seeds | **Required** | Supabase → API → `service_role` | **Yes** | Bypasses RLS. Never ship to the app. |
 | `SUPABASE_JWT_SECRET` | API | **Required** (zod) | Supabase → Settings → API → JWT Secret (legacy) | **Yes** | HS256 fallback; ES256/RS256 verified via JWKS at `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`. |
-| `CACHE_DRIVER` | API, worker | Optional (default `memory`) | Set explicitly | No | Prod: **`redis`**. |
-| `UPSTASH_REDIS_REST_URL` | API, worker | Required if redis | Upstash console | **Yes** | |
-| `UPSTASH_REDIS_REST_TOKEN` | API, worker | Required if redis | Upstash console | **Yes** | |
-| `UPSTASH_REDIS_TCP_URL` | API | Required if redis | Upstash → Connect → `rediss://…` (ioredis) | **Yes** | Needed for `/v1/realtime` `(P)SUBSCRIBE`. Worker lineup cache only needs REST. |
+| `CACHE_DRIVER` | API, worker, runner | Optional (default `memory`) | Set explicitly | No | Prod: **`redis`**. |
+| `REDIS_URL` | API, worker, runner | Required in prod | Upstash → Connect → TCP `rediss://…` (ioredis) | **Yes** | **Set this on all three processes.** Local Docker is `redis://127.0.0.1:6379`. Game state, lineup cache, the flag queue, and pub/sub use this ioredis client. |
+| `UPSTASH_REDIS_REST_URL` | API, worker | Fallback if `REDIS_URL` unset | Upstash console | **Yes** | Not used when `REDIS_URL` is set. Do not point the REST client at the Docker port. |
+| `UPSTASH_REDIS_REST_TOKEN` | API, worker | Fallback if `REDIS_URL` unset | Upstash console | **Yes** | |
+| `UPSTASH_REDIS_TCP_URL` | API, runner | Fallback if `REDIS_URL` unset | Upstash → Connect → `rediss://…` | **Yes** | Subscribe fallback. Production should set `REDIS_URL` to this same TCP URL instead. |
 | `REVENUECAT_WEBHOOK_SECRET` | API | Optional until billing | You generate; paste into RevenueCat webhook auth | **Yes** | Also read via raw `process.env` in `billing.ts` (not only through `env.ts`). Without it, `POST /billing/revenuecat` → 503. |
 | `PORT` | API | Optional (default 3000) | Fly sets `PORT` / internal port | No | Listen is already `0.0.0.0`. |
 | `GIT_SHA` | API (`GET /health`) | Optional (default `"dev"`) | Docker `ARG` / `fly deploy --build-arg` | No | Returned as `version` in `/health`. |
@@ -87,7 +88,7 @@ Config loaders: `services/api/src/env.ts` (zod + dotenv), `services/ingestion/sr
 
 ### Runtime — worker process
 
-Same as API for Supabase + cache REST vars. Worker does **not** open the TCP realtime subscriber, but sharing one secrets set is fine.
+Same Supabase vars as the API. The worker writes the lineup cache. In production it uses `REDIS_URL` (ioredis), the same TCP URL as the API and the runner, so a lineup written by the worker is visible to the runner. It does not open the realtime subscriber. The Upstash REST client is only the fallback when `REDIS_URL` is unset.
 
 ### Client — Expo / EAS (`EXPO_PUBLIC_*`)
 

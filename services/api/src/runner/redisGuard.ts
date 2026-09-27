@@ -1,7 +1,7 @@
 /**
  * Local dev must not take `pivot:runner:leader` on the production Upstash host.
- * The repo has no `REDIS_URL`. Callers pass `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_TCP_URL`,
- * and `REDIS_URL` when that name is set. `PRODUCTION_REDIS_HOST` is the hostname only.
+ * Callers pass `REDIS_URL`, `UPSTASH_REDIS_REST_URL`, and `UPSTASH_REDIS_TCP_URL`.
+ * `PRODUCTION_REDIS_HOST` is the hostname only.
  */
 
 export function hostnameOf(url: string): string | null {
