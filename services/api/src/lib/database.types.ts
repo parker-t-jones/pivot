@@ -42,6 +42,11 @@ export type Database = {
           game_id: string
           id: string
           priority_score: number
+          push_attempts: number
+          push_last_error: string | null
+          push_next_attempt_at: string | null
+          push_payload: Json | null
+          push_status: string | null
           reasons: Json
           triggering_play_id: string | null
           user_action: string | null
@@ -54,6 +59,11 @@ export type Database = {
           game_id: string
           id?: string
           priority_score: number
+          push_attempts?: number
+          push_last_error?: string | null
+          push_next_attempt_at?: string | null
+          push_payload?: Json | null
+          push_status?: string | null
           reasons: Json
           triggering_play_id?: string | null
           user_action?: string | null
@@ -66,6 +76,11 @@ export type Database = {
           game_id?: string
           id?: string
           priority_score?: number
+          push_attempts?: number
+          push_last_error?: string | null
+          push_next_attempt_at?: string | null
+          push_payload?: Json | null
+          push_status?: string | null
           reasons?: Json
           triggering_play_id?: string | null
           user_action?: string | null

@@ -23,7 +23,8 @@ import {
   type NotificationGameContext,
 } from './notificationContent.js';
 import type { GameStateStore } from './providers/gameStateStore.js';
-import type { PushNotifier } from './pushNotifier.js';
+import type { PushNotifier, PushPayload } from './pushNotifier.js';
+import { PUSH_RETRY_BACKOFF_MS } from './pushRetry.js';
 import type { RateLimitStore } from './rateLimiter.js';
 import { realtimeUserChannel, type RealtimeBus } from './realtimeBus.js';
 import { buildGameSummary, type GameSummary } from './gameSummary.js';
@@ -289,6 +290,7 @@ export async function deliverFlagEvent(
   // or when the user is already looking at this game (`in_app_indicator` — a push would be noise on
   // top of what's already on screen).
   if (user.expoPushToken && action.type !== 'in_app_indicator') {
+    let payload: PushPayload | null = null;
     try {
       const notificationPlayers = await resolveNotificationPlayers(deps, event, players);
       const game: NotificationGameContext = {
@@ -297,25 +299,54 @@ export async function deliverFlagEvent(
         timeRemainingSec: gameState?.timeRemainingSec ?? 0,
       };
 
-      const result = await deps.pushNotifier.sendPush({
+      payload = {
         token: user.expoPushToken,
         title: notificationTitle(event, game, notificationPlayers),
         body: notificationBody(event, game),
         data: envelope.payload,
-      });
+      };
+      const result = await deps.pushNotifier.sendPush(payload);
 
-      if (!result.success) {
+      if (result.success) {
+        await deps.persistence.recordPushOutcome({ id: persisted.id, status: 'sent' });
+      } else {
         console.error('[push] delivery failed', {
           userId: event.userId,
           eventId: event.id,
           error: result.error,
         });
+        await deps.persistence.recordPushOutcome({
+          id: persisted.id,
+          status: 'pending',
+          userId: event.userId,
+          deliveredAt,
+          attempts: 1,
+          lastError: result.error ?? 'push failed',
+          nextAttemptAt: deliveredAt + PUSH_RETRY_BACKOFF_MS,
+          payload,
+        });
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       console.error('[push] delivery threw', {
         userId: event.userId,
         eventId: event.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
+      });
+      await deps.persistence.recordPushOutcome({
+        id: persisted.id,
+        status: 'pending',
+        userId: event.userId,
+        deliveredAt,
+        attempts: 1,
+        lastError: message,
+        nextAttemptAt: deliveredAt + PUSH_RETRY_BACKOFF_MS,
+        payload: payload ?? {
+          token: user.expoPushToken,
+          title: '',
+          body: '',
+          data: envelope.payload,
+        },
       });
     }
   }

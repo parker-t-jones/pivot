@@ -1,6 +1,7 @@
 import { defaultClock, type Clock } from '@pivot/engine';
 import type { DeliveryDeps } from './delivery.js';
 import { deliverFlagEvent } from './delivery.js';
+import { retryPendingPushes } from './pushRetry.js';
 import { isStillRelevant } from './isStillRelevant.js';
 import type { FlagEventQueue } from './queue.js';
 import type { GameStateStore } from './providers/gameStateStore.js';
@@ -86,6 +87,8 @@ export async function runDispatcherTick(deps: DispatcherTickDeps): Promise<Dispa
     await deps.queue.remove(item);
     if (outcome === 'inserted') result.delivered += 1;
   }
+
+  await retryPendingPushes(deps.delivery, now);
 
   return result;
 }

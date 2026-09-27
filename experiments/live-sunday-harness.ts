@@ -97,8 +97,10 @@ import {
   type DispatchUser,
   type DispatcherTickDeps,
   type FlagEventPersistence,
+  type PendingPushRetry,
   type PersistFlagEventResult,
   type PersistedFlagEventInput,
+  type PushOutcome,
   type PushNotifier,
   type PushPayload,
   type PushResult,
@@ -323,6 +325,12 @@ class LoggingFlagEventPersistence implements FlagEventPersistence {
     const id = randomUUID();
     this.onPersist({ ...input, id });
     return { inserted: true, id };
+  }
+
+  async recordPushOutcome(_outcome: PushOutcome): Promise<void> {}
+
+  async duePushRetries(_now: number): Promise<PendingPushRetry[]> {
+    return [];
   }
 }
 

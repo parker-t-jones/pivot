@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { FlagEvent, FlagState } from '@pivot/shared';
 import { InMemoryBroadcastCatalog } from './broadcastLag.js';
 import {
@@ -9,6 +9,7 @@ import {
   type DispatchUser,
 } from './catalogs.js';
 import { deliverFlagEvent, type DeliveryDeps, type FlagEventEnvelope } from './delivery.js';
+import { PUSH_RELEVANCE_MS, PUSH_RETRY_BACKOFF_MS, retryPendingPushes } from './pushRetry.js';
 import { notificationBody, notificationTitle } from './notificationContent.js';
 import { CapturingPushNotifier } from './pushNotifier.js';
 import { InMemoryGameStateStore } from './providers/inMemoryGameStateStore.js';
@@ -629,6 +630,63 @@ describe('deliverFlagEvent', () => {
 
       expect(persistence.records).toHaveLength(1);
       expect(bus.published).toHaveLength(1);
+    });
+
+    it('retries a failed push once the row exists and delivers exactly one', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      let delivered = 0;
+      pushNotifier.sendPush = async (payload) => {
+        pushNotifier.calls.push(payload);
+        if (pushNotifier.calls.length === 1) return { success: false, error: 'network down' };
+        delivered += 1;
+        return { success: true };
+      };
+      const persistence = new InMemoryFlagEventPersistence();
+      const gameStateStore = new InMemoryGameStateStore();
+      await setPossessingHomeGameState(gameStateStore);
+      const deps = buildDeps({
+        pushNotifier,
+        persistence,
+        gameStateStore,
+        gameCatalog: gameCatalogWithNames(),
+      });
+      const deliveredAt = 1_700_000_061_500;
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+
+      const rowId = persistence.records[0]?.id;
+      expect(persistence.records).toHaveLength(1);
+      expect(rowId).toBeDefined();
+      expect(persistence.pushOutcome(rowId ?? '')?.status).toBe('pending');
+      expect(pushNotifier.calls).toHaveLength(1);
+
+      await retryPendingPushes(deps, deliveredAt + PUSH_RETRY_BACKOFF_MS);
+
+      expect(pushNotifier.calls).toHaveLength(2);
+      expect(delivered).toBe(1);
+      expect(persistence.records).toHaveLength(1);
+      expect(persistence.pushOutcome(rowId ?? '')?.status).toBe('sent');
+    });
+
+    it('drops a failed push once the reveal is two minutes old', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      pushNotifier.nextResult = { success: false, error: 'network down' };
+      const persistence = new InMemoryFlagEventPersistence();
+      const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      const deps = buildDeps({ pushNotifier, persistence });
+      const deliveredAt = 1_700_000_061_500;
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+      const rowId = persistence.records[0]?.id ?? '';
+
+      await retryPendingPushes(deps, deliveredAt + PUSH_RELEVANCE_MS);
+
+      expect(pushNotifier.calls).toHaveLength(1);
+      expect(persistence.pushOutcome(rowId)?.status).toBe('dropped');
+      expect(logs.mock.calls.map((call) => call[0])).toContain(
+        `[push] retry dropped u1 ${rowId}: reveal older than 2m`,
+      );
+      logs.mockRestore();
     });
 
     it('a thrown push rejection is caught and does not propagate out of deliverFlagEvent', async () => {

@@ -148,8 +148,52 @@ export interface StoredFlagEvent extends PersistedFlagEventInput {
 
 export type PersistFlagEventResult = { inserted: true; id: string } | { inserted: false };
 
+/** The push body saved with a failed send so a later retry does not rebuild it. */
+export interface PushRetryPayload {
+  token: string;
+  title: string;
+  body: string;
+  data: unknown;
+}
+
+export interface PendingPushRetry {
+  id: string;
+  userId: string;
+  /** Clock at the `flag_events` insert. Age is measured from here. */
+  deliveredAt: number;
+  attempts: number;
+  payload: PushRetryPayload;
+}
+
+export type PushOutcome =
+  | { id: string; status: 'sent' }
+  | { id: string; status: 'dropped' }
+  | {
+      id: string;
+      status: 'pending';
+      userId: string;
+      deliveredAt: number;
+      attempts: number;
+      lastError: string;
+      nextAttemptAt: number;
+      payload: PushRetryPayload;
+    };
+
+export interface PushOutcomeRecord {
+  id: string;
+  status: 'sent' | 'pending' | 'dropped';
+  userId: string;
+  deliveredAt: number;
+  attempts: number;
+  lastError: string | null;
+  nextAttemptAt: number | null;
+  payload: PushRetryPayload | null;
+}
+
 export interface FlagEventPersistence {
   persistFlagEvent(input: PersistedFlagEventInput): Promise<PersistFlagEventResult>;
+  recordPushOutcome(outcome: PushOutcome): Promise<void>;
+  duePushRetries(now: number): Promise<PendingPushRetry[]>;
 }
 
 function dedupeKey(input: PersistedFlagEventInput): string | null {
@@ -161,6 +205,7 @@ function dedupeKey(input: PersistedFlagEventInput): string | null {
 export class InMemoryFlagEventPersistence implements FlagEventPersistence {
   readonly records: StoredFlagEvent[] = [];
   private readonly seenKeys = new Set<string>();
+  private readonly pushOutcomes = new Map<string, PushOutcomeRecord>();
 
   async persistFlagEvent(input: PersistedFlagEventInput): Promise<PersistFlagEventResult> {
     const key = dedupeKey(input);
@@ -169,5 +214,53 @@ export class InMemoryFlagEventPersistence implements FlagEventPersistence {
     const id = randomUUID();
     this.records.push({ ...input, id });
     return { inserted: true, id };
+  }
+
+  pushOutcome(id: string): PushOutcomeRecord | undefined {
+    return this.pushOutcomes.get(id);
+  }
+
+  async recordPushOutcome(outcome: PushOutcome): Promise<void> {
+    const existing = this.pushOutcomes.get(outcome.id);
+    if (outcome.status === 'sent' || outcome.status === 'dropped') {
+      this.pushOutcomes.set(outcome.id, {
+        id: outcome.id,
+        status: outcome.status,
+        userId: existing?.userId ?? '',
+        deliveredAt: existing?.deliveredAt ?? 0,
+        attempts: existing?.attempts ?? 0,
+        lastError: existing?.lastError ?? null,
+        nextAttemptAt: null,
+        payload: existing?.payload ?? null,
+      });
+      return;
+    }
+    this.pushOutcomes.set(outcome.id, {
+      id: outcome.id,
+      status: 'pending',
+      userId: outcome.userId,
+      deliveredAt: outcome.deliveredAt,
+      attempts: outcome.attempts,
+      lastError: outcome.lastError,
+      nextAttemptAt: outcome.nextAttemptAt,
+      payload: outcome.payload,
+    });
+  }
+
+  async duePushRetries(now: number): Promise<PendingPushRetry[]> {
+    const due: PendingPushRetry[] = [];
+    for (const item of this.pushOutcomes.values()) {
+      if (item.status !== 'pending' || item.nextAttemptAt === null || item.payload === null)
+        continue;
+      if (item.nextAttemptAt > now) continue;
+      due.push({
+        id: item.id,
+        userId: item.userId,
+        deliveredAt: item.deliveredAt,
+        attempts: item.attempts,
+        payload: item.payload,
+      });
+    }
+    return due;
   }
 }
