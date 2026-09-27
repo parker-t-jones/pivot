@@ -1,7 +1,12 @@
 /**
- * Seeds `public.game_broadcasts` with fixture routing data (Sprint 7 Phase 4) so the Section 9
- * `GET /games/:id/broadcasts` endpoint, the dispatcher's `recommended_source`/`deep_link_url`
- * enrichment, and the Home-screen "Switch" CTA all have something real to resolve against in dev.
+ * Seeds `public.game_broadcasts` from a real ESPN scoreboard (B1.2, docs/B1-BROADCAST-DESIGN.md §6):
+ * saved JSON (default `experiments/logs/espn-scoreboard-2026-week3.json`) or `--live` for the
+ * current week. Airings go through the same `parseEspnAirings` as production and join to `games` on
+ * `sportradar_id = 'seed:espn:' || event.id`.
+ *
+ * Temporary compatibility dump: writes the old `game_broadcasts` shape as *networks only* — no
+ * synthetic `sunday_ticket` / `nfl_plus` rows. `espn` has no row in the `is_valid_streaming_service`
+ * CHECK, so ESPN airings are skipped and logged (MNF shows ABC until `game_airings` lands in B1.3).
  *
  * ⚠️ TWO DIFFERENT THINGS ARE AT STAKE HERE, and only the first is verified. Keep them apart.
  *
@@ -27,13 +32,19 @@
  * `cbs` and `nbc` are knowingly left broken: cbssports.com serves an AASA with zero app entries and
  * nbcsports.com serves none at all, so no URL on those domains can open an app. Not fixable by us.
  *
- * Idempotent: deletes existing rows for the seeded games, then re-inserts (there is no
- * UNIQUE(game_id, service) constraint to upsert on, and this sprint adds no migrations).
+ * Idempotent: deletes existing rows for the games on the scoreboard, then re-inserts (there is no
+ * UNIQUE(game_id, service) constraint to upsert on).
  *
- * Usage: `pnpm seed:broadcasts` from the repo root.
+ * Usage (repo root):
+ *   pnpm seed:broadcasts                     # saved Week 3 scoreboard
+ *   pnpm seed:broadcasts -- path/to/scoreboard.json
+ *   pnpm seed:broadcasts -- --live           # fetch ESPN's current week
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { parseEspnAirings, type EspnBroadcastEvent, type UnmappedMediaLog } from '@pivot/shared';
 import { bootstrapSeedScript, RemoteSafetyError } from './remoteSafety.js';
 
 export interface ServiceTemplate {
@@ -80,89 +91,179 @@ export interface BroadcastSeedRow {
   requires_subscription: boolean;
 }
 
-/** Free over-the-air network assigned round-robin across games (real matchups aren't known without
- *  Sportradar schedule data — Sprint 2, deferred). Fixture-only. */
-const OTA_ROTATION = ['fox', 'cbs', 'nbc', 'abc'] as const;
+const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
+export const DEFAULT_SCOREBOARD_PATH = path.resolve(
+  scriptsDir,
+  '../experiments/logs/espn-scoreboard-2026-week3.json',
+);
+export const ESPN_LIVE_SCOREBOARD_URL =
+  'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 
-export function otaForIndex(gameIndex: number): string {
-  return OTA_ROTATION[gameIndex % OTA_ROTATION.length] ?? 'fox';
+export type ScoreboardSource = { kind: 'file'; path: string } | { kind: 'live' };
+
+/** Positional scoreboard path or `--live` (remote-safety flags are already stripped). */
+export function parseScoreboardSource(rest: readonly string[]): ScoreboardSource {
+  let live = false;
+  let file: string | undefined;
+  for (const arg of rest) {
+    if (arg === '--live') {
+      live = true;
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      throw new Error(`seed:broadcasts: unknown flag ${arg}`);
+    }
+    if (file !== undefined) {
+      throw new Error('seed:broadcasts: pass at most one scoreboard path.');
+    }
+    file = arg;
+  }
+  if (live && file !== undefined) {
+    throw new Error('seed:broadcasts: --live and a scoreboard path are mutually exclusive.');
+  }
+  return live ? { kind: 'live' } : { kind: 'file', path: path.resolve(file ?? DEFAULT_SCOREBOARD_PATH) };
 }
 
-/**
- * Fixture broadcast set per game: one rotating free OTA network plus two paid streaming options
- * (Sunday Ticket + NFL+). Enough to exercise eligibility ranking (free vs. paid), the `preferred`
- * tiebreak, and the CTA against a user's `user_app_presence` — not a claim about who actually airs
- * a given matchup.
- */
-export function buildBroadcastRows(gameId: string, gameIndex: number): BroadcastSeedRow[] {
-  const services = [otaForIndex(gameIndex), 'sunday_ticket', 'nfl_plus'];
+/** `games.sportradar_id` written by `seed:schedule` for an ESPN event. */
+export function espnGameExternalId(eventId: string): string {
+  return `seed:espn:${eventId}`;
+}
+
+export interface SkippedAiring {
+  eventId: string;
+  shortName: string | undefined;
+  network: string;
+}
+
+export interface NetworkRowsResult {
+  rows: BroadcastSeedRow[];
+  /** Airings with no `game_broadcasts` service (today only `espn`, blocked by the CHECK). */
+  skipped: SkippedAiring[];
+  /** Scoreboard events with no seeded game. */
+  unmatchedEventIds: string[];
+}
+
+/** One network-only row per distinct airing network per game. */
+export function buildNetworkRows(
+  events: readonly EspnBroadcastEvent[],
+  gameIdByExternalId: ReadonlyMap<string, string>,
+  logUnmapped: UnmappedMediaLog,
+): NetworkRowsResult {
   const rows: BroadcastSeedRow[] = [];
-  for (const service of services) {
-    const template = BROADCAST_TEMPLATES[service];
-    if (!template) continue;
-    rows.push({
-      game_id: gameId,
-      service: template.service,
-      deep_link_url: template.deepLinkUrl,
-      requires_subscription: template.requiresSubscription,
-    });
+  const skipped: SkippedAiring[] = [];
+  const unmatchedEventIds: string[] = [];
+
+  for (const event of events) {
+    const gameId = gameIdByExternalId.get(espnGameExternalId(event.id));
+    if (gameId === undefined) {
+      unmatchedEventIds.push(event.id);
+      continue;
+    }
+    const seen = new Set<string>();
+    for (const airing of parseEspnAirings(event, logUnmapped)) {
+      if (seen.has(airing.network)) continue;
+      seen.add(airing.network);
+      const template = BROADCAST_TEMPLATES[airing.network];
+      if (!template) {
+        skipped.push({ eventId: event.id, shortName: event.shortName, network: airing.network });
+        continue;
+      }
+      rows.push({
+        game_id: gameId,
+        service: template.service,
+        deep_link_url: template.deepLinkUrl,
+        requires_subscription: template.requiresSubscription,
+      });
+    }
   }
-  return rows;
+
+  return { rows, skipped, unmatchedEventIds };
 }
 
-function chunk<T>(items: readonly T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    chunks.push(items.slice(i, i + size));
-  }
-  return chunks;
+interface ScoreboardBody {
+  events?: EspnBroadcastEvent[];
 }
 
-export async function seedBroadcasts(): Promise<void> {
+async function loadScoreboardEvents(source: ScoreboardSource): Promise<EspnBroadcastEvent[]> {
+  let body: ScoreboardBody;
+  if (source.kind === 'live') {
+    console.log(`Fetching live scoreboard from ${ESPN_LIVE_SCOREBOARD_URL}...`);
+    const response = await fetch(ESPN_LIVE_SCOREBOARD_URL);
+    if (!response.ok) {
+      throw new Error(`ESPN scoreboard request failed: ${response.status} ${response.statusText}`);
+    }
+    body = (await response.json()) as ScoreboardBody;
+  } else {
+    console.log(`Reading scoreboard from ${source.path}...`);
+    body = JSON.parse(readFileSync(source.path, 'utf8')) as ScoreboardBody;
+  }
+  const events = body.events ?? [];
+  if (events.length === 0) {
+    throw new Error('Scoreboard has no events.');
+  }
+  return events;
+}
+
+export async function seedBroadcasts(source: ScoreboardSource): Promise<void> {
   const supabaseUrl = process.env['SUPABASE_URL'];
   const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY. Set them in services/api/.env.');
   }
 
+  const events = await loadScoreboardEvents(source);
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  console.log(`Fetching games from ${supabaseUrl}...`);
+  const externalIds = events.map((event) => espnGameExternalId(event.id));
   const { data: games, error: gamesError } = await supabase
     .from('games')
-    .select('id')
-    .order('scheduled_start', { ascending: true });
+    .select('id, sportradar_id')
+    .in('sportradar_id', externalIds);
   if (gamesError) throw gamesError;
-  if (!games || games.length === 0) {
-    throw new Error('No games found. Seed the schedule before seeding broadcasts.');
+  const gameIdByExternalId = new Map<string, string>(
+    (games ?? []).map((game: { id: string; sportradar_id: string }) => [game.sportradar_id, game.id]),
+  );
+  if (gameIdByExternalId.size === 0) {
+    throw new Error('No scoreboard events match seeded games. Run `pnpm seed:schedule` first.');
   }
 
-  const gameIds = games.map((g) => g.id);
+  const { rows, skipped, unmatchedEventIds } = buildNetworkRows(events, gameIdByExternalId, (info) => {
+    console.warn(
+      `unmapped media "${info.rawName}" on ${info.shortName ?? '?'} (${info.eventId}) via ${info.source} — skipped`,
+    );
+  });
+  for (const eventId of unmatchedEventIds) {
+    console.warn(`no seeded game for ESPN event ${eventId} (${espnGameExternalId(eventId)}) — skipped`);
+  }
+  for (const skip of skipped) {
+    console.warn(
+      `skip ${skip.network} on ${skip.shortName ?? '?'} (${skip.eventId}): not a game_broadcasts service`,
+    );
+  }
 
+  const gameIds = [...gameIdByExternalId.values()];
   console.log(`Clearing existing broadcasts for ${gameIds.length} games (idempotent re-seed)...`);
   const { error: deleteError } = await supabase.from('game_broadcasts').delete().in('game_id', gameIds);
   if (deleteError) throw deleteError;
 
-  const rows = games.flatMap((game, index) => buildBroadcastRows(game.id, index));
-
-  console.log(`Inserting ${rows.length} broadcast rows (${games.length} games x 3)...`);
-  for (const batch of chunk(rows, 500)) {
-    const { error } = await supabase.from('game_broadcasts').insert(batch);
-    if (error) throw error;
+  if (rows.length > 0) {
+    console.log(`Inserting ${rows.length} network rows...`);
+    const { error: insertError } = await supabase.from('game_broadcasts').insert(rows);
+    if (insertError) throw insertError;
   }
 
-  console.log('Done. ⚠️ Deep links are UNVERIFIED placeholders (Open Question #2 audit pending).');
+  console.log(`Done. ${rows.length} rows, ${skipped.length} skipped airings, ${unmatchedEventIds.length} unmatched events.`);
 }
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) {
   try {
-    bootstrapSeedScript({
+    const cli = bootstrapSeedScript({
       argv: process.argv.slice(2),
       scriptName: 'seed:broadcasts',
       forbidRemoteAlways: true,
     });
-    seedBroadcasts().catch((error: unknown) => {
+    seedBroadcasts(parseScoreboardSource(cli.rest)).catch((error: unknown) => {
       console.error(error);
       process.exitCode = 1;
     });
