@@ -10,7 +10,7 @@ const BASE_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl';
 const SCOREBOARD_URL = `${BASE_URL}/scoreboard`;
 const summaryUrl = (eventId: string): string => `${BASE_URL}/summary?event=${eventId}`;
 
-/** Bounds one ESPN `fetch`. An abort is a `network_error`; the poll loop retries. */
+/** Bounds one ESPN request, including the body read. An abort is a `network_error`. */
 const FETCH_TIMEOUT_MS = 8_000;
 
 export type EspnFetchFailureKind = 'network_error' | 'http_error' | 'invalid_shape';
@@ -27,9 +27,10 @@ export type EspnFetchResult<T> = { ok: true; data: T } | EspnFetchFailure;
 
 /**
  * Fetches and validates one ESPN endpoint. Never throws — every failure mode (the fetch itself
- * rejecting, a non-2xx response, or a response that doesn't match `schema`) becomes a typed
- * `EspnFetchFailure` instead, because all three are expected, recoverable conditions against an
- * undocumented API that the caller (`EspnPlaySource`) needs to distinguish: a shape mismatch is
+ * rejecting, the body read rejecting, a non-2xx response, or a response that doesn't match
+ * `schema`) becomes a typed `EspnFetchFailure` instead, because each is an expected, recoverable
+ * condition against an undocumented API that the caller (`EspnPlaySource`) needs to distinguish: a
+ * shape mismatch is
  * worth reporting to `@pivot/shared`'s `ErrorReporter`, while a transient network/HTTP failure is
  * just worth logging and retrying next poll — mirroring how `experiments/espn-latency-probe.ts`'s
  * poll loop already treated a failed fetch as "log and keep going", never as fatal.
@@ -39,45 +40,47 @@ export type EspnFetchResult<T> = { ok: true; data: T } | EspnFetchFailure;
  * behavior. ESPN is unofficial and polled continuously in the background, where a single bad poll
  * should never take down the loop.
  */
+function networkError(aborted: boolean, error: unknown): EspnFetchFailure {
+  return {
+    ok: false,
+    kind: 'network_error',
+    reason: aborted
+      ? `ESPN request aborted after ${FETCH_TIMEOUT_MS}ms`
+      : `ESPN request threw: ${error instanceof Error ? error.message : String(error)}`,
+  };
+}
+
 async function fetchAndValidate<T>(url: string, schema: z.ZodType<T>): Promise<EspnFetchResult<T>> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  let response: Response;
   try {
-    response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, { signal: controller.signal });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        kind: 'http_error',
+        reason: `ESPN request failed: ${response.status} ${response.statusText}`,
+      };
+    }
+
+    const json: unknown = await response.json();
+    const parsed = schema.safeParse(json);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        kind: 'invalid_shape',
+        reason: 'response did not match the expected shape',
+        issues: parsed.error.issues,
+      };
+    }
+
+    return { ok: true, data: parsed.data };
   } catch (error) {
-    const aborted = controller.signal.aborted;
-    return {
-      ok: false,
-      kind: 'network_error',
-      reason: aborted
-        ? `ESPN request aborted after ${FETCH_TIMEOUT_MS}ms`
-        : `ESPN request threw: ${error instanceof Error ? error.message : String(error)}`,
-    };
+    return networkError(controller.signal.aborted, error);
   } finally {
     clearTimeout(timer);
   }
-
-  if (!response.ok) {
-    return {
-      ok: false,
-      kind: 'http_error',
-      reason: `ESPN request failed: ${response.status} ${response.statusText}`,
-    };
-  }
-
-  const json: unknown = await response.json();
-  const parsed = schema.safeParse(json);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      kind: 'invalid_shape',
-      reason: 'response did not match the expected shape',
-      issues: parsed.error.issues,
-    };
-  }
-
-  return { ok: true, data: parsed.data };
 }
 
 export interface EspnClient {

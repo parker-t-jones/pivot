@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { espnClient } from './espnClient.js';
+import { EspnPlaySource } from './espnPlaySource.js';
 
 function jsonResponse(body: unknown, ok = true, status = 200, statusText = 'OK'): Response {
   return {
@@ -116,6 +117,76 @@ describe('espnClient', () => {
       if (!result.ok) {
         expect(result.kind).toBe('invalid_shape');
         expect(Array.isArray(result.issues)).toBe(true);
+      }
+    });
+
+    it('aborts a body that never finishes and that game backs off', async () => {
+      vi.useFakeTimers();
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      let fetchCalls = 0;
+      fetchMock.mockImplementation((_url: string, init?: { signal?: AbortSignal }) => {
+        fetchCalls += 1;
+        if (fetchCalls === 1) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: () =>
+              new Promise((_resolve, reject) => {
+                const abort = (): void => {
+                  const error = new Error('The operation was aborted');
+                  error.name = 'AbortError';
+                  reject(error);
+                };
+                if (init?.signal?.aborted) abort();
+                else init?.signal?.addEventListener('abort', abort, { once: true });
+              }),
+          } as Response);
+        }
+        return Promise.resolve(
+          jsonResponse({
+            header: {
+              week: 4,
+              competitions: [
+                {
+                  competitors: [
+                    { id: '11', homeAway: 'home', team: { abbreviation: 'IND' } },
+                    { id: '8', homeAway: 'away', team: { abbreviation: 'DET' } },
+                  ],
+                  status: { type: { state: 'post', completed: true } },
+                },
+              ],
+            },
+            drives: {
+              previous: [
+                { team: { abbreviation: 'IND' }, plays: [{ id: 'p1', type: { id: '5' } }] },
+              ],
+            },
+          }),
+        );
+      });
+
+      const source = new EspnPlaySource({ eventId: '401873308', pollIntervalMs: 0 });
+      const done = source.subscribe(async () => undefined);
+
+      try {
+        expect(fetchCalls).toBe(1);
+        vi.advanceTimersByTime(7_999);
+        expect(fetchCalls).toBe(1);
+        vi.advanceTimersByTime(1);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(fetchCalls).toBe(1);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('ESPN request aborted after 8000ms'),
+        );
+        await vi.advanceTimersByTimeAsync(9_999);
+        expect(fetchCalls).toBe(1);
+        await vi.advanceTimersByTimeAsync(1);
+        await done;
+        expect(fetchCalls).toBe(2);
+      } finally {
+        consoleErrorSpy.mockRestore();
+        vi.useRealTimers();
       }
     });
 
