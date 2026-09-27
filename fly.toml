@@ -50,3 +50,8 @@ primary_region = 'iad'
   size = 'shared-cpu-1x'
   memory = '256mb'
   processes = ['worker']
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
+  processes = ['runner']

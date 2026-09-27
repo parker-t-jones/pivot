@@ -25,15 +25,16 @@ Hosted Supabase gets its **own** project ref (e.g. `abcdefghijklmnop`). That is 
 |---|---|---|---|---|
 | **API + WebSocket** | `@pivot/api` → `services/api/src/index.ts` | `pnpm --filter @pivot/api dev` | `node dist/index.js` (`pnpm --filter @pivot/api start`) | REST + `GET /v1/realtime` WebSocket. Listens `0.0.0.0:$PORT` (default 3000). |
 | **Lineup-sync worker** | `@pivot/api` → `services/api/src/worker.ts` | `pnpm --filter @pivot/api worker` (`tsx watch`) | `node dist/worker.js` (`pnpm --filter @pivot/api start:worker`) | Every 5 minutes: sync Sleeper lineups into cache + DB. |
+| **Runner** | `@pivot/api` → `services/api/src/runner.ts` | (no watch script) | `node dist/runner.js` (`pnpm --filter @pivot/api start:runner`) | Third process group: ESPN discovery, `games.status`, Redis `game_state`, flag dispatch. No public port. |
 
-Both share the same image and the same env. They must **not** share an in-process memory cache: with two processes, `CACHE_DRIVER=memory` gives each its own empty lineup / game-state store. Production requires `CACHE_DRIVER=redis` + Upstash.
+All three share the same image. They must **not** share an in-process memory cache: with separate processes, `CACHE_DRIVER=memory` gives each its own empty lineup / game-state store. Production requires `CACHE_DRIVER=redis` and Upstash.
 
-### What PLAN.md §6 expects but is not a hosted process yet
+### Libraries that are not their own Fly process
 
-| Planned process | Reality in repo | Hosting note |
+| Library | Reality in repo | Hosting note |
 |---|---|---|
-| **Ingestion** | `@pivot/ingestion` is a **library** (`EspnPlaySource`, etc.). No `main` runner. Live path today is `experiments/live-sunday-harness.ts` / `experiments/live-ingest-service.ts`. | **P0** adds the production live-ingestion runner (one `EspnPlaySource` subscribe loop per live game). Slot: **third Fly process group** on the same app (preferred), or a sibling cycle on an expanded worker — P0 design decides. Do **not** invent a fourth Fly app for it. |
-| **Engine + dispatcher** | Packages `@pivot/engine` / `@pivot/dispatcher` are libraries. The API uses dispatcher bits for Redis game-state + realtime subscribe. The dispatch **loop** (schedule → decide → push) only runs inside the harness today. | P0 folds this into the ingestion runner (or a dedicated `engine` process group). Until then, hosted API can serve REST/WS/auth/league connect; it cannot fire live "switch now" pushes from ESPN. |
+| **Ingestion** | `@pivot/ingestion` is a **library** (`EspnPlaySource`, etc.). Live path is the `runner` process, not a second app. | Process group `runner` on `pivot-sports-api` (`node dist/runner.js`). Do **not** invent a fourth Fly app for it. |
+| **Engine + dispatcher** | Packages `@pivot/engine` / `@pivot/dispatcher` are libraries. The API uses dispatcher bits for Redis game-state + realtime subscribe. | The dispatch loop runs in the `runner` process. There is no `engine` process group. |
 
 ### Fly shape for v1 (recommendation)
 
@@ -43,25 +44,26 @@ Both share the same image and the same env. They must **not** share an in-proces
 [processes]
   api    = "node dist/index.js"
   worker = "node dist/worker.js"
+  runner = "node dist/runner.js"
 ```
 
 | Process | Separate Fly app? | Scale to zero? |
 |---|---|---|
-| `api` | No — same app | **Allowed** (`min_machines_running = 0` in `fly.toml`). Prefer `fly scale count api=1` for TestFlight if cold starts hurt. |
-| `worker` | No — same app | **Never.** After first deploy: `fly scale count worker=1`. `[[restart]] policy = always` keeps it up once scaled. |
-| P0 `ingest` (future) | No — same app | **Never.** Live poll loops cannot auto-stop. |
+| `api` | No — `pivot-sports-api` | **Allowed** (`min_machines_running = 0` in `fly.toml`). Prefer `fly scale count -a pivot-sports-api api=1` for TestFlight if cold starts hurt. |
+| `worker` | No — `pivot-sports-api` | **Never.** After first deploy: `fly scale count -a pivot-sports-api worker=1`. `[[restart]] policy = always` keeps it up once scaled. |
+| `runner` | No — `pivot-sports-api` | **Never.** After deploy: `fly scale count -a pivot-sports-api runner=1`. Same VM as the worker (`shared-cpu-1x` @ 256MB). `[[restart]] policy = always` includes `runner`. Then `fly logs -a pivot-sports-api --process runner` should show `leader` and `discovery live=0` on a weekday, with no crash loop. |
 
-Do **not** run API and worker as two Fly apps unless secrets drift becomes painful; shared secrets + one image is simpler for v1.
+Do **not** run API, worker, and runner as separate Fly apps. Shared secrets + one image.
 
-### P0 slot (explicit)
+### Runner (third process group)
 
-When P0 lands, add a long-running process that:
+`runner` is in `fly.toml`. It:
 
 1. Owns concurrent `EspnPlaySource.subscribe()` loops (pattern from `experiments/live-sunday-harness.ts`).
 2. Drives dispatcher scheduling / `watchForResumption` / silence ceiling / per-game collapse.
-3. Optionally runs B1.7 broadcast airings as a **sibling cycle** (15 min / daily) — see `docs/B1-BROADCAST-DESIGN.md` §3.6. That is **not** a fourth process if it rides the P0 runner.
+3. Does not yet run B1.7 broadcast airings. That sibling cycle waits on B1.6 — see `docs/B1-BROADCAST-DESIGN.md` §3.6. It is **not** a fourth process.
 
-Until P0: deploy **api + worker only**. Be honest with TestFlight testers: no live switch nudges from ESPN.
+Deploy `api`, `worker`, and `runner`. Leave `PUSH_DRIVER` unset so this deploy does not send pushes.
 
 ---
 
@@ -83,12 +85,17 @@ Config loaders: `services/api/src/env.ts` (zod + dotenv), `services/ingestion/sr
 | `UPSTASH_REDIS_TCP_URL` | API, runner | Fallback if `REDIS_URL` unset | Upstash → Connect → `rediss://…` | **Yes** | Subscribe fallback. Production should set `REDIS_URL` to this same TCP URL instead. |
 | `REVENUECAT_WEBHOOK_SECRET` | API | Optional until billing | You generate; paste into RevenueCat webhook auth | **Yes** | Also read via raw `process.env` in `billing.ts` (not only through `env.ts`). Without it, `POST /billing/revenuecat` → 503. |
 | `PORT` | API | Optional (default 3000) | Fly sets `PORT` / internal port | No | Listen is already `0.0.0.0`. |
-| `GIT_SHA` | API (`GET /health`) | Optional (default `"dev"`) | Docker `ARG` / `fly deploy --build-arg` | No | Returned as `version` in `/health`. |
-| `NODE_ENV` | API / worker | Optional | `fly.toml` sets `production` | No | |
+| `GIT_SHA` | API (`GET /health`) | Optional (default `"dev"`) | Docker `ARG` / `fly deploy -a pivot-sports-api --build-arg` | No | Returned as `version` in `/health`. |
+| `NODE_ENV` | API, worker, runner | Optional | `fly.toml` sets `production` | No | |
+| `PRODUCTION_REDIS_HOST` | API, worker, runner | Set in prod | Upstash hostname only (no token) | No | Not committed. If `NODE_ENV` is not `production` and a Redis URL's host matches, the process exits. |
 
 ### Runtime — worker process
 
 Same Supabase vars as the API. The worker writes the lineup cache. In production it uses `REDIS_URL` (ioredis), the same TCP URL as the API and the runner, so a lineup written by the worker is visible to the runner. It does not open the realtime subscriber. The Upstash REST client is only the fallback when `REDIS_URL` is unset.
+
+### Runtime — runner process
+
+Same secrets as the worker, plus `PRODUCTION_REDIS_HOST`. `REDIS_URL` must be Upstash's **TCP** URL (`rediss://…` from Upstash → Connect → TCP) on the API, the worker, and the runner. Leave `PUSH_DRIVER` unset; it defaults to `none`.
 
 ### Client — Expo / EAS (`EXPO_PUBLIC_*`)
 
@@ -96,7 +103,7 @@ Same Supabase vars as the API. The worker writes the lineup cache. In production
 |---|---|---|---|---|---|
 | `EXPO_PUBLIC_SUPABASE_URL` | App | **Required** | Same hosted Project URL | No | Baked into JS at build time. |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | App | **Required** | Supabase → `anon` / publishable key | No (public by design; RLS-bound) | |
-| `EXPO_PUBLIC_API_BASE_URL` | App | **Required** | `https://<fly-app>.fly.dev` (no trailing path) | No | Drives REST + `wss://…/v1/realtime`. |
+| `EXPO_PUBLIC_API_BASE_URL` | App | **Required** | `https://pivot-sports-api.fly.dev` (no trailing path) | No | Drives REST + `wss://…/v1/realtime`. |
 | `EXPO_PUBLIC_REVENUECAT_API_KEY` | App | Optional until IAP | RevenueCat → iOS public SDK key | No (public SDK key) | Without it, Upgrade UI opens but purchase/restore fail. |
 
 `app/eas.json` maps `preview` → EAS environment `preview` and `production` → `production`. Set `EXPO_PUBLIC_*` in the Expo dashboard for those environments (no values in git).
@@ -105,7 +112,7 @@ Same Supabase vars as the API. The worker writes the lineup cache. In production
 
 | Variable | Who would read it | Status | Secret? |
 |---|---|---|---|
-| `PUSH_DRIVER` | Intended for P0 / harness (`createPushNotifier`); **no production process loads it today** | Flagged: B3-HANDOFF lists it for prod; API `env.ts` does not. Add to env schema when P0 wires push. Values: `expo` \| `none`. | No |
+| `PUSH_DRIVER` | Runner (`createPushNotifier` via `services/api/src/env.ts`) | **Leave unset** on Fly. Default is `none`. Values: `expo` \| `none`. | No |
 | Expo access token (constructor `expoAccessToken`) | `ExpoPushNotifier` optional | Not an env name in repo; Expo dashboard "Access Token" if rate-limited. | **Yes** if used |
 | `SENTRY_DSN` / `SENTRY_ENVIRONMENT` | `@pivot/ingestion` env only | No hosted ingestion process yet. Optional later. | DSN is **Yes** |
 | `SEED_TEST_USER_EMAIL` / `SEED_TEST_USER_PASSWORD` | `scripts/seed-test-user.ts` only | Local/dev convenience. **Do not** seed a shared weak password into hosted unless intentional. | Password **Yes** |
@@ -132,11 +139,11 @@ Scripts under `scripts/` that write to the DB call `bootstrapSeedScript` (`scrip
 
 - Multi-stage Node **22** build; `pnpm@9.15.0` via Corepack.
 - Build: `tsc -b tsconfig.build.json`, then `pnpm --filter=@pivot/api deploy --prod /out`.
-- Runtime `WORKDIR /app` with `dist/index.js` / `dist/worker.js`; `CMD` defaults to API.
+- Runtime `WORKDIR /app` with `dist/index.js` / `dist/worker.js` / `dist/runner.js`; `CMD` defaults to API. Fly process groups override the command.
 - `.dockerignore` excludes `.env*`, `node_modules`, `app/`, `docs/`, `experiments/logs/`, `*.png`, `.git`.
 - Optional build-arg: `GIT_SHA` → `/health` `version`.
 
-**Verify:** `docker build -t pivot-api .` then `curl localhost:<port>/health` → `200`.
+**Verify:** `docker build -t pivot-sports-api .` then `curl localhost:<port>/health` → `200`.
 
 ---
 
@@ -283,7 +290,7 @@ If a future OAuth product appears, it would be a new PLAN.md item — out of sco
 
 | Item | Value |
 |---|---|
-| URL | `https://<fly-app>.fly.dev/billing/revenuecat` |
+| URL | `https://pivot-sports-api.fly.dev/billing/revenuecat` |
 | Method | `POST` |
 | Auth | `Authorization` header must equal `REVENUECAT_WEBHOOK_SECRET` (raw or `Bearer …`) — see `services/api/src/routes/billing.ts` |
 | App user id | Supabase user UUID (`users.id`) |
@@ -301,7 +308,7 @@ There is **no** raw APNs driver in this repo. Credentials:
 | Apple Push Key `82JW379P4C` | **EAS / Expo project** `@parkertjones/fantasy-focus` (via `eas credentials -p ios`) | **No** — Expo’s servers talk to APNs | Verified on device (B1); same key covers development + production `aps-environment` |
 | Expo push tokens | `users.expo_push_token` in Supabase | N/A (data, not a secret file) | Written by the app when permission granted |
 | Optional Expo **access token** | Expo dashboard → Access tokens; would be a Fly secret if rate limits require it | Optional | Not configured in `env.ts` yet |
-| `PUSH_DRIVER=expo` | Would be a Fly secret/env when P0 wires the dispatcher runner | Yes (then) | **Not loaded by API/worker today** — live pushes wait on P0 |
+| `PUSH_DRIVER` | Runner, via `env.ts` | **No** — leave unset | Defaults to `none`. Do not set `expo` until after the weekday no-push check. |
 
 **Manual verify without P0:** curl Expo’s push API with a stored `ExponentPushToken[…]` (see `RUNBOOK.md` “PUSH NOTIFICATIONS ON DEVICE”). That proves APNs + EAS credentials independently of Fly.
 
@@ -325,7 +332,7 @@ Set at least: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO
 
 ### 6.5 Upstash **[Parker]**
 
-Create Redis (region near `iad`), copy REST URL/token + TCP `rediss://` URL into Fly secrets.
+Create Redis (region near `iad`). On `pivot-sports-api`, set `REDIS_URL` to Upstash's TCP `rediss://` URL for the API, the worker, and the runner. REST URL and token stay as the fallback only, used when `REDIS_URL` is unset.
 
 ---
 
@@ -343,8 +350,9 @@ Create Redis (region near `iad`), copy REST URL/token + TCP `rediss://` URL into
 |---|---|
 | Region | **`iad`** |
 | API VM | `shared-cpu-1x` @ 512MB; `min_machines_running = 0` (may scale to zero) |
-| Worker VM | `shared-cpu-1x` @ 256MB; after deploy **`fly scale count worker=1`** |
-| HTTP | `http_service` internal 3000, HTTPS, check `GET /health` |
+| Worker VM | `shared-cpu-1x` @ 256MB; after deploy **`fly scale count -a pivot-sports-api worker=1`** |
+| Runner VM | `shared-cpu-1x` @ 256MB (same as worker); after deploy **`fly scale count -a pivot-sports-api runner=1`**, then **`fly logs -a pivot-sports-api --process runner`** shows `leader` and `discovery live=0` on a weekday, with no crash loop |
+| HTTP | `http_service` internal 3000, HTTPS, check `GET /health`. `processes = ['api']` — worker and runner have no public port. |
 
 ### 7.3 Health check
 
@@ -353,7 +361,7 @@ Create Redis (region near `iad`), copy REST URL/token + TCP `rediss://` URL into
 **Verify (once deployed):**
 
 ```bash
-curl -sS https://<fly-app>.fly.dev/health
+curl -sS https://pivot-sports-api.fly.dev/health
 # expected: {"ok":true,"version":"..."}  and HTTP 200
 ```
 
@@ -391,15 +399,15 @@ Do **not** deploy on Thu / Sun / Mon. Prefer Tue–Wed–Fri.
 | 9 | **[Parker]** | Create Upstash Redis near `iad`; copy REST + TCP URLs | Upstash ping / console | DB reachable |
 | 10 | **[Parker]** | Generate `REVENUECAT_WEBHOOK_SECRET`; note for Fly + RevenueCat | Stored in password manager | Non-empty random string |
 | 11 | **[Cursor]** ✓ | `GET /health`, `start:worker`, Dockerfile, fly.toml, remote-safety, EAS environments | `pnpm test`; `docker build`; `fly config validate` | Green (D1.1) |
-| 12 | **[Parker]** | ~~`fly apps create pivot-sports-api`~~ (done 2026-09-27); `fly secrets set …` | `fly secrets list -a pivot-sports-api` | Required keys present; **no** `.env` upload |
-| 13 | **[Parker]** | `fly deploy` on a non-frozen day (optionally `--build-arg GIT_SHA=$(git rev-parse --short HEAD)`) | `fly status`; `curl https://pivot-sports-api.fly.dev/health` | Machines started; health **200** |
-| 14 | **[Parker]** | `fly scale count worker=1` (and preferably `api=1` for TestFlight) | `fly scale show` | `worker` count ≥ 1 |
+| 12 | **[Parker]** | ~~`fly apps create pivot-sports-api`~~ (done 2026-09-27). `fly secrets set -a pivot-sports-api …` — runner secrets match the worker, plus `PRODUCTION_REDIS_HOST`. `REDIS_URL` is Upstash's TCP `rediss://` URL on all three processes. Leave `PUSH_DRIVER` unset. | `fly secrets list -a pivot-sports-api` | Required keys present; **no** `.env` upload; `PUSH_DRIVER` absent |
+| 13 | **[Parker]** | `fly deploy -a pivot-sports-api` on a non-frozen day (optionally `--build-arg GIT_SHA=$(git rev-parse --short HEAD)`) | `fly status -a pivot-sports-api`; `curl https://pivot-sports-api.fly.dev/health` | Machines started; health **200** |
+| 14 | **[Parker]** | `fly scale count -a pivot-sports-api worker=1 runner=1` (and preferably `api=1` for TestFlight) | `fly scale show -a pivot-sports-api`; `fly logs -a pivot-sports-api --process runner` | `worker` and `runner` counts ≥ 1. On a weekday the runner logs `leader` and `discovery live=0`, and does not crash-loop. |
 | 15 | **[Parker]** | Smoke API with JWT from hosted auth | `curl -H "Authorization: Bearer $JWT" https://pivot-sports-api.fly.dev/leagues` | 200 JSON (likely `[]`) |
 | 16 | **[Parker]** | RevenueCat webhook URL + auth header → Fly | Test event in RC dashboard | 200 `{ ok: true, … }` |
 | 17 | **[Parker]** | Set Expo dashboard env vars for **preview** / **production** (`EXPO_PUBLIC_*`) | EAS build log shows injected env | No `127.0.0.1` / `169.254` in those builds |
 | 18 | **[Parker]** | Confirm APNs key still on EAS for `com.fantasyfocus.app`; optional Expo curl push smoke | Notification on device | Ticket/receipt `ok` |
 | 19 | **[Parker]** | EAS build → TestFlight; sign in on a second device/network | Auth + Home load | Works off Parker's LAN |
-| 20 | **[Cursor]** (later) | P0 ingestion runner + `PUSH_DRIVER` in `env.ts` | Weekday live test | Live games update state; pushes only after intentional enable |
+| 20 | **[Parker]** (later, a game day) | Runner is already the third process group. Watch one slate with `PUSH_DRIVER` still unset. | `fly logs -a pivot-sports-api --process runner`; Home live list | `games.status` and the live list move. No push burst. Set `PUSH_DRIVER=expo` only after that check. |
 
 ---
 
@@ -412,7 +420,7 @@ Do **not** deploy on Thu / Sun / Mon. Prefer Tue–Wed–Fri.
 | `.env` copied into Docker image | `.dockerignore` lists `.env*` / `**/.env*`. Verified empty `find` in image. |
 | Seed scripts aimed at prod by accident | `scripts/remoteSafety.ts` requires `--allow-remote`; fixture broadcasts refuse remote always. Prefer `--env-file .env.production`. |
 | `SUPABASE_SERVICE_ROLE_KEY` in app bundle | Only `EXPO_PUBLIC_*` + anon key in the client. |
-| `fly secrets` printed in CI logs | Prefer `fly secrets set` locally; avoid echoing values in scripts. |
+| `fly secrets` printed in CI logs | Prefer `fly secrets set -a pivot-sports-api` locally; avoid echoing values in scripts. |
 | Committing linked project credentials | `supabase/.temp/` is machine-local; do not force-add. |
 
 ### Rollback blockers
@@ -442,19 +450,19 @@ Do **not** deploy on Thu / Sun / Mon. Prefer Tue–Wed–Fri.
 | Artifact | Status |
 |---|---|
 | `Dockerfile` / `.dockerignore` | Done (D1.1) |
-| `fly.toml` (`iad`, `api`/`worker`, `/health` check) | Done (D1.1) |
+| `fly.toml` (`iad`, `api`/`worker`/`runner`, `/health` check, runner VM same as worker) | Done |
 | `GET /health` + `GIT_SHA` version | Done (D1.1) |
-| `start:worker` in `@pivot/api` | Done (D1.1) |
+| `start:worker` and `start:runner` in `@pivot/api` | Done |
 | Remote-safety + `--env-file` for seeds | Done (D1.1) |
 | EAS `environment` for preview/production | Done (D1.1) — Parker fills dashboard values |
 | Upstash + Supabase + Fly + RevenueCat dashboard config | **Parker** |
-| P0 ingest process + `PUSH_DRIVER` in `env.ts` | Later phase |
+| Runner process group; `PUSH_DRIVER` left unset (default `none`) | In repo. Hosted `fly scale count -a pivot-sports-api runner=1` is Parker, Tue–Wed. |
 
 ---
 
 ## 11. Out of scope for this deploy (honest TestFlight)
 
-- Live ESPN → notification loop (P0).
+- Live pushes. The `runner` process group is in the deploy, but `PUSH_DRIVER` stays unset (default `none`) until the weekday no-push check.
 - Fixture or live `game_broadcasts` / `game_airings` until B1 seed path exists.
 - Apple Sign In.
 - Sleeper OAuth.
