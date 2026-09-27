@@ -8,6 +8,7 @@ primary_region = 'iad'
 [processes]
   api = 'node dist/index.js'
   worker = 'node dist/worker.js'
+  runner = 'node dist/runner.js'
 
 [env]
   NODE_ENV = 'production'
@@ -30,14 +31,15 @@ primary_region = 'iad'
     method = 'GET'
     path = '/health'
 
-# Worker must not scale to zero (lineup sync every 5 minutes).
+# Worker and runner must not scale to zero.
 # Fly has no min_machines_running for non-HTTP process groups in fly.toml — after first deploy:
 #   fly scale count worker=1
+#   fly scale count runner=1
 # Intention documented in the runbook: worker min_machines_running = 1.
 [[restart]]
   policy = 'always'
   retries = 10
-  processes = ['worker']
+  processes = ['worker', 'runner']
 
 [[vm]]
   size = 'shared-cpu-1x'
