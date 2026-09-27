@@ -11,7 +11,7 @@ import {
 import type { DeliveryDeps } from './delivery.js';
 import { runDispatcherTick, startDispatcherLoop, type DispatcherTickDeps } from './dispatcher.js';
 import { InMemoryFlagEventQueue } from './inMemoryQueue.js';
-import { NoOpPushNotifier } from './pushNotifier.js';
+import { NoOpPushNotifier, CapturingPushNotifier } from './pushNotifier.js';
 import { InMemoryGameStateStore } from './providers/inMemoryGameStateStore.js';
 import { InMemoryRateLimitStore } from './rateLimiter.js';
 import { InMemoryRealtimeBus } from './realtimeBus.js';
@@ -211,26 +211,48 @@ describe('runDispatcherTick', () => {
     expect(realtimeBus.published).toHaveLength(0);
   });
 
-  it('drops an event for a user who went inactive during the deferral window (Sprint 4 closeout #1)', async () => {
+  it('pushes for a user with no socket and no active_users entry', async () => {
     const now = 1_700_000_060_000;
-    const { deps, queue, gameStateStore, userDirectory, realtimeBus } = buildHarness(now);
-
-    // State is EXACTLY fresh — nothing changed — but the user is no longer active.
-    await gameStateStore.setUserFlagState('u1', 'g1', makeFlagState());
-    userDirectory.setUser(freeUser);
-    await queue.enqueue(makeEvent({ scheduledFireAt: now - 1000 }));
-    // Deliberately not calling markUserActive.
-
-    const result = await runDispatcherTick(deps);
-
-    expect(result).toEqual({
-      processed: 1,
-      delivered: 0,
-      droppedStale: 1,
-      droppedMissingUser: 0,
-      droppedRateLimited: 0,
+    const queue = new InMemoryFlagEventQueue();
+    const gameStateStore = new InMemoryGameStateStore();
+    const userDirectory = new InMemoryUserDirectory();
+    const pushNotifier = new CapturingPushNotifier();
+    const persistence = new InMemoryFlagEventPersistence();
+    const realtimeBus = new InMemoryRealtimeBus();
+    userDirectory.setUser({
+      ...freeUser,
+      expoPushToken: 'ExponentPushToken[background]',
     });
-    expect(realtimeBus.published).toHaveLength(0);
+    await gameStateStore.setUserFlagState('u1', 'g1', makeFlagState());
+    await queue.enqueue(makeEvent({ scheduledFireAt: now - 1000 }));
+
+    const delivery: DeliveryDeps = {
+      gameStateStore,
+      gameCatalog: new InMemoryGameCatalog(),
+      playerCatalog: new InMemoryPlayerCatalog(),
+      broadcastCatalog: new InMemoryBroadcastCatalog(),
+      userDirectory,
+      persistence,
+      realtimeBus,
+      rateLimitStore: new InMemoryRateLimitStore(),
+      pushNotifier,
+      clock: () => now,
+    };
+    const result = await runDispatcherTick({
+      queue,
+      gameStateStore,
+      userDirectory,
+      rateLimitStore: delivery.rateLimitStore,
+      delivery,
+      clock: () => now,
+    });
+
+    expect(result.delivered).toBe(1);
+    expect(result.droppedStale).toBe(0);
+    expect(await gameStateStore.isUserActive('u1')).toBe(false);
+    expect(pushNotifier.calls).toHaveLength(1);
+    expect(pushNotifier.calls[0]?.token).toBe('ExponentPushToken[background]');
+    expect(realtimeBus.published).toHaveLength(1);
   });
 
   it('drops an event when the user has no directory entry', async () => {

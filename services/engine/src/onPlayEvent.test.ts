@@ -84,13 +84,15 @@ describe('onPlayEvent', () => {
     expect(stored?.status).toBe('in_progress');
   });
 
-  it('does not dispatch for a stakeholder who is not active', async () => {
+  it('dispatches for a stakeholder who is not in active_users', async () => {
     lineupCache.set(lineupWithRbOn('KC'));
-    gameState.addStake('KC', 'u1'); // stake but not active
+    gameState.addStake('KC', 'u1');
 
     await onPlayEvent(deps, makePlay());
 
-    expect(dispatcher.events).toHaveLength(0);
+    expect(dispatcher.events).toHaveLength(1);
+    expect(dispatcher.events[0]?.type).toBe('flag_added');
+    expect(dispatcher.events[0]?.userId).toBe('u1');
   });
 
   it('does not dispatch for an active stakeholder with no lineup cached', async () => {

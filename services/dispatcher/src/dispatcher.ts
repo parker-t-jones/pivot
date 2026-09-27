@@ -59,12 +59,9 @@ export async function runDispatcherTick(deps: DispatcherTickDeps): Promise<Dispa
     result.processed += 1;
     const { event } = item;
 
-    const [currentState, userIsActive] = await Promise.all([
-      deps.gameStateStore.getUserFlagState(event.userId, event.gameId),
-      deps.gameStateStore.isUserActive(event.userId),
-    ]);
+    const currentState = await deps.gameStateStore.getUserFlagState(event.userId, event.gameId);
 
-    if (!isStillRelevant(event, currentState, userIsActive)) {
+    if (!isStillRelevant(event, currentState)) {
       await deps.queue.remove(item);
       result.droppedStale += 1;
       continue;

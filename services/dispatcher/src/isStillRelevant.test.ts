@@ -55,25 +55,17 @@ describe('isEventStateFresh (gate a — state freshness)', () => {
   });
 });
 
-describe('isStillRelevant — two independent gates', () => {
-  it('passes when both state is fresh AND the user is active', () => {
-    expect(isStillRelevant(makeEvent(), makeFlagState(), true)).toBe(true);
+describe('isStillRelevant — freshness only', () => {
+  it('passes when the stored state matches, including when the user has no socket', () => {
+    expect(isStillRelevant(makeEvent(), makeFlagState())).toBe(true);
   });
 
-  it('drops a FRESH-state event for an INACTIVE user (liveness gate alone fails)', () => {
-    // Same exact FlagState the event was generated from — state hasn't moved at all — but the user
-    // went inactive during the deferral window. This is the Sprint 4 closeout bug: liveness must be
-    // checked independently of state freshness, not inferred from it.
-    expect(isStillRelevant(makeEvent(), makeFlagState(), false)).toBe(false);
-  });
-
-  it('drops a STALE-state event for an ACTIVE user (state gate alone fails)', () => {
-    // The user never went anywhere — still active — but a later play superseded this event's state.
+  it('drops a stale event', () => {
     const superseded = makeFlagState({ priorityScore: 12, computedAt: 1_700_000_045_000 });
-    expect(isStillRelevant(makeEvent(), superseded, true)).toBe(false);
+    expect(isStillRelevant(makeEvent(), superseded)).toBe(false);
   });
 
-  it('drops when BOTH gates fail', () => {
-    expect(isStillRelevant(makeEvent(), null, false)).toBe(false);
+  it('drops when there is no stored state', () => {
+    expect(isStillRelevant(makeEvent(), null)).toBe(false);
   });
 });

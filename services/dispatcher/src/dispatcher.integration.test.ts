@@ -29,7 +29,7 @@ import { QueueingEventDispatcher } from './scheduleFlagEvent.js';
  * `CapturingEventDispatcher` it used pre-Sprint-5, so the engine never knows the difference — this
  * IS the seam the sprint plan called out ("swapping the injected dispatcher instance is the entire
  * integration point"). From there: `flag_event_queue` -> `runDispatcherTick` (Phase 2) ->
- * `isStillRelevant` (Sprint 4 closeout #1, both gates) -> `shouldRateLimit` (Phase 2) ->
+ * `isStillRelevant` (freshness only; Decision 8) -> `shouldRateLimit` (Phase 2) ->
  * `deliverFlagEvent` (Phase 2) -> persistence + realtime bus.
  *
  * Only in-memory providers (decision #2) — no Redis, no Postgres. `vi.useFakeTimers()` controls both
@@ -225,28 +225,26 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
     expect(p.realtimeBus.published[0]?.channel).toBe(realtimeUserChannel(USER_ID));
   });
 
-  it('inactive user drop (Sprint 4 closeout #1): user goes inactive after queuing, before fire time', async () => {
+  it('delivers a fresh event when the user has no active socket', async () => {
     const p = buildPipeline();
     await p.gameStateStore.markUserActive(USER_ID, 10 * 60_000);
 
     await onPlayEvent(p.onPlayEventDeps, makePlay());
     expect(p.queue.size()).toBe(1);
 
-    // Goes inactive before the tick — the flag state itself never changes.
     await p.gameStateStore.removeActiveUser(USER_ID);
 
     const result = await runDispatcherTick(p.tickDeps);
 
     expect(result).toEqual({
       processed: 1,
-      delivered: 0,
-      droppedStale: 1,
+      delivered: 1,
+      droppedStale: 0,
       droppedMissingUser: 0,
       droppedRateLimited: 0,
     });
-    expect(p.queue.size()).toBe(0);
-    expect(p.persistence.records).toHaveLength(0);
-    expect(p.realtimeBus.published).toHaveLength(0);
+    expect(p.persistence.records).toHaveLength(1);
+    expect(p.realtimeBus.published).toHaveLength(1);
   });
 
   it('stale event drop: a superseding play invalidates the queued event before it fires', async () => {

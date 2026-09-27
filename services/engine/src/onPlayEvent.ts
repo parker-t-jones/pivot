@@ -25,19 +25,16 @@ export interface OnPlayEventDeps {
   clock?: Clock;
 }
 
-/** Section 8 "User candidate selection": stakeholders in either team who are currently active. */
-async function getActiveUsersWithStakeIn(
+/** Users whose lineup includes either team. Decision 8: a backgrounded user is still a candidate. */
+async function getUsersWithStakeIn(
   gameState: GameStateProvider,
   state: GameState,
 ): Promise<string[]> {
-  const [homeStakes, awayStakes, active] = await Promise.all([
+  const [homeStakes, awayStakes] = await Promise.all([
     gameState.getUsersWithStakeIn(state.homeTeamId),
     gameState.getUsersWithStakeIn(state.awayTeamId),
-    gameState.getActiveUsers(),
   ]);
-  const stakeholders = new Set([...homeStakes, ...awayStakes]);
-  const activeSet = new Set(active);
-  return [...stakeholders].filter((userId) => activeSet.has(userId));
+  return [...new Set([...homeStakes, ...awayStakes])];
 }
 
 /**
@@ -67,8 +64,8 @@ export async function onPlayEvent(deps: OnPlayEventDeps, play: PlayEvent): Promi
   // 2. Filter out non-interesting plays.
   if (!isInterestingStateChange(oldState, newState)) return;
 
-  // 3. Find active users with a stake in this game.
-  const candidateUsers = await getActiveUsersWithStakeIn(deps.gameState, newState);
+  // 3. Find users whose lineup includes this game, active socket or not (Decision 8).
+  const candidateUsers = await getUsersWithStakeIn(deps.gameState, newState);
 
   // 4. Recompute flag state per candidate and emit deltas.
   await Promise.all(

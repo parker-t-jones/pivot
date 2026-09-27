@@ -3,8 +3,8 @@ import type { GameStateProvider } from '@pivot/engine';
 /**
  * The dispatcher/API-side hot-path store (PLAN.md Section 7 Redis schemas). Extends the engine's
  * read/write `GameStateProvider` (Section 8 `redis.*` calls) with the active-user lifecycle needed by
- * the dispatcher's `isStillRelevant` liveness gate, the WebSocket connection lifecycle, and
- * `/session/heartbeat`.
+ * the WebSocket connection lifecycle, and `/session/heartbeat`. Push delivery does not read it
+ * (Decision 8).
  *
  * `active_users` is modeled as a sorted set scored by expiry-ms (sprint decision #4): a plain Redis
  * set can't express Section 7's "user_ids with viewing session in last 5 min" TTL. Membership is
@@ -20,7 +20,7 @@ export interface GameStateStore extends GameStateProvider {
   markUserActive(userId: string, ttlMs: number): Promise<void>;
   /** Drop a user immediately (WebSocket disconnect). */
   removeActiveUser(userId: string): Promise<void>;
-  /** Liveness check used by the dispatcher's `isStillRelevant` gate. `true` iff not expired. */
+  /** WebSocket presence. `true` iff not expired. Not consulted before a push. */
   isUserActive(userId: string): Promise<boolean>;
   /** Lazy maintenance sweep of expired members (`zremrangebyscore active_users 0 <now-1>`). */
   sweepExpiredActiveUsers(): Promise<void>;
