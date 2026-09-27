@@ -15,6 +15,10 @@ const envSchema = z.object({
   UPSTASH_REDIS_TCP_URL: z.string().optional(),
   /** Authorization value RevenueCat sends on webhook POSTs (optional until billing is wired). */
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
+  /** `none` logs and does not hit the network. `expo` constructs `ExpoPushNotifier`. */
+  PUSH_DRIVER: z.enum(['expo', 'none']).default('none'),
+  /** Optional Expo access token. `expo` still constructs without it. */
+  EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
   PORT: z.coerce.number().int().positive().default(3000),
 });
 
