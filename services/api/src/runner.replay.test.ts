@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   IncrementalResumptionTracker,
+  classifyPlayType,
   onPlayEvent,
   type PlayEvent,
   type ResumptionResolution,
@@ -194,10 +195,11 @@ describe('ATL @ GB replay', () => {
     // 21 completed drives. The first has no prior possession, so the tracker opens 20 windows.
     // Halftime aborts one. 19 resolve REAL_ACTION. That is the possession-change derivation.
     // This user is on offense for both teams, one player each, so a possession flip keeps
-    // priority at 2 and emits nothing. The gate enqueues 16 flag_added, 17 flag_removed,
-    // 9 priority_increased, and 3 priority_decreased. Only flag_added pushes or counts
-    // against the rate limit, and this game stays under 3 flag_added per 60s, so all 45
-    // events are delivered and 16 pushes go out.
+    // priority at 2 and emits nothing. After collapse and mid-drive release the gate enqueues
+    // 16 flag_added, 16 flag_removed, 9 priority_increased, and 3 priority_decreased. One
+    // flag_removed is still parked at the final whistle. Only flag_added pushes, and this
+    // game stays under 3 flag_added per 60s. Six of the 44 enqueued events are stale by
+    // the time the next real play releases them, so 38 are delivered.
     const windowsOpened = driveCount - 1;
     const abortedWindows = 1;
     const resolvedWindows = windowsOpened - abortedWindows;
@@ -213,12 +215,12 @@ describe('ATL @ GB replay', () => {
     }
     expect(Object.fromEntries(byType)).toEqual({
       flag_added: 16,
-      flag_removed: 17,
+      flag_removed: 16,
       priority_increased: 9,
       priority_decreased: 3,
     });
-    expect(first.dropped).toEqual({ stale: 0, rate: 0, delivered: 45 });
-    expect(persistence.records).toHaveLength(45);
+    expect(first.dropped).toEqual({ stale: 6, rate: 0, delivered: 38 });
+    expect(persistence.records).toHaveLength(38);
     expect(pushes).toHaveLength(16);
     expect(hits).toHaveLength(16);
 
@@ -236,7 +238,7 @@ describe('ATL @ GB replay', () => {
         expect(item.scheduledFireAt).toBeGreaterThanOrEqual(release.openAt);
         expect(item.scheduledFireAt).toBeLessThanOrEqual(release.resolveAt);
       } else {
-        expect(item.scheduledFireAt).toBe(producedAt);
+        expect(item.scheduledFireAt).toBeGreaterThanOrEqual(producedAt ?? Number.POSITIVE_INFINITY);
       }
       expect(item.scheduledFireAt).not.toBe((producedAt ?? 0) + 75_000);
       expect(item.scheduledFireAt).not.toBe((producedAt ?? 0) + 60_000);
@@ -249,7 +251,9 @@ describe('ATL @ GB replay', () => {
         expect(row.firedAt).toBeGreaterThanOrEqual(release.openAt);
         expect(row.firedAt).toBeLessThanOrEqual(release.resolveAt);
       } else {
-        expect(row.firedAt).toBe(first.playAt.get(row.triggeringPlayId ?? ''));
+        expect(row.firedAt).toBeGreaterThanOrEqual(
+          first.playAt.get(row.triggeringPlayId ?? '') ?? Number.POSITIVE_INFINITY,
+        );
       }
     }
     for (const push of pushes) {
@@ -382,6 +386,9 @@ async function playGame(input: {
     playAt.set(play.playId, input.clock.now);
     plays += 1;
     gate.beginPlay(play.gameId);
+    if (classifyPlayType(play.playType) === 'REAL_ACTION') {
+      await gate.releaseMidDrive(play.gameId);
+    }
     tracker.observe(play, input.clock.now);
     await onPlayEvent(
       {

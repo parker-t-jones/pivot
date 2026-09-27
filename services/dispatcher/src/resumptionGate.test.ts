@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { ResumptionResolution } from '@pivot/engine';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { RESUMPTION_CEILING_MS, type ResumptionResolution } from '@pivot/engine';
 import type { FlagEvent, FlagState } from '@pivot/shared';
 import { InMemoryFlagEventQueue } from './inMemoryQueue.js';
 import { ResumptionGatedDispatcher, type GatedEventRecord } from './resumptionGate.js';
@@ -48,6 +48,9 @@ function gate(now: { value: number }): {
 }
 
 describe('ResumptionGatedDispatcher', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it('fires immediately when the same play opens and resolves the window', async () => {
     const now = { value: 5_000 };
     const { dispatcher, queue, records } = gate(now);
@@ -131,12 +134,17 @@ describe('ResumptionGatedDispatcher', () => {
     await dispatcher.endPlay('g1');
 
     const due = await queue.due(now.value, 10);
-    expect(due).toHaveLength(2);
+    expect(due).toHaveLength(1);
     const byGame = new Map(due.map((item) => [item.event.gameId, item]));
     expect(byGame.get('g1')?.event.id).toBe('high');
     expect(byGame.get('g1')?.event.newState.priorityScore).toBe(9);
     expect(byGame.get('g1')?.triggeringPlayId).toBe('play-high');
-    expect(byGame.get('g2')?.event.id).toBe('other');
+    expect(queue.size()).toBe(1);
+
+    await dispatcher.releaseMidDrive('g2');
+    const after = await queue.due(now.value, 10);
+    expect(after).toHaveLength(2);
+    expect(after.find((item) => item.event.gameId === 'g2')?.event.id).toBe('other');
   });
 
   it('collapses a parked window to the higher priorityScore', async () => {
@@ -207,5 +215,45 @@ describe('ResumptionGatedDispatcher', () => {
       '[gate] collapsed flag_added g1 for u1 into flag_added',
     ]);
     logs.mockRestore();
+  });
+
+  it('keeps a mid-drive flag_added parked through a non-real play and releases it on the next snap', async () => {
+    const now = { value: 1_000 };
+    const { dispatcher, queue } = gate(now);
+    await dispatcher.dispatch(makeEvent({ id: 'red-zone' }), 'play-red-zone');
+    expect(queue.size()).toBe(0);
+
+    now.value = 2_000;
+    dispatcher.beginPlay('g1');
+    await dispatcher.endPlay('g1');
+    expect(queue.size()).toBe(0);
+
+    now.value = 8_000;
+    dispatcher.beginPlay('g1');
+    await dispatcher.releaseMidDrive('g1');
+    await dispatcher.dispatch(makeEvent({ id: 'later' }), 'play-snap');
+    await dispatcher.endPlay('g1');
+
+    const due = await queue.due(now.value, 10);
+    expect(due.map((item) => item.event.id)).toEqual(['red-zone']);
+    expect(due[0]?.event.scheduledFireAt).toBe(8_000);
+    expect(due[0]?.triggeringPlayId).toBe('play-red-zone');
+    expect(queue.size()).toBe(1);
+  });
+
+  it('releases a parked mid-drive event from the silence ceiling when no play arrives', async () => {
+    vi.useFakeTimers();
+    const now = { value: 3_000 };
+    const { dispatcher, queue } = gate(now);
+    await dispatcher.dispatch(makeEvent({ id: 'waiting' }), 'play-1');
+    expect(queue.size()).toBe(0);
+
+    now.value = 3_000 + RESUMPTION_CEILING_MS;
+    await vi.advanceTimersByTimeAsync(RESUMPTION_CEILING_MS);
+
+    const due = await queue.due(now.value, 10);
+    expect(due).toHaveLength(1);
+    expect(due[0]?.event.id).toBe('waiting');
+    expect(due[0]?.event.scheduledFireAt).toBe(now.value);
   });
 });

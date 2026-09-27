@@ -1,11 +1,14 @@
 /**
- * `EventDispatcher` that holds flag events until resumption resolves.
+ * `EventDispatcher` that holds flag events until they can be released without spoiling the play.
  *
- * On release, `scheduledFireAt` is the clock's now. A window that is still open parks the event.
- * `ABORTED` drops it. An event dispatched after the resolution on that same play fires immediately.
+ * A possession-change window parks until that window resolves. An event produced while no window
+ * is open waits for the next real play in the game, or the silence ceiling if none arrives
+ * (Decision 9). On release, `scheduledFireAt` is the clock's now. `ABORTED` drops a possession
+ * window. An event dispatched on the play that resolves a possession window fires with that play.
  */
 
 import type { EventDispatcher, ResumptionResolution } from '@pivot/engine';
+import { RESUMPTION_CEILING_MS } from '@pivot/engine';
 import type { FlagEvent } from '@pivot/shared';
 import { collapseByUser, isPushEligibleEvent } from './collapseFlagEvents.js';
 import type { FlagEventQueue } from './queue.js';
@@ -33,7 +36,7 @@ interface WindowCandidate {
   triggeringPlayId: string | null;
   decision: 'fire_immediately' | 'held_pending_resumption';
   holdMs: number;
-  resolution: ResumptionResolution;
+  resolution: ResumptionResolution | null;
 }
 
 export interface ResumptionGatedDispatcherDeps {
@@ -76,6 +79,9 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
    * `endPlay`, after `onPlayEvent` has dispatched everything that play will emit.
    */
   private readonly resolving = new Map<string, WindowCandidate[]>();
+  /** gameId -> events dispatched while no possession window is open, waiting for the next real play. */
+  private readonly midDrive = new Map<string, ParkedEvent[]>();
+  private readonly midDriveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(private readonly deps: ResumptionGatedDispatcherDeps) {}
 
@@ -184,7 +190,62 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
       return;
     }
 
-    await this.enqueueNow(event, triggeringPlayId, 'fire_immediately', 0, resolution);
+    if (resolution) {
+      await this.enqueueNow(event, triggeringPlayId, 'fire_immediately', 0, resolution);
+      return;
+    }
+    this.parkMidDrive(gameId, event, triggeringPlayId);
+  }
+
+  /**
+   * Releases events that were waiting for the next real play. Call this at the start of a
+   * `REAL_ACTION` play, before that play's own events are dispatched, so those new events stay
+   * parked. The silence ceiling calls it too, when no play arrives.
+   */
+  async releaseMidDrive(gameId: string): Promise<void> {
+    this.clearMidDriveCeiling(gameId);
+    const list = this.midDrive.get(gameId);
+    if (!list || list.length === 0) return;
+    this.midDrive.delete(gameId);
+
+    const now = this.now();
+    const held: WindowCandidate[] = list.map(({ event, parkedAt, triggeringPlayId }) => ({
+      event,
+      triggeringPlayId,
+      decision: 'held_pending_resumption',
+      holdMs: now - parkedAt,
+      resolution: null,
+    }));
+    if (this.playInProgress.has(gameId)) {
+      const batch = this.resolving.get(gameId) ?? [];
+      batch.push(...held);
+      this.resolving.set(gameId, batch);
+      return;
+    }
+    await this.enqueueCollapsed(held);
+  }
+
+  private parkMidDrive(gameId: string, event: FlagEvent, triggeringPlayId: string | null): void {
+    const list = this.midDrive.get(gameId) ?? [];
+    list.push({ event, parkedAt: this.now(), triggeringPlayId });
+    this.midDrive.set(gameId, list);
+    this.armMidDriveCeiling(gameId);
+  }
+
+  private armMidDriveCeiling(gameId: string): void {
+    if (this.midDriveTimers.has(gameId)) return;
+    const timer = setTimeout(() => {
+      this.midDriveTimers.delete(gameId);
+      void this.releaseMidDrive(gameId);
+    }, RESUMPTION_CEILING_MS);
+    timer.unref?.();
+    this.midDriveTimers.set(gameId, timer);
+  }
+
+  private clearMidDriveCeiling(gameId: string): void {
+    const timer = this.midDriveTimers.get(gameId);
+    if (timer !== undefined) clearTimeout(timer);
+    this.midDriveTimers.delete(gameId);
   }
 
   /** Flushes events parked while the window was open, once its outcome is known. */
