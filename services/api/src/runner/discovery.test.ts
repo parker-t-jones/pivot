@@ -10,6 +10,7 @@ function game(espnEventId: string, status = 'scheduled'): SeededGame {
     awayTeamId: 'away',
     week: 4,
     status,
+    scheduledStart: '2026-09-13T17:00:00.000Z',
     abbrToUuid: new Map([
       ['H', 'home'],
       ['A', 'away'],

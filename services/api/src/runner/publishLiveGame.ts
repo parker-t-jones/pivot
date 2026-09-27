@@ -1,0 +1,38 @@
+import {
+  buildGameSummary,
+  realtimeGameChannel,
+  type GameCatalog,
+  type GameStateStore,
+  type RealtimeBus,
+} from '@pivot/dispatcher';
+import { buildEnvelope } from '../websocket/messages.js';
+
+/**
+ * After an applied play, publish the same object `GET /games/live` returns for this game.
+ * A game that is not `in_progress` is not on that route, so it is not published.
+ */
+export async function publishLiveGame(deps: {
+  gameId: string;
+  scheduledStart: string;
+  gameState: GameStateStore;
+  catalog: GameCatalog;
+  realtime: RealtimeBus;
+  now?: number;
+}): Promise<void> {
+  const state = await deps.gameState.getGameState(deps.gameId);
+  if (!state || state.status !== 'in_progress') return;
+  const summary = buildGameSummary(state, await deps.catalog.getGameSummary(deps.gameId));
+  await deps.realtime.publish(
+    realtimeGameChannel(deps.gameId),
+    buildEnvelope(
+      'game_state',
+      {
+        game_id: deps.gameId,
+        status: 'in_progress' as const,
+        scheduled_start: deps.scheduledStart,
+        ...summary,
+      },
+      deps.now,
+    ),
+  );
+}

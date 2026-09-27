@@ -34,6 +34,7 @@ import { followGame } from './followGame.js';
 import { LEADER_KEY, leaderOwner, type LeaderLockRedis } from './leaderLock.js';
 import { startLeaderLoop, type LeaderLoopHandle } from './leaderLoop.js';
 import { createPlaySession } from './playSession.js';
+import { publishLiveGame } from './publishLiveGame.js';
 import { superviseGame } from './superviseGame.js';
 import type { SeenPlaySet } from './seenPlays.js';
 
@@ -150,6 +151,17 @@ async function runLeader(
         onPlayEvent: async (raw) => {
           const play = withGameWeek(translatePlay(raw, game.id, game.abbrToUuid), game.week);
           await session.handlePlay(play);
+          try {
+            await publishLiveGame({
+              gameId: game.id,
+              scheduledStart: game.scheduledStart,
+              gameState: deps.gameState,
+              catalog: deps.gameCatalog,
+              realtime: deps.realtime,
+            });
+          } catch (error) {
+            console.error(`[runner] game_state publish failed ${game.id}: ${failureReason(error)}`);
+          }
         },
       });
     } finally {

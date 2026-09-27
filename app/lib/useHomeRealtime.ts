@@ -9,6 +9,7 @@ import { shouldConnectHomeRealtime } from './homeState';
 import type { FlagEventPayload } from './flagEventPayload';
 import type { NflSeasonType } from './nflState';
 import { RealtimeClient, type WebSocketConstructor } from './realtimeClient';
+import type { LiveGame } from './schedule';
 import { supabase } from './supabase';
 
 export interface UseHomeRealtimeOptions {
@@ -18,6 +19,9 @@ export interface UseHomeRealtimeOptions {
   /** Home finished its initial load (socket must not race cold-start `/flags/current`). */
   homeReady: boolean;
   onFlagEvent: (payload: FlagEventPayload) => void;
+  onGameState: (game: LiveGame) => void;
+  /** Stake games on the week slate. Home sends `subscribe_game` for each. */
+  gameIds: readonly string[];
   /** Refetch `/flags/current` after re-connect / foreground resume (not initial mount connect). */
   onReconcile: () => void | Promise<void>;
   /** Test seam — omit in production (uses platform WebSocket + env base URL). */
@@ -38,6 +42,8 @@ export function useHomeRealtime(options: UseHomeRealtimeOptions): void {
     hasLeagues,
     homeReady,
     onFlagEvent,
+    onGameState,
+    gameIds,
     onReconcile,
     apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL,
     WebSocketImpl,
@@ -45,8 +51,11 @@ export function useHomeRealtime(options: UseHomeRealtimeOptions): void {
   } = options;
 
   const onFlagEventRef = useRef(onFlagEvent);
+  const onGameStateRef = useRef(onGameState);
   const onReconcileRef = useRef(onReconcile);
+  const clientRef = useRef<RealtimeClient | null>(null);
   onFlagEventRef.current = onFlagEvent;
+  onGameStateRef.current = onGameState;
   onReconcileRef.current = onReconcile;
 
   const shouldConnect = shouldConnectHomeRealtime({
@@ -67,6 +76,9 @@ export function useHomeRealtime(options: UseHomeRealtimeOptions): void {
       onFlagEvent: (payload) => {
         onFlagEventRef.current(payload);
       },
+      onGameState: (game) => {
+        onGameStateRef.current(game);
+      },
       onReconnected: () => {
         void onReconcileRef.current();
       },
@@ -74,6 +86,8 @@ export function useHomeRealtime(options: UseHomeRealtimeOptions): void {
 
     // Connect when foregrounded. Tear down only on true `background` (not `inactive` /
     // Control Center), per Phase 3 — avoids reconnect thrash on brief inactive transitions.
+    clientRef.current = client;
+    client.setSubscribedGames(gameIds);
     if (AppState.currentState === 'active') {
       client.start();
     }
@@ -98,7 +112,12 @@ export function useHomeRealtime(options: UseHomeRealtimeOptions): void {
     return () => {
       appSub.remove();
       authSub.unsubscribe();
+      clientRef.current = null;
       client.stop();
     };
   }, [shouldConnect, apiBaseUrl, getAccessToken, WebSocketImpl]);
+
+  useEffect(() => {
+    clientRef.current?.setSubscribedGames(gameIds);
+  }, [gameIds]);
 }

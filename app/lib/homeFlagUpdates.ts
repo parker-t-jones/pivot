@@ -206,6 +206,24 @@ export function applyFlagEventToHome(
 }
 
 /**
+ * Replaces one stake game in the live list from a `game_state` message and recomputes the branch.
+ * A game that was not on the list is added, so a kickoff can show up before the 30s reconcile.
+ */
+export function applyGameStateToHome(
+  slice: HomeFlagSlice,
+  game: LiveGame,
+  now: Date = new Date(),
+): HomeFlagSlice {
+  const index = slice.liveStakeGames.findIndex((row) => row.game_id === game.game_id);
+  const liveStakeGames =
+    index === -1
+      ? [...slice.liveStakeGames, game]
+      : slice.liveStakeGames.map((row, i) => (i === index ? game : row));
+  const next: HomeFlagSlice = { ...slice, liveStakeGames };
+  return { ...next, branch: recomputeBranch(next, next.flag !== null, now) };
+}
+
+/**
  * Reconciles Home against a fresh `GET /flags/current` after a reconnect / foreground resume.
  * Flags pushed while the socket was down have no replay — this closes the gap.
  */

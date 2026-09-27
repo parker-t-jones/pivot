@@ -39,6 +39,7 @@ export interface SeededGame {
   awayTeamId: string;
   week: number;
   status: string;
+  scheduledStart: string;
   abbrToUuid: Map<string, string>;
 }
 

@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  isLiveDisplayPhase,
-  shouldConnectHomeRealtime,
-} from './homeState';
+import { isLiveDisplayPhase, shouldConnectHomeRealtime } from './homeState';
 import {
   REALTIME_PING_INTERVAL_MS,
   REALTIME_PONG_TIMEOUT_MS,
@@ -259,6 +256,39 @@ describe('RealtimeClient', () => {
     });
     expect(onFlagEvent).toHaveBeenCalledTimes(1);
     expect(onFlagEvent.mock.calls[0]?.[0].game_id).toBe('g');
+  });
+
+  it('sends subscribe_game and applies a game_state message to the live list callback', async () => {
+    const onGameState = vi.fn();
+    const client = createClient({ onGameState });
+    client.setSubscribedGames(['g1']);
+    client.start();
+    const socket = await flushConnect();
+    socket.open();
+    expect(socket.sent.map((raw) => JSON.parse(raw) as { type: string; payload: unknown })).toEqual(
+      [
+        expect.objectContaining({
+          type: 'subscribe_game',
+          payload: { game_id: 'g1' },
+        }),
+      ],
+    );
+    socket.emitJson({
+      id: 'e2',
+      type: 'game_state',
+      timestamp: 2,
+      payload: {
+        game_id: 'g1',
+        status: 'in_progress',
+        scheduled_start: '2026-09-27T17:00:00Z',
+        home_team: 'GB',
+        away_team: 'ATL',
+        score: { home: 14, away: 7 },
+        quarter: 2,
+      },
+    });
+    expect(onGameState).toHaveBeenCalledTimes(1);
+    expect(onGameState.mock.calls[0]?.[0].score).toEqual({ home: 14, away: 7 });
   });
 
   it('sends ping on the amended ~15s interval and reconnects if pong is missed', async () => {

@@ -7,6 +7,7 @@
  */
 import { isFlagEventPayload, type FlagEventPayload } from './flagEventPayload';
 import { buildRealtimeWsUrl } from './realtimeUrl';
+import type { LiveGame } from './schedule';
 
 /** Amended Phase 3: ~15s against the server's 40s idle-close (PLAN still says 25s). */
 export const REALTIME_PING_INTERVAL_MS = 15_000;
@@ -38,6 +39,7 @@ export interface RealtimeClientOptions {
   apiBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
   onFlagEvent: (payload: FlagEventPayload) => void;
+  onGameState?: (game: LiveGame) => void;
   /**
    * Fires after a successful socket open that is NOT the first connect of this client instance
    * (drop/reconnect, token refresh, foreground resume after stop+start with same instance).
@@ -59,6 +61,8 @@ export class RealtimeClient {
   private readonly apiBaseUrl: string;
   private readonly getAccessToken: () => Promise<string | null>;
   private readonly onFlagEvent: (payload: FlagEventPayload) => void;
+  private readonly onGameState: ((game: LiveGame) => void) | null;
+  private subscribedGameIds: readonly string[] = [];
   private readonly onReconnected: () => void;
   private readonly WebSocketImpl: WebSocketConstructor;
   private readonly pingIntervalMs: number;
@@ -83,10 +87,10 @@ export class RealtimeClient {
     this.apiBaseUrl = options.apiBaseUrl;
     this.getAccessToken = options.getAccessToken;
     this.onFlagEvent = options.onFlagEvent;
+    this.onGameState = options.onGameState ?? null;
     this.onReconnected = options.onReconnected;
     this.WebSocketImpl =
-      options.WebSocketImpl ??
-      (globalThis.WebSocket as unknown as WebSocketConstructor);
+      options.WebSocketImpl ?? (globalThis.WebSocket as unknown as WebSocketConstructor);
     this.pingIntervalMs = options.pingIntervalMs ?? REALTIME_PING_INTERVAL_MS;
     this.pongTimeoutMs = options.pongTimeoutMs ?? REALTIME_PONG_TIMEOUT_MS;
     this.initialBackoffMs = options.initialBackoffMs ?? DEFAULT_BACKOFF_MS;
@@ -108,6 +112,12 @@ export class RealtimeClient {
 
   isOpen(): boolean {
     return this.socket?.readyState === 1;
+  }
+
+  /** Stake games on the week slate. Sent on the open socket, and again after each reconnect. */
+  setSubscribedGames(gameIds: readonly string[]): void {
+    this.subscribedGameIds = gameIds;
+    this.sendGameSubscriptions();
   }
 
   /** Begin connecting. Idempotent while already started. */
@@ -175,6 +185,7 @@ export class RealtimeClient {
       this.hasConnectedOnce = true;
       this.reconnectAttempt = 0;
       this.startPingLoop();
+      this.sendGameSubscriptions();
       if (isReconnect) {
         this.onReconnected();
       }
@@ -218,6 +229,29 @@ export class RealtimeClient {
 
     if (envelope.type === 'flag_event' && isFlagEventPayload(envelope.payload)) {
       this.onFlagEvent(envelope.payload);
+      return;
+    }
+
+    if (envelope.type === 'game_state' && this.onGameState && isLiveGame(envelope.payload)) {
+      this.onGameState(envelope.payload);
+    }
+  }
+
+  private sendGameSubscriptions(): void {
+    if (!this.isOpen() || !this.socket) return;
+    for (const gameId of this.subscribedGameIds) {
+      const envelope: RealtimeEnvelope = {
+        id: this.createId(),
+        type: 'subscribe_game',
+        timestamp: Date.now(),
+        payload: { game_id: gameId },
+      };
+      try {
+        this.socket.send(JSON.stringify(envelope));
+      } catch {
+        this.forceReconnect();
+        return;
+      }
     }
   }
 
@@ -262,10 +296,7 @@ export class RealtimeClient {
   private scheduleReconnect(): void {
     if (!this.started || this.intentionalClose) return;
     this.clearReconnectTimer();
-    const delay = Math.min(
-      this.initialBackoffMs * 2 ** this.reconnectAttempt,
-      this.maxBackoffMs,
-    );
+    const delay = Math.min(this.initialBackoffMs * 2 ** this.reconnectAttempt, this.maxBackoffMs);
     this.reconnectAttempt += 1;
     this.reconnectTimer = this.setTimeoutFn(() => {
       this.reconnectTimer = null;
@@ -316,4 +347,24 @@ export class RealtimeClient {
       this.reconnectTimer = null;
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isLiveGame(value: unknown): value is LiveGame {
+  if (!isRecord(value)) return false;
+  const score = value['score'];
+  if (!isRecord(score)) return false;
+  return (
+    typeof value['game_id'] === 'string' &&
+    value['status'] === 'in_progress' &&
+    typeof value['scheduled_start'] === 'string' &&
+    typeof value['home_team'] === 'string' &&
+    typeof value['away_team'] === 'string' &&
+    typeof score['home'] === 'number' &&
+    typeof score['away'] === 'number' &&
+    typeof value['quarter'] === 'number'
+  );
 }

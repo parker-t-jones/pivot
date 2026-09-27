@@ -17,7 +17,7 @@ export class SupabaseGameDirectory implements GameDirectory {
   async findByEspnId(espnEventId: string): Promise<SeededGame | null> {
     const { data: game, error } = await this.client
       .from('games')
-      .select('id, home_team_id, away_team_id, week, status')
+      .select('id, home_team_id, away_team_id, week, status, scheduled_start')
       .eq('sportradar_id', `seed:espn:${espnEventId}`)
       .maybeSingle();
     if (error) throw new Error(`games lookup failed: ${error.message}`);
@@ -40,6 +40,7 @@ export class SupabaseGameDirectory implements GameDirectory {
       awayTeamId: game.away_team_id,
       week: game.week,
       status: game.status,
+      scheduledStart: game.scheduled_start,
       abbrToUuid,
     };
   }

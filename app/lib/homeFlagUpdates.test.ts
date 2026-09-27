@@ -4,12 +4,14 @@ import type { FlagEventPayload } from './flagEventPayload';
 import type { CurrentFlag } from './gameDisplay';
 import {
   applyFlagEventToHome,
+  applyGameStateToHome,
   flagEventToCurrentFlag,
   reconcileHomeWithFlagsCurrent,
   recommendedActionFromFlagEvent,
   type HomeFlagSlice,
 } from './homeFlagUpdates';
 import type { NflStateResponse } from './nflState';
+import type { LiveGame } from './schedule';
 
 const NFL: NflStateResponse = {
   season: '2026',
@@ -472,11 +474,50 @@ describe('reconcileHomeWithFlagsCurrent', () => {
   });
 });
 
+function liveGame(overrides: Partial<LiveGame> = {}): LiveGame {
+  return {
+    game_id: 'g1',
+    status: 'in_progress',
+    scheduled_start: '2026-09-27T17:00:00Z',
+    home_team: 'GB',
+    away_team: 'ATL',
+    home_team_name: 'Packers',
+    away_team_name: 'Falcons',
+    home_team_primary_color: '#203731',
+    home_team_secondary_color: '#FFB612',
+    away_team_primary_color: '#A71930',
+    away_team_secondary_color: '#000000',
+    score: { home: 0, away: 0 },
+    quarter: 1,
+    time_remaining_sec: 900,
+    possession_team: 'GB',
+    yards_to_endzone: 75,
+    down: 1,
+    distance: 10,
+    in_red_zone: false,
+    ...overrides,
+  };
+}
+
+describe('applyGameStateToHome', () => {
+  it('a game_state message updates liveStakeGames and recomputes the branch', () => {
+    const existing = liveGame({ score: { home: 7, away: 0 }, quarter: 1 });
+    const updated = liveGame({ score: { home: 14, away: 7 }, quarter: 2, time_remaining_sec: 400 });
+    const slice = baseSlice({
+      branch: { branch: 'state4' },
+      liveStakeGames: [existing],
+    });
+
+    const next = applyGameStateToHome(slice, updated, new Date('2026-09-27T18:00:00Z'));
+
+    expect(next.liveStakeGames).toEqual([updated]);
+    expect(next.branch).toEqual({ branch: 'state2' });
+  });
+});
+
 describe('flagEventToCurrentFlag', () => {
   it('maps wire payload fields onto CurrentFlag', () => {
-    const flag = flagEventToCurrentFlag(
-      flagPayload({ event_type: 'flag_added', game_id: 'g1' }),
-    );
+    const flag = flagEventToCurrentFlag(flagPayload({ event_type: 'flag_added', game_id: 'g1' }));
     expect(flag.game_id).toBe('g1');
     expect(flag.priority_score).toBe(50);
     expect(flag.reasons).toEqual(['offense_active']);

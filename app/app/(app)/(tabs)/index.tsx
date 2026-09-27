@@ -9,10 +9,7 @@ import { EmptyState } from '../../../components/EmptyState';
 import { ErrorState } from '../../../components/ErrorState';
 import { HomeDashboard } from '../../../components/HomeDashboard';
 import { HomeLiveIdleCard } from '../../../components/HomeLiveIdleCard';
-import {
-  HomePregameView,
-  type PregameHero,
-} from '../../../components/HomePregameView';
+import { HomePregameView, type PregameHero } from '../../../components/HomePregameView';
 import { IdleHomeCard } from '../../../components/IdleHomeCard';
 import { LoadingState } from '../../../components/LoadingState';
 import { NowActiveCard } from '../../../components/NowActiveCard';
@@ -37,10 +34,12 @@ import {
 } from '../../../lib/gameDisplay';
 import {
   applyFlagEventToHome,
+  applyGameStateToHome,
   type HomeFlagSlice,
 } from '../../../lib/homeFlagUpdates';
 import {
   filterLiveStakeGames,
+  gameHasStake,
   groupLineupByGame,
   isLiveDisplayPhase,
   nextStakeKickoff,
@@ -296,6 +295,21 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const onGameState = useCallback((game: LiveGame) => {
+    setHomeData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, ...applyGameStateToHome(toFlagSlice(prev), game) };
+    });
+  }, []);
+
+  const stakeGameIds = useMemo(() => {
+    if (!homeData) return [];
+    const teams = stakeTeamAbbreviations(homeData.playerTeamMap);
+    return homeData.weekGames
+      .filter((game) => gameHasStake(game.home_team, game.away_team, teams))
+      .map((game) => game.game_id);
+  }, [homeData?.weekGames, homeData?.playerTeamMap]);
+
   const onReconcileHome = useCallback(async () => {
     try {
       // Full Home reload — not flags-only. Foreground / WS reconnect must pick up games that
@@ -311,6 +325,8 @@ export default function HomeScreen() {
     hasLeagues: homeData?.hasLeagues ?? false,
     homeReady: !isLoading && homeData !== null && loadError === null,
     onFlagEvent,
+    onGameState,
+    gameIds: stakeGameIds,
     onReconcile: onReconcileHome,
   });
 
