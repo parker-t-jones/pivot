@@ -86,6 +86,15 @@ export {
   type ResumptionGatedDispatcherDeps,
 } from './resumptionGate.js';
 
+export {
+  InMemoryResumptionOpenStore,
+  ResumptionCeiling,
+  resumptionOpenKey,
+  type ResumptionCeilingDeps,
+  type ResumptionOpenRecord,
+  type ResumptionOpenStore,
+} from './resumptionCeiling.js';
+
 export { deliverFlagEvent, type DeliveryDeps, type FlagEventEnvelope } from './delivery.js';
 
 export {

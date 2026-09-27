@@ -6,16 +6,12 @@
  * measured against the last play that had a known possession, and procedural plays since then are
  * prepended, so a timeout then a snap is `watchForResumption(previous, [timeout, snap])`.
  *
- * `CEILING_FALLBACK` from the pure function still requires a later play already in the array. The
- * timer here is only the silence hook.
+ * `CEILING_FALLBACK` from the pure function still requires a later play already in the array.
+ * Silence is not handled here. The owner calls `applyWallClockCeiling` when its timer fires.
  */
 
 import type { PlayEvent } from './playEvent.js';
-import {
-  RESUMPTION_CEILING_MS,
-  watchForResumption,
-  type ObservedPlay,
-} from './resumptionWatcher.js';
+import { watchForResumption, type ObservedPlay } from './resumptionWatcher.js';
 
 /** Why a window closed, and — for `real_action` / `ceiling` — when play is considered resumed. */
 export type ResumptionResolution =
@@ -58,7 +54,6 @@ interface OpenWindow {
   precedingPlay: ObservedPlay;
   /** Plays from the possession-revealing one onward — exactly the watcher's second argument. */
   buffer: ObservedPlay[];
-  ceilingTimer: NodeJS.Timeout;
 }
 
 /**
@@ -116,11 +111,7 @@ export class IncrementalResumptionTracker {
       return null;
     }
 
-    const window: OpenWindow = {
-      precedingPlay: previous,
-      buffer,
-      ceilingTimer: this.armCeilingTimer(previous, revealingPlay),
-    };
+    const window: OpenWindow = { precedingPlay: previous, buffer };
     this.openWindow = window;
     this.callbacks.onWindowOpened?.(this.gameId, { precedingPlay: previous, revealingPlay });
 
@@ -130,12 +121,23 @@ export class IncrementalResumptionTracker {
     return resolution;
   }
 
-  /** Clears the pending ceiling timer so a finished game can't keep the process alive. */
+  /** Drops an open window without resolving it. Does not fire the silence ceiling. */
   dispose(): void {
-    if (this.openWindow) {
-      clearTimeout(this.openWindow.ceilingTimer);
-      this.openWindow = null;
-    }
+    this.openWindow = null;
+  }
+
+  /** Closes the open window as a wall-clock ceiling. No-op when no window is open. */
+  applyWallClockCeiling(now: number): void {
+    const window = this.openWindow;
+    if (!window) return;
+    const revealing = window.buffer[0];
+    const openedAt = revealing?.observedAt ?? now;
+    this.closeWindow({
+      outcome: 'CEILING_FALLBACK',
+      precedingPlay: window.precedingPlay,
+      elapsedMs: now - openedAt,
+      resolvedBy: 'wall_clock_timer',
+    });
   }
 
   /** Runs the real pure function over the current buffer and maps its result onto a resolution. */
@@ -173,33 +175,7 @@ export class IncrementalResumptionTracker {
     }
   }
 
-  /**
-   * The wall-clock half of the ceiling. Anchored on `revealingPlay.observedAt` to match the pure
-   * function's own `elapsedMs` reference point, so both paths report a comparable number.
-   */
-  private armCeilingTimer(
-    precedingPlay: ObservedPlay,
-    revealingPlay: ObservedPlay,
-  ): NodeJS.Timeout {
-    const deadline = revealingPlay.observedAt + RESUMPTION_CEILING_MS;
-    const timer = setTimeout(
-      () => {
-        if (!this.openWindow) return;
-        this.closeWindow({
-          outcome: 'CEILING_FALLBACK',
-          precedingPlay,
-          elapsedMs: Date.now() - revealingPlay.observedAt,
-          resolvedBy: 'wall_clock_timer',
-        });
-      },
-      Math.max(0, deadline - Date.now()),
-    );
-    timer.unref?.();
-    return timer;
-  }
-
   private closeWindow(resolution: ResumptionResolution): void {
-    if (this.openWindow) clearTimeout(this.openWindow.ceilingTimer);
     this.openWindow = null;
     this.callbacks.onResolved(this.gameId, resolution);
   }
