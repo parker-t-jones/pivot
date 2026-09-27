@@ -51,7 +51,7 @@ All three share the same image. They must **not** share an in-process memory cac
 |---|---|---|
 | `api` | No — `pivot-sports-api` | **Allowed** (`min_machines_running = 0` in `fly.toml`). Prefer `fly scale count -a pivot-sports-api api=1` for TestFlight if cold starts hurt. |
 | `worker` | No — `pivot-sports-api` | **Never.** After first deploy: `fly scale count -a pivot-sports-api worker=1`. `[[restart]] policy = always` keeps it up once scaled. |
-| `runner` | No — `pivot-sports-api` | **Never.** After deploy: `fly scale count -a pivot-sports-api runner=1`. Same VM as the worker (`shared-cpu-1x` @ 256MB). `[[restart]] policy = always` includes `runner`. Then `fly logs -a pivot-sports-api --process runner` should show `leader` and `discovery live=0` on a weekday, with no crash loop. |
+| `runner` | No — `pivot-sports-api` | **Never.** After deploy: `fly scale count -a pivot-sports-api runner=1`. `shared-cpu-1x` @ 512MB. `[[restart]] policy = always` includes `runner`. Then `fly logs -a pivot-sports-api --process runner` should show `leader` and `discovery live=0` on a weekday, with no crash loop. |
 
 Do **not** run API, worker, and runner as separate Fly apps. Shared secrets + one image.
 
@@ -351,7 +351,7 @@ Create Redis (region near `iad`). On `pivot-sports-api`, set `REDIS_URL` to Upst
 | Region | **`iad`** |
 | API VM | `shared-cpu-1x` @ 512MB; `min_machines_running = 0` (may scale to zero) |
 | Worker VM | `shared-cpu-1x` @ 256MB; after deploy **`fly scale count -a pivot-sports-api worker=1`** |
-| Runner VM | `shared-cpu-1x` @ 256MB (same as worker); after deploy **`fly scale count -a pivot-sports-api runner=1`**, then **`fly logs -a pivot-sports-api --process runner`** shows `leader` and `discovery live=0` on a weekday, with no crash loop |
+| Runner VM | `shared-cpu-1x` @ 512MB; after deploy **`fly scale count -a pivot-sports-api runner=1`**, then **`fly logs -a pivot-sports-api --process runner`** shows `leader` and `discovery live=0` on a weekday, with no crash loop |
 | HTTP | `http_service` internal 3000, HTTPS, check `GET /health`. `processes = ['api']` — worker and runner have no public port. |
 
 ### 7.3 Health check
@@ -371,8 +371,9 @@ Rough, always-on, one region (pre–Oct 2026 Fly list prices; Oct 1 2026 bump ~+
 
 | Item | Estimate |
 |---|---|
-| Fly API machine (shared-1x 1GB, always on) | ~$8–16/mo |
-| Fly worker (shared-1x 512MB, always on) | ~$4–8/mo |
+| Fly API machine (`shared-cpu-1x` @ 512MB, may scale to zero) | ~$4–8/mo |
+| Fly worker (`shared-cpu-1x` @ 256MB, always on) | ~$2–4/mo |
+| Fly runner (`shared-cpu-1x` @ 512MB, always on) | ~$4–8/mo |
 | Fly bandwidth | low for API JSON — a few $ |
 | Upstash Redis | $0–10/mo (PLAN.md) |
 | Supabase Free | $0 (pause risk) or **Pro ~$25/mo** |
@@ -450,7 +451,7 @@ Do **not** deploy on Thu / Sun / Mon. Prefer Tue–Wed–Fri.
 | Artifact | Status |
 |---|---|
 | `Dockerfile` / `.dockerignore` | Done (D1.1) |
-| `fly.toml` (`iad`, `api`/`worker`/`runner`, `/health` check, runner VM same as worker) | Done |
+| `fly.toml` (`iad`, `api`/`worker`/`runner`, `/health` check; API 512MB, worker 256MB, runner 512MB) | Done |
 | `GET /health` + `GIT_SHA` version | Done (D1.1) |
 | `start:worker` and `start:runner` in `@pivot/api` | Done |
 | Remote-safety + `--env-file` for seeds | Done (D1.1) |
