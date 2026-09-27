@@ -9,6 +9,7 @@
   "references": [
     { "path": "../../shared" },
     { "path": "../engine" },
-    { "path": "../dispatcher" }
+    { "path": "../dispatcher" },
+    { "path": "../ingestion" }
   ]
 }

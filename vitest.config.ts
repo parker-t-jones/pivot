@@ -7,6 +7,7 @@ export default defineConfig({
       '@pivot/shared': new URL('./shared/src/index.ts', import.meta.url).pathname,
       '@pivot/engine': new URL('./services/engine/src/index.ts', import.meta.url).pathname,
       '@pivot/dispatcher': new URL('./services/dispatcher/src/index.ts', import.meta.url).pathname,
+      '@pivot/ingestion': new URL('./services/ingestion/src/index.ts', import.meta.url).pathname,
     },
   },
   test: {

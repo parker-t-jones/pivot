@@ -14,7 +14,11 @@ export {
 
 export { mapEspnPlay, resolveGameContext, type EspnGameContext } from './espn/mapEspnPlay.js';
 
-export { EspnPlaySource, type EspnPlaySourceOptions } from './espn/espnPlaySource.js';
+export {
+  EspnPlaySource,
+  summaryPlayIds,
+  type EspnPlaySourceOptions,
+} from './espn/espnPlaySource.js';
 
 export {
   IngestionError,

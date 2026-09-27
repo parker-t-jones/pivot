@@ -30,6 +30,11 @@ export interface EspnPlaySourceOptions {
   /** Injectable for tests; defaults to a fresh throttle owned by this instance, so Sentry-report
    *  throttling persists across polls for this game but starts clean for each new instance. */
   shapeFailureThrottle?: ShapeFailureReportThrottle;
+  /**
+   * Play ids already in `espn_seen_plays:{eventId}`. Copied in before the first poll so a
+   * restarted process does not emit the summary it just seeded.
+   */
+  initialSeenPlayIds?: Iterable<string>;
 }
 
 function isFinal(summary: EspnSummary): boolean {
@@ -61,6 +66,11 @@ function flattenPlays(summary: EspnSummary): FlattenedPlay[] {
   return flattened;
 }
 
+/** Play ids in poll order: completed drives, then the in-progress drive. */
+export function summaryPlayIds(summary: EspnSummary): string[] {
+  return flattenPlays(summary).map(({ play }) => play.id);
+}
+
 /**
  * The production `PlaySource` (PLAN.md Section 2's swap-ready boundary). Polls ESPN's summary
  * endpoint on an interval, dedupes by play id, and emits normalized `PlayEvent`s in order — the
@@ -85,7 +95,7 @@ export class EspnPlaySource implements PlaySource {
   }
 
   async subscribe(handler: (play: PlayEvent) => Promise<void>): Promise<void> {
-    const seenPlayIds = new Set<string>();
+    const seenPlayIds = new Set<string>(this.options.initialSeenPlayIds);
     let context: EspnGameContext | null = null;
 
     while (!this.disconnected) {

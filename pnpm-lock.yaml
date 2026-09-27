@@ -154,6 +154,9 @@ importers:
       '@pivot/engine':
         specifier: workspace:^
         version: link:../engine
+      '@pivot/ingestion':
+        specifier: workspace:^
+        version: link:../ingestion
       '@pivot/shared':
         specifier: workspace:^
         version: link:../../shared
