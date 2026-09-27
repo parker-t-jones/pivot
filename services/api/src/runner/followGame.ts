@@ -28,8 +28,8 @@ export interface FollowGameDeps {
 /**
  * One live game after the lock is acquired.
  * The summary fetched here is recorded into `espn_seen_plays` and is not passed to `onPlayEvent`.
- * Polling starts only after that seed succeeds. A later play id is written to the seen set before
- * `onPlayEvent`.
+ * Polling starts only after that seed succeeds. A later play id is written to the seen set only
+ * after `onPlayEvent` resolves.
  */
 export async function followGame(deps: FollowGameDeps): Promise<void> {
   const seeded = await loadSeed(deps);
@@ -108,6 +108,11 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 
 async function deliverIfNew(deps: FollowGameDeps, play: PlayEvent): Promise<void> {
   if (await deps.seen.has(deps.eventId, play.playId)) return;
+  try {
+    await deps.onPlayEvent(play);
+  } catch (error) {
+    console.error(`[runner] play failed ${deps.eventId} ${play.playId}: ${failureReason(error)}`);
+    return;
+  }
   await deps.seen.add(deps.eventId, play.playId);
-  await deps.onPlayEvent(play);
 }

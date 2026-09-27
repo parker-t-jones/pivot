@@ -123,12 +123,13 @@ describe('followGame', () => {
       signal: new AbortController().signal,
       pollIntervalMs: 0,
       onPlayEvent: async (play: PlayEvent) => {
-        expect(await store.has(EVENT_ID, play.playId)).toBe(true);
+        expect(await store.has(EVENT_ID, play.playId)).toBe(false);
         handled.push(play.playId);
       },
     });
 
     expect(handled).toEqual(['p2']);
+    expect(await store.has(EVENT_ID, 'p2')).toBe(true);
     expect(hasCalls).toEqual(['p2']);
     expect(await store.has(EVENT_ID, 'p1')).toBe(true);
     expect(await store.has(EVENT_ID, 'old')).toBe(true);
@@ -259,5 +260,35 @@ describe('followGame', () => {
     expect(await seen.has(EVENT_ID, 'p1')).toBe(true);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(client.calls).toHaveLength(2);
+  });
+
+  it('leaves a play unmarked when handling throws and still handles the next play', async () => {
+    const seen = new InMemorySeenPlaySet();
+    const handled: string[] = [];
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const client = scripted([
+      summary(['p1']),
+      summary(['p1', 'X', 'Y']),
+      summary(['p1', 'X', 'Y'], true),
+    ]);
+
+    await followGame({
+      eventId: EVENT_ID,
+      getSummary: client.getSummary,
+      seen,
+      signal: new AbortController().signal,
+      pollIntervalMs: 0,
+      onPlayEvent: async (play) => {
+        if (play.playId === 'X') throw new Error('boom');
+        handled.push(play.playId);
+      },
+    });
+
+    expect(handled).toEqual(['Y']);
+    expect(await seen.has(EVENT_ID, 'X')).toBe(false);
+    expect(await seen.has(EVENT_ID, 'Y')).toBe(true);
+    expect(errors.mock.calls.map((call) => call[0])).toEqual([
+      `[runner] play failed ${EVENT_ID} X: boom`,
+    ]);
   });
 });
