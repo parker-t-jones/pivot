@@ -89,6 +89,11 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
     return (this.deps.clock ?? Date.now)();
   }
 
+  /** Drops mid-drive silence timers. Does not release parked events. */
+  stop(): void {
+    for (const gameId of this.midDriveTimers.keys()) this.clearMidDriveCeiling(gameId);
+  }
+
   /**
    * Called before `onPlayEvent`, so `dispatch` can tell "a window resolved on the play
    * I am currently reacting to" from "a window resolved some plays ago". Demotes an unconsumed

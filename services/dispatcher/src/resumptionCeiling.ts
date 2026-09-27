@@ -102,4 +102,9 @@ export class ResumptionCeiling {
   private now(): number {
     return (this.deps.clock ?? Date.now)();
   }
+
+  /** Drops silence timers. Does not release parked events. */
+  stop(): void {
+    for (const gameId of this.timers.keys()) this.clearTimer(gameId);
+  }
 }

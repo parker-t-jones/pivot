@@ -1,7 +1,6 @@
 import { hostname } from 'node:os';
 import {
   IncrementalResumptionTracker,
-  onPlayEvent,
   type LineupCacheReader,
   type PlayEvent,
 } from '@pivot/engine';
@@ -34,7 +33,7 @@ import {
 import { followGame } from './followGame.js';
 import { LEADER_KEY, leaderOwner, type LeaderLockRedis } from './leaderLock.js';
 import { startLeaderLoop, type LeaderLoopHandle } from './leaderLoop.js';
-import { observeResolution } from './observeResolution.js';
+import { createPlaySession } from './playSession.js';
 import { superviseGame } from './superviseGame.js';
 import type { SeenPlaySet } from './seenPlays.js';
 
@@ -130,20 +129,17 @@ async function runLeader(
   };
 
   async function followOne(game: SeededGame, gameSignal: AbortSignal): Promise<void> {
-    const tracker = new IncrementalResumptionTracker(game.id, {
-      onWindowOpened: (gameId, window) => {
-        void ceiling.onWindowOpened(gameId, window).catch((error: unknown) => {
-          console.error(`[runner] ceiling open failed ${gameId}: ${failureReason(error)}`);
-        });
-      },
-      onResolved: (gameId, resolution) => {
-        void ceiling.onResolved(gameId).catch((error: unknown) => {
-          console.error(`[runner] ceiling clear failed ${gameId}: ${failureReason(error)}`);
-        });
-        observeResolution(gameId, gate.noteResolution(gameId, resolution));
+    const session = createPlaySession({
+      gameId: game.id,
+      gate,
+      ceiling,
+      onPlay: {
+        lineupCache: deps.lineupCache,
+        gameState: deps.gameState,
+        dispatcher: gate,
       },
     });
-    trackers.set(game.id, tracker);
+    trackers.set(game.id, session.tracker);
     try {
       await ceiling.rearm(game.id);
       await followGame({
@@ -153,21 +149,12 @@ async function runLeader(
         signal: gameSignal,
         onPlayEvent: async (raw) => {
           const play = withGameWeek(translatePlay(raw, game.id, game.abbrToUuid), game.week);
-          gate.beginPlay(play.gameId);
-          tracker.observe(play, Date.now());
-          await onPlayEvent(
-            {
-              lineupCache: deps.lineupCache,
-              gameState: deps.gameState,
-              dispatcher: gate,
-            },
-            play,
-          );
+          await session.handlePlay(play);
         },
       });
     } finally {
-      tracker.dispose();
-      if (trackers.get(game.id) === tracker) trackers.delete(game.id);
+      session.dispose();
+      if (trackers.get(game.id) === session.tracker) trackers.delete(game.id);
     }
   }
 
@@ -215,6 +202,8 @@ async function runLeader(
     await Promise.all([discovery, ticks]);
   } finally {
     gamesAbort.abort();
+    ceiling.stop();
+    gate.stop();
     signal.removeEventListener('abort', onLost);
   }
 }
