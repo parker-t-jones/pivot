@@ -1,14 +1,10 @@
 import type { FlagEvent } from '@pivot/shared';
 
 /**
- * Event types that can produce a push. Collapse only considers these.
- * `flag_removed` is the clear (the engine has no `flag_cleared` type). It always delivers.
+ * The only event type that sends a push (Decision 7). Collapse and the rate limiter
+ * count these and nothing else. The other three types are persisted and published.
  */
-const PUSH_ELIGIBLE_EVENT_TYPES: ReadonlySet<FlagEvent['type']> = new Set([
-  'flag_added',
-  'priority_increased',
-  'priority_decreased',
-]);
+const PUSH_ELIGIBLE_EVENT_TYPES: ReadonlySet<FlagEvent['type']> = new Set(['flag_added']);
 
 export function isPushEligibleEvent(type: FlagEvent['type']): boolean {
   return PUSH_ELIGIBLE_EVENT_TYPES.has(type);

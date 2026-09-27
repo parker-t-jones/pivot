@@ -194,9 +194,10 @@ describe('ATL @ GB replay', () => {
     // 21 completed drives. The first has no prior possession, so the tracker opens 20 windows.
     // Halftime aborts one. 19 resolve REAL_ACTION. That is the possession-change derivation.
     // This user is on offense for both teams, one player each, so a possession flip keeps
-    // priority at 2 and emits nothing. Pushes are the flag diffs that survive collapse and the
-    // 3-per-60s limiter: 16 flag_added, 17 flag_removed, 9 priority_increased, 3 priority_decreased
-    // enqueued, 2 dropped by the limiter, 43 delivered.
+    // priority at 2 and emits nothing. The gate enqueues 16 flag_added, 17 flag_removed,
+    // 9 priority_increased, and 3 priority_decreased. Only flag_added pushes or counts
+    // against the rate limit, and this game stays under 3 flag_added per 60s, so all 45
+    // events are delivered and 16 pushes go out.
     const windowsOpened = driveCount - 1;
     const abortedWindows = 1;
     const resolvedWindows = windowsOpened - abortedWindows;
@@ -216,15 +217,15 @@ describe('ATL @ GB replay', () => {
       priority_increased: 9,
       priority_decreased: 3,
     });
-    expect(first.dropped).toEqual({ stale: 0, rate: 2, delivered: 43 });
-    expect(pushes).toHaveLength(first.dropped.delivered);
-    expect(persistence.records).toHaveLength(first.dropped.delivered);
+    expect(first.dropped).toEqual({ stale: 0, rate: 0, delivered: 45 });
+    expect(persistence.records).toHaveLength(45);
+    expect(pushes).toHaveLength(16);
+    expect(hits).toHaveLength(16);
 
     expect(failedRowId).not.toBeNull();
     expect(sends.get(failedRowId ?? '')).toBe(2);
     expect(pushes.filter((push) => push.rowId === failedRowId)).toHaveLength(1);
     expect(hits).toHaveLength(new Set(hits.map((hit) => hit.eventId)).size);
-    expect(hits).toHaveLength(persistence.records.length);
     expect(maxInWindow(hits.map((hit) => hit.at))).toBeLessThanOrEqual(3);
     expect(maxInWindow(pushes.map((push) => push.at))).toBeLessThanOrEqual(3);
 

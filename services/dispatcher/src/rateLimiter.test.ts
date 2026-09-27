@@ -98,6 +98,18 @@ describe('shouldRateLimit — sliding 60s window (<3 per minute)', () => {
     }
     expect(await shouldRateLimit(makeEvent({ id: 'e-4th' }), prefs, store, NOW)).toBe(true);
   });
+
+  it('does not count flag_removed, priority_increased, or priority_decreased', async () => {
+    const store = new InMemoryRateLimitStore();
+    const prefs = parsePreferences({});
+    for (let i = 0; i < 3; i += 1) {
+      await store.recordNotification('u1', `e${i}`, NOW - (3 - i) * 1000);
+    }
+    for (const type of ['flag_removed', 'priority_increased', 'priority_decreased'] as const) {
+      expect(await shouldRateLimit(makeEvent({ type }), prefs, store, NOW)).toBe(false);
+    }
+    expect(await shouldRateLimit(makeEvent({ type: 'flag_added' }), prefs, store, NOW)).toBe(true);
+  });
 });
 
 describe('shouldRateLimit — quiet hours', () => {

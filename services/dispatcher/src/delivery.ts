@@ -16,6 +16,7 @@ import type {
   PlayerInfo,
   UserDirectory,
 } from './catalogs.js';
+import { isPushEligibleEvent } from './collapseFlagEvents.js';
 import { decideAction } from './decideAction.js';
 import {
   notificationBody,
@@ -281,8 +282,9 @@ export async function deliverFlagEvent(
 
   await deps.realtimeBus.publish(realtimeUserChannel(event.userId), envelope);
 
-  // Decision #8: record ONLY after a successful delivery, so a dropped/rate-limited event never
-  // counts towards its own sliding window.
+  // Decision 7: only flag_added is a push, and only a push counts against the rate limit.
+  if (!isPushEligibleEvent(event.type)) return 'inserted';
+
   await deps.rateLimitStore.recordNotification(event.userId, event.id, deliveredAt);
 
   // Sprint 6 Phase 3: push, strictly after persistence/publish/rate-limit bookkeeping, and strictly

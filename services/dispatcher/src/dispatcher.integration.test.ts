@@ -280,15 +280,13 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
     expect(p.queue.size()).toBe(0);
   });
 
-  it('rate limit: a 4th event within 60s is dropped, the first 3 are delivered', async () => {
+  it('rate limit: a 4th flag_added within 60s is dropped; other types do not count', async () => {
     const p = buildPipeline();
     await p.gameStateStore.markUserActive(USER_ID, 10 * 60_000);
 
-    // Alternates flag_added/flag_removed (KC has the ball, then LV has the ball) so every play
-    // produces a fresh, deliverable event without needing priority-delta bookkeeping. Each event is
-    // fully processed (queued -> advanced to its fire time -> ticked) before the next play fires, so
-    // no event is ever superseded before its own delivery.
-    for (let i = 0; i < 4; i += 1) {
+    // flag_added, flag_removed, flag_added, ... The clears are delivered and do not fill the window.
+    // The 4th flag_added is the one the limiter drops.
+    for (let i = 0; i < 7; i += 1) {
       const play =
         i % 2 === 0
           ? makePlay({ playId: `play-${i}` })
@@ -297,16 +295,16 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
       vi.advanceTimersByTime(PLAY_GAP_MS);
 
       const result = await runDispatcherTick(p.tickDeps);
-      if (i < 3) {
+      const flagAddedIndex = Math.floor(i / 2);
+      if (i % 2 === 1 || flagAddedIndex < 3) {
         expect(result.delivered).toBe(1);
       } else {
         expect(result.droppedRateLimited).toBe(1);
       }
     }
 
-    // All four plays happened within 3s of each other — inside the 60s sliding window.
-    expect(p.persistence.records).toHaveLength(3);
-    expect(p.realtimeBus.published).toHaveLength(3);
-    expect(p.queue.size()).toBe(0); // the rate-limited 4th event is still removed from the queue
+    expect(p.persistence.records).toHaveLength(6);
+    expect(p.realtimeBus.published).toHaveLength(6);
+    expect(p.queue.size()).toBe(0);
   });
 });

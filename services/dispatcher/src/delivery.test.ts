@@ -598,6 +598,25 @@ describe('deliverFlagEvent', () => {
       expect(pushNotifier.calls[0]?.token).toBe(TOKEN);
     });
 
+    it.each(['flag_removed', 'priority_increased', 'priority_decreased'] as const)(
+      'persists and publishes %s with no push and no rate-limit hit',
+      async (type) => {
+        const pushNotifier = new CapturingPushNotifier();
+        const persistence = new InMemoryFlagEventPersistence();
+        const realtimeBus = new InMemoryRealtimeBus();
+        const rateLimitStore = new InMemoryRateLimitStore();
+        const deps = buildDeps({ pushNotifier, persistence, realtimeBus, rateLimitStore });
+
+        await deliverFlagEvent(deps, makeEvent({ type }), pushUser);
+
+        expect(persistence.records).toHaveLength(1);
+        expect(persistence.records[0]?.eventType).toBe(type);
+        expect(realtimeBus.published).toHaveLength(1);
+        expect(pushNotifier.calls).toHaveLength(0);
+        expect(rateLimitStore.entriesFor('u1')).toEqual([]);
+      },
+    );
+
     it('does NOT send push when the user has no expo_push_token', async () => {
       const pushNotifier = new CapturingPushNotifier();
       const deps = buildDeps({ pushNotifier });

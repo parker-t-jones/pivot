@@ -28,10 +28,10 @@ function event(overrides: {
 }
 
 describe('isPushEligibleEvent', () => {
-  it('collapses the push types and lets a clear through', () => {
+  it('only flag_added is push-eligible', () => {
     expect(isPushEligibleEvent('flag_added')).toBe(true);
-    expect(isPushEligibleEvent('priority_increased')).toBe(true);
-    expect(isPushEligibleEvent('priority_decreased')).toBe(true);
+    expect(isPushEligibleEvent('priority_increased')).toBe(false);
+    expect(isPushEligibleEvent('priority_decreased')).toBe(false);
     expect(isPushEligibleEvent('flag_removed')).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import type { FlagEvent, FlagReasonType, Preferences } from '@pivot/shared';
+import { isPushEligibleEvent } from './collapseFlagEvents.js';
 
 /** Section 3 "Rate limiting" / Section 8 `shouldRateLimit`: max 3 per 60s sliding window. */
 const WINDOW_MS = 60_000;
@@ -68,6 +69,8 @@ export async function shouldRateLimit(
   store: RateLimitStore,
   now: number,
 ): Promise<boolean> {
+  if (!isPushEligibleEvent(event.type)) return false;
+
   const recentCount = await store.countRecentNotifications(event.userId, now - WINDOW_MS, now);
   if (recentCount >= MAX_PER_WINDOW) return true;
 
