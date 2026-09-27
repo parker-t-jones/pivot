@@ -12,6 +12,11 @@ export interface EventDispatcher {
    * The handler passes it here so delivery can store `flag_events.triggering_play_id`.
    */
   dispatch(event: FlagEvent, triggeringPlayId?: string | null): Promise<void>;
+  /**
+   * Called once `onPlayEvent` has dispatched every event for this play. The resumption gate
+   * collapses that play's reveal window here, before anything is enqueued.
+   */
+  endPlay?(gameId: string): Promise<void>;
 }
 
 /** Records every dispatched event in order, so tests can assert on the engine's output. */

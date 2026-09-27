@@ -86,4 +86,5 @@ export async function onPlayEvent(deps: OnPlayEventDeps, play: PlayEvent): Promi
       await deps.dispatcher.dispatch(event, play.playId);
     }),
   );
+  await deps.dispatcher.endPlay?.(play.gameId);
 }

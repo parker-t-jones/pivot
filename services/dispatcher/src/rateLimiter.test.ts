@@ -49,6 +49,14 @@ describe('shouldRateLimit — sliding 60s window (<3 per minute)', () => {
     expect(await shouldRateLimit(makeEvent({ id: 'e4' }), parsePreferences({}), store, NOW)).toBe(
       true,
     );
+    expect(
+      await shouldRateLimit(
+        makeEvent({ id: 'e4-other-game', gameId: 'g2' }),
+        parsePreferences({}),
+        store,
+        NOW,
+      ),
+    ).toBe(true);
   });
 
   it('does not count notifications outside the 60s window', async () => {

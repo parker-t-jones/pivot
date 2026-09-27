@@ -4,25 +4,28 @@ import type { FlagEvent, FlagState } from '@pivot/shared';
 import { InMemoryFlagEventQueue } from './inMemoryQueue.js';
 import { ResumptionGatedDispatcher, type GatedEventRecord } from './resumptionGate.js';
 
-function makeFlagState(): FlagState {
+function makeFlagState(overrides: Partial<FlagState> = {}): FlagState {
   return {
     gameId: 'g1',
     flagged: true,
     priorityScore: 5,
     reasons: [{ type: 'offense_active', triggeringPlayerIds: ['p1'] }],
     computedAt: 1_000,
+    ...overrides,
   };
 }
 
-function makeEvent(): FlagEvent {
+function makeEvent(overrides: Partial<FlagEvent> = {}): FlagEvent {
+  const newState = overrides.newState ?? makeFlagState();
   return {
     id: 'evt-1',
     userId: 'u1',
-    gameId: 'g1',
+    gameId: newState.gameId,
     type: 'flag_added',
     oldState: null,
-    newState: makeFlagState(),
+    newState,
     scheduledFireAt: 0,
+    ...overrides,
   };
 }
 
@@ -53,6 +56,7 @@ describe('ResumptionGatedDispatcher', () => {
     await dispatcher.noteResolution('g1', realAction);
 
     await dispatcher.dispatch(makeEvent(), 'play-9');
+    await dispatcher.endPlay('g1');
 
     expect(records).toEqual([
       expect.objectContaining({ decision: 'fire_immediately', holdMs: 0, resolution: realAction }),
@@ -99,5 +103,77 @@ describe('ResumptionGatedDispatcher', () => {
     expect(records).toEqual([
       expect.objectContaining({ decision: 'dropped_by_abort', resolution: aborted }),
     ]);
+  });
+
+  it('collapses two events for one user and game in a window, and leaves another game alone', async () => {
+    const now = { value: 5_000 };
+    const { dispatcher, queue } = gate(now);
+    dispatcher.beginPlay('g1');
+    dispatcher.noteWindowOpened('g1');
+    await dispatcher.noteResolution('g1', realAction);
+
+    await dispatcher.dispatch(
+      makeEvent({ id: 'low', newState: makeFlagState({ priorityScore: 2 }) }),
+      'play-low',
+    );
+    await dispatcher.dispatch(
+      makeEvent({ id: 'high', newState: makeFlagState({ priorityScore: 9 }) }),
+      'play-high',
+    );
+    await dispatcher.dispatch(
+      makeEvent({
+        id: 'other',
+        gameId: 'g2',
+        newState: makeFlagState({ gameId: 'g2', priorityScore: 100 }),
+      }),
+      'play-other',
+    );
+    await dispatcher.endPlay('g1');
+
+    const due = await queue.due(now.value, 10);
+    expect(due).toHaveLength(2);
+    const byGame = new Map(due.map((item) => [item.event.gameId, item]));
+    expect(byGame.get('g1')?.event.id).toBe('high');
+    expect(byGame.get('g1')?.event.newState.priorityScore).toBe(9);
+    expect(byGame.get('g1')?.triggeringPlayId).toBe('play-high');
+    expect(byGame.get('g2')?.event.id).toBe('other');
+  });
+
+  it('collapses a parked window to the higher priorityScore', async () => {
+    const now = { value: 4_000 };
+    const { dispatcher, queue } = gate(now);
+    dispatcher.noteWindowOpened('g1');
+    await dispatcher.dispatch(
+      makeEvent({ id: 'low', newState: makeFlagState({ priorityScore: 2 }) }),
+    );
+    await dispatcher.dispatch(
+      makeEvent({ id: 'high', newState: makeFlagState({ priorityScore: 8 }) }),
+    );
+
+    await dispatcher.noteResolution('g1', realAction);
+
+    const due = await queue.due(now.value, 10);
+    expect(due).toHaveLength(1);
+    expect(due[0]?.event.id).toBe('high');
+    expect(due[0]?.event.newState.priorityScore).toBe(8);
+  });
+
+  it('merges events parked during the window with events from the play that resolves it', async () => {
+    const now = { value: 6_000 };
+    const { dispatcher, queue } = gate(now);
+    dispatcher.beginPlay('g1');
+    dispatcher.noteWindowOpened('g1');
+    await dispatcher.dispatch(
+      makeEvent({ id: 'parked', newState: makeFlagState({ priorityScore: 4 }) }),
+    );
+    await dispatcher.noteResolution('g1', realAction);
+    await dispatcher.dispatch(
+      makeEvent({ id: 'resolving', newState: makeFlagState({ priorityScore: 7 }) }),
+    );
+    await dispatcher.endPlay('g1');
+
+    const due = await queue.due(now.value, 10);
+    expect(due).toHaveLength(1);
+    expect(due[0]?.event.id).toBe('resolving');
   });
 });

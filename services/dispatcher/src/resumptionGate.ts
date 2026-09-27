@@ -7,6 +7,7 @@
 
 import type { EventDispatcher, ResumptionResolution } from '@pivot/engine';
 import type { FlagEvent } from '@pivot/shared';
+import { collapseByUser } from './collapseFlagEvents.js';
 import type { FlagEventQueue } from './queue.js';
 
 /** What the gate decided to do with an event at dispatch time. */
@@ -25,6 +26,14 @@ interface ParkedEvent {
   event: FlagEvent;
   parkedAt: number;
   triggeringPlayId: string | null;
+}
+
+interface WindowCandidate {
+  event: FlagEvent;
+  triggeringPlayId: string | null;
+  decision: 'fire_immediately' | 'held_pending_resumption';
+  holdMs: number;
+  resolution: ResumptionResolution;
 }
 
 export interface ResumptionGatedDispatcherDeps {
@@ -58,6 +67,15 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
   private readonly carryOverResolution = new Map<string, ResumptionResolution>();
   /** gameId -> events dispatched while a window was open, awaiting its resolution. */
   private readonly parked = new Map<string, ParkedEvent[]>();
+  /** gameId -> beginPlay has run and endPlay has not. */
+  private readonly playInProgress = new Set<string>();
+  /** gameId -> this play already dropped an event for an ABORTED window. */
+  private readonly droppedAbort = new Set<string>();
+  /**
+   * gameId -> events in the reveal window that is resolving on the current play. Flushed by
+   * `endPlay`, after `onPlayEvent` has dispatched everything that play will emit.
+   */
+  private readonly resolving = new Map<string, WindowCandidate[]>();
 
   constructor(private readonly deps: ResumptionGatedDispatcherDeps) {}
 
@@ -79,6 +97,22 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
       this.carryOverResolution.delete(gameId);
     }
     this.resolutionThisPlay.delete(gameId);
+    this.playInProgress.add(gameId);
+  }
+
+  /** Collapses this play's reveal window and enqueues one event per user. */
+  async endPlay(gameId: string): Promise<void> {
+    this.playInProgress.delete(gameId);
+    const items = this.resolving.get(gameId) ?? [];
+    this.resolving.delete(gameId);
+    const playDispatched = items.some((item) => item.decision === 'fire_immediately');
+    const droppedAbort = this.droppedAbort.has(gameId);
+    this.droppedAbort.delete(gameId);
+    await this.enqueueCollapsed(items);
+    if (playDispatched || droppedAbort) {
+      this.resolutionThisPlay.delete(gameId);
+      this.carryOverResolution.delete(gameId);
+    }
   }
 
   /** Called when a tracker closes a window, including from the silence timer. */
@@ -109,8 +143,35 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
       return;
     }
 
-    const resolution =
-      this.resolutionThisPlay.get(gameId) ?? this.carryOverResolution.get(gameId) ?? null;
+    const thisPlayResolution = this.resolutionThisPlay.get(gameId) ?? null;
+    if (this.playInProgress.has(gameId) && thisPlayResolution?.outcome === 'ABORTED') {
+      this.droppedAbort.add(gameId);
+      this.deps.onGated({
+        event,
+        decision: 'dropped_by_abort',
+        holdMs: 0,
+        resolution: thisPlayResolution,
+      });
+      return;
+    }
+    if (
+      this.playInProgress.has(gameId) &&
+      thisPlayResolution &&
+      thisPlayResolution.outcome !== 'ABORTED'
+    ) {
+      const list = this.resolving.get(gameId) ?? [];
+      list.push({
+        event,
+        triggeringPlayId,
+        decision: 'fire_immediately',
+        holdMs: 0,
+        resolution: thisPlayResolution,
+      });
+      this.resolving.set(gameId, list);
+      return;
+    }
+
+    const resolution = thisPlayResolution ?? this.carryOverResolution.get(gameId) ?? null;
     // Consumed at most once: the first event dispatched after a resolution lands claims it, so a
     // second, unrelated event later doesn't also inherit it.
     this.resolutionThisPlay.delete(gameId);
@@ -133,13 +194,43 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
     this.parked.delete(gameId);
 
     const now = this.now();
-    for (const { event, parkedAt, triggeringPlayId } of list) {
-      const holdMs = now - parkedAt;
-      if (resolution.outcome === 'ABORTED') {
-        this.deps.onGated({ event, decision: 'dropped_by_abort', holdMs, resolution });
-        continue;
+    if (resolution.outcome === 'ABORTED') {
+      for (const { event, parkedAt } of list) {
+        this.deps.onGated({
+          event,
+          decision: 'dropped_by_abort',
+          holdMs: now - parkedAt,
+          resolution,
+        });
       }
-      await this.enqueueNow(event, triggeringPlayId, 'held_pending_resumption', holdMs, resolution);
+      return;
+    }
+
+    const held: WindowCandidate[] = list.map(({ event, parkedAt, triggeringPlayId }) => ({
+      event,
+      triggeringPlayId,
+      decision: 'held_pending_resumption',
+      holdMs: now - parkedAt,
+      resolution,
+    }));
+    if (this.playInProgress.has(gameId)) {
+      const batch = this.resolving.get(gameId) ?? [];
+      batch.push(...held);
+      this.resolving.set(gameId, batch);
+      return;
+    }
+    await this.enqueueCollapsed(held);
+  }
+
+  private async enqueueCollapsed(items: readonly WindowCandidate[]): Promise<void> {
+    for (const winner of collapseByUser(items)) {
+      await this.enqueueNow(
+        winner.event,
+        winner.triggeringPlayId,
+        winner.decision,
+        winner.holdMs,
+        winner.resolution,
+      );
     }
   }
 
