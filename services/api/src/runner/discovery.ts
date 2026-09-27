@@ -137,10 +137,11 @@ export async function applyDiscovery(deps: {
   loops: DiscoveryLoops;
   now?: () => number;
   log?: (line: string) => void;
-}): Promise<{ live: number }> {
+}): Promise<{ live: number; games: SeededGame[] }> {
   const log = deps.log ?? console.log;
   const now = deps.now ?? Date.now;
   let live = 0;
+  const games: SeededGame[] = [];
 
   for (const event of deps.events) {
     const disposition = classifyScoreboardStatus(event.status?.type);
@@ -179,6 +180,7 @@ export async function applyDiscovery(deps: {
     }
 
     live += 1;
+    games.push(game);
     const existing = await deps.gameState.getGameState(game.id);
     if (existing === null) {
       await deps.gameState.setGameState(game.id, seedGameState(game, event, now()));
@@ -196,5 +198,5 @@ export async function applyDiscovery(deps: {
   }
 
   log(`[runner] discovery live=${live}`);
-  return { live };
+  return { live, games };
 }

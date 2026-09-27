@@ -23,6 +23,8 @@ import {
   type UserDirectory,
 } from '@pivot/dispatcher';
 import type { PushNotifier } from '@pivot/dispatcher';
+import type { LineupCacheProvider } from '../cache/index.js';
+import type { SupabaseServiceClient } from '../lib/supabase.js';
 import {
   applyDiscovery,
   DISCOVERY_INTERVAL_MS,
@@ -35,6 +37,7 @@ import { LEADER_KEY, leaderOwner, type LeaderLockRedis } from './leaderLock.js';
 import { startLeaderLoop, type LeaderLoopHandle } from './leaderLoop.js';
 import { createPlaySession } from './playSession.js';
 import { publishLiveGame } from './publishLiveGame.js';
+import { createNoStakeWarner, rebuildStakeCache } from './stakeCache.js';
 import { superviseGame } from './superviseGame.js';
 import type { SeenPlaySet } from './seenPlays.js';
 
@@ -58,6 +61,11 @@ export interface LiveRunnerDeps {
   pushNotifier: PushNotifier;
   scoreboard?: EspnClient;
   owner?: string;
+  /** Postgres + the Redis lineup cache. Rebuilt when this process becomes leader. */
+  stakeCache: {
+    supabase: SupabaseServiceClient;
+    lineupCache: LineupCacheProvider;
+  };
 }
 
 export function startLiveRunner(deps: LiveRunnerDeps): LeaderLoopHandle {
@@ -78,6 +86,14 @@ async function runLeader(
   signal: AbortSignal,
 ): Promise<void> {
   console.log(`[runner] leader ${holdValue}`);
+  try {
+    await rebuildStakeCache(deps.stakeCache);
+  } catch (error) {
+    console.error(`[runner] stake cache rebuild failed: ${failureReason(error)}`);
+  }
+  const warnNoStake = createNoStakeWarner((line) => {
+    console.log(line);
+  });
   const gamesAbort = new AbortController();
   const onLost = (): void => {
     gamesAbort.abort();
@@ -183,12 +199,13 @@ async function runLeader(
           console.error(`[runner] scoreboard failed: ${board.reason}`);
           return;
         }
-        await applyDiscovery({
+        const found = await applyDiscovery({
           events: board.data.events ?? [],
           games: deps.games,
           gameState: deps.gameState,
           loops,
         });
+        await warnNoStake(found.games, (teamId) => deps.gameState.getUsersWithStakeIn(teamId));
       } catch (error) {
         console.error(`[runner] discovery failed: ${failureReason(error)}`);
       }

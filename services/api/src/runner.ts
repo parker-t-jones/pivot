@@ -1,6 +1,7 @@
 import { hostname } from 'node:os';
 import { createPushNotifier } from '@pivot/dispatcher';
 import { espnClient } from '@pivot/ingestion';
+import { TcpLineupCache } from './cache/tcp.js';
 import { env } from './env.js';
 import { createSupabaseServiceClient } from './lib/supabase.js';
 import { leaderOwner } from './runner/leaderLock.js';
@@ -18,7 +19,6 @@ import {
   tcpFlagEventQueue,
   tcpGameState,
   tcpLeaderLock,
-  tcpLineupCache,
   tcpRateLimit,
   tcpRealtimeBus,
   tcpRedisUrl,
@@ -46,6 +46,7 @@ if (tcpUrl === undefined) {
 
 const redis = createTcpRedis(tcpUrl);
 const supabase = createSupabaseServiceClient(env);
+const lineupCache = new TcpLineupCache(redis);
 const handle = startLiveRunner({
   lock: tcpLeaderLock(redis),
   seen: tcpSeenPlays(redis),
@@ -54,7 +55,8 @@ const handle = startLiveRunner({
   gameState: tcpGameState(redis),
   rateLimit: tcpRateLimit(redis),
   realtime: tcpRealtimeBus(redis),
-  lineupCache: tcpLineupCache(redis),
+  lineupCache,
+  stakeCache: { supabase, lineupCache },
   games: new SupabaseGameDirectory(supabase),
   users: new SupabaseUserDirectory(supabase),
   gameCatalog: new SupabaseGameCatalog(supabase),
