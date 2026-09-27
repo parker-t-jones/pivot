@@ -78,12 +78,18 @@ export const espnStatusSchema = z.object({
       name: z.string().optional(),
     })
     .optional(),
+  /** 1–4, or 5 in overtime. Scoreboard events carry this next to `displayClock`. */
+  period: z.number().optional(),
+  /** Game clock as `M:SS`, e.g. `'8:41'`. */
+  displayClock: z.string().optional(),
 });
 
 export const espnCompetitorSchema = z.object({
   id: z.string(),
   homeAway: z.enum(['home', 'away']),
   team: z.object({ abbreviation: z.string().optional() }).optional(),
+  /** Running score. The scoreboard sends a string; a number is accepted too. */
+  score: z.union([z.string(), z.number()]).optional(),
 });
 
 /**
@@ -98,6 +104,7 @@ export const espnScoreboardEventSchema = z.object({
     .array(
       z.object({
         competitors: z.array(espnCompetitorSchema).optional(),
+        status: espnStatusSchema.optional(),
       }),
     )
     .optional(),

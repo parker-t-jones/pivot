@@ -11,9 +11,25 @@ export interface ScoreboardStatusType {
   completed?: boolean | undefined;
 }
 
+export interface DiscoveryCompetitor {
+  homeAway?: 'home' | 'away' | undefined;
+  score?: string | number | undefined;
+}
+
+export interface DiscoveryClock {
+  period?: number | undefined;
+  displayClock?: string | undefined;
+}
+
 export interface DiscoveryEvent {
   id: string;
-  status?: { type?: ScoreboardStatusType | undefined } | undefined;
+  status?: ({ type?: ScoreboardStatusType | undefined } & DiscoveryClock) | undefined;
+  competitions?:
+    | {
+        competitors?: DiscoveryCompetitor[] | undefined;
+        status?: DiscoveryClock | undefined;
+      }[]
+    | undefined;
 }
 
 export interface SeededGame {
@@ -67,21 +83,43 @@ export function classifyScoreboardStatus(
   return { kind: 'unknown', state, name };
 }
 
+/** ESPN `M:SS` → seconds. Missing or unparseable → 0. */
+export function displayClockToSeconds(displayClock: string | undefined): number {
+  const match = /^(\d+):(\d{1,2})$/.exec((displayClock ?? '').trim());
+  if (match === null) return 0;
+  return Number(match[1] ?? '0') * 60 + Number(match[2] ?? '0');
+}
+
+function competitorScore(
+  competitors: readonly DiscoveryCompetitor[] | undefined,
+  homeAway: 'home' | 'away',
+): number {
+  const raw = competitors?.find((competitor) => competitor.homeAway === homeAway)?.score;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'string' && raw.trim() !== '' && Number.isFinite(Number(raw))) {
+    return Number(raw);
+  }
+  return 0;
+}
+
 /**
- * Placeholder hash so `in_progress` is not written before Redis has `game_state`.
- * The first play replaces scores, quarter, and clock.
+ * First Redis hash for a game ESPN has marked live. Score, quarter, and clock come from the
+ * scoreboard event. Possession and down wait for the first play.
  */
-export function shellGameState(game: SeededGame, now: number): GameState {
+export function seedGameState(game: SeededGame, event: DiscoveryEvent, now: number): GameState {
+  const competition = event.competitions?.[0];
+  const period = event.status?.period ?? competition?.status?.period;
+  const displayClock = event.status?.displayClock ?? competition?.status?.displayClock;
   return {
     gameId: game.id,
     homeTeamId: game.homeTeamId,
     awayTeamId: game.awayTeamId,
     possessionTeamId: null,
     unitOnField: 'none',
-    scoreHome: 0,
-    scoreAway: 0,
-    quarter: 1,
-    timeRemainingSec: 0,
+    scoreHome: competitorScore(competition?.competitors, 'home'),
+    scoreAway: competitorScore(competition?.competitors, 'away'),
+    quarter: period !== undefined && period > 0 ? period : 1,
+    timeRemainingSec: displayClockToSeconds(displayClock),
     yardsToOpponentEndzone: null,
     down: null,
     distance: null,
@@ -142,7 +180,7 @@ export async function applyDiscovery(deps: {
     live += 1;
     const existing = await deps.gameState.getGameState(game.id);
     if (existing === null) {
-      await deps.gameState.setGameState(game.id, shellGameState(game, now()));
+      await deps.gameState.setGameState(game.id, seedGameState(game, event, now()));
     } else if (existing.status !== 'in_progress') {
       await deps.gameState.setGameState(game.id, {
         ...existing,

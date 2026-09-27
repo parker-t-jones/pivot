@@ -77,4 +77,49 @@ describe('discovery', () => {
     ).toBe(true);
     expect(logs.at(-1)).toBe('[runner] discovery live=1');
   });
+
+  it('seeds game state from the scoreboard score, period, and display clock', async () => {
+    const event: DiscoveryEvent = {
+      id: 'live-1',
+      status: {
+        type: { state: 'in', name: 'STATUS_IN_PROGRESS' },
+        period: 2,
+        displayClock: '8:41',
+      },
+      competitions: [
+        {
+          competitors: [
+            { homeAway: 'home', score: '7' },
+            { homeAway: 'away', score: '3' },
+          ],
+        },
+      ],
+    };
+    const states = new Map<string, GameState>();
+    await applyDiscovery({
+      events: [event],
+      now: () => 5_000,
+      games: {
+        findByEspnId: () => Promise.resolve(game('live-1')),
+        setStatus: () => Promise.resolve(),
+      },
+      gameState: {
+        getGameState: (gameId) => Promise.resolve(states.get(gameId) ?? null),
+        setGameState: (gameId, state) => {
+          states.set(gameId, state);
+          return Promise.resolve();
+        },
+      },
+      loops: { isRunning: () => false, start: () => undefined, stop: () => undefined },
+    });
+
+    expect(states.get('game-live-1')).toMatchObject({
+      scoreHome: 7,
+      scoreAway: 3,
+      quarter: 2,
+      timeRemainingSec: 8 * 60 + 41,
+      status: 'in_progress',
+      updatedAt: 5_000,
+    });
+  });
 });
