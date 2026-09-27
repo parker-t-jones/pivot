@@ -1,6 +1,6 @@
-# App name may already be taken on Fly — Parker can change `app` after `fly apps create`.
-# See docs/D1-DEPLOY-RUNBOOK.md.
-app = 'pivot-api'
+# `pivot-api` is owned by someone else on Fly; this app was created with
+# `fly apps create pivot-sports-api`. See docs/D1-DEPLOY-RUNBOOK.md §7.1.
+app = 'pivot-sports-api'
 primary_region = 'iad'
 
 [build]

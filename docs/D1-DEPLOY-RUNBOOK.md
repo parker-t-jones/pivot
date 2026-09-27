@@ -333,20 +333,9 @@ Create Redis (region near `iad`), copy REST URL/token + TCP `rediss://` URL into
 
 ### 7.1 App name
 
-`pivot-api.fly.dev` already **resolves** (recon 2026-09-24) and returned edge `404 NOT_FOUND` — may be an empty/foreign reservation. After `fly auth login`:
+**Resolved (2026-09-27):** the app is **`pivot-sports-api`** (`https://pivot-sports-api.fly.dev`), created with `fly apps create pivot-sports-api` in Parker's personal org. It matches the `pivot-sports.app` domain used for support email.
 
-```bash
-fly apps list
-fly status -a pivot-api   # if listed
-```
-
-If `pivot-api` is yours and empty, reuse it. If taken or unclear, alternatives:
-
-| Candidate | Notes |
-|---|---|
-| `pivot-sports-api` | Matches `support@pivot-sports.app` branding |
-| `pivot-backend` | Clear |
-| `fantasyfocus-api` | Matches frozen bundle naming; uglier product name |
+`pivot-api` belongs to someone else. The `pivot-api.fly.dev` edge 404s noted in `docs/BROADCAST-DATA-RECON.md` came from that app, not ours, so it can never hold our secrets or hosted `SUPABASE_URL`.
 
 ### 7.2 Region, size, min machines
 
@@ -402,10 +391,10 @@ Do **not** deploy on Thu / Sun / Mon. Prefer Tue–Wed–Fri.
 | 9 | **[Parker]** | Create Upstash Redis near `iad`; copy REST + TCP URLs | Upstash ping / console | DB reachable |
 | 10 | **[Parker]** | Generate `REVENUECAT_WEBHOOK_SECRET`; note for Fly + RevenueCat | Stored in password manager | Non-empty random string |
 | 11 | **[Cursor]** ✓ | `GET /health`, `start:worker`, Dockerfile, fly.toml, remote-safety, EAS environments | `pnpm test`; `docker build`; `fly config validate` | Green (D1.1) |
-| 12 | **[Parker]** | `fly apps create pivot-api` (or rename in `fly.toml` if taken); `fly secrets set …` | `fly secrets list -a pivot-api` | Required keys present; **no** `.env` upload |
-| 13 | **[Parker]** | `fly deploy` on a non-frozen day (optionally `--build-arg GIT_SHA=$(git rev-parse --short HEAD)`) | `fly status`; `curl https://pivot-api.fly.dev/health` | Machines started; health **200** |
+| 12 | **[Parker]** | ~~`fly apps create pivot-sports-api`~~ (done 2026-09-27); `fly secrets set …` | `fly secrets list -a pivot-sports-api` | Required keys present; **no** `.env` upload |
+| 13 | **[Parker]** | `fly deploy` on a non-frozen day (optionally `--build-arg GIT_SHA=$(git rev-parse --short HEAD)`) | `fly status`; `curl https://pivot-sports-api.fly.dev/health` | Machines started; health **200** |
 | 14 | **[Parker]** | `fly scale count worker=1` (and preferably `api=1` for TestFlight) | `fly scale show` | `worker` count ≥ 1 |
-| 15 | **[Parker]** | Smoke API with JWT from hosted auth | `curl -H "Authorization: Bearer $JWT" https://pivot-api.fly.dev/leagues` | 200 JSON (likely `[]`) |
+| 15 | **[Parker]** | Smoke API with JWT from hosted auth | `curl -H "Authorization: Bearer $JWT" https://pivot-sports-api.fly.dev/leagues` | 200 JSON (likely `[]`) |
 | 16 | **[Parker]** | RevenueCat webhook URL + auth header → Fly | Test event in RC dashboard | 200 `{ ok: true, … }` |
 | 17 | **[Parker]** | Set Expo dashboard env vars for **preview** / **production** (`EXPO_PUBLIC_*`) | EAS build log shows injected env | No `127.0.0.1` / `169.254` in those builds |
 | 18 | **[Parker]** | Confirm APNs key still on EAS for `com.fantasyfocus.app`; optional Expo curl push smoke | Notification on device | Ticket/receipt `ok` |
@@ -434,7 +423,7 @@ Do **not** deploy on Thu / Sun / Mon. Prefer Tue–Wed–Fri.
 | Schema migrations are forward-only | `db push` does not auto-write down migrations; bad migration ⇒ manual SQL fix. |
 | `EXPO_PUBLIC_*` baked into binary | Rolling back Fly without a new EAS build leaves the app pointing at a dead URL if you change hostnames. |
 | Redis + two processes | Rolling back to `CACHE_DRIVER=memory` silently splits API/worker state. |
-| Empty `pivot-api` DNS mystery | Deploying to the wrong org's app name fails or hijacks expectations — confirm ownership first. |
+| Wrong app name | `pivot-api` is someone else's app. Always pass `-a pivot-sports-api` (or rely on `fly.toml`) so commands never target it. |
 
 ### Hard-coded `127.0.0.1` / localhost
 

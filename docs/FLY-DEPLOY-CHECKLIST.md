@@ -1,7 +1,7 @@
 ### Saturday, Sept 26: accounts and keys (nothing goes live):
 
 1. Install and sign in: brew install flyctl, then fly auth login.
-2. Reserve the name: fly apps create pivot-api. If it's taken, pick another name and tell Cursor, since fly.toml and the webhook URL both use it.
+2. Reserve the name: done. pivot-api was taken, so the app is pivot-sports-api (fly.toml matches).
 3. Add a payment card in the Fly dashboard under Billing.
 4. Check push: eas credentials -p ios. Confirm APNs key 82JW379P4C is attached to com.fantasyfocus.app.
 5. Supabase: create a project in East US (North Virginia), free tier. Save the project URL, anon key, service_role key, JWT secret and database password in a password manager.
@@ -28,13 +28,13 @@
 6. fly secrets set ... with the names from the runbook.
 7. fly deploy, then fly scale count worker=1 (and api=1).
 8. Smoke test:
-- curl [https://pivot-api.fly.dev/health](https://pivot-api.fly.dev/health) should return {"ok":true,...};
+- curl [https://pivot-sports-api.fly.dev/health](https://pivot-sports-api.fly.dev/health) should return {"ok":true,...};
 - fly logs should show a [lineup-sync-worker] synced line within about 5 minutes.
 
 ### Wednesday, Sept 30: connect outside services:
 
-1. RevenueCat: set the webhook URL to [https://pivot-api.fly.dev/billing/revenuecat](https://pivot-api.fly.dev/billing/revenuecat), with your secret as the auth header.
-2. Expo dashboard: in both the preview and production environments, set EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY and EXPO_PUBLIC_API_BASE_URL.
+1. RevenueCat: set the webhook URL to [https://pivot-sports-api.fly.dev/billing/revenuecat](https://pivot-sports-api.fly.dev/billing/revenuecat), with your secret as the auth header.
+2. Expo dashboard: in both the preview and production environments, set EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY and EXPO_PUBLIC_API_BASE_URL (https://pivot-sports-api.fly.dev).
 3. Test build: build a preview version, install it on your phone, switch to cellular (Wi-Fi off), sign in, and confirm Home loads.
 
 ### Later, not scheduled yet:
