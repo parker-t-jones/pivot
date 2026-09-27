@@ -6,8 +6,8 @@
  * Everything about the firing path here is the real, already-validated code: `EspnPlaySource` polls,
  * `mapEspnPlay` normalizes, `onPlayEvent` computes flag state, `watchForResumption` decides when play
  * resumed, and `runDispatcherTick` -> `isStillRelevant` -> `deliverFlagEvent` -> `ExpoPushNotifier`
- * delivers. Only two things are new (`incrementalResumption.ts`, `resumptionGate.ts`) and only the
- * things that structurally cannot run outside production are shimmed.
+ * delivers. The resumption tracker and the gated dispatcher live in `services/`. Only the things
+ * that structurally cannot run outside production are shimmed.
  *
  * WHY A HARNESS AND NOT A SERVICE. Nothing in the repo wires ingestion -> engine -> dispatcher into a
  * runnable process; `services/{engine,ingestion,dispatcher}` have no `dev` or `start` script, and the
@@ -90,6 +90,7 @@ import {
   InMemoryRealtimeBus,
   InMemoryUserDirectory,
   createPushNotifier,
+  ResumptionGatedDispatcher,
   startDispatcherLoop,
   type DeliveryDeps,
   type DispatchUser,
@@ -99,6 +100,7 @@ import {
   type PushNotifier,
   type PushPayload,
   type PushResult,
+  type GatedEventRecord,
   type RateLimitStore,
 } from '@pivot/dispatcher';
 import {
@@ -122,7 +124,6 @@ import {
 import type { UserLineupCache } from '@pivot/shared';
 
 import { teamInfo } from './nflTeams.js';
-import { ResumptionGatedDispatcher, type GatedEventRecord } from './resumptionGate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = path.resolve(__dirname, 'logs');

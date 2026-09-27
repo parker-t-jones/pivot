@@ -1,31 +1,13 @@
 /**
- * THROWAWAY TEST HARNESS CODE — not part of the Pivot app, not production code.
+ * `EventDispatcher` that holds flag events until resumption resolves.
  *
- * The `EventDispatcher` the engine hands flag events to during the live test, gating them on
- * resumption detection instead of on a fixed delay.
- *
- * This deliberately replaces `QueueingEventDispatcher` rather than wrapping it. That class sets
- * `scheduledFireAt = now + lagSecondsFor(source) * 1000` — the fixed per-platform padding. Today's
- * test is about using the resumption watcher's detected trigger time as the scheduling input instead,
- * which is precisely the substitution PLAN.md Section 8's "Open items" names as unbuilt. Everything
- * downstream of the queue is untouched: `runDispatcherTick` -> `isStillRelevant` -> `deliverFlagEvent`
- * all run exactly as they do in the integration test.
- *
- * WHAT THIS IS EXPECTED TO SHOW. Normalized `PlayEvent`s carry `possessionTeamId: null` on every
- * procedural play, and every play type that classifies `SKIP_AND_WAIT` is in that null set. So the
- * play that reveals a new possession is always itself `REAL_ACTION`, which means an opening window
- * resolves on the very same play that opened it — either `REAL_ACTION` (fire now) or, if halftime
- * intervened, `ABORTED` (drop). The predicted consequence is that `holdMs` is ~0 for every event and
- * the ceiling timer never fires.
- *
- * That prediction is the thing under test, so the hold and ceiling paths are implemented properly
- * rather than asserted away: if ESPN produces a sequence that does hold, the logs will say so with a
- * real number attached. Measuring it is the point; assuming it would defeat the exercise.
+ * On release, `scheduledFireAt` is the clock's now. A window that is still open parks the event.
+ * `ABORTED` drops it. An event dispatched after the resolution on that same play fires immediately.
  */
 
-import type { FlagEventQueue } from '@pivot/dispatcher';
+import type { EventDispatcher, ResumptionResolution } from '@pivot/engine';
 import type { FlagEvent } from '@pivot/shared';
-import type { ResumptionResolution } from '@pivot/engine';
+import type { FlagEventQueue } from './queue.js';
 
 /** What the gate decided to do with an event at dispatch time. */
 export type GateDecision = 'fire_immediately' | 'held_pending_resumption' | 'dropped_by_abort';
@@ -51,15 +33,15 @@ export interface ResumptionGatedDispatcherDeps {
   clock?: () => number;
 }
 
-export class ResumptionGatedDispatcher {
+export class ResumptionGatedDispatcher implements EventDispatcher {
   /** gameId -> whether a possession change is currently awaiting evidence play resumed. */
   private readonly windowOpen = new Map<string, boolean>();
   /** gameId -> the resolution produced while processing the CURRENT play, if any. */
   private readonly resolutionThisPlay = new Map<string, ResumptionResolution>();
   /**
    * gameId -> a resolution that was set on the PREVIOUS play but never consumed by a `dispatch()`
-   * call that play (e.g. a kickoff resolves REAL_ACTION on itself, per the file header's "window
-   * anchoring" prediction, but a kickoff never produces a `flag_added` — `applyPlayToState` puts it in
+   * call that play (e.g. a kickoff resolves REAL_ACTION on itself, but a kickoff never produces a
+   * `flag_added` — `applyPlayToState` puts it in
    * `SPECIAL_TEAMS_PLAY_TYPES`, not `OFFENSE_PLAY_TYPES` — so the event this resolution is actually
    * FOR doesn't exist until the following offensive snap). Findings doc, Finding 2: without this,
    * `beginPlay` wiped the resolution one play before anything ever read it, so every kickoff-started
@@ -83,7 +65,7 @@ export class ResumptionGatedDispatcher {
   }
 
   /**
-   * Called by the harness before `onPlayEvent`, so `dispatch` can tell "a window resolved on the play
+   * Called before `onPlayEvent`, so `dispatch` can tell "a window resolved on the play
    * I am currently reacting to" from "a window resolved some plays ago". Demotes an unconsumed
    * resolution from the play that just ended into a one-play grace period (`carryOverResolution`)
    * instead of discarding it outright — see that field's comment for why.
@@ -98,15 +80,15 @@ export class ResumptionGatedDispatcher {
     this.resolutionThisPlay.delete(gameId);
   }
 
-  /** Called by the harness when a tracker closes a window — including from the ceiling timer. */
-  noteResolution(gameId: string, resolution: ResumptionResolution): void {
+  /** Called when a tracker closes a window, including from the silence timer. */
+  noteResolution(gameId: string, resolution: ResumptionResolution): Promise<void> {
     this.windowOpen.set(gameId, false);
     this.resolutionThisPlay.set(gameId, resolution);
-    void this.releaseParked(gameId, resolution);
+    return this.releaseParked(gameId, resolution);
   }
 
   /**
-   * Called by the harness when a tracker opens a window. A fresh possession change starting also
+   * Called when a tracker opens a window. A fresh possession change starting also
    * invalidates any not-yet-consumed carry-over from a prior, now-irrelevant resolution — otherwise a
    * kickoff whose return is itself immediately fumbled (a second possession change before the first
    * one's `flag_added` ever fired) could misattribute the wrong resolution to the eventual event.

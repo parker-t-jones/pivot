@@ -79,6 +79,13 @@ export {
 
 export { QueueingEventDispatcher, type ScheduleFlagEventDeps } from './scheduleFlagEvent.js';
 
+export {
+  ResumptionGatedDispatcher,
+  type GateDecision,
+  type GatedEventRecord,
+  type ResumptionGatedDispatcherDeps,
+} from './resumptionGate.js';
+
 export { deliverFlagEvent, type DeliveryDeps, type FlagEventEnvelope } from './delivery.js';
 
 export {
