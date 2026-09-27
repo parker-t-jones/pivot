@@ -14,6 +14,7 @@ export {
 
 export { mapEspnPlay, resolveGameContext, type EspnGameContext } from './espn/mapEspnPlay.js';
 export { translatePlay } from './espn/translatePlay.js';
+export { countSummaryPlays, summaryPlayPrefixes } from './espn/summaryPlayPrefixes.js';
 
 export {
   EspnPlaySource,
