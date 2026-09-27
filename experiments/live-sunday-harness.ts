@@ -75,6 +75,7 @@
  *   PIVOT_EXPO_PUSH_TOKEN   ExponentPushToken[...] for the phone under test (required unless --no-push)
  */
 
+import { randomUUID } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -96,6 +97,7 @@ import {
   type DispatchUser,
   type DispatcherTickDeps,
   type FlagEventPersistence,
+  type PersistFlagEventResult,
   type PersistedFlagEventInput,
   type PushNotifier,
   type PushPayload,
@@ -313,10 +315,14 @@ class MeasuringRateLimitStore implements RateLimitStore {
 
 /** Captures the `firedAt`/`deliveredAt` pair `deliverFlagEvent` computes, which is the measured data. */
 class LoggingFlagEventPersistence implements FlagEventPersistence {
-  constructor(private readonly onPersist: (input: PersistedFlagEventInput) => void) {}
+  constructor(
+    private readonly onPersist: (input: PersistedFlagEventInput & { id: string }) => void,
+  ) {}
 
-  async persistFlagEvent(input: PersistedFlagEventInput): Promise<void> {
-    this.onPersist(input);
+  async persistFlagEvent(input: PersistedFlagEventInput): Promise<PersistFlagEventResult> {
+    const id = randomUUID();
+    this.onPersist({ ...input, id });
+    return { inserted: true, id };
   }
 }
 

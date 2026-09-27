@@ -70,6 +70,7 @@ export {
   type FlagEventPersistence,
   type GameCatalog,
   type GameSummaryInfo,
+  type PersistFlagEventResult,
   type PersistedFlagEventInput,
   type PlayerCatalog,
   type PlayerInfo,

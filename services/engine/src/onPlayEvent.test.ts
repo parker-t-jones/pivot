@@ -74,6 +74,7 @@ describe('onPlayEvent', () => {
     expect(dispatcher.events[0]?.type).toBe('flag_added');
     expect(dispatcher.events[0]?.userId).toBe('u1');
     expect(dispatcher.events[0]?.gameId).toBe('g1');
+    expect(dispatcher.triggeringPlayIds).toEqual(['p1']);
   });
 
   it('persists the new game state on every play', async () => {

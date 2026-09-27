@@ -21,9 +21,9 @@ export interface ScheduleFlagEventDeps {
 export class QueueingEventDispatcher implements EventDispatcher {
   constructor(private readonly deps: ScheduleFlagEventDeps) {}
 
-  async dispatch(event: FlagEvent): Promise<void> {
+  async dispatch(event: FlagEvent, triggeringPlayId: string | null = null): Promise<void> {
     const clock = this.deps.clock ?? defaultClock;
     const scheduled: FlagEvent = { ...event, scheduledFireAt: clock() };
-    await this.deps.queue.enqueue(scheduled);
+    await this.deps.queue.enqueue(scheduled, triggeringPlayId);
   }
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FlagReason, Preferences } from '@pivot/shared';
 
 /**
@@ -125,12 +126,14 @@ export class InMemoryPlayerCatalog implements PlayerCatalog {
 // --- `flag_events` persistence (Phase 3 migration; concrete Supabase adapter lands alongside it) ---
 
 export interface PersistedFlagEventInput {
-  id: string;
   userId: string;
   gameId: string;
   eventType: 'flag_added' | 'flag_removed' | 'priority_increased' | 'priority_decreased';
-  /** Section 8's `FlagEvent` (frozen Sprint 4 shared type) carries no play id, so this is always
-   *  `null` for now — see PLAN.md Section 7 `flag_events.triggering_play_id` (nullable). */
+  /**
+   * ESPN play id of the play that produced the event. `FlagEvent` does not carry it; the handler
+   * passes it into dispatch. Null does not participate in the dedupe key — Postgres UNIQUE treats
+   * NULLs as distinct, and live events set this.
+   */
   triggeringPlayId: string | null;
   priorityScore: number;
   reasons: FlagReason[];
@@ -138,14 +141,33 @@ export interface PersistedFlagEventInput {
   deliveredAt: number;
 }
 
-export interface FlagEventPersistence {
-  persistFlagEvent(input: PersistedFlagEventInput): Promise<void>;
+export interface StoredFlagEvent extends PersistedFlagEventInput {
+  /** `flag_events.id` from `gen_random_uuid()`. Not the engine `FlagEvent.id`. */
+  id: string;
 }
 
-export class InMemoryFlagEventPersistence implements FlagEventPersistence {
-  readonly records: PersistedFlagEventInput[] = [];
+export type PersistFlagEventResult = { inserted: true; id: string } | { inserted: false };
 
-  async persistFlagEvent(input: PersistedFlagEventInput): Promise<void> {
-    this.records.push(input);
+export interface FlagEventPersistence {
+  persistFlagEvent(input: PersistedFlagEventInput): Promise<PersistFlagEventResult>;
+}
+
+function dedupeKey(input: PersistedFlagEventInput): string | null {
+  if (input.triggeringPlayId === null) return null;
+  return `${input.userId}\0${input.gameId}\0${input.eventType}\0${input.triggeringPlayId}`;
+}
+
+/** Records inserted flag events. A repeated non-null dedupe key inserts nothing. */
+export class InMemoryFlagEventPersistence implements FlagEventPersistence {
+  readonly records: StoredFlagEvent[] = [];
+  private readonly seenKeys = new Set<string>();
+
+  async persistFlagEvent(input: PersistedFlagEventInput): Promise<PersistFlagEventResult> {
+    const key = dedupeKey(input);
+    if (key !== null && this.seenKeys.has(key)) return { inserted: false };
+    if (key !== null) this.seenKeys.add(key);
+    const id = randomUUID();
+    this.records.push({ ...input, id });
+    return { inserted: true, id };
   }
 }

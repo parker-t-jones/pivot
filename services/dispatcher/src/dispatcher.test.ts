@@ -120,6 +120,59 @@ describe('runDispatcherTick', () => {
     expect(realtimeBus.published).toHaveLength(1);
   });
 
+  it('stores the play id the handler passed into dispatch', async () => {
+    const now = 1_700_000_060_000;
+    const { deps, queue, gameStateStore, userDirectory, persistence } = buildHarness(now);
+
+    await gameStateStore.setUserFlagState('u1', 'g1', makeFlagState());
+    await gameStateStore.markUserActive('u1', 60_000);
+    userDirectory.setUser(freeUser);
+    await queue.enqueue(makeEvent({ scheduledFireAt: now - 1000 }), 'play-x');
+
+    const result = await runDispatcherTick(deps);
+
+    expect(result.delivered).toBe(1);
+    expect(persistence.records[0]?.triggeringPlayId).toBe('play-x');
+    expect(persistence.records[0]?.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it('removes a duplicate insert without publishing or counting a delivery', async () => {
+    const now = 1_700_000_060_000;
+    const { deps, queue, gameStateStore, userDirectory, realtimeBus, persistence, rateLimitStore } =
+      buildHarness(now);
+
+    await gameStateStore.setUserFlagState('u1', 'g1', makeFlagState());
+    await gameStateStore.markUserActive('u1', 60_000);
+    userDirectory.setUser(freeUser);
+    await persistence.persistFlagEvent({
+      userId: 'u1',
+      gameId: 'g1',
+      eventType: 'flag_added',
+      triggeringPlayId: 'play-x',
+      priorityScore: 5,
+      reasons: makeFlagState().reasons,
+      firedAt: now,
+      deliveredAt: now,
+    });
+    await queue.enqueue(makeEvent({ scheduledFireAt: now - 1000 }), 'play-x');
+
+    const result = await runDispatcherTick(deps);
+
+    expect(result).toEqual({
+      processed: 1,
+      delivered: 0,
+      droppedStale: 0,
+      droppedMissingUser: 0,
+      droppedRateLimited: 0,
+    });
+    expect(queue.size()).toBe(0);
+    expect(persistence.records).toHaveLength(1);
+    expect(realtimeBus.published).toHaveLength(0);
+    expect(rateLimitStore.entriesFor('u1')).toEqual([]);
+  });
+
   it('ignores events not yet due', async () => {
     const now = 1_700_000_060_000;
     const { deps, queue } = buildHarness(now);

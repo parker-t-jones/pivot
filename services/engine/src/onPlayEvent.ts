@@ -83,7 +83,7 @@ export async function onPlayEvent(deps: OnPlayEventDeps, play: PlayEvent): Promi
       if (!event) return;
 
       await deps.gameState.setUserFlagState(userId, play.gameId, newFlagState);
-      await deps.dispatcher.dispatch(event);
+      await deps.dispatcher.dispatch(event, play.playId);
     }),
   );
 }

@@ -69,41 +69,67 @@ function buildDeps(overrides: Partial<DeliveryDeps> = {}): DeliveryDeps {
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 describe('deliverFlagEvent', () => {
-  it('persists to flag_events with firedAt=scheduledFireAt and deliveredAt=now, no play id', async () => {
+  it('persists a uuid row id with firedAt=scheduledFireAt and deliveredAt=now', async () => {
     const persistence = new InMemoryFlagEventPersistence();
     const deps = buildDeps({ persistence });
 
     await deliverFlagEvent(deps, makeEvent(), freeUser);
 
-    expect(persistence.records).toEqual([
-      {
-        id: 'evt-1',
-        userId: 'u1',
-        gameId: 'g1',
-        eventType: 'flag_added',
-        triggeringPlayId: null,
-        priorityScore: 10,
-        reasons: makeFlagState().reasons,
-        firedAt: 1_700_000_060_000,
-        deliveredAt: 1_700_000_061_500,
-      },
-    ]);
+    expect(persistence.records).toHaveLength(1);
+    expect(persistence.records[0]?.id).toMatch(UUID_RE);
+    expect(persistence.records[0]).toMatchObject({
+      userId: 'u1',
+      gameId: 'g1',
+      eventType: 'flag_added',
+      triggeringPlayId: null,
+      priorityScore: 10,
+      reasons: makeFlagState().reasons,
+      firedAt: 1_700_000_060_000,
+      deliveredAt: 1_700_000_061_500,
+    });
+  });
+
+  it('inserts one row for a play and does not notify again on the same key', async () => {
+    const persistence = new InMemoryFlagEventPersistence();
+    const bus = new InMemoryRealtimeBus();
+    const pushNotifier = new CapturingPushNotifier();
+    const rateLimitStore = new InMemoryRateLimitStore();
+    const deps = buildDeps({ persistence, realtimeBus: bus, pushNotifier, rateLimitStore });
+    const pushUser: DispatchUser = { ...freeUser, expoPushToken: 'ExponentPushToken[dedupe]' };
+    const playId = '401772510-9';
+
+    const first = await deliverFlagEvent(deps, makeEvent(), pushUser, playId);
+    const second = await deliverFlagEvent(deps, makeEvent({ id: 'evt-2' }), pushUser, playId);
+
+    expect(first).toBe('inserted');
+    expect(second).toBe('duplicate');
+    expect(persistence.records).toHaveLength(1);
+    expect(persistence.records[0]?.id).toMatch(UUID_RE);
+    expect(persistence.records[0]?.triggeringPlayId).toBe(playId);
+    expect(bus.published).toHaveLength(1);
+    expect(pushNotifier.calls).toHaveLength(1);
+    expect(rateLimitStore.entriesFor('u1')).toHaveLength(1);
   });
 
   it('publishes the Section 9 envelope to realtime:user:{userId}', async () => {
+    const persistence = new InMemoryFlagEventPersistence();
     const bus = new InMemoryRealtimeBus();
-    const deps = buildDeps({ realtimeBus: bus });
+    const deps = buildDeps({ persistence, realtimeBus: bus });
 
     await deliverFlagEvent(deps, makeEvent(), freeUser);
 
     expect(bus.published).toHaveLength(1);
     expect(bus.published[0]?.channel).toBe(realtimeUserChannel('u1'));
     const envelope = bus.published[0]?.message as FlagEventEnvelope;
-    expect(envelope.id).toBe('evt-1');
+    const rowId = persistence.records[0]?.id;
+    expect(rowId).toMatch(UUID_RE);
+    expect(envelope.id).toBe(rowId);
     expect(envelope.type).toBe('flag_event');
     expect(envelope.timestamp).toBe(1_700_000_061_500);
-    expect(envelope.payload.event_id).toBe('evt-1');
+    expect(envelope.payload.event_id).toBe(rowId);
     expect(envelope.payload.user_id).toBe('u1');
     expect(envelope.payload.game_id).toBe('g1');
     expect(envelope.payload.event_type).toBe('flag_added');
@@ -188,7 +214,11 @@ describe('deliverFlagEvent', () => {
   it('degrades to null when the only broadcast is ineligible and there is no timing source (Phase 3b)', async () => {
     const broadcastCatalog = new InMemoryBroadcastCatalog();
     broadcastCatalog.setGameBroadcasts('g1', [
-      { service: 'sunday_ticket', deepLinkUrl: 'https://st.example/g1', requiresSubscription: true },
+      {
+        service: 'sunday_ticket',
+        deepLinkUrl: 'https://st.example/g1',
+        requiresSubscription: true,
+      },
     ]);
     // User isn't subscribed -> not a timing source AND not eligible for the ranker.
     const bus = new InMemoryRealtimeBus();
@@ -595,7 +625,7 @@ describe('deliverFlagEvent', () => {
       const bus = new InMemoryRealtimeBus();
       const deps = buildDeps({ pushNotifier, persistence, realtimeBus: bus });
 
-      await expect(deliverFlagEvent(deps, makeEvent(), pushUser)).resolves.toBeUndefined();
+      await expect(deliverFlagEvent(deps, makeEvent(), pushUser)).resolves.toBe('inserted');
 
       expect(persistence.records).toHaveLength(1);
       expect(bus.published).toHaveLength(1);
@@ -610,7 +640,7 @@ describe('deliverFlagEvent', () => {
       const bus = new InMemoryRealtimeBus();
       const deps = buildDeps({ pushNotifier: throwingPushNotifier, persistence, realtimeBus: bus });
 
-      await expect(deliverFlagEvent(deps, makeEvent(), pushUser)).resolves.toBeUndefined();
+      await expect(deliverFlagEvent(deps, makeEvent(), pushUser)).resolves.toBe('inserted');
 
       expect(persistence.records).toHaveLength(1);
       expect(bus.published).toHaveLength(1);

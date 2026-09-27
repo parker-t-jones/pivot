@@ -165,7 +165,9 @@ async function resolveActionRecommendation(
     const deepLinkUrl = broadcasts.find((b) => b.service === timingSource)?.deepLinkUrl ?? null;
     return { recommendedSource: timingSource, deepLinkUrl };
   }
-  const preferred = preferredBroadcast(await resolveBroadcasts(gameId, userId, deps.broadcastCatalog));
+  const preferred = preferredBroadcast(
+    await resolveBroadcasts(gameId, userId, deps.broadcastCatalog),
+  );
   return {
     recommendedSource: preferred?.service ?? null,
     deepLinkUrl: preferred?.deepLinkUrl ?? null,
@@ -173,13 +175,15 @@ async function resolveActionRecommendation(
 }
 
 /**
- * PLAN.md Section 8 `deliverFlagEvent`. Builds the Section 9 envelope, persists to `flag_events`
- * (Phase 3's table via the structural `FlagEventPersistence`), publishes to `realtime:user:{user_id}`,
- * records the delivery into the rate-limit sliding window (sprint decision #8), and — Sprint 6 Phase 3
- * — sends an Expo push carrying the identical envelope `payload` as `data`, so a client renders a push
- * exactly like a WebSocket delivery. The `user` powering `decideAction` is passed in (already fetched
- * by the dispatcher tick for the rate-limit check) rather than re-fetched here, to avoid a redundant
- * `getUser` round trip.
+ * PLAN.md Section 8 `deliverFlagEvent`. Persists to `flag_events` first. The row `id` is a generated
+ * uuid, not the engine `FlagEvent.id`. That uuid is what the Section 9 envelope and the push `data`
+ * carry as `event_id`. A unique-key conflict is already delivered: nothing is published, pushed, or
+ * recorded as a rate-limit hit. Otherwise publishes to `realtime:user:{user_id}`, records the
+ * delivery into the rate-limit sliding window (sprint decision #8), and — Sprint 6 Phase 3 — sends an
+ * Expo push carrying the identical envelope `payload` as `data`, so a client renders a push exactly
+ * like a WebSocket delivery. The `user` powering `decideAction` is passed in (already fetched by the
+ * dispatcher tick for the rate-limit check) rather than re-fetched here, to avoid a redundant
+ * `getUser` round trip. `triggeringPlayId` is the ESPN play id the handler passed into dispatch.
  *
  * Push is strictly best-effort and last in the sequence: persistence and the realtime publish already
  * succeeded by the time push is attempted, and a push failure (invalid token, Expo outage, thrown
@@ -190,7 +194,8 @@ export async function deliverFlagEvent(
   deps: DeliveryDeps,
   event: FlagEvent,
   user: DispatchUser,
-): Promise<void> {
+  triggeringPlayId: string | null = null,
+): Promise<'inserted' | 'duplicate'> {
   const clock = deps.clock ?? defaultClock;
   const deliveredAt = clock();
 
@@ -225,12 +230,24 @@ export async function deliverFlagEvent(
 
   const possessionTeam = resolvePossessionTeamAbbreviation(gameState, gameSummaryInfo);
 
+  const persisted = await deps.persistence.persistFlagEvent({
+    userId: event.userId,
+    gameId: event.gameId,
+    eventType: event.type,
+    triggeringPlayId,
+    priorityScore: event.newState.priorityScore,
+    reasons: event.newState.reasons,
+    firedAt: event.scheduledFireAt,
+    deliveredAt,
+  });
+  if (!persisted.inserted) return 'duplicate';
+
   const envelope: FlagEventEnvelope = {
-    id: event.id,
+    id: persisted.id,
     type: 'flag_event',
     timestamp: deliveredAt,
     payload: {
-      event_id: event.id,
+      event_id: persisted.id,
       user_id: event.userId,
       game_id: event.gameId,
       event_type: event.type,
@@ -260,18 +277,6 @@ export async function deliverFlagEvent(
       })),
     },
   };
-
-  await deps.persistence.persistFlagEvent({
-    id: event.id,
-    userId: event.userId,
-    gameId: event.gameId,
-    eventType: event.type,
-    triggeringPlayId: null,
-    priorityScore: event.newState.priorityScore,
-    reasons: event.newState.reasons,
-    firedAt: event.scheduledFireAt,
-    deliveredAt,
-  });
 
   await deps.realtimeBus.publish(realtimeUserChannel(event.userId), envelope);
 
@@ -314,4 +319,6 @@ export async function deliverFlagEvent(
       });
     }
   }
+
+  return 'inserted';
 }

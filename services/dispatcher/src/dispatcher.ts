@@ -82,9 +82,9 @@ export async function runDispatcherTick(deps: DispatcherTickDeps): Promise<Dispa
       continue;
     }
 
-    await deliverFlagEvent(deps.delivery, event, user);
+    const outcome = await deliverFlagEvent(deps.delivery, event, user, item.triggeringPlayId);
     await deps.queue.remove(item);
-    result.delivered += 1;
+    if (outcome === 'inserted') result.delivered += 1;
   }
 
   return result;

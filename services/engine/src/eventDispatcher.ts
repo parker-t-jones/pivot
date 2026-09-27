@@ -7,14 +7,20 @@ import type { FlagEvent } from '@pivot/shared';
  * which is explicitly out of scope here.
  */
 export interface EventDispatcher {
-  dispatch(event: FlagEvent): Promise<void>;
+  /**
+   * `triggeringPlayId` is the ESPN play id that produced `event`. `FlagEvent` does not carry it.
+   * The handler passes it here so delivery can store `flag_events.triggering_play_id`.
+   */
+  dispatch(event: FlagEvent, triggeringPlayId?: string | null): Promise<void>;
 }
 
 /** Records every dispatched event in order, so tests can assert on the engine's output. */
 export class CapturingEventDispatcher implements EventDispatcher {
   readonly events: FlagEvent[] = [];
+  readonly triggeringPlayIds: Array<string | null> = [];
 
-  async dispatch(event: FlagEvent): Promise<void> {
+  async dispatch(event: FlagEvent, triggeringPlayId: string | null = null): Promise<void> {
     this.events.push(event);
+    this.triggeringPlayIds.push(triggeringPlayId);
   }
 }

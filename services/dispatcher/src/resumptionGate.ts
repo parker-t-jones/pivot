@@ -24,6 +24,7 @@ export interface GatedEventRecord {
 interface ParkedEvent {
   event: FlagEvent;
   parkedAt: number;
+  triggeringPlayId: string | null;
 }
 
 export interface ResumptionGatedDispatcherDeps {
@@ -98,12 +99,12 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
     this.carryOverResolution.delete(gameId);
   }
 
-  async dispatch(event: FlagEvent): Promise<void> {
+  async dispatch(event: FlagEvent, triggeringPlayId: string | null = null): Promise<void> {
     const gameId = event.gameId;
 
     if (this.windowOpen.get(gameId) === true) {
       const list = this.parked.get(gameId) ?? [];
-      list.push({ event, parkedAt: this.now() });
+      list.push({ event, parkedAt: this.now(), triggeringPlayId });
       this.parked.set(gameId, list);
       return;
     }
@@ -122,7 +123,7 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
       return;
     }
 
-    await this.enqueueNow(event, 'fire_immediately', 0, resolution);
+    await this.enqueueNow(event, triggeringPlayId, 'fire_immediately', 0, resolution);
   }
 
   /** Flushes events parked while the window was open, once its outcome is known. */
@@ -132,13 +133,13 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
     this.parked.delete(gameId);
 
     const now = this.now();
-    for (const { event, parkedAt } of list) {
+    for (const { event, parkedAt, triggeringPlayId } of list) {
       const holdMs = now - parkedAt;
       if (resolution.outcome === 'ABORTED') {
         this.deps.onGated({ event, decision: 'dropped_by_abort', holdMs, resolution });
         continue;
       }
-      await this.enqueueNow(event, 'held_pending_resumption', holdMs, resolution);
+      await this.enqueueNow(event, triggeringPlayId, 'held_pending_resumption', holdMs, resolution);
     }
   }
 
@@ -149,11 +150,12 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
    */
   private async enqueueNow(
     event: FlagEvent,
+    triggeringPlayId: string | null,
     decision: GateDecision,
     holdMs: number,
     resolution: ResumptionResolution | null,
   ): Promise<void> {
-    await this.deps.queue.enqueue({ ...event, scheduledFireAt: this.now() });
+    await this.deps.queue.enqueue({ ...event, scheduledFireAt: this.now() }, triggeringPlayId);
     this.deps.onGated({ event, decision, holdMs, resolution });
   }
 }

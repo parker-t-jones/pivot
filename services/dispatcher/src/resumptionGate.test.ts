@@ -52,7 +52,7 @@ describe('ResumptionGatedDispatcher', () => {
     dispatcher.noteWindowOpened('g1');
     await dispatcher.noteResolution('g1', realAction);
 
-    await dispatcher.dispatch(makeEvent());
+    await dispatcher.dispatch(makeEvent(), 'play-9');
 
     expect(records).toEqual([
       expect.objectContaining({ decision: 'fire_immediately', holdMs: 0, resolution: realAction }),
@@ -60,13 +60,14 @@ describe('ResumptionGatedDispatcher', () => {
     const due = await queue.due(now.value, 10);
     expect(due).toHaveLength(1);
     expect(due[0]?.event.scheduledFireAt).toBe(5_000);
+    expect(due[0]?.triggeringPlayId).toBe('play-9');
   });
 
   it('releases a parked event when the window resolves, scheduled for now', async () => {
     const now = { value: 1_000 };
     const { dispatcher, queue, records } = gate(now);
     dispatcher.noteWindowOpened('g1');
-    await dispatcher.dispatch(makeEvent());
+    await dispatcher.dispatch(makeEvent(), 'play-held');
     expect(queue.size()).toBe(0);
     expect(records).toHaveLength(0);
 
@@ -83,6 +84,7 @@ describe('ResumptionGatedDispatcher', () => {
     const due = await queue.due(now.value, 10);
     expect(due).toHaveLength(1);
     expect(due[0]?.event.scheduledFireAt).toBe(4_000);
+    expect(due[0]?.triggeringPlayId).toBe('play-held');
   });
 
   it('drops a parked event when the window aborts', async () => {
