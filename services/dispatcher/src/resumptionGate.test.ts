@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ResumptionResolution } from '@pivot/engine';
 import type { FlagEvent, FlagState } from '@pivot/shared';
 import { InMemoryFlagEventQueue } from './inMemoryQueue.js';
@@ -175,5 +175,37 @@ describe('ResumptionGatedDispatcher', () => {
     const due = await queue.due(now.value, 10);
     expect(due).toHaveLength(1);
     expect(due[0]?.event.id).toBe('resolving');
+  });
+
+  it('delivers a flag clear and only collapses push-eligible events', async () => {
+    const now = { value: 5_000 };
+    const { dispatcher, queue } = gate(now);
+    const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    dispatcher.beginPlay('g1');
+    dispatcher.noteWindowOpened('g1');
+    await dispatcher.noteResolution('g1', realAction);
+
+    await dispatcher.dispatch(
+      makeEvent({ id: 'low', newState: makeFlagState({ priorityScore: 2 }) }),
+    );
+    await dispatcher.dispatch(
+      makeEvent({
+        id: 'clear',
+        type: 'flag_removed',
+        newState: makeFlagState({ priorityScore: 100, flagged: false, reasons: [] }),
+      }),
+    );
+    await dispatcher.dispatch(
+      makeEvent({ id: 'high', newState: makeFlagState({ priorityScore: 9 }) }),
+    );
+    await dispatcher.endPlay('g1');
+
+    const due = await queue.due(now.value, 10);
+    expect(due.map((item) => item.event.id).sort()).toEqual(['clear', 'high']);
+    expect(due.find((item) => item.event.id === 'clear')?.event.type).toBe('flag_removed');
+    expect(logs.mock.calls.map((call) => call[0])).toEqual([
+      '[gate] collapsed flag_added g1 for u1 into flag_added',
+    ]);
+    logs.mockRestore();
   });
 });

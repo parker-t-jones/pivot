@@ -1,8 +1,22 @@
 import type { FlagEvent } from '@pivot/shared';
 
 /**
- * One reveal window emits one event per user. Highest `priorityScore` wins. A tie prefers
- * `flagged === true`. A further tie prefers the later `computedAt`.
+ * Event types that can produce a push. Collapse only considers these.
+ * `flag_removed` is the clear (the engine has no `flag_cleared` type). It always delivers.
+ */
+const PUSH_ELIGIBLE_EVENT_TYPES: ReadonlySet<FlagEvent['type']> = new Set([
+  'flag_added',
+  'priority_increased',
+  'priority_decreased',
+]);
+
+export function isPushEligibleEvent(type: FlagEvent['type']): boolean {
+  return PUSH_ELIGIBLE_EVENT_TYPES.has(type);
+}
+
+/**
+ * One reveal window emits one push-eligible event per user. Highest `priorityScore` wins. A tie
+ * prefers `flagged === true`. A further tie prefers the later `computedAt`.
  */
 export function outranks(candidate: FlagEvent, incumbent: FlagEvent): boolean {
   if (candidate.newState.priorityScore !== incumbent.newState.priorityScore) {

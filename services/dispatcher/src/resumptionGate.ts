@@ -7,7 +7,7 @@
 
 import type { EventDispatcher, ResumptionResolution } from '@pivot/engine';
 import type { FlagEvent } from '@pivot/shared';
-import { collapseByUser } from './collapseFlagEvents.js';
+import { collapseByUser, isPushEligibleEvent } from './collapseFlagEvents.js';
 import type { FlagEventQueue } from './queue.js';
 
 /** What the gate decided to do with an event at dispatch time. */
@@ -223,7 +223,31 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
   }
 
   private async enqueueCollapsed(items: readonly WindowCandidate[]): Promise<void> {
-    for (const winner of collapseByUser(items)) {
+    const bypass: WindowCandidate[] = [];
+    const eligible: WindowCandidate[] = [];
+    for (const item of items) {
+      if (isPushEligibleEvent(item.event.type)) eligible.push(item);
+      else bypass.push(item);
+    }
+    for (const item of bypass) {
+      await this.enqueueNow(
+        item.event,
+        item.triggeringPlayId,
+        item.decision,
+        item.holdMs,
+        item.resolution,
+      );
+    }
+    const winners = collapseByUser(eligible);
+    const winnerByUser = new Map(winners.map((winner) => [winner.event.userId, winner]));
+    for (const item of eligible) {
+      const winner = winnerByUser.get(item.event.userId);
+      if (!winner || winner === item) continue;
+      console.log(
+        `[gate] collapsed ${item.event.type} ${item.event.gameId} for ${item.event.userId} into ${winner.event.type}`,
+      );
+    }
+    for (const winner of winners) {
       await this.enqueueNow(
         winner.event,
         winner.triggeringPlayId,

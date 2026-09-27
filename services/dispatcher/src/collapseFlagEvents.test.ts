@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FlagEvent, FlagState } from '@pivot/shared';
-import { collapseByUser } from './collapseFlagEvents.js';
+import { collapseByUser, isPushEligibleEvent } from './collapseFlagEvents.js';
 
 function event(overrides: {
   id: string;
@@ -26,6 +26,15 @@ function event(overrides: {
     scheduledFireAt: 0,
   };
 }
+
+describe('isPushEligibleEvent', () => {
+  it('collapses the push types and lets a clear through', () => {
+    expect(isPushEligibleEvent('flag_added')).toBe(true);
+    expect(isPushEligibleEvent('priority_increased')).toBe(true);
+    expect(isPushEligibleEvent('priority_decreased')).toBe(true);
+    expect(isPushEligibleEvent('flag_removed')).toBe(false);
+  });
+});
 
 describe('collapseByUser', () => {
   it('keeps the higher priorityScore', () => {
