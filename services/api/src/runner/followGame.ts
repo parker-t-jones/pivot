@@ -10,6 +10,16 @@ import type { SeenPlaySet } from './seenPlays.js';
 /** Same curve as an ESPN poll failure: 10s, 20s, 40s, then 60s. */
 const BACKOFF_BASE_MS = 5_000;
 const BACKOFF_CAP_MS = 60_000;
+/** Matches `EspnPlaySource`'s own default. The retry wait uses the caller's interval when set. */
+const DEFAULT_POLL_INTERVAL_MS = 5_000;
+
+/** `onPlayEvent` failed. The rest of this poll is abandoned; the next poll starts at this play. */
+class PlayHandlingError extends Error {
+  constructor(readonly playId: string) {
+    super(`play handling failed: ${playId}`);
+    this.name = 'PlayHandlingError';
+  }
+}
 
 function backoffMs(consecutiveFailures: number): number {
   return Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** consecutiveFailures);
@@ -40,21 +50,28 @@ export async function followGame(deps: FollowGameDeps): Promise<void> {
   }
   if (deps.signal.aborted || summaryIsFinal(seeded)) return;
 
-  const source = new EspnPlaySource({
-    eventId: deps.eventId,
-    client: { getSummary: deps.getSummary },
-    initialSeenPlayIds: await deps.seen.members(deps.eventId),
-    ...(deps.pollIntervalMs !== undefined ? { pollIntervalMs: deps.pollIntervalMs } : {}),
-  });
-
-  const disconnect = (): void => {
-    void source.disconnect();
-  };
-  deps.signal.addEventListener('abort', disconnect, { once: true });
-  try {
-    await source.subscribe((play) => deliverIfNew(deps, play));
-  } finally {
-    deps.signal.removeEventListener('abort', disconnect);
+  const pollIntervalMs = deps.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  while (!deps.signal.aborted) {
+    const source = new EspnPlaySource({
+      eventId: deps.eventId,
+      client: { getSummary: deps.getSummary },
+      initialSeenPlayIds: await deps.seen.members(deps.eventId),
+      pollIntervalMs,
+    });
+    const disconnect = (): void => {
+      void source.disconnect();
+    };
+    deps.signal.addEventListener('abort', disconnect, { once: true });
+    try {
+      await source.subscribe((play) => deliverIfNew(deps, play));
+      return;
+    } catch (error) {
+      if (!(error instanceof PlayHandlingError)) throw error;
+    } finally {
+      deps.signal.removeEventListener('abort', disconnect);
+    }
+    if (deps.signal.aborted) return;
+    await delay(pollIntervalMs, deps.signal);
   }
 }
 
@@ -112,7 +129,7 @@ async function deliverIfNew(deps: FollowGameDeps, play: PlayEvent): Promise<void
     await deps.onPlayEvent(play);
   } catch (error) {
     console.error(`[runner] play failed ${deps.eventId} ${play.playId}: ${failureReason(error)}`);
-    return;
+    throw new PlayHandlingError(play.playId);
   }
   await deps.seen.add(deps.eventId, play.playId);
 }

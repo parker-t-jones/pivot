@@ -262,9 +262,10 @@ describe('followGame', () => {
     expect(client.calls).toHaveLength(2);
   });
 
-  it('leaves a play unmarked when handling throws and still handles the next play', async () => {
+  it('stops the poll when handling throws and retries that play before the ones after it', async () => {
     const seen = new InMemorySeenPlaySet();
     const handled: string[] = [];
+    let xAttempts = 0;
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const client = scripted([
       summary(['p1']),
@@ -279,13 +280,16 @@ describe('followGame', () => {
       signal: new AbortController().signal,
       pollIntervalMs: 0,
       onPlayEvent: async (play) => {
-        if (play.playId === 'X') throw new Error('boom');
+        if (play.playId === 'X') {
+          xAttempts += 1;
+          if (xAttempts === 1) throw new Error('boom');
+        }
         handled.push(play.playId);
       },
     });
 
-    expect(handled).toEqual(['Y']);
-    expect(await seen.has(EVENT_ID, 'X')).toBe(false);
+    expect(handled).toEqual(['X', 'Y']);
+    expect(await seen.has(EVENT_ID, 'X')).toBe(true);
     expect(await seen.has(EVENT_ID, 'Y')).toBe(true);
     expect(errors.mock.calls.map((call) => call[0])).toEqual([
       `[runner] play failed ${EVENT_ID} X: boom`,
