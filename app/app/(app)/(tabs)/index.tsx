@@ -60,6 +60,7 @@ import { fetchNflState, type NflStateResponse } from '../../../lib/nflState';
 import {
   fetchGamesLive,
   fetchGamesWeek,
+  type GameStateMessage,
   type LiveGame,
   type ScheduleGame,
 } from '../../../lib/schedule';
@@ -295,7 +296,7 @@ export default function HomeScreen() {
     }
   }, []);
 
-  const onGameState = useCallback((game: LiveGame) => {
+  const onGameState = useCallback((game: GameStateMessage) => {
     setHomeData((prev) => {
       if (!prev) return prev;
       return { ...prev, ...applyGameStateToHome(toFlagSlice(prev), game) };

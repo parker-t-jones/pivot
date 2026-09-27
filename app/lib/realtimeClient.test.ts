@@ -291,6 +291,30 @@ describe('RealtimeClient', () => {
     expect(onGameState.mock.calls[0]?.[0].score).toEqual({ home: 14, away: 7 });
   });
 
+  it('delivers a final game_state so Home can drop the game', async () => {
+    const onGameState = vi.fn();
+    const client = createClient({ onGameState });
+    client.start();
+    const socket = await flushConnect();
+    socket.open();
+    socket.emitJson({
+      id: 'e3',
+      type: 'game_state',
+      timestamp: 3,
+      payload: {
+        game_id: 'g1',
+        status: 'final',
+        scheduled_start: '2026-09-27T17:00:00Z',
+        home_team: 'GB',
+        away_team: 'ATL',
+        score: { home: 24, away: 17 },
+        quarter: 4,
+      },
+    });
+    expect(onGameState).toHaveBeenCalledTimes(1);
+    expect(onGameState.mock.calls[0]?.[0].status).toBe('final');
+  });
+
   it('sends ping on the amended ~15s interval and reconnects if pong is missed', async () => {
     const client = createClient();
     client.start();

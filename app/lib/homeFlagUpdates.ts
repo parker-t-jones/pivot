@@ -13,7 +13,7 @@ import {
 } from './homeState';
 import type { LineupResponse } from './leagues';
 import type { NflStateResponse } from './nflState';
-import type { LiveGame, ScheduleGame } from './schedule';
+import type { GameStateMessage, LiveGame, ScheduleGame } from './schedule';
 import type { PlayerTeamMap } from './teamDisplay';
 
 /** Minimal Home snapshot the WS layer mutates (matches `HomeData` fields used for State 1–4). */
@@ -206,21 +206,27 @@ export function applyFlagEventToHome(
 }
 
 /**
- * Replaces one stake game in the live list from a `game_state` message and recomputes the branch.
- * A game that was not on the list is added, so a kickoff can show up before the 30s reconcile.
+ * Applies one `game_state` message and recomputes the branch.
+ * An in-progress game replaces the matching row, or is added when a kickoff arrives before the
+ * 30s reconcile. A final game is removed immediately, so the live list does not wait for that poll.
  */
 export function applyGameStateToHome(
   slice: HomeFlagSlice,
-  game: LiveGame,
+  game: GameStateMessage,
   now: Date = new Date(),
 ): HomeFlagSlice {
-  const index = slice.liveStakeGames.findIndex((row) => row.game_id === game.game_id);
   const liveStakeGames =
-    index === -1
-      ? [...slice.liveStakeGames, game]
-      : slice.liveStakeGames.map((row, i) => (i === index ? game : row));
+    game.status === 'final'
+      ? slice.liveStakeGames.filter((row) => row.game_id !== game.game_id)
+      : upsertLiveGame(slice.liveStakeGames, game);
   const next: HomeFlagSlice = { ...slice, liveStakeGames };
   return { ...next, branch: recomputeBranch(next, next.flag !== null, now) };
+}
+
+function upsertLiveGame(games: LiveGame[], game: LiveGame): LiveGame[] {
+  const index = games.findIndex((row) => row.game_id === game.game_id);
+  if (index === -1) return [...games, game];
+  return games.map((row, i) => (i === index ? game : row));
 }
 
 /**

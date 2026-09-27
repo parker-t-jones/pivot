@@ -513,6 +513,23 @@ describe('applyGameStateToHome', () => {
     expect(next.liveStakeGames).toEqual([updated]);
     expect(next.branch).toEqual({ branch: 'state2' });
   });
+
+  it('a final game_state removes the game and recomputes the branch', () => {
+    const existing = liveGame();
+    const slice = baseSlice({
+      branch: { branch: 'state2' },
+      liveStakeGames: [existing],
+    });
+
+    const next = applyGameStateToHome(
+      slice,
+      { ...existing, status: 'final', score: { home: 24, away: 17 }, time_remaining_sec: 0 },
+      new Date('2026-09-28T18:00:00Z'),
+    );
+
+    expect(next.liveStakeGames).toEqual([]);
+    expect(next.branch).toEqual({ branch: 'state4' });
+  });
 });
 
 describe('flagEventToCurrentFlag', () => {

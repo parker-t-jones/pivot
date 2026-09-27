@@ -9,7 +9,7 @@ import { shouldConnectHomeRealtime } from './homeState';
 import type { FlagEventPayload } from './flagEventPayload';
 import type { NflSeasonType } from './nflState';
 import { RealtimeClient, type WebSocketConstructor } from './realtimeClient';
-import type { LiveGame } from './schedule';
+import type { GameStateMessage } from './schedule';
 import { supabase } from './supabase';
 
 export interface UseHomeRealtimeOptions {
@@ -19,7 +19,7 @@ export interface UseHomeRealtimeOptions {
   /** Home finished its initial load (socket must not race cold-start `/flags/current`). */
   homeReady: boolean;
   onFlagEvent: (payload: FlagEventPayload) => void;
-  onGameState: (game: LiveGame) => void;
+  onGameState: (game: GameStateMessage) => void;
   /** Stake games on the week slate. Home sends `subscribe_game` for each. */
   gameIds: readonly string[];
   /** Refetch `/flags/current` after re-connect / foreground resume (not initial mount connect). */

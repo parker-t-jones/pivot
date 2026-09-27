@@ -7,7 +7,7 @@
  */
 import { isFlagEventPayload, type FlagEventPayload } from './flagEventPayload';
 import { buildRealtimeWsUrl } from './realtimeUrl';
-import type { LiveGame } from './schedule';
+import type { GameStateMessage } from './schedule';
 
 /** Amended Phase 3: ~15s against the server's 40s idle-close (PLAN still says 25s). */
 export const REALTIME_PING_INTERVAL_MS = 15_000;
@@ -39,7 +39,7 @@ export interface RealtimeClientOptions {
   apiBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
   onFlagEvent: (payload: FlagEventPayload) => void;
-  onGameState?: (game: LiveGame) => void;
+  onGameState?: (game: GameStateMessage) => void;
   /**
    * Fires after a successful socket open that is NOT the first connect of this client instance
    * (drop/reconnect, token refresh, foreground resume after stop+start with same instance).
@@ -61,7 +61,7 @@ export class RealtimeClient {
   private readonly apiBaseUrl: string;
   private readonly getAccessToken: () => Promise<string | null>;
   private readonly onFlagEvent: (payload: FlagEventPayload) => void;
-  private readonly onGameState: ((game: LiveGame) => void) | null;
+  private readonly onGameState: ((game: GameStateMessage) => void) | null;
   private subscribedGameIds: readonly string[] = [];
   private readonly onReconnected: () => void;
   private readonly WebSocketImpl: WebSocketConstructor;
@@ -232,7 +232,11 @@ export class RealtimeClient {
       return;
     }
 
-    if (envelope.type === 'game_state' && this.onGameState && isLiveGame(envelope.payload)) {
+    if (
+      envelope.type === 'game_state' &&
+      this.onGameState &&
+      isGameStateMessage(envelope.payload)
+    ) {
       this.onGameState(envelope.payload);
     }
   }
@@ -353,13 +357,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isLiveGame(value: unknown): value is LiveGame {
+function isGameStateMessage(value: unknown): value is GameStateMessage {
   if (!isRecord(value)) return false;
   const score = value['score'];
   if (!isRecord(score)) return false;
   return (
     typeof value['game_id'] === 'string' &&
-    value['status'] === 'in_progress' &&
+    (value['status'] === 'in_progress' || value['status'] === 'final') &&
     typeof value['scheduled_start'] === 'string' &&
     typeof value['home_team'] === 'string' &&
     typeof value['away_team'] === 'string' &&

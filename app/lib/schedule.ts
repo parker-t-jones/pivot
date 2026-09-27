@@ -46,6 +46,13 @@ export interface LiveGame {
   in_red_zone: boolean;
 }
 
+/** `game_state` payload. `in_progress` is a `LiveGame`. `final` is the same fields so Home can drop the game. */
+export type GameStateMessage = LiveGame | FinalGameState;
+
+export interface FinalGameState extends Omit<LiveGame, 'status'> {
+  status: 'final';
+}
+
 export interface GamesLiveResponse {
   games: LiveGame[];
 }
