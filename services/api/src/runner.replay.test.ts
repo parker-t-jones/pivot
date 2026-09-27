@@ -2,7 +2,7 @@ import { gunzipSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { classifyPlayType, type PlayEvent } from '@pivot/engine';
+import { classifyPlayType, computeFlagState, type PlayEvent } from '@pivot/engine';
 import {
   espnClient,
   EspnPlaySource,
@@ -18,6 +18,7 @@ import {
   InMemoryGameStateStore,
   InMemoryPlayerCatalog,
   InMemoryRealtimeBus,
+  realtimeUserChannel,
   InMemoryResumptionOpenStore,
   InMemoryUserDirectory,
   ResumptionCeiling,
@@ -27,7 +28,7 @@ import {
   type FlagEventQueue,
   type RateLimitStore,
 } from '@pivot/dispatcher';
-import { parsePreferences, type FlagEvent } from '@pivot/shared';
+import { parsePreferences, type FlagEvent, type FlagState } from '@pivot/shared';
 import { createPlaySession } from './runner/playSession.js';
 
 const FIXTURE = fileURLToPath(
@@ -115,6 +116,22 @@ function nextRealPlayAt(seen: readonly SeenPlay[], playId: string): number | und
   return undefined;
 }
 
+/** The flag Home would show: identity, whether it is on, score, and reasons. */
+function flagSnapshot(state: FlagState | null | undefined): {
+  gameId: string;
+  flagged: boolean;
+  priorityScore: number;
+  reasons: FlagState['reasons'];
+} | null {
+  if (!state) return null;
+  return {
+    gameId: state.gameId,
+    flagged: state.flagged,
+    priorityScore: state.priorityScore,
+    reasons: state.reasons,
+  };
+}
+
 function countBy(values: readonly string[]): Record<string, number> {
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
@@ -153,13 +170,13 @@ describe('ATL @ GB replay', () => {
     expect(stats.plays).toBe(playCount);
     expect(stats.enqueued).toEqual({
       flag_added: 16,
-      flag_removed: 16,
+      flag_removed: 17,
       priority_increased: 9,
       priority_decreased: 3,
     });
     expect(stats.rows).toEqual({
       flag_added: 16,
-      flag_removed: 10,
+      flag_removed: 11,
       priority_increased: 9,
       priority_decreased: 3,
     });
@@ -208,6 +225,7 @@ async function replay(input: {
     persistence,
     rateStore,
     clock,
+    checkPublished: true,
     notifier: {
       id: 'none',
       async sendPush(payload) {
@@ -253,6 +271,7 @@ async function replay(input: {
     persistence,
     rateStore,
     clock: { now: 0, last: 0 },
+    checkPublished: false,
     notifier: {
       id: 'none',
       async sendPush() {
@@ -280,6 +299,8 @@ async function playGame(input: {
   rateStore: RateLimitStore;
   clock: { now: number; last: number };
   notifier: DeliveryDeps['pushNotifier'];
+  /** The dedupe pass publishes nothing new; only the first pass has a flag stream to compare. */
+  checkPublished: boolean;
 }): Promise<{ plays: number; seen: SeenPlay[]; enqueued: Enqueued[]; rateLimited: number }> {
   const gameState = new InMemoryGameStateStore();
   gameState.addStake(HOME_ID, USER_ID);
@@ -352,6 +373,7 @@ async function playGame(input: {
   });
   trackers.set(GAME_ID, session.tracker);
 
+  const realtime = new InMemoryRealtimeBus();
   const delivery: DeliveryDeps = {
     gameStateStore: gameState,
     gameCatalog: catalog,
@@ -359,7 +381,7 @@ async function playGame(input: {
     broadcastCatalog: new InMemoryBroadcastCatalog(),
     userDirectory: users,
     persistence: input.persistence,
-    realtimeBus: new InMemoryRealtimeBus(),
+    realtimeBus: realtime,
     rateLimitStore: input.rateStore,
     pushNotifier: input.notifier,
     clock: () => input.clock.now,
@@ -397,6 +419,33 @@ async function playGame(input: {
     ceiling.stop();
     gate.stop();
   }
+
+  const finalGame = await gameState.getGameState(GAME_ID);
+  if (!finalGame) throw new Error('replay produced no game state');
+  const expected = computeFlagState(
+    {
+      userId: USER_ID,
+      week: 3,
+      teamPositions: positions,
+      playerToTeam: players,
+      starPlayerIds: new Set<string>(),
+    },
+    finalGame,
+    () => input.clock.now,
+  );
+  const stored = await gameState.getUserFlagState(USER_ID, GAME_ID);
+  expect(flagSnapshot(stored)).toEqual(flagSnapshot(expected));
+  if (!input.checkPublished) return { plays, seen, enqueued: queue.enqueued, rateLimited };
+
+  const published = realtime.published
+    .filter((item) => item.channel === realtimeUserChannel(USER_ID))
+    .map((item) => item.message)
+    .filter(isRecord)
+    .filter((message) => message['type'] === 'flag_event')
+    .at(-1);
+  const payload = published && isRecord(published['payload']) ? published['payload'] : null;
+  const newState = payload && isRecord(payload['new_state']) ? payload['new_state'] : null;
+  expect(flagSnapshot(newState as FlagState | null)).toEqual(flagSnapshot(expected));
 
   return { plays, seen, enqueued: queue.enqueued, rateLimited };
 }

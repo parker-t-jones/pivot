@@ -57,6 +57,12 @@ export function createPlaySession(deps: PlaySessionDeps): {
       tracker.observe(play, clock());
       await onPlayEvent(deps.onPlay, play);
       await deps.gate.endPlay(play.gameId);
+      // The play that ends the game has no following snap. Release anything still parked so the
+      // final flag (usually a clear) is published instead of waiting out the silence ceiling.
+      const settled = await deps.onPlay.gameState.getGameState(play.gameId);
+      if (settled?.status === 'final') {
+        await deps.gate.releaseMidDrive(play.gameId);
+      }
     },
     dispose(): void {
       tracker.dispose();
