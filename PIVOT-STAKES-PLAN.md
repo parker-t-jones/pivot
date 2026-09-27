@@ -8,6 +8,8 @@
 
 **Revision (Sept 24, 2026):** corrected against `docs/STAKES-PLAN-RECON.md` (repo at `f1e0963`). Where this plan and the recon disagree on a *fact about the code*, the recon wins. Flag any remaining mismatch instead of guessing.
 
+**Revision (Sept 27, 2026):** §11.3 live mode mapping (`state1` / `state2`) records Parker's U4 decisions. The V2 mockup's live layout is superseded.
+
 ### Repo facts every phase must use
 - **Test command:** `pnpm test` at the repo root (root `vitest.config.ts`). `pnpm --filter app test` and `pnpm -r test` run **zero tests** and exit 0. Never use them as a gate.
 - **Component tests:** the vitest config collects `.ts` only, in a `node` environment. There are no component tests, and adding a React Native testing setup is out of scope unless a phase says so. UI regressions are verified with before/after simulator screenshots.
@@ -400,6 +402,8 @@ Restore purchases                Not now
 
 Reference mockups are on the "Pivot Mid-Week Home Directions" design canvas, rows **V2** and **Amber ladder tokens**. Parker can share screenshots with Cursor. The first row (A/B/C) and the palette row are exploration only. **Don't build the Felt, Floodlight, Midnight or Slate palettes.**
 
+**The V2 row's live layout is superseded (Sept 27, 2026).** Live Home (`state1` / `state2`) follows the U4 mapping in §11.3, not that mockup. V2 remains the reference for the pre-game layout. The amber-ladder token row is unchanged.
+
 ### 11.1 Tokens: add the amber ladder to `app/lib/theme.ts`
 Additive only. **No existing key or value changes.** If any existing assertion in `theme.test.ts` would need editing, stop and ask. The ladder is built around the **real** accent `#F5A018` (rgb 245,160,24). The design canvas mockups used `#FFB020`, and the difference is imperceptible. Don't port canvas hexes directly.
 
@@ -486,7 +490,7 @@ Unit-test all three tie levels.
 1. **Header:** mode eyebrow, "Home" title, and a right-side meta block.
 2. **`SegmentedControl`:** `BOARD | MY CARD`.
 3. **Hero slot.**
-4. **Also Flagged row:** State 1 only. Unchanged.
+4. **Live stake tiles** (`state1` and `state2` only): the existing Also Flagged tiles (`AlsoFlaggedRow`) with the Switch button, per **Live layout** below. Omitted in pre-game.
 5. **Board.**
 6. Tab bar.
 
@@ -494,10 +498,16 @@ Unit-test all three tie levels.
 
 | Existing state | Mode eyebrow | Header right | Hero slot | Board |
 |---|---|---|---|---|
-| `state1` (active flag) | `● LIVE · {n} GAMES` (flare) | Current time | `NowActiveCard`, **unchanged**, plus `flareGlow` | Live rows first (clock + score), then upcoming |
-| `state2` (live, no flag) | `● LIVE · {n} GAMES` (flare) | Current time | `FeaturedStakeCard` for the top-ranked live game, with the `fieldAlignedMatchup` scoreboard and `FieldGauge` | Same as State 1 |
+| `state1` (active flag) | `● LIVE · {n} GAMES` (flare) | Current time | `NowActiveCard`, exactly as it is today (team-color score blocks, the full `FieldGauge` with yard labels and RED ZONE, the Watch button, and the NOW ACTIVE eyebrow), plus `flareGlow` | See **Live layout** below |
+| `state2` (live, no flag) | `● LIVE · {n} GAMES` (flare) | Current time | The top-ranked live stake game (§4 `gameScore`), in the same `NowActiveCard` visuals **without** the NOW ACTIVE eyebrow, plus `flareGlow`. Not `FeaturedStakeCard` | Same as State 1 |
 | `state3` (pre-game window) and `state4` (off-day) | `WEEK {n} · PRE-GAME` (brass) | "NEXT KICKOFF" + countdown (brass, `accent` within 24h) | `FeaturedStakeCard` for `pickFeaturedGame` (ranking rule above) | Full week's slate grouped by window: THURSDAY NIGHT / SUNDAY · EARLY / SUNDAY · LATE / PRIMETIME / MONDAY |
 | `season_idle` (`off` / `pre`), `no_leagues` | Unchanged | Unchanged | Unchanged | Unchanged. **Do not merge `off` and `pre`** (see the existing docstring and regression test) |
+
+**Live layout (`state1` / `state2`), U4 decision Sept 27, 2026.** This supersedes the V2 mockup's live layout. Do not build that arrangement. The header (`● LIVE · {n} GAMES`, the clock) and the `BOARD | MY CARD` control are added as in the table above. Under them:
+
+1. **Hero**, as in the Hero slot column. `state2` keeps the Watch button, the team-color score blocks, and the full `FieldGauge`. Only the NOW ACTIVE eyebrow is omitted.
+2. **Live stake games** render as the existing Also Flagged tiles with the Switch button. Flagged games first, under "ALSO FLAGGED". Then unflagged live stake games, under "LIVE NOW". The hero game is not repeated in either group.
+3. **The board below** holds everything else: live non-stake games as muted rows (clock and score), then upcoming games grouped by the same windows as the pre-game board.
 
 Rules:
 - **The board shows the whole slate, not just stake games.** Games without a stake appear muted. That's what makes it a board. `GET /games?week=` already returns every game in the week, and the client already holds it as `weekGames`, so no new endpoint or fetch is needed. It returns `[]` when `display_phase` is `'off'`, which is harmless because Home never reaches the board then. To exercise it off-season, mock `/state/nfl`.
@@ -529,7 +539,7 @@ Rules:
    - the countdown matches the next kickoff;
    - the featured card matches `pickFeaturedGame` (most stakes / starters, then earliest kickoff, then lowest game id);
    - the board lists **every** game this week, grouped by window, with stake rows tinted and dotted.
-4. **Live Home** (U4, after P0): replay a captured `experiments/logs/events-<ISO>.jsonl` through the local pipeline so a flag fires. Home should switch to LIVE with no manual refresh, and the hero should be `NowActiveCard` with its existing content. When the flag clears, the hero should go back to the featured card.
+4. **Live Home** (U4, after P0): replay a captured `experiments/logs/events-<ISO>.jsonl` through the local pipeline so a flag fires. Home should switch to LIVE with no manual refresh. The hero should be `NowActiveCard` with its existing content (team-color score blocks, full `FieldGauge` with yard labels and RED ZONE, Watch button, NOW ACTIVE eyebrow) plus `flareGlow`. Other live stake games should be Also Flagged tiles: flagged games under "ALSO FLAGGED", then unflagged live stake games under "LIVE NOW". The board below should show live non-stake games as muted rows (clock and score), then upcoming games grouped by window. When the flag clears, the hero should become the top-ranked live stake game in those same card visuals without the NOW ACTIVE eyebrow — not `FeaturedStakeCard`.
 5. **Segment switch:** tap MY CARD, then background and foreground the app. The segment should stay on MY CARD. Force-quit and reopen, and it should come back on BOARD.
 6. **Accessibility:** turn on VoiceOver. The segments should be read as tabs with a selected state, and every board row should read as "{time}, {matchup}, {network}, {n} stakes".
 7. **On device:** Parker confirms on a physical iPhone. Cursor's own report is not sufficient.
