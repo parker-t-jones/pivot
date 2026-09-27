@@ -27,7 +27,7 @@ Hosted Supabase gets its **own** project ref (e.g. `abcdefghijklmnop`). That is 
 | **Lineup-sync worker** | `@pivot/api` → `services/api/src/worker.ts` | `pnpm --filter @pivot/api worker` (`tsx watch`) | `node dist/worker.js` (`pnpm --filter @pivot/api start:worker`) | Every 5 minutes: sync Sleeper lineups into cache + DB. |
 | **Runner** | `@pivot/api` → `services/api/src/runner.ts` | (no watch script) | `node dist/runner.js` (`pnpm --filter @pivot/api start:runner`) | Third process group: ESPN discovery, `games.status`, Redis `game_state`, flag dispatch. No public port. |
 
-All three share the same image. They must **not** share an in-process memory cache: with separate processes, `CACHE_DRIVER=memory` gives each its own empty lineup / game-state store. Production requires `CACHE_DRIVER=redis` and Upstash.
+All three share the same image. They must **not** share an in-process memory cache: with separate processes, `CACHE_DRIVER=memory` gives each its own empty lineup / game-state store, and the runner never sees those lineups. Production sets `CACHE_DRIVER=redis` on the API, the worker, and the runner.
 
 ### Libraries that are not their own Fly process
 
@@ -78,7 +78,7 @@ Config loaders: `services/api/src/env.ts` (zod + dotenv), `services/ingestion/sr
 | `SUPABASE_URL` | API, worker, seeds | **Required** | Hosted Supabase → Settings → API → Project URL | No (URL) | Must be `https://<ref>.supabase.co`, not `127.0.0.1`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | API, worker, seeds | **Required** | Supabase → API → `service_role` | **Yes** | Bypasses RLS. Never ship to the app. |
 | `SUPABASE_JWT_SECRET` | API | **Required** (zod) | Supabase → Settings → API → JWT Secret (legacy) | **Yes** | HS256 fallback; ES256/RS256 verified via JWKS at `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`. |
-| `CACHE_DRIVER` | API, worker, runner | Optional (default `memory`) | Set explicitly | No | Prod: **`redis`**. |
+| `CACHE_DRIVER` | API, worker, runner | Required | Set explicitly | No | **`redis` on all three processes.** A memory cache cannot feed the runner. |
 | `REDIS_URL` | API, worker, runner | Required in prod | Upstash → Connect → TCP `rediss://…` (ioredis) | **Yes** | **Set this on all three processes.** Local Docker is `redis://127.0.0.1:6379`. Game state, lineup cache, the flag queue, and pub/sub use this ioredis client. |
 | `UPSTASH_REDIS_REST_URL` | API, worker | Fallback if `REDIS_URL` unset | Upstash console | **Yes** | Not used when `REDIS_URL` is set. Do not point the REST client at the Docker port. |
 | `UPSTASH_REDIS_REST_TOKEN` | API, worker | Fallback if `REDIS_URL` unset | Upstash console | **Yes** | |
