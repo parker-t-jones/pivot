@@ -103,10 +103,12 @@ import {
 } from '@pivot/dispatcher';
 import {
   classifyPlayType,
+  IncrementalResumptionTracker,
   onPlayEvent,
   type LineupCacheReader,
   type OnPlayEventDeps,
   type PlayEvent,
+  type ResumptionResolution,
 } from '@pivot/engine';
 import {
   EspnPlaySource,
@@ -119,7 +121,6 @@ import {
 } from '@pivot/ingestion';
 import type { UserLineupCache } from '@pivot/shared';
 
-import { IncrementalResumptionTracker, type ResumptionResolution } from './incrementalResumption.js';
 import { teamInfo } from './nflTeams.js';
 import { ResumptionGatedDispatcher, type GatedEventRecord } from './resumptionGate.js';
 
@@ -288,7 +289,11 @@ class MeasuringRateLimitStore implements RateLimitStore {
 
   constructor(private readonly onWouldLimit: (userId: string, recentCount: number) => void) {}
 
-  async countRecentNotifications(userId: string, sinceMs: number, untilMs: number): Promise<number> {
+  async countRecentNotifications(
+    userId: string,
+    sinceMs: number,
+    untilMs: number,
+  ): Promise<number> {
     const recent = (this.delivered.get(userId) ?? []).filter(
       (at) => at >= sinceMs && at <= untilMs,
     ).length;
@@ -324,7 +329,11 @@ class LoggingPushNotifier implements PushNotifier {
 
   constructor(
     private readonly inner: PushNotifier,
-    private readonly onResult: (eventId: string | null, payload: PushPayload, result: PushResult) => void,
+    private readonly onResult: (
+      eventId: string | null,
+      payload: PushPayload,
+      result: PushResult,
+    ) => void,
   ) {
     this.id = inner.id;
   }
@@ -351,7 +360,12 @@ class LoggingPushNotifier implements PushNotifier {
  */
 class InstrumentedEspnClient implements Pick<EspnClient, 'getSummary'> {
   constructor(
-    private readonly onPoll: (ok: boolean, latencyMs: number, kind: string | null, reason: string | null) => void,
+    private readonly onPoll: (
+      ok: boolean,
+      latencyMs: number,
+      kind: string | null,
+      reason: string | null,
+    ) => void,
   ) {}
 
   async getSummary(eventId: string): Promise<EspnFetchResult<EspnSummary>> {
@@ -436,7 +450,9 @@ async function resolveContexts(gameIds: string[]): Promise<EspnGameContext[]> {
   for (const gameId of gameIds) {
     const result = await espnClient.getSummary(gameId);
     if (!result.ok) {
-      console.error(`[harness] skipping ${gameId}: summary failed (${result.kind}) ${result.reason}`);
+      console.error(
+        `[harness] skipping ${gameId}: summary failed (${result.kind}) ${result.reason}`,
+      );
       continue;
     }
     const context = resolveGameContext(result.data, gameId);
@@ -560,7 +576,9 @@ async function runList(): Promise<void> {
   const games = await fetchScoreboard();
   console.log(`\nESPN scoreboard — ${games.length} game(s) today\n`);
   for (const game of games) {
-    console.log(`  ${game.eventId}  ${game.away.padEnd(4)} @ ${game.home.padEnd(4)}  ${game.state}`);
+    console.log(
+      `  ${game.eventId}  ${game.away.padEnd(4)} @ ${game.home.padEnd(4)}  ${game.state}`,
+    );
   }
   console.log(
     '\nPick the games you can actually see on screen for --watch; pass --data auto for the rest.\n',
@@ -629,9 +647,7 @@ async function runHarness(config: HarnessConfig): Promise<void> {
   });
 
   const pushNotifier = new LoggingPushNotifier(
-    createPushNotifier(
-      config.pushToken === null ? { pushDriver: 'none' } : { pushDriver: 'expo' },
-    ),
+    createPushNotifier(config.pushToken === null ? { pushDriver: 'none' } : { pushDriver: 'expo' }),
     (eventId, payload, result) => {
       eventsLog.write({
         kind: 'push',
@@ -639,8 +655,9 @@ async function runHarness(config: HarnessConfig): Promise<void> {
         gameId: (payload.data as { game_id?: string } | null)?.game_id ?? null,
         title: payload.title,
         body: payload.body,
-        deepLinkUrl: (payload.data as { action?: { deep_link_url?: string | null } } | null)?.action
-          ?.deep_link_url ?? null,
+        deepLinkUrl:
+          (payload.data as { action?: { deep_link_url?: string | null } } | null)?.action
+            ?.deep_link_url ?? null,
         success: result.success,
         error: result.error ?? null,
       });
@@ -707,7 +724,8 @@ async function runHarness(config: HarnessConfig): Promise<void> {
         resumptionElapsedMs: resolution?.elapsedMs ?? null,
         resumptionResolvedBy: resolution?.resolvedBy ?? null,
         precedingPlayId: resolution?.precedingPlay.play.playId ?? null,
-        triggerPlayId: resolution?.outcome === 'REAL_ACTION' ? resolution.triggerPlay.play.playId : null,
+        triggerPlayId:
+          resolution?.outcome === 'REAL_ACTION' ? resolution.triggerPlay.play.playId : null,
       });
       console.log(
         `[harness] ${event.gameId} EVENT ${event.type} ${decision} hold=${holdMs}ms prio=${event.newState.priorityScore}`,
@@ -764,7 +782,8 @@ async function runHarness(config: HarnessConfig): Promise<void> {
             resolution.outcome === 'REAL_ACTION' ? resolution.triggerPlay.play.playId : null,
           triggerPlayType:
             resolution.outcome === 'REAL_ACTION' ? resolution.triggerPlay.play.playType : null,
-          abortPlayType: resolution.outcome === 'ABORTED' ? resolution.abortPlay.play.playType : null,
+          abortPlayType:
+            resolution.outcome === 'ABORTED' ? resolution.abortPlay.play.playType : null,
         });
         console.log(
           `[harness] ${gid} RESUMPTION ${resolution.outcome} after ${(resolution.elapsedMs / 1000).toFixed(1)}s (${resolution.resolvedBy})`,
@@ -778,7 +797,9 @@ async function runHarness(config: HarnessConfig): Promise<void> {
       if (!weekLogged) {
         weekLogged = true;
         eventsLog.write({ kind: 'observed_week', week: play.week });
-        console.log(`[harness] ESPN reports week=${play.week} (lineup cache ignores week by design)`);
+        console.log(
+          `[harness] ESPN reports week=${play.week} (lineup cache ignores week by design)`,
+        );
       }
 
       playsLog.write({
@@ -826,7 +847,11 @@ async function runHarness(config: HarnessConfig): Promise<void> {
     onTick: (result) => {
       if (result.processed === 0) return;
       eventsLog.write({ kind: 'tick', ...result });
-      if (result.droppedStale > 0 || result.droppedMissingUser > 0 || result.droppedRateLimited > 0) {
+      if (
+        result.droppedStale > 0 ||
+        result.droppedMissingUser > 0 ||
+        result.droppedRateLimited > 0
+      ) {
         console.log(`[harness] tick drops ${JSON.stringify(result)}`);
       }
     },
@@ -849,7 +874,9 @@ async function runHarness(config: HarnessConfig): Promise<void> {
           reason,
           latencyMs,
         });
-        console.error(`[harness] ESPN poll FAILED ${context.gameId} (${kind ?? '?'}) ${reason ?? ''}`);
+        console.error(
+          `[harness] ESPN poll FAILED ${context.gameId} (${kind ?? '?'}) ${reason ?? ''}`,
+        );
       }),
     });
   });

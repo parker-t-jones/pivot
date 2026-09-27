@@ -1,43 +1,21 @@
 /**
- * THROWAWAY TEST HARNESS CODE — not part of the Pivot app, not production code.
+ * Buffer in front of `watchForResumption` for a live play stream.
  *
- * Feeds `@pivot/engine`'s `watchForResumption` from a live, incrementally-arriving play stream.
+ * The watcher is pure and wants the plays so far in one array. This class keeps that buffer for one
+ * game and re-calls it on every arrival. It does not rescan on its own. Possession changes are
+ * measured against the last play that had a known possession, and procedural plays since then are
+ * prepended, so a timeout then a snap is `watchForResumption(previous, [timeout, snap])`.
  *
- * The promoted watcher is a pure function over a COMPLETE play array: `watchForResumption(preceding,
- * playsFromPossessionChange)`. That shape came from the backtest, which replayed an already-captured
- * log all at once. A live feed hands us one play at a time, so something has to bridge the two.
- *
- * The bridge deliberately does NOT reimplement the algorithm as a state machine. It keeps a per-game
- * buffer and RE-CALLS the pure function on the grown buffer each time a play arrives. Because the
- * function rescans from the start and is side-effect free, re-calling it on a growing array returns
- * the same answer the backtest would have given for that prefix, and flips to `REAL_ACTION` on
- * exactly the play where the trigger lands. The cost is O(n^2) over a handful of plays per window,
- * which is irrelevant here and buys the thing that matters on a test day: the code under test is the
- * validated function, byte for byte, not a paraphrase of it.
- *
- * Two behaviors worth knowing about, both discovered while wiring this up:
- *
- * 1. WINDOW ANCHORING. `PlayEvent.possessionTeamId` is `null` on every procedural play (see
- *    `mapEspnPlay`'s `NO_POSSESSION_PLAY_TYPES`), so a naive "possession differs from the previous
- *    play" test would fire on every timeout. Possession changes are therefore detected against the
- *    last play that had a KNOWN possession, and the buffer handed to the watcher includes the
- *    procedural plays observed in between. That reproduces the reference cases exactly — the
- *    TD -> timeout -> kickoff case becomes `watchForResumption(td, [timeout, kickoff])`, which is
- *    verbatim what `resumptionWatcher.test.ts` asserts.
- *
- * 2. THE CEILING CANNOT FIRE ON SILENCE. `RESUMPTION_CEILING_MS` is only evaluated inside the pure
- *    function's loop over arriving plays. In the backtest a next play always existed, so the ceiling
- *    was reachable. Live, a long stoppage means NO plays arrive at all — the exact condition the
- *    ceiling exists to catch is the one that starves it. A wall-clock timer covers that here, and
- *    resolutions record which mechanism won (`resolvedBy`) so the logs can distinguish them.
+ * `CEILING_FALLBACK` from the pure function still requires a later play already in the array. The
+ * timer here is only the silence hook.
  */
 
+import type { PlayEvent } from './playEvent.js';
 import {
   RESUMPTION_CEILING_MS,
   watchForResumption,
   type ObservedPlay,
-  type PlayEvent,
-} from '@pivot/engine';
+} from './resumptionWatcher.js';
 
 /** Why a window closed, and — for `real_action` / `ceiling` — when play is considered resumed. */
 export type ResumptionResolution =
@@ -60,7 +38,7 @@ export type ResumptionResolution =
       outcome: 'CEILING_FALLBACK';
       precedingPlay: ObservedPlay;
       elapsedMs: number;
-      /** `wall_clock_timer` is the harness-only path described in the file header. */
+      /** `wall_clock_timer` is the silence timer. The pure function uses `watcher`. */
       resolvedBy: 'watcher' | 'wall_clock_timer';
     };
 
@@ -84,8 +62,7 @@ interface OpenWindow {
 }
 
 /**
- * Tracks resumption windows for ONE game. The harness owns one of these per game so nothing is
- * shared across the slate — the multi-game footgun this whole test exists to look for.
+ * Tracks resumption windows for one game. One instance per game, so games do not share a buffer.
  */
 export class IncrementalResumptionTracker {
   /** Most recent play with a non-null possession — the `precedingPlay` anchor for the next change. */
@@ -131,8 +108,7 @@ export class IncrementalResumptionTracker {
       return null;
     }
 
-    // Buffer starts at the first play after the possession-ending one, so intervening procedural
-    // plays are included — see WINDOW ANCHORING in the file header.
+    // Buffer starts at the first play after the possession-ending one, so a timeout in between is included.
     const buffer = [...this.proceduralSincePossession, observed];
     const revealingPlay = buffer[0];
     if (!revealingPlay) {
@@ -201,7 +177,10 @@ export class IncrementalResumptionTracker {
    * The wall-clock half of the ceiling. Anchored on `revealingPlay.observedAt` to match the pure
    * function's own `elapsedMs` reference point, so both paths report a comparable number.
    */
-  private armCeilingTimer(precedingPlay: ObservedPlay, revealingPlay: ObservedPlay): NodeJS.Timeout {
+  private armCeilingTimer(
+    precedingPlay: ObservedPlay,
+    revealingPlay: ObservedPlay,
+  ): NodeJS.Timeout {
     const deadline = revealingPlay.observedAt + RESUMPTION_CEILING_MS;
     const timer = setTimeout(
       () => {

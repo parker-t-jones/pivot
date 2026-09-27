@@ -25,7 +25,7 @@
 
 import type { FlagEventQueue } from '@pivot/dispatcher';
 import type { FlagEvent } from '@pivot/shared';
-import type { ResumptionResolution } from './incrementalResumption.js';
+import type { ResumptionResolution } from '@pivot/engine';
 
 /** What the gate decided to do with an event at dispatch time. */
 export type GateDecision = 'fire_immediately' | 'held_pending_resumption' | 'dropped_by_abort';
