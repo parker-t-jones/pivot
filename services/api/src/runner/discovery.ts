@@ -6,14 +6,14 @@ export const DISCOVERY_INTERVAL_MS = 30_000;
 const NOT_LIVE_NAME = ['postponed', 'canceled', 'delayed'] as const;
 
 export interface ScoreboardStatusType {
-  state?: string;
-  name?: string;
-  completed?: boolean;
+  state?: string | undefined;
+  name?: string | undefined;
+  completed?: boolean | undefined;
 }
 
 export interface DiscoveryEvent {
   id: string;
-  status?: { type?: ScoreboardStatusType };
+  status?: { type?: ScoreboardStatusType | undefined } | undefined;
 }
 
 export interface SeededGame {

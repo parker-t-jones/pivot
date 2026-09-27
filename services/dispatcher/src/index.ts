@@ -8,7 +8,18 @@ export {
 
 export type { Action } from './types.js';
 
-export { type FlagEventQueue, type QueuedFlagEvent } from './queue.js';
+export {
+  parseQueuedFlagEvent,
+  serializeQueuedFlagEvent,
+  type FlagEventQueue,
+  type QueuedFlagEvent,
+} from './queue.js';
+export {
+  deserializeFlagState,
+  deserializeGameState,
+  serializeFlagState,
+  serializeGameState,
+} from './providers/redisSerde.js';
 export { InMemoryFlagEventQueue } from './inMemoryQueue.js';
 export { RedisFlagEventQueue } from './redisQueue.js';
 
