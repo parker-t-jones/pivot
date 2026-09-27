@@ -22,6 +22,9 @@ Parker, 2026-09-25. These override the recommendations that were in §12.
 4. **ESPN states.** `pre` → `scheduled`. `post` or `completed` → `final`. `in` → live. Postponed, canceled, and delayed games (`status.type.name`) are never live; log them. Any other state: log it and do not start a loop.
 5. **Mid-drive REVEALs.** Not in P0. `PROP_NEAR` and `SPREAD_SWING` stay in stakes Phase 3/4.
 6. **P0.1 reuses R1.** R1 is `experiments/espn-live-recorder.ts` and `experiments/replay-recording.ts` (committed). P0.1 does not add a recorder. It reuses R1's recording format as the replay fixture format, plus the prefix helper. If those two files were not on the branch, P0.1 would wait.
+7. **Push policy.** Only `flag_added` sends a push. `flag_removed`, `priority_increased`, and `priority_decreased` are persisted and published in real time, with no push. Collapse and the rate limiter only count push-eligible events.
+8. **Background push (implements Decision 1).** The engine emits events for every user whose lineup includes the game, whether or not they're in `active_users`. Keep the freshness check. Nothing on the push path may require an active socket.
+9. **Mid-drive timing.** An event produced outside an open resumption window is parked until the next `REAL_ACTION` play in the same game (or the silence ceiling), then released. This applies to all four event types, so Home can't reveal anything either. A possession-change window behaves as it does today.
 
 ---
 
