@@ -13,6 +13,7 @@ export {
 } from './espn/espnPlayTypeMap.js';
 
 export { mapEspnPlay, resolveGameContext, type EspnGameContext } from './espn/mapEspnPlay.js';
+export { translatePlay } from './espn/translatePlay.js';
 
 export {
   EspnPlaySource,

@@ -5,7 +5,7 @@ import {
   type LineupCacheReader,
   type PlayEvent,
 } from '@pivot/engine';
-import { espnClient, type EspnClient } from '@pivot/ingestion';
+import { espnClient, translatePlay, type EspnClient } from '@pivot/ingestion';
 import {
   InMemoryBroadcastCatalog,
   ResumptionCeiling,
@@ -152,7 +152,7 @@ async function runLeader(
         seen: deps.seen,
         signal: gameSignal,
         onPlayEvent: async (raw) => {
-          const play = withGameWeek(translateTeamIds(raw, game), game.week);
+          const play = withGameWeek(translatePlay(raw, game.id, game.abbrToUuid), game.week);
           gate.beginPlay(play.gameId);
           tracker.observe(play, Date.now());
           await onPlayEvent(
@@ -275,23 +275,6 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
       resolve();
     }
   });
-}
-
-/** Same translation as `experiments/liveIngestCore.translatePlay`. The API package cannot import that file. */
-function translateTeamIds(play: PlayEvent, game: SeededGame): PlayEvent {
-  const home = game.abbrToUuid.get(play.homeTeamId) ?? play.homeTeamId;
-  const away = game.abbrToUuid.get(play.awayTeamId) ?? play.awayTeamId;
-  const possession =
-    play.possessionTeamId === null
-      ? null
-      : (game.abbrToUuid.get(play.possessionTeamId) ?? play.possessionTeamId);
-  return {
-    ...play,
-    gameId: game.id,
-    homeTeamId: home,
-    awayTeamId: away,
-    possessionTeamId: possession,
-  };
 }
 
 function withGameWeek(play: PlayEvent, week: number): PlayEvent {

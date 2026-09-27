@@ -4,8 +4,8 @@
  * instance — no Redis needed). See either file's header for why this exists.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { EspnPlaySource } from '@pivot/ingestion';
-import { applyPlayToState, type PlayEvent } from '@pivot/engine';
+import { EspnPlaySource, translatePlay } from '@pivot/ingestion';
+import { applyPlayToState } from '@pivot/engine';
 import type { GameStateStore } from '@pivot/dispatcher';
 import type { GameState } from '@pivot/shared';
 
@@ -47,29 +47,6 @@ export async function resolveGame(
     abbrToUuid.set(t.abbreviation, t.id);
   }
   return { internalGameId: game.id, abbrToUuid };
-}
-
-/** Translate a `PlayEvent`'s ESPN-abbreviation team ids into our Supabase team UUIDs, and its
- *  ESPN event-id `gameId` into our internal `games.id`. `applyPlayToState` treats team ids
- *  opaquely, so this is the one place the translation (Section 8 decision #2/#3) needs to happen. */
-export function translatePlay(
-  play: PlayEvent,
-  internalGameId: string,
-  abbrToUuid: Map<string, string>,
-): PlayEvent {
-  const home = abbrToUuid.get(play.homeTeamId) ?? play.homeTeamId;
-  const away = abbrToUuid.get(play.awayTeamId) ?? play.awayTeamId;
-  const possession =
-    play.possessionTeamId === null
-      ? null
-      : abbrToUuid.get(play.possessionTeamId) ?? play.possessionTeamId;
-  return {
-    ...play,
-    gameId: internalGameId,
-    homeTeamId: home,
-    awayTeamId: away,
-    possessionTeamId: possession,
-  };
 }
 
 export async function markStatus(
