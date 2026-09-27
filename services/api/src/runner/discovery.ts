@@ -3,7 +3,7 @@ import type { GameState } from '@pivot/shared';
 /** Leader scoreboard poll. */
 export const DISCOVERY_INTERVAL_MS = 30_000;
 
-const NOT_LIVE_NAME = ['postponed', 'canceled', 'delayed'] as const;
+const NOT_LIVE_NAME = ['postponed', 'canceled', 'cancelled', 'delayed'] as const;
 
 export interface ScoreboardStatusType {
   state?: string | undefined;
@@ -65,7 +65,7 @@ export type DiscoveryDisposition =
   | { kind: 'not_live'; state: string | undefined; name: string | undefined }
   | { kind: 'unknown'; state: string | undefined; name: string | undefined };
 
-/** Postponed, canceled, and delayed win over `state === 'in'`. Anything else unknown is not live. */
+/** Postponed, canceled, cancelled, and delayed win over `state === 'in'`. Anything else unknown is not live. */
 export function classifyScoreboardStatus(
   status: ScoreboardStatusType | undefined,
 ): DiscoveryDisposition {

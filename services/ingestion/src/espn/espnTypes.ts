@@ -74,7 +74,7 @@ export const espnStatusSchema = z.object({
     .object({
       state: z.string().optional(),
       completed: z.boolean().optional(),
-      /** `postponed` / `canceled` / `delayed` live here. A substring match beats `state === 'in'`. */
+      /** `postponed` / `canceled` / `cancelled` / `delayed` live here. A substring match beats `state === 'in'`. */
       name: z.string().optional(),
     })
     .optional(),

@@ -78,6 +78,44 @@ describe('discovery', () => {
     expect(logs.at(-1)).toBe('[runner] discovery live=1');
   });
 
+  it('treats canceled and cancelled names as not live', async () => {
+    const events: DiscoveryEvent[] = [
+      { id: 'us', status: { type: { state: 'in', name: 'STATUS_CANCELED' } } },
+      { id: 'uk', status: { type: { state: 'in', name: 'Cancelled' } } },
+    ];
+    const started: string[] = [];
+    const logs: string[] = [];
+    const statuses: string[] = [];
+    await applyDiscovery({
+      events,
+      log: (line) => logs.push(line),
+      games: {
+        findByEspnId: (espnEventId) => Promise.resolve(game(espnEventId)),
+        setStatus: (_gameId, status) => {
+          statuses.push(status);
+          return Promise.resolve();
+        },
+      },
+      gameState: {
+        getGameState: () => Promise.resolve(null),
+        setGameState: () => Promise.resolve(),
+      },
+      loops: {
+        isRunning: () => false,
+        start: (seeded) => started.push(seeded.id),
+        stop: () => undefined,
+      },
+    });
+    expect(started).toEqual([]);
+    expect(statuses).toEqual([]);
+    expect(
+      logs.some((line) => line.includes('not live us') && line.includes('STATUS_CANCELED')),
+    ).toBe(true);
+    expect(logs.some((line) => line.includes('not live uk') && line.includes('Cancelled'))).toBe(
+      true,
+    );
+  });
+
   it('seeds game state from the scoreboard score, period, and display clock', async () => {
     const event: DiscoveryEvent = {
       id: 'live-1',
