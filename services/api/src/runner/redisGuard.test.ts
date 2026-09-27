@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { guardRunnerStart, startGuarded } from './redisGuard.js';
+import { guardRunnerStart, memoryCacheRefusal, startGuarded } from './redisGuard.js';
 
 const PROD_HOST = 'willing-example.upstash.io';
+
+describe('memory cache refusal', () => {
+  it('refuses CACHE_DRIVER=memory so a process cannot hide lineups from the runner', () => {
+    const reason = memoryCacheRefusal({ cacheDriver: 'memory', nodeEnv: undefined });
+    expect(reason).toContain('CACHE_DRIVER=memory');
+    expect(reason).toContain('runner reads them from Redis');
+  });
+
+  it('allows memory when NODE_ENV=test', () => {
+    expect(memoryCacheRefusal({ cacheDriver: 'memory', nodeEnv: 'test' })).toBeNull();
+  });
+
+  it('allows redis outside tests', () => {
+    expect(memoryCacheRefusal({ cacheDriver: 'redis', nodeEnv: undefined })).toBeNull();
+  });
+});
 
 describe('production Redis host guard', () => {
   it('refuses a production-looking Redis URL before SET NX', async () => {

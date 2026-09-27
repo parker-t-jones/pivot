@@ -2,7 +2,16 @@ import { createLineupCacheProvider } from './cache/index.js';
 import { env } from './env.js';
 import { createSupabaseServiceClient } from './lib/supabase.js';
 import { runWorkerCycle, type WorkerCycleState } from './lib/worker-cycle.js';
-import { productionRedisRefusal } from './runner/redisGuard.js';
+import { memoryCacheRefusal, productionRedisRefusal } from './runner/redisGuard.js';
+
+const memoryBlocked = memoryCacheRefusal({
+  cacheDriver: env.CACHE_DRIVER,
+  nodeEnv: process.env['NODE_ENV'],
+});
+if (memoryBlocked !== null) {
+  console.error(`[worker] ${memoryBlocked}`);
+  process.exit(1);
+}
 
 const blocked = productionRedisRefusal({
   urls: [env.REDIS_URL, env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_TCP_URL],

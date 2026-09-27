@@ -12,6 +12,20 @@ export function hostnameOf(url: string): string | null {
   }
 }
 
+/**
+ * The API and worker must not keep lineups in process memory. The runner is a
+ * separate process and only reads `users_with_stake` and `user_lineup_cache` from Redis.
+ * Tests keep the memory driver (`NODE_ENV=test`).
+ */
+export function memoryCacheRefusal(input: {
+  cacheDriver: string;
+  nodeEnv: string | undefined;
+}): string | null {
+  if (input.nodeEnv === 'test') return null;
+  if (input.cacheDriver !== 'memory') return null;
+  return 'refusing to start: CACHE_DRIVER=memory keeps lineups in this process, and the runner reads them from Redis';
+}
+
 /** A reason to exit, or null when this process may connect. */
 export function productionRedisRefusal(input: {
   urls: readonly (string | undefined)[];
