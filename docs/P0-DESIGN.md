@@ -45,7 +45,7 @@ Same image as the API and the worker (`docs/D1-DEPLOY-RUNBOOK.md` §1). New entr
 
 Boot requires `CACHE_DRIVER=redis`. If it is `memory`, the process exits. The API and the runner are different processes; a memory store in the runner is invisible to `GET /games/live` and to the WebSocket (recon §9, runbook §1). Replay tests inject fakes and do not use this entrypoint.
 
-**Local Redis is Docker, never the production instance.** Production Redis is the Upstash host in the Fly secrets. The repo has no variable named `REDIS_URL`. The guard reads `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_TCP_URL`. Before any ESPN call or `SET NX`, parse each set URL's hostname. If `NODE_ENV` is not `production` and either hostname equals `PRODUCTION_REDIS_HOST`, exit. That variable is the Upstash hostname only (no token) and is not committed. Local Redis is `docker run -d -p 6379:6379 redis`. Local API and runner both use it: `UPSTASH_REDIS_TCP_URL=redis://127.0.0.1:6379`. The leader lock, the queue, game state, and pub/sub use that TCP URL. `127.0.0.1` does not equal `PRODUCTION_REDIS_HOST`, so the process starts. A copied Fly secret does, so the process exits instead of taking `pivot:runner:leader`. Do not point `@upstash/redis` at the Docker port, and do not put the production host in local env to satisfy the REST schema.
+**Local Redis is Docker, never the production instance.** Production Redis is the Upstash host in the Fly secrets. The API, the worker, and the runner all read and write Redis through `REDIS_URL` (ioredis TCP): local `redis://127.0.0.1:6379`, production Upstash's TCP `rediss://` URL, set on all three processes. Game state, the lineup cache, the flag queue, and pub/sub use that client. The Upstash REST URL and token are only the fallback when `REDIS_URL` is unset. Do not point `@upstash/redis` at the Docker port. The production-host guard reads `REDIS_URL`, `UPSTASH_REDIS_REST_URL`, and `UPSTASH_REDIS_TCP_URL`, and it applies to the API and the worker as well as the runner. Before any connection, parse each set URL's hostname. If `NODE_ENV` is not `production` and any hostname equals `PRODUCTION_REDIS_HOST`, exit. That variable is the Upstash hostname only (no token) and is not committed. Local Redis is `docker run -d -p 6379:6379 redis`. `127.0.0.1` does not equal `PRODUCTION_REDIS_HOST`, so the process starts. A copied Fly secret does, so the process exits instead of taking `pivot:runner:leader`.
 
 The process owns, in one instance:
 
@@ -240,7 +240,7 @@ Rows are not deleted. `user_action` is set only by the existing POST. There is n
 
 ## 6. Realtime to the app
 
-**Mechanism: Redis pub/sub.** The API already `PSUBSCRIBE`s `realtime:user:*` and `realtime:game:*` and relays to local sockets (`services/api/src/routes/realtime.ts`). `RedisRealtimeBus.publish` is `PUBLISH` on the REST client. The runner uses that bus. It does not construct `InMemoryRealtimeBus` (that object is why the harness never reaches Home, recon §1).
+**Mechanism: Redis pub/sub.** The API already `PSUBSCRIBE`s `realtime:user:*` and `realtime:game:*` and relays to local sockets (`services/api/src/routes/realtime.ts`). When `REDIS_URL` is set, publish and subscribe both use that ioredis TCP connection. The Upstash REST client publishes only when `REDIS_URL` is unset. The runner uses that bus. It does not construct `InMemoryRealtimeBus` (that object is why the harness never reaches Home, recon §1).
 
 Supabase Realtime is the wrong bus. Scores are not Postgres columns, the phone already speaks `GET /v1/realtime`, and a second client connection would not see Redis.
 
@@ -249,9 +249,9 @@ Supabase Realtime is the wrong bus. Scores are not Postgres columns, the phone a
 **Live game state.** Nothing publishes on `realtime:game:{id}` today, and Home does not send `subscribe_game`. After each applied play the runner publishes one message on `realtime:game:{games.id}`:
 
 - `type: 'game_state'`
-- `payload`: the same object `GET /games/live` returns for one game (`LiveGame`)
+- `payload`: the same object `GET /games/live` returns for one game (`LiveGame`). When the play leaves the game `final`, the same fields are published with `status: 'final'` (`GET /games/live` itself still returns only `in_progress`)
 
-Home, after `loadHome`, sends `subscribe_game` for each stake game on the week slate (the client message type already exists). On `game_state`, replace that game in `liveStakeGames` and recompute the branch. On `flag_event`, keep the current `applyFlagEventToHome` path.
+Home, after `loadHome`, sends `subscribe_game` for each stake game on the week slate (the client message type already exists). On an in-progress `game_state`, replace that game in `liveStakeGames` and recompute the branch. On a `game_state` whose status is `final`, remove that game from `liveStakeGames` and recompute the branch on the message, without waiting for the 30s `loadHome`. On `flag_event`, keep the current `applyFlagEventToHome` path.
 
 The 30s `loadHome` stays as the reconcile for a missed message. It is no longer the only way the hero and the live list move.
 
