@@ -34,8 +34,7 @@ import { QueueingEventDispatcher } from './scheduleFlagEvent.js';
  *
  * Only in-memory providers (decision #2) — no Redis, no Postgres. `vi.useFakeTimers()` controls both
  * the injectable `Clock` (engine/dispatcher default to `Date.now()`) AND `GameStateStore`'s
- * active-user TTL (hardcoded `Date.now()`, not clock-injectable) on the SAME mocked clock, which is
- * the only way to advance "broadcast lag" time without a real 8-60s wait per scenario.
+ * active-user TTL (hardcoded `Date.now()`, not clock-injectable) on the SAME mocked clock.
  */
 
 const GAME_ID = 'g1';
@@ -44,9 +43,8 @@ const AWAY = 'LV';
 const WEEK = 5;
 const USER_ID = 'u1';
 const PLAYER_ID = 'p1';
-/** `BROADCAST_LAG_SECONDS.cbs` (broadcastLag.ts) — seeded below as the user's only matching service,
- *  so `scheduledFireAt` is a precise, assertable `computedAt + 8000`, not the 60s unresolved fallback. */
-const CBS_LAG_MS = 8_000;
+/** Gap between plays in the rate-limit case. Fire time is the clock, so this is not broadcast lag. */
+const PLAY_GAP_MS = 1_000;
 
 class StubLineupCache implements LineupCacheReader {
   constructor(private readonly cache: UserLineupCache) {}
@@ -100,7 +98,7 @@ function buildPipeline(): Pipeline {
   broadcastCatalog.setUserSubscribedServices(USER_ID, ['cbs']);
 
   const queue = new InMemoryFlagEventQueue();
-  const engineDispatcher = new QueueingEventDispatcher({ queue, broadcastCatalog });
+  const engineDispatcher = new QueueingEventDispatcher({ queue });
 
   const userDirectory = new InMemoryUserDirectory();
   userDirectory.setUser(freeUser);
@@ -200,13 +198,10 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
 
     await onPlayEvent(p.onPlayEventDeps, makePlay());
 
-    // Queued with the DISPATCHER's real scheduledFireAt (computedAt + cbs's 8s lag) — the engine's
-    // discarded placeholder would have been `computedAt` itself (Sprint 4 closeout #3).
+    // Fire time is the clock at dispatch, not clock plus a broadcast lag.
     expect(p.queue.size()).toBe(1);
-    expect(await p.queue.due(T0 + CBS_LAG_MS - 1, 10)).toHaveLength(0); // not due one ms early
-    expect(await p.queue.due(T0 + CBS_LAG_MS, 10)).toHaveLength(1);
-
-    vi.advanceTimersByTime(CBS_LAG_MS);
+    expect(await p.queue.due(T0 - 1, 10)).toHaveLength(0);
+    expect(await p.queue.due(T0, 10)).toHaveLength(1);
 
     const result = await runDispatcherTick(p.tickDeps);
 
@@ -223,8 +218,8 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
       userId: USER_ID,
       gameId: GAME_ID,
       eventType: 'flag_added',
-      firedAt: T0 + CBS_LAG_MS,
-      deliveredAt: T0 + CBS_LAG_MS,
+      firedAt: T0,
+      deliveredAt: T0,
     });
     expect(p.realtimeBus.published).toHaveLength(1);
     expect(p.realtimeBus.published[0]?.channel).toBe(realtimeUserChannel(USER_ID));
@@ -237,10 +232,9 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
     await onPlayEvent(p.onPlayEventDeps, makePlay());
     expect(p.queue.size()).toBe(1);
 
-    // Goes inactive during the deferral window — the flag state itself never changes.
+    // Goes inactive before the tick — the flag state itself never changes.
     await p.gameStateStore.removeActiveUser(USER_ID);
 
-    vi.advanceTimersByTime(CBS_LAG_MS);
     const result = await runDispatcherTick(p.tickDeps);
 
     expect(result).toEqual({
@@ -259,13 +253,13 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
     const p = buildPipeline();
     await p.gameStateStore.markUserActive(USER_ID, 10 * 60_000);
 
-    // t1: KC run, midfield -> flag_added (priority 2), queued for T0 + 8s.
+    // t1: KC run, midfield -> flag_added (priority 2), due at T0.
     await onPlayEvent(p.onPlayEventDeps, makePlay());
     expect(p.queue.size()).toBe(1);
 
     // t2 (2s later): KC is now in the red zone -> priority jumps 2 -> 5 (delta 3, over the
-    // priority_increased threshold), overwriting user_flag_state with a NEWER computedAt. This second
-    // event is queued for (T0+2s)+8s = T0+10s, which is NOT yet due when the first event fires below.
+    // priority_increased threshold), overwriting user_flag_state with a NEWER computedAt.
+    // Both events are due: fire time is the clock at each dispatch.
     vi.advanceTimersByTime(2_000);
     await onPlayEvent(
       p.onPlayEventDeps,
@@ -273,25 +267,19 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
     );
     expect(p.queue.size()).toBe(2);
 
-    // Advance to exactly the FIRST event's scheduledFireAt (T0 + 8s) — the second event
-    // (due at T0 + 10s) is not due yet.
-    vi.advanceTimersByTime(CBS_LAG_MS - 2_000);
-    expect(Date.now()).toBe(T0 + CBS_LAG_MS);
-
     const result = await runDispatcherTick(p.tickDeps);
 
     expect(result).toEqual({
-      processed: 1,
-      delivered: 0,
+      processed: 2,
+      delivered: 1,
       droppedStale: 1,
       droppedMissingUser: 0,
       droppedRateLimited: 0,
     });
-    expect(p.persistence.records).toHaveLength(0);
-    expect(p.realtimeBus.published).toHaveLength(0);
-    // The superseding event is still queued, untouched — only the stale one was dropped.
-    expect(p.queue.size()).toBe(1);
-    expect((await p.queue.due(T0 + 10_000, 10))[0]?.event.newState.priorityScore).toBe(5);
+    expect(p.persistence.records).toHaveLength(1);
+    expect(p.persistence.records[0]?.priorityScore).toBe(5);
+    expect(p.realtimeBus.published).toHaveLength(1);
+    expect(p.queue.size()).toBe(0);
   });
 
   it('rate limit: a 4th event within 60s is dropped, the first 3 are delivered', async () => {
@@ -308,7 +296,7 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
           ? makePlay({ playId: `play-${i}` })
           : makeAwayPossessionPlay({ playId: `play-${i}` });
       await onPlayEvent(p.onPlayEventDeps, play);
-      vi.advanceTimersByTime(CBS_LAG_MS);
+      vi.advanceTimersByTime(PLAY_GAP_MS);
 
       const result = await runDispatcherTick(p.tickDeps);
       if (i < 3) {
@@ -318,7 +306,7 @@ describe('dispatcher end-to-end integration (engine -> flag_event_queue -> dispa
       }
     }
 
-    // All four plays happened within 3 * 8s = 24s of each other — well inside the 60s sliding window.
+    // All four plays happened within 3s of each other — inside the 60s sliding window.
     expect(p.persistence.records).toHaveLength(3);
     expect(p.realtimeBus.published).toHaveLength(3);
     expect(p.queue.size()).toBe(0); // the rate-limited 4th event is still removed from the queue

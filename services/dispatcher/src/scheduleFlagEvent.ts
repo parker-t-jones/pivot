@@ -1,15 +1,9 @@
 import { defaultClock, type Clock, type EventDispatcher } from '@pivot/engine';
 import type { FlagEvent } from '@pivot/shared';
-import {
-  lagSecondsFor,
-  resolveLikelyBroadcastSource,
-  type BroadcastCatalog,
-} from './broadcastLag.js';
 import type { FlagEventQueue } from './queue.js';
 
 export interface ScheduleFlagEventDeps {
   queue: FlagEventQueue;
-  broadcastCatalog: BroadcastCatalog;
   clock?: Clock;
 }
 
@@ -21,22 +15,15 @@ export interface ScheduleFlagEventDeps {
  * entire integration point.
  *
  * Per Sprint 4 closeout item #3, this OVERWRITES `event.scheduledFireAt` — the engine's placeholder
- * value (`newState.computedAt`) is discarded, never read. The dispatcher is the sole owner of real
- * fire-time scheduling.
+ * value (`newState.computedAt`) is discarded, never read. Fire time is the clock's now.
+ * `lagSecondsFor` is a ranking tiebreak, not a delay added here.
  */
 export class QueueingEventDispatcher implements EventDispatcher {
   constructor(private readonly deps: ScheduleFlagEventDeps) {}
 
   async dispatch(event: FlagEvent): Promise<void> {
     const clock = this.deps.clock ?? defaultClock;
-    const broadcastSource = await resolveLikelyBroadcastSource(
-      event.gameId,
-      event.userId,
-      this.deps.broadcastCatalog,
-    );
-    const lagSec = lagSecondsFor(broadcastSource);
-
-    const scheduled: FlagEvent = { ...event, scheduledFireAt: clock() + lagSec * 1000 };
+    const scheduled: FlagEvent = { ...event, scheduledFireAt: clock() };
     await this.deps.queue.enqueue(scheduled);
   }
 }

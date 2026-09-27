@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FlagEvent, FlagState } from '@pivot/shared';
-import { InMemoryBroadcastCatalog } from './broadcastLag.js';
+import { lagSecondsFor } from './broadcastLag.js';
 import { InMemoryFlagEventQueue } from './inMemoryQueue.js';
 import { QueueingEventDispatcher } from './scheduleFlagEvent.js';
 
@@ -29,56 +29,43 @@ function makeEngineEvent(overrides: Partial<FlagEvent> = {}): FlagEvent {
   };
 }
 
+const CLOCK = 1_700_000_050_000;
+
 describe('QueueingEventDispatcher (implements the engine EventDispatcher interface)', () => {
-  it('overwrites the engine placeholder scheduledFireAt with clock() + resolved lag', async () => {
-    const catalog = new InMemoryBroadcastCatalog();
-    catalog.setGameBroadcasts('g1', [
-      { service: 'fox', deepLinkUrl: 'https://fox.example', requiresSubscription: false },
-    ]);
-    catalog.setUserSubscribedServices('u1', ['fox']);
+  it('does not add sunday_ticket lag to scheduledFireAt', async () => {
+    expect(lagSecondsFor('sunday_ticket')).toBe(75);
 
     const queue = new InMemoryFlagEventQueue();
-    const dispatcher = new QueueingEventDispatcher({
-      queue,
-      broadcastCatalog: catalog,
-      clock: () => 1_700_000_050_000,
-    });
+    const dispatcher = new QueueingEventDispatcher({ queue, clock: () => CLOCK });
 
     await dispatcher.dispatch(makeEngineEvent());
 
-    const due = await queue.due(1_700_000_050_000 + 8_000, 10);
+    const due = await queue.due(CLOCK, 10);
     expect(due).toHaveLength(1);
-    // fox lag = 8s -> 1_700_000_050_000 + 8000, NOT the engine's placeholder (1_700_000_000_000).
-    expect(due[0]?.event.scheduledFireAt).toBe(1_700_000_058_000);
+    expect(due[0]?.event.scheduledFireAt).toBe(CLOCK);
+    expect(due[0]?.event.scheduledFireAt).not.toBe(CLOCK + 75_000);
     expect(due[0]?.event.scheduledFireAt).not.toBe(makeEngineEvent().scheduledFireAt);
   });
 
-  it('falls back to the 60s default lag when no broadcast source resolves', async () => {
+  it('schedules at the clock when no broadcast source would have resolved', async () => {
     const queue = new InMemoryFlagEventQueue();
-    const dispatcher = new QueueingEventDispatcher({
-      queue,
-      broadcastCatalog: new InMemoryBroadcastCatalog(), // no data seeded -> no match
-      clock: () => 1_700_000_050_000,
-    });
+    const dispatcher = new QueueingEventDispatcher({ queue, clock: () => CLOCK });
 
     await dispatcher.dispatch(makeEngineEvent());
 
-    const due = await queue.due(1_700_000_050_000 + 60_000, 10);
-    expect(due[0]?.event.scheduledFireAt).toBe(1_700_000_110_000);
+    const due = await queue.due(CLOCK, 10);
+    expect(due[0]?.event.scheduledFireAt).toBe(CLOCK);
+    expect(due[0]?.event.scheduledFireAt).not.toBe(CLOCK + 60_000);
   });
 
   it('preserves every other field of the event unchanged', async () => {
     const queue = new InMemoryFlagEventQueue();
-    const dispatcher = new QueueingEventDispatcher({
-      queue,
-      broadcastCatalog: new InMemoryBroadcastCatalog(),
-      clock: () => 1_700_000_050_000,
-    });
+    const dispatcher = new QueueingEventDispatcher({ queue, clock: () => CLOCK });
 
     const event = makeEngineEvent();
     await dispatcher.dispatch(event);
 
-    const due = await queue.due(1_700_000_050_000 + 60_000, 10);
-    expect(due[0]?.event).toEqual({ ...event, scheduledFireAt: 1_700_000_110_000 });
+    const due = await queue.due(CLOCK, 10);
+    expect(due[0]?.event).toEqual({ ...event, scheduledFireAt: CLOCK });
   });
 });
