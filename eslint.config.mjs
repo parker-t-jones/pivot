@@ -37,5 +37,24 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // The root entry re-exports server-only code (the @sentry/node reporter), which Metro can't
+    // bundle for iOS. `paths` matches the exact specifier, so `@pivot/shared/broadcast` is allowed.
+    files: ['app/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@pivot/shared',
+              message:
+                "Import from '@pivot/shared/broadcast'. The root entry pulls in server-only code (@sentry/node).",
+            },
+          ],
+        },
+      ],
+    },
+  },
   eslintConfigPrettier,
 );

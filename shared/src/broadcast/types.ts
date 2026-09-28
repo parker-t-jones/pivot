@@ -99,15 +99,15 @@ export interface EspnBroadcastEvent {
   id: string;
   shortName?: string;
   date?: string;
-  competitions?: Array<{
+  competitions?: {
     broadcast?: string;
-    broadcasts?: Array<{ market?: string; names?: string[] }>;
-    geoBroadcasts?: Array<{
+    broadcasts?: { market?: string; names?: string[] }[];
+    geoBroadcasts?: {
       type?: { shortName?: string };
       market?: { type?: string };
       media?: { shortName?: string };
-    }>;
-  }>;
+    }[];
+  }[];
 }
 
 export type UnmappedMediaLog = (info: {

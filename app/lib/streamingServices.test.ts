@@ -1,4 +1,4 @@
-import { USER_SERVICES } from '@pivot/shared';
+import { USER_SERVICES } from '@pivot/shared/broadcast';
 import { describe, expect, it } from 'vitest';
 import {
   showsSundayTicketHint,

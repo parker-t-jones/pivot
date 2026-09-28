@@ -13,7 +13,7 @@ import {
 import type { GameBroadcast } from './gameDisplay';
 import { resolveHomeBranch, type HomeBranch, type LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
-import { AIRING_NETWORKS, USER_SERVICES } from '@pivot/shared';
+import { AIRING_NETWORKS, USER_SERVICES } from '@pivot/shared/broadcast';
 
 function broadcast(service: string): GameBroadcast {
   return {
