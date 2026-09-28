@@ -43,9 +43,17 @@ export interface SeededGame {
   abbrToUuid: Map<string, string>;
 }
 
+/** A `games` row still marked `in_progress`. `espnEventId` is null when it wasn't seeded from ESPN. */
+export interface InProgressGame {
+  id: string;
+  espnEventId: string | null;
+  scheduledStart: string;
+}
+
 export interface GameDirectory {
   findByEspnId(espnEventId: string): Promise<SeededGame | null>;
   setStatus(gameId: string, status: 'in_progress' | 'final'): Promise<void>;
+  listInProgress(): Promise<InProgressGame[]>;
 }
 
 export interface DiscoveryGameState {
@@ -132,7 +140,7 @@ export function seedGameState(game: SeededGame, event: DiscoveryEvent, now: numb
 
 export async function applyDiscovery(deps: {
   events: readonly DiscoveryEvent[];
-  games: GameDirectory;
+  games: Pick<GameDirectory, 'findByEspnId' | 'setStatus'>;
   gameState: DiscoveryGameState;
   loops: DiscoveryLoops;
   now?: () => number;

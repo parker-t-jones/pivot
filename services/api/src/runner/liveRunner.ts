@@ -37,6 +37,7 @@ import { LEADER_KEY, leaderOwner, type LeaderLockRedis } from './leaderLock.js';
 import { startLeaderLoop, type LeaderLoopHandle } from './leaderLoop.js';
 import { createPlaySession } from './playSession.js';
 import { publishLiveGame } from './publishLiveGame.js';
+import { reconcileInProgress } from './reconcile.js';
 import { createNoStakeWarner, rebuildStakeCache } from './stakeCache.js';
 import { superviseGame } from './superviseGame.js';
 import type { SeenPlaySet } from './seenPlays.js';
@@ -90,6 +91,22 @@ async function runLeader(
     await rebuildStakeCache(deps.stakeCache);
   } catch (error) {
     console.error(`[runner] stake cache rebuild failed: ${failureReason(error)}`);
+  }
+  try {
+    const board = await scoreboard.getScoreboard();
+    if (board.ok) {
+      await reconcileInProgress({
+        events: board.data.events ?? [],
+        games: deps.games,
+        gameState: deps.gameState,
+        catalog: deps.gameCatalog,
+        realtime: deps.realtime,
+      });
+    } else {
+      console.error(`[runner] reconcile skipped, scoreboard failed: ${board.reason}`);
+    }
+  } catch (error) {
+    console.error(`[runner] reconcile failed: ${failureReason(error)}`);
   }
   const warnNoStake = createNoStakeWarner((line) => {
     console.log(line);

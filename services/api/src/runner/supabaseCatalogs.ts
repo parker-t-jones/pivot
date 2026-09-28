@@ -9,7 +9,9 @@ import type {
   ViewingSessionSnapshot,
 } from '@pivot/dispatcher';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
-import type { GameDirectory, SeededGame } from './discovery.js';
+import type { GameDirectory, InProgressGame, SeededGame } from './discovery.js';
+
+const ESPN_SEED_PREFIX = 'seed:espn:';
 
 export class SupabaseGameDirectory implements GameDirectory {
   constructor(private readonly client: SupabaseServiceClient) {}
@@ -18,7 +20,7 @@ export class SupabaseGameDirectory implements GameDirectory {
     const { data: game, error } = await this.client
       .from('games')
       .select('id, home_team_id, away_team_id, week, status, scheduled_start')
-      .eq('sportradar_id', `seed:espn:${espnEventId}`)
+      .eq('sportradar_id', `${ESPN_SEED_PREFIX}${espnEventId}`)
       .maybeSingle();
     if (error) throw new Error(`games lookup failed: ${error.message}`);
     if (!game) return null;
@@ -48,6 +50,21 @@ export class SupabaseGameDirectory implements GameDirectory {
   async setStatus(gameId: string, status: 'in_progress' | 'final'): Promise<void> {
     const { error } = await this.client.from('games').update({ status }).eq('id', gameId);
     if (error) throw new Error(`games status update failed: ${error.message}`);
+  }
+
+  async listInProgress(): Promise<InProgressGame[]> {
+    const { data, error } = await this.client
+      .from('games')
+      .select('id, sportradar_id, scheduled_start')
+      .eq('status', 'in_progress');
+    if (error) throw new Error(`in-progress games lookup failed: ${error.message}`);
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      espnEventId: row.sportradar_id?.startsWith(ESPN_SEED_PREFIX)
+        ? row.sportradar_id.slice(ESPN_SEED_PREFIX.length)
+        : null,
+      scheduledStart: row.scheduled_start,
+    }));
   }
 }
 
