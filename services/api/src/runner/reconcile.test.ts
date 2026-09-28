@@ -7,10 +7,10 @@ import {
 } from '@pivot/dispatcher';
 import type { EspnClient, EspnScoreboard, EspnScoreboardWeek } from '@pivot/ingestion';
 import type { GameState } from '@pivot/shared';
-import type { GameDirectory, InProgressGame } from './discovery.js';
+import type { GameDirectory, StaleGame } from './discovery.js';
 
 type ScoreboardEvent = NonNullable<EspnScoreboard['events']>[number];
-import { reconcileInProgress } from './reconcile.js';
+import { reconcileStaleGames, STALE_SCHEDULED_AFTER_MS } from './reconcile.js';
 
 function liveState(gameId: string): GameState {
   return {
@@ -32,29 +32,55 @@ function liveState(gameId: string): GameState {
   };
 }
 
-function row(id: string, espnEventId: string | null, week: number): InProgressGame {
+function row(
+  id: string,
+  espnEventId: string | null,
+  week: number,
+  scheduledStart = '2026-09-27T17:00:00Z',
+): StaleGame {
   return {
     id,
     espnEventId,
-    scheduledStart: '2026-09-27T17:00:00Z',
+    scheduledStart,
     seasonYear: 2026,
     seasonType: 'regular',
     week,
   };
 }
 
+/** `inProgress` rows start `in_progress`; `scheduled` rows start `scheduled`. */
 function directory(
-  rows: InProgressGame[],
-): Pick<GameDirectory, 'listInProgress' | 'setStatus'> & { statuses: Map<string, string> } {
-  const statuses = new Map(rows.map((game) => [game.id, 'in_progress']));
+  inProgress: StaleGame[],
+  scheduled: StaleGame[] = [],
+): Pick<GameDirectory, 'listInProgress' | 'listStaleScheduled' | 'setStatus'> & {
+  statuses: Map<string, string>;
+  cutoffs: string[];
+} {
+  const statuses = new Map<string, string>([
+    ...inProgress.map((game) => [game.id, 'in_progress'] as const),
+    ...scheduled.map((game) => [game.id, 'scheduled'] as const),
+  ]);
+  const rows = [...inProgress, ...scheduled];
+  const cutoffs: string[] = [];
   return {
     statuses,
+    cutoffs,
     setStatus: (gameId, status) => {
       statuses.set(gameId, status);
       return Promise.resolve();
     },
     listInProgress: () =>
       Promise.resolve(rows.filter((game) => statuses.get(game.id) === 'in_progress')),
+    listStaleScheduled: (kickoffBefore) => {
+      cutoffs.push(kickoffBefore);
+      return Promise.resolve(
+        rows.filter(
+          (game) =>
+            statuses.get(game.id) === 'scheduled' &&
+            Date.parse(game.scheduledStart) < Date.parse(kickoffBefore),
+        ),
+      );
+    },
   };
 }
 
@@ -87,7 +113,7 @@ const LIVE: ScoreboardEvent['status'] = {
   type: { state: 'in', name: 'STATUS_IN_PROGRESS' },
 };
 
-describe('reconcileInProgress', () => {
+describe('reconcileStaleGames', () => {
   it('finalizes a game a stopped run left in_progress and publishes the final game_state', async () => {
     const games = directory([row('g-stale', '401', 3)]);
     const gameState = new InMemoryGameStateStore();
@@ -95,7 +121,7 @@ describe('reconcileInProgress', () => {
     const realtime = new InMemoryRealtimeBus();
     const logs: string[] = [];
 
-    const result = await reconcileInProgress({
+    const result = await reconcileStaleGames({
       scoreboard: scoreboard({ current: [{ id: '401', status: FINAL }] }),
       games,
       gameState,
@@ -127,7 +153,7 @@ describe('reconcileInProgress', () => {
     ]);
     expect(logs).toEqual([
       '[runner] reconcile: finalized g-stale (ESPN 401) from the current scoreboard',
-      '[runner] reconcile in_progress=1 finalized=1',
+      '[runner] reconcile in_progress=1 stale_scheduled=0 finalized=1',
     ]);
   });
 
@@ -145,7 +171,7 @@ describe('reconcileInProgress', () => {
     });
     const logs: string[] = [];
 
-    const result = await reconcileInProgress({
+    const result = await reconcileStaleGames({
       scoreboard: board,
       games,
       gameState,
@@ -165,7 +191,7 @@ describe('reconcileInProgress', () => {
     expect(logs).toEqual([
       '[runner] reconcile: finalized g-wk2-a (ESPN 201) from the 2026 regular week 2 scoreboard',
       '[runner] reconcile: finalized g-wk2-b (ESPN 202) from the 2026 regular week 2 scoreboard (no game_state to publish)',
-      '[runner] reconcile in_progress=2 finalized=2',
+      '[runner] reconcile in_progress=2 stale_scheduled=0 finalized=2',
     ]);
   });
 
@@ -179,7 +205,7 @@ describe('reconcileInProgress', () => {
     const realtime = new InMemoryRealtimeBus();
     const logs: string[] = [];
 
-    const result = await reconcileInProgress({
+    const result = await reconcileStaleGames({
       scoreboard: board,
       games,
       gameState: new InMemoryGameStateStore(),
@@ -197,7 +223,7 @@ describe('reconcileInProgress', () => {
       '[runner] reconcile: 2026 regular week 1 scoreboard failed: ESPN request failed: 503',
       '[runner] reconcile: g-fetchfail (ESPN 101) is not on the current or 2026 regular week 1 scoreboard; left in_progress',
       '[runner] reconcile: g-unseeded (ESPN none) has no ESPN id; left in_progress',
-      '[runner] reconcile in_progress=3 finalized=0',
+      '[runner] reconcile in_progress=3 stale_scheduled=0 finalized=0',
     ]);
   });
 
@@ -206,7 +232,7 @@ describe('reconcileInProgress', () => {
     const board = scoreboard({ current: [{ id: '403', status: LIVE }] });
     const logs: string[] = [];
 
-    await reconcileInProgress({
+    await reconcileStaleGames({
       scoreboard: board,
       games,
       gameState: new InMemoryGameStateStore(),
@@ -220,5 +246,108 @@ describe('reconcileInProgress', () => {
     expect(logs[0]).toBe(
       '[runner] reconcile: g-live (ESPN 403) is live on the current scoreboard; left to discovery',
     );
+  });
+
+  const NOW = Date.parse('2026-09-28T02:00:00Z');
+
+  it("finalizes a week-2 game left scheduled from its own week's scoreboard", async () => {
+    const games = directory([], [row('g-wk2', '205', 2, '2026-09-20T17:00:00Z')]);
+    const board = scoreboard({ current: [], '2': [{ id: '205', status: FINAL }] });
+    const realtime = new InMemoryRealtimeBus();
+    const logs: string[] = [];
+
+    const result = await reconcileStaleGames({
+      scoreboard: board,
+      games,
+      gameState: new InMemoryGameStateStore(),
+      catalog: new InMemoryGameCatalog(),
+      realtime,
+      now: () => NOW,
+      log: (line) => logs.push(line),
+    });
+
+    expect(result.finalized).toBe(1);
+    expect(games.statuses.get('g-wk2')).toBe('final');
+    expect(games.cutoffs).toEqual([new Date(NOW - STALE_SCHEDULED_AFTER_MS).toISOString()]);
+    expect(board.fetches).toEqual(['2']);
+    expect(realtime.published).toEqual([]);
+    expect(logs).toEqual([
+      '[runner] reconcile: finalized g-wk2 (ESPN 205) from the 2026 regular week 2 scoreboard (no game_state to publish)',
+      '[runner] reconcile in_progress=0 stale_scheduled=1 finalized=1',
+    ]);
+  });
+
+  it('shares one week fetch between in_progress and stale scheduled games', async () => {
+    const games = directory(
+      [row('g-live-left', '201', 2)],
+      [row('g-sched', '202', 2, '2026-09-20T17:00:00Z')],
+    );
+    const board = scoreboard({
+      current: [],
+      '2': [
+        { id: '201', status: FINAL },
+        { id: '202', status: FINAL },
+      ],
+    });
+
+    const result = await reconcileStaleGames({
+      scoreboard: board,
+      games,
+      gameState: new InMemoryGameStateStore(),
+      catalog: new InMemoryGameCatalog(),
+      realtime: new InMemoryRealtimeBus(),
+      now: () => NOW,
+      log: () => undefined,
+    });
+
+    expect(result.finalized).toBe(2);
+    expect(board.fetches).toEqual(['current', '2']);
+    expect(games.statuses.get('g-sched')).toBe('final');
+  });
+
+  it('leaves recent, unfinished, and missing scheduled games alone', async () => {
+    const games = directory(
+      [],
+      [
+        row('g-recent', '301', 3, new Date(NOW - STALE_SCHEDULED_AFTER_MS + 60_000).toISOString()),
+        row('g-postponed', '206', 2, '2026-09-20T17:00:00Z'),
+        row('g-missing', '299', 2, '2026-09-20T17:00:00Z'),
+        row('g-unseeded', null, 2, '2026-09-20T17:00:00Z'),
+      ],
+    );
+    const board = scoreboard({
+      '2': [
+        {
+          id: '206',
+          status: { type: { state: 'post', name: 'STATUS_POSTPONED', completed: false } },
+        },
+      ],
+    });
+    const logs: string[] = [];
+
+    const result = await reconcileStaleGames({
+      scoreboard: board,
+      games,
+      gameState: new InMemoryGameStateStore(),
+      catalog: new InMemoryGameCatalog(),
+      realtime: new InMemoryRealtimeBus(),
+      now: () => NOW,
+      log: (line) => logs.push(line),
+    });
+
+    expect(result.finalized).toBe(0);
+    expect([...games.statuses.values()]).toEqual([
+      'scheduled',
+      'scheduled',
+      'scheduled',
+      'scheduled',
+    ]);
+    expect(board.fetches).toEqual(['2']);
+    expect(logs).toEqual([
+      '[runner] reconcile: g-postponed (ESPN 206) is not_live on the 2026 regular week 2 scoreboard; left scheduled',
+      '[runner] reconcile: g-missing (ESPN 299) is not on the 2026 regular week 2 scoreboard; left scheduled',
+      '[runner] reconcile: g-unseeded (ESPN none) has no ESPN id; left scheduled',
+      '[runner] reconcile in_progress=0 stale_scheduled=3 finalized=0',
+    ]);
   });
 });

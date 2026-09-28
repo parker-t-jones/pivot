@@ -37,7 +37,7 @@ import { LEADER_KEY, leaderOwner, type LeaderLockRedis } from './leaderLock.js';
 import { startLeaderLoop, type LeaderLoopHandle } from './leaderLoop.js';
 import { createPlaySession } from './playSession.js';
 import { publishLiveGame } from './publishLiveGame.js';
-import { reconcileInProgress } from './reconcile.js';
+import { reconcileStaleGames } from './reconcile.js';
 import { createNoStakeWarner, rebuildStakeCache } from './stakeCache.js';
 import { superviseGame } from './superviseGame.js';
 import type { SeenPlaySet } from './seenPlays.js';
@@ -94,7 +94,7 @@ async function runLeader(
     console.error(`[runner] stake cache rebuild failed: ${failureReason(error)}`);
   }
   try {
-    await reconcileInProgress({
+    await reconcileStaleGames({
       scoreboard,
       games: deps.games,
       gameState: deps.gameState,

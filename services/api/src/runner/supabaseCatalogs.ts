@@ -11,12 +11,12 @@ import type {
 } from '@pivot/dispatcher';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import { AIRING_COLUMNS, weekGameAirings } from '../lib/watchOptions.js';
-import type { GameDirectory, InProgressGame, SeededGame } from './discovery.js';
+import type { GameDirectory, StaleGame, SeededGame } from './discovery.js';
 
 const ESPN_SEED_PREFIX = 'seed:espn:';
 
 /** `games.season_type` is CHECKed to these three values. */
-function parseSeasonType(value: string): InProgressGame['seasonType'] {
+function parseSeasonType(value: string): StaleGame['seasonType'] {
   if (value === 'pre' || value === 'regular' || value === 'post') return value;
   throw new Error(`unexpected games.season_type ${value}`);
 }
@@ -60,23 +60,47 @@ export class SupabaseGameDirectory implements GameDirectory {
     if (error) throw new Error(`games status update failed: ${error.message}`);
   }
 
-  async listInProgress(): Promise<InProgressGame[]> {
+  async listInProgress(): Promise<StaleGame[]> {
     const { data, error } = await this.client
       .from('games')
-      .select('id, sportradar_id, scheduled_start, season_year, season_type, week')
+      .select(STALE_GAME_COLUMNS)
       .eq('status', 'in_progress');
     if (error) throw new Error(`in-progress games lookup failed: ${error.message}`);
-    return (data ?? []).map((row) => ({
-      id: row.id,
-      espnEventId: row.sportradar_id?.startsWith(ESPN_SEED_PREFIX)
-        ? row.sportradar_id.slice(ESPN_SEED_PREFIX.length)
-        : null,
-      scheduledStart: row.scheduled_start,
-      seasonYear: row.season_year,
-      seasonType: parseSeasonType(row.season_type),
-      week: row.week,
-    }));
+    return (data ?? []).map(toStaleGame);
   }
+
+  async listStaleScheduled(kickoffBefore: string): Promise<StaleGame[]> {
+    const { data, error } = await this.client
+      .from('games')
+      .select(STALE_GAME_COLUMNS)
+      .eq('status', 'scheduled')
+      .lt('scheduled_start', kickoffBefore)
+      .order('scheduled_start');
+    if (error) throw new Error(`stale scheduled games lookup failed: ${error.message}`);
+    return (data ?? []).map(toStaleGame);
+  }
+}
+
+const STALE_GAME_COLUMNS = 'id, sportradar_id, scheduled_start, season_year, season_type, week';
+
+function toStaleGame(row: {
+  id: string;
+  sportradar_id: string | null;
+  scheduled_start: string;
+  season_year: number;
+  season_type: string;
+  week: number;
+}): StaleGame {
+  return {
+    id: row.id,
+    espnEventId: row.sportradar_id?.startsWith(ESPN_SEED_PREFIX)
+      ? row.sportradar_id.slice(ESPN_SEED_PREFIX.length)
+      : null,
+    scheduledStart: row.scheduled_start,
+    seasonYear: row.season_year,
+    seasonType: parseSeasonType(row.season_type),
+    week: row.week,
+  };
 }
 
 export class SupabaseUserDirectory implements UserDirectory {

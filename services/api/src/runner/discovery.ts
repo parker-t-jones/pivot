@@ -43,8 +43,11 @@ export interface SeededGame {
   abbrToUuid: Map<string, string>;
 }
 
-/** A `games` row still marked `in_progress`. `espnEventId` is null when it wasn't seeded from ESPN. */
-export interface InProgressGame {
+/**
+ * A `games` row leader reconcile revisits: still `in_progress`, or still `scheduled` well past
+ * kickoff. `espnEventId` is null when it wasn't seeded from ESPN.
+ */
+export interface StaleGame {
   id: string;
   espnEventId: string | null;
   scheduledStart: string;
@@ -56,7 +59,9 @@ export interface InProgressGame {
 export interface GameDirectory {
   findByEspnId(espnEventId: string): Promise<SeededGame | null>;
   setStatus(gameId: string, status: 'in_progress' | 'final'): Promise<void>;
-  listInProgress(): Promise<InProgressGame[]>;
+  listInProgress(): Promise<StaleGame[]>;
+  /** `scheduled` rows whose `scheduled_start` is before `kickoffBefore` (ISO timestamp). */
+  listStaleScheduled(kickoffBefore: string): Promise<StaleGame[]>;
 }
 
 export interface DiscoveryGameState {

@@ -4,25 +4,32 @@ import {
   classifyScoreboardStatus,
   type DiscoveryEvent,
   type GameDirectory,
-  type InProgressGame,
+  type StaleGame,
 } from './discovery.js';
 import { publishLiveGame } from './publishLiveGame.js';
 
 type WeekEvents = ReadonlyMap<string, DiscoveryEvent>;
 
+/** A `scheduled` row whose kickoff is further back than this is revisited on becoming leader. */
+export const STALE_SCHEDULED_AFTER_MS = 5 * 60 * 60 * 1000;
+
 /**
- * Runs once each time this process becomes leader, before discovery starts. A run that stopped
- * mid-game leaves `games.status = in_progress` (and a live `game_state` hash) behind; nothing else
- * revisits a game once it drops off the scoreboard, so Home would keep showing it live.
+ * Runs once each time this process becomes leader, before discovery starts. Nothing else revisits
+ * a game once it drops off the current scoreboard, so two kinds of row go stale:
  *
- * Each game is looked up on the current scoreboard, then on its own season/week scoreboard (one
- * fetch per week per pass). ESPN final → `game_state` final, published on the game channel, then
- * the row set to `final`. Still live on the current scoreboard → left to discovery. ESPN doesn't
- * have it, or it isn't final → logged and left alone.
+ * - `in_progress`: a run stopped mid-game (with a live `game_state` hash left behind), so Home
+ *   would keep showing it live. Looked up on the current scoreboard, then on its own week's.
+ *   Still live on the current scoreboard → left to discovery.
+ * - `scheduled` with kickoff more than {@link STALE_SCHEDULED_AFTER_MS} ago: no runner was leader
+ *   while it was played. Looked up on its own week's scoreboard only.
+ *
+ * Week scoreboards are fetched once per week per pass, shared across both kinds. ESPN final →
+ * `game_state` final (if one exists), published on the game channel, then the row set to `final`.
+ * ESPN doesn't have it, or it isn't final → logged and left alone.
  */
-export async function reconcileInProgress(deps: {
+export async function reconcileStaleGames(deps: {
   scoreboard: Pick<EspnClient, 'getScoreboard'>;
-  games: Pick<GameDirectory, 'listInProgress' | 'setStatus'>;
+  games: Pick<GameDirectory, 'listInProgress' | 'listStaleScheduled' | 'setStatus'>;
   gameState: GameStateStore;
   catalog: GameCatalog;
   realtime: RealtimeBus;
@@ -43,11 +50,42 @@ export async function reconcileInProgress(deps: {
     return cached;
   };
 
-  const stale = await deps.games.listInProgress();
+  const finalize = async (game: StaleGame, label: string, source: string): Promise<boolean> => {
+    try {
+      const existing = await deps.gameState.getGameState(game.id);
+      if (existing !== null) {
+        await deps.gameState.setGameState(game.id, {
+          ...existing,
+          status: 'final',
+          updatedAt: now(),
+        });
+        await publishLiveGame({
+          gameId: game.id,
+          scheduledStart: game.scheduledStart,
+          gameState: deps.gameState,
+          catalog: deps.catalog,
+          realtime: deps.realtime,
+        });
+      }
+      await deps.games.setStatus(game.id, 'final');
+      log(
+        `[runner] reconcile: finalized ${label} from the ${source} scoreboard` +
+          (existing === null ? ' (no game_state to publish)' : ''),
+      );
+      return true;
+    } catch (error) {
+      log(
+        `[runner] reconcile: ${label} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  };
+
+  const inProgress = await deps.games.listInProgress();
   let finalized = 0;
 
-  for (const game of stale) {
-    const label = `${game.id} (ESPN ${game.espnEventId ?? 'none'})`;
+  for (const game of inProgress) {
+    const label = gameLabel(game);
     if (game.espnEventId === null) {
       log(`[runner] reconcile: ${label} has no ESPN id; left in_progress`);
       continue;
@@ -71,49 +109,53 @@ export async function reconcileInProgress(deps: {
       continue;
     }
 
-    try {
-      const existing = await deps.gameState.getGameState(game.id);
-      if (existing !== null) {
-        await deps.gameState.setGameState(game.id, {
-          ...existing,
-          status: 'final',
-          updatedAt: now(),
-        });
-        await publishLiveGame({
-          gameId: game.id,
-          scheduledStart: game.scheduledStart,
-          gameState: deps.gameState,
-          catalog: deps.catalog,
-          realtime: deps.realtime,
-        });
-      }
-      await deps.games.setStatus(game.id, 'final');
-      finalized += 1;
-      log(
-        `[runner] reconcile: finalized ${label} from the ${found.source} scoreboard` +
-          (existing === null ? ' (no game_state to publish)' : ''),
-      );
-    } catch (error) {
-      log(
-        `[runner] reconcile: ${label} failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+    if (await finalize(game, label, found.source)) finalized += 1;
   }
 
-  log(`[runner] reconcile in_progress=${stale.length} finalized=${finalized}`);
+  const scheduled = await deps.games.listStaleScheduled(
+    new Date(now() - STALE_SCHEDULED_AFTER_MS).toISOString(),
+  );
+
+  for (const game of scheduled) {
+    const label = gameLabel(game);
+    if (game.espnEventId === null) {
+      log(`[runner] reconcile: ${label} has no ESPN id; left scheduled`);
+      continue;
+    }
+
+    const event = (await board(weekOf(game))).get(game.espnEventId);
+    if (event === undefined) {
+      log(
+        `[runner] reconcile: ${label} is not on the ${weekLabel(game)} scoreboard; left scheduled`,
+      );
+      continue;
+    }
+
+    const disposition = classifyScoreboardStatus(event.status?.type);
+    if (disposition.kind !== 'final') {
+      log(
+        `[runner] reconcile: ${label} is ${disposition.kind} on the ${weekLabel(game)} scoreboard; left scheduled`,
+      );
+      continue;
+    }
+
+    if (await finalize(game, label, weekLabel(game))) finalized += 1;
+  }
+
+  log(
+    `[runner] reconcile in_progress=${inProgress.length} stale_scheduled=${scheduled.length} finalized=${finalized}`,
+  );
   return { finalized };
 }
 
 async function findEvent(
   espnEventId: string,
-  game: InProgressGame,
+  game: StaleGame,
   board: (week: EspnScoreboardWeek | undefined) => Promise<WeekEvents>,
 ): Promise<{ event: DiscoveryEvent; source: string } | null> {
   const current = (await board(undefined)).get(espnEventId);
   if (current !== undefined) return { event: current, source: 'current' };
-  const own = (
-    await board({ seasonYear: game.seasonYear, seasonType: game.seasonType, week: game.week })
-  ).get(espnEventId);
+  const own = (await board(weekOf(game))).get(espnEventId);
   return own === undefined ? null : { event: own, source: weekLabel(game) };
 }
 
@@ -130,6 +172,14 @@ async function fetchBoard(
     return new Map();
   }
   return new Map((result.data.events ?? []).map((event) => [event.id, event]));
+}
+
+function gameLabel(game: StaleGame): string {
+  return `${game.id} (ESPN ${game.espnEventId ?? 'none'})`;
+}
+
+function weekOf(game: StaleGame): EspnScoreboardWeek {
+  return { seasonYear: game.seasonYear, seasonType: game.seasonType, week: game.week };
 }
 
 function weekLabel(week: EspnScoreboardWeek): string {
