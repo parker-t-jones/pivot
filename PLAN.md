@@ -1265,21 +1265,31 @@ not seeded in v1. Home supplies `week` from this response into `GET /games?week=
     away_team_primary_color: string,
     away_team_secondary_color: string,
     broadcasts: Array<{                        // same entry shape as GET /games/:id/broadcasts
-      service: string,
+      service: string,                         // user service (youtube_tv), not the network
       deep_link_url: string,
       requires_subscription: boolean,
       user_has_subscription: boolean,
       typical_lag_seconds: number,
-      preferred: boolean
+      preferred: boolean,
+      network: string,                         // airing this option carries (fox)
+      market_confidence: 'national' | 'unknown' | 'in' | 'out',
+      route_hint?: 'in_market_local'           // second option when Ticket outranks a local MVPD
+    }>,
+    airings: Array<{                           // every airing of the game, board-label order
+      network: string,
+      market: 'national' | 'regional' | 'unknown',
+      market_confidence: 'national' | 'unknown' | 'in' | 'out'
     }>
   }>
 }
 ```
 
 `week` is required; Home supplies it from `GET /state/nfl`. Schedule catalog only — no live
-score/clock (those live on `GET /games/live`). Broadcasts are ranked via eligibility-first
-`rankBroadcasts` (Section 2 `BroadcastResolver`), with **one** `user_app_presence` load reused
-across the whole slate — not `pickBroadcastSource` (timing / lag-only among subscribed services).
+score/clock (those live on `GET /games/live`). Broadcasts are watch options computed from
+`game_airings` through the carriage map and ranked against the user's services
+(docs/B1-BROADCAST-DESIGN.md §1.6), with **one** `user_app_presence` load reused across the whole
+slate — not `pickBroadcastSource` (timing / lag-only among subscribed services). Only services the
+user has are listed; a user with no services gets an empty `broadcasts` list.
 
 `GET /games/live` **response (Sprint 10):**
 
@@ -1320,13 +1330,16 @@ spoiler-safe app. No `broadcasts` list (use `GET /games/:id/broadcasts` when swi
 ```typescript
 {
   game_id: string,
-  broadcasts: Array<{
+  broadcasts: Array<{                          // same entry shape as GET /games?week=
     service: string,
     deep_link_url: string,
     requires_subscription: boolean,
     user_has_subscription: boolean,
     typical_lag_seconds: number,
-    preferred: boolean
+    preferred: boolean,
+    network: string,
+    market_confidence: 'national' | 'unknown' | 'in' | 'out',
+    route_hint?: 'in_market_local'
   }>
 }
 ```

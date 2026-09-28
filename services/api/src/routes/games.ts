@@ -1,9 +1,10 @@
-import { buildGameSummary, rankBroadcasts, type GameBroadcastOption } from '@pivot/dispatcher';
+import { buildGameSummary } from '@pivot/dispatcher';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { deriveDisplayPhaseNow, derivePhaseOpeners } from '../lib/phase-openers.js';
+import { buildWeekWatch } from '../lib/watchOptions.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
 
@@ -27,26 +28,19 @@ function teamFields(home: TeamDisplay | undefined, away: TeamDisplay | undefined
   };
 }
 
-function toWireBroadcasts(broadcasts: GameBroadcastOption[], subscribedServices: Set<string>) {
-  // Eligibility-first BroadcastResolver (`rankBroadcasts`) — presentation ranking for the schedule
-  // menu. NOT `pickBroadcastSource` (timing / lag-only among subscribed services).
-  return rankBroadcasts(broadcasts, subscribedServices).map((b) => ({
-    service: b.service,
-    deep_link_url: b.deepLinkUrl,
-    requires_subscription: b.requiresSubscription,
-    user_has_subscription: b.userHasSubscription,
-    typical_lag_seconds: b.typicalLagSeconds,
-    preferred: b.preferred,
-  }));
+const AIRING_COLUMNS = 'game_id, network, market, espn_media_name, espn_type';
+
+function subscribedServicesFrom(rows: { service: string; has_subscription: boolean }[] | null) {
+  return new Set((rows ?? []).filter((row) => row.has_subscription).map((row) => row.service));
 }
 
 const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate);
 
   /**
-   * PLAN.md Section 9 `GET /games?week={w}` (Sprint 10) — week's schedule with per-game ranked
-   * broadcasts. Home supplies `week` from `GET /state/nfl`. One `user_app_presence` load is reused
-   * across the whole slate; each game is ranked via `rankBroadcasts` (BroadcastResolver).
+   * PLAN.md Section 9 `GET /games?week={w}` (Sprint 10) — week's schedule with per-game watch
+   * options and airings (`buildWeekWatch`, docs/B1-BROADCAST-DESIGN.md §1.6). Home supplies `week`
+   * from `GET /state/nfl`. One `user_app_presence` load is reused across the whole slate.
    */
   fastify.get(
     '/games',
@@ -88,15 +82,12 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const teamIds = [...new Set(games.flatMap((g) => [g.home_team_id, g.away_team_id]))];
       const gameIds = games.map((g) => g.id);
 
-      const [teamsResult, broadcastsResult, presenceResult] = await Promise.all([
+      const [teamsResult, airingsResult, presenceResult] = await Promise.all([
         fastify.supabase
           .from('teams')
           .select('id, abbreviation, name, primary_color, secondary_color')
           .in('id', teamIds),
-        fastify.supabase
-          .from('game_broadcasts')
-          .select('game_id, service, deep_link_url, requires_subscription')
-          .in('game_id', gameIds),
+        fastify.supabase.from('game_airings').select(AIRING_COLUMNS).in('game_id', gameIds),
         // ONE presence load for the whole week — not per game.
         fastify.supabase
           .from('user_app_presence')
@@ -104,25 +95,14 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
           .eq('user_id', user.id),
       ]);
       if (teamsResult.error) throw teamsResult.error;
-      if (broadcastsResult.error) throw broadcastsResult.error;
+      if (airingsResult.error) throw airingsResult.error;
       if (presenceResult.error) throw presenceResult.error;
 
       const teamById = new Map((teamsResult.data ?? []).map((t) => [t.id, t]));
-      const broadcastsByGameId = new Map<string, GameBroadcastOption[]>();
-      for (const row of broadcastsResult.data ?? []) {
-        const list = broadcastsByGameId.get(row.game_id) ?? [];
-        list.push({
-          service: row.service,
-          deepLinkUrl: row.deep_link_url,
-          requiresSubscription: row.requires_subscription,
-        });
-        broadcastsByGameId.set(row.game_id, list);
-      }
-
-      const subscribedServices = new Set(
-        (presenceResult.data ?? [])
-          .filter((row) => row.has_subscription)
-          .map((row) => row.service),
+      const watchByGameId = buildWeekWatch(
+        games,
+        airingsResult.data ?? [],
+        subscribedServicesFrom(presenceResult.data),
       );
 
       return {
@@ -130,12 +110,14 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         games: games.map((game) => {
           const home = teamById.get(game.home_team_id);
           const away = teamById.get(game.away_team_id);
+          const watch = watchByGameId.get(game.id);
           return {
             game_id: game.id,
             status: game.status,
             scheduled_start: game.scheduled_start,
             ...teamFields(home, away),
-            broadcasts: toWireBroadcasts(broadcastsByGameId.get(game.id) ?? [], subscribedServices),
+            broadcasts: watch?.broadcasts ?? [],
+            airings: watch?.airings ?? [],
           };
         }),
       };
@@ -224,15 +206,13 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
   });
 
   /**
-   * PLAN.md Section 9 `GET /games/:id/broadcasts` — the game's broadcast sources annotated by the
-   * caller's app presence. Presentation only (the full ranked list), so it uses `rankBroadcasts`
-   * directly (Section 2's `BroadcastResolver`); it is NOT the timing-critical switch recommendation
-   * (that's `delivery.ts`, kept consistent with the fire-time source). Follows the `flags.ts`/
-   * `session.ts` pattern: Supabase I/O here, pure ranking in the dispatcher package.
+   * PLAN.md Section 9 `GET /games/:id/broadcasts` — the game's watch options for the caller: the
+   * same `buildWeekWatch` path as `GET /games?week=`, so regional-slate ranking sees the game's
+   * whole week. Presentation only; NOT the timing-critical switch recommendation (that's
+   * `delivery.ts`).
    *
-   * `user_has_subscription` is derived from `user_app_presence.has_subscription = true` (a presence
-   * row with `has_subscription = false` means the user knows about the service but can't watch it, so
-   * it does not make a paid broadcast eligible).
+   * A service counts only when `user_app_presence.has_subscription = true` (a presence row with
+   * `has_subscription = false` means the user knows about the service but can't watch it).
    */
   fastify.get(
     '/games/:id/broadcasts',
@@ -243,7 +223,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       const { data: game, error: gameError } = await fastify.supabase
         .from('games')
-        .select('id')
+        .select('id, week, season_type')
         .eq('id', gameId)
         .maybeSingle();
       if (gameError) throw gameError;
@@ -251,31 +231,37 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         throw new ApiError(404, 'game_not_found', 'No game exists with that id.');
       }
 
-      const { data: broadcastRows, error: broadcastsError } = await fastify.supabase
-        .from('game_broadcasts')
-        .select('service, deep_link_url, requires_subscription')
-        .eq('game_id', gameId);
-      if (broadcastsError) throw broadcastsError;
+      const { data: weekGames, error: weekError } = await fastify.supabase
+        .from('games')
+        .select('id, scheduled_start')
+        .eq('week', game.week)
+        .eq('season_type', game.season_type)
+        .order('scheduled_start', { ascending: true });
+      if (weekError) throw weekError;
+      const slate = weekGames ?? [];
 
-      const { data: presenceRows, error: presenceError } = await fastify.supabase
-        .from('user_app_presence')
-        .select('service, has_subscription')
-        .eq('user_id', user.id);
-      if (presenceError) throw presenceError;
+      const [airingsResult, presenceResult] = await Promise.all([
+        fastify.supabase
+          .from('game_airings')
+          .select(AIRING_COLUMNS)
+          .in('game_id', slate.map((g) => g.id)),
+        fastify.supabase
+          .from('user_app_presence')
+          .select('service, has_subscription')
+          .eq('user_id', user.id),
+      ]);
+      if (airingsResult.error) throw airingsResult.error;
+      if (presenceResult.error) throw presenceResult.error;
 
-      const subscribedServices = new Set(
-        (presenceRows ?? []).filter((row) => row.has_subscription).map((row) => row.service),
-      );
-
-      const broadcasts: GameBroadcastOption[] = (broadcastRows ?? []).map((row) => ({
-        service: row.service,
-        deepLinkUrl: row.deep_link_url,
-        requiresSubscription: row.requires_subscription,
-      }));
+      const watch = buildWeekWatch(
+        slate,
+        airingsResult.data ?? [],
+        subscribedServicesFrom(presenceResult.data),
+      ).get(gameId);
 
       return {
         game_id: gameId,
-        broadcasts: toWireBroadcasts(broadcasts, subscribedServices),
+        broadcasts: watch?.broadcasts ?? [],
       };
     },
   );
