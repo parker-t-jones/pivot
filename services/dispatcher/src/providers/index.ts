@@ -32,4 +32,4 @@ export function createGameStateStore(config: RedisProviderConfig): GameStateStor
 
 export type { GameStateStore } from './gameStateStore.js';
 export { InMemoryGameStateStore } from './inMemoryGameStateStore.js';
-export { RedisGameStateProvider } from './redisGameStateProvider.js';
+export { GAME_STATE_KEY_TTL_SECONDS, RedisGameStateProvider } from './redisGameStateProvider.js';

@@ -5,6 +5,7 @@ import { deserializeUserLineupCache, type SerializedUserLineupCache } from '@piv
 import {
   deserializeFlagState,
   deserializeGameState,
+  GAME_STATE_KEY_TTL_SECONDS,
   NOTIFICATIONS_KEY_TTL_SECONDS,
   parseQueuedFlagEvent,
   serializeFlagState,
@@ -135,7 +136,9 @@ export function tcpGameState(redis: Redis): GameStateStore {
       return deserializeGameState(raw);
     },
     async setGameState(gameId: string, state: GameState): Promise<void> {
-      await redis.hset(gameStateKey(gameId), serializeGameState(state));
+      const key = gameStateKey(gameId);
+      await redis.hset(key, serializeGameState(state));
+      await redis.expire(key, GAME_STATE_KEY_TTL_SECONDS);
     },
     async getUserFlagState(userId: string, gameId: string): Promise<FlagState | null> {
       const raw = await redis.hgetall(userFlagStateKey(userId, gameId));

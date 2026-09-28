@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Redis } from '@upstash/redis';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { GameState } from '@pivot/shared';
-import { RedisGameStateProvider } from './redisGameStateProvider.js';
+import { GAME_STATE_KEY_TTL_SECONDS, RedisGameStateProvider } from './redisGameStateProvider.js';
 
 /*
  * CACHE_DRIVER=redis integration test (sprint requirement). Runs against a real Redis (Upstash REST,
@@ -70,6 +70,9 @@ describe.skipIf(!shouldRun)('RedisGameStateProvider (integration, real Redis)', 
     const provider = new RedisGameStateProvider(client());
     await provider.setGameState(gameId, makeGameState());
     expect(await provider.getGameState(gameId)).toEqual(makeGameState());
+    const ttl = await client().ttl(`game_state:${gameId}`);
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(GAME_STATE_KEY_TTL_SECONDS);
   });
 
   it('round-trips a FlagState through the user_flag_state hash', async () => {

@@ -607,6 +607,8 @@ game_state:{game_id}              hash → { game_id, home_team_id, away_team_id
                                             time_remaining_sec, yards_to_opponent_endzone,
                                             down, distance, in_red_zone,
                                             status, updated_at }
+                                  TTL 6h, refreshed on every write, so a stopped
+                                  run can't leave a live hash behind indefinitely.
 
 user_flagged_games:{user_id}      sorted set → { game_id : priority_score }
                                   (highest score = current primary)

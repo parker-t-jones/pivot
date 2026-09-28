@@ -1,5 +1,6 @@
 export {
   createGameStateStore,
+  GAME_STATE_KEY_TTL_SECONDS,
   InMemoryGameStateStore,
   RedisGameStateProvider,
   type GameStateStore,

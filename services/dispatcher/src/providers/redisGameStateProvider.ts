@@ -10,6 +10,12 @@ import {
 
 const ACTIVE_USERS_KEY = 'active_users';
 
+/**
+ * `game_state:{game_id}` expiry, refreshed on every write. Longer than any game, so a live game
+ * never loses its hash, but a run that stops mid-game can't leave one behind indefinitely.
+ */
+export const GAME_STATE_KEY_TTL_SECONDS = 6 * 60 * 60;
+
 function gameStateKey(gameId: string): string {
   return `game_state:${gameId}`;
 }
@@ -41,7 +47,9 @@ export class RedisGameStateProvider implements GameStateStore {
   }
 
   async setGameState(gameId: string, state: GameState): Promise<void> {
-    await this.redis.hset(gameStateKey(gameId), serializeGameState(state));
+    const key = gameStateKey(gameId);
+    await this.redis.hset(key, serializeGameState(state));
+    await this.redis.expire(key, GAME_STATE_KEY_TTL_SECONDS);
   }
 
   async getUserFlagState(userId: string, gameId: string): Promise<FlagState | null> {
