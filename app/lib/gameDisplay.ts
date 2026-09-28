@@ -304,12 +304,28 @@ export function localRouteOption(broadcasts: readonly GameBroadcast[]): GameBroa
   return broadcasts.find((b) => b.route_hint === 'in_market_local') ?? null;
 }
 
-/** An option's name in lists and CTAs. The in-market local route says when to use it (§4.4). */
-export function watchOptionLabel(broadcast: GameBroadcast): string {
+export interface WatchOptionParts {
+  title: string;
+  /** When to use the option; only the in-market local route has one (§4.4). */
+  caption: string | null;
+}
+
+export function watchOptionParts(broadcast: GameBroadcast): WatchOptionParts {
   const service = serviceLabel(broadcast.service);
   return broadcast.route_hint === 'in_market_local'
-    ? `${serviceLabel(broadcast.network)} on ${service} — if this game is in your market`
-    : service;
+    ? {
+        title: `${serviceLabel(broadcast.network)} on ${service}`,
+        caption: 'If this game is in your market',
+      }
+    : { title: service, caption: null };
+}
+
+/** An option's name on one line, for lists: `watchOptionParts` joined with a dash. */
+export function watchOptionLabel(broadcast: GameBroadcast): string {
+  const { title, caption } = watchOptionParts(broadcast);
+  return caption === null
+    ? title
+    : `${title} — ${caption.charAt(0).toLowerCase()}${caption.slice(1)}`;
 }
 
 export type WatchCta =

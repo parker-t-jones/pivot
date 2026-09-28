@@ -12,6 +12,8 @@ import { theme } from '../lib/theme';
 
 interface SecondaryButtonProps {
   label: string;
+  /** Muted second line under the label. */
+  caption?: string | null;
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
@@ -21,6 +23,7 @@ interface SecondaryButtonProps {
 
 export function SecondaryButton({
   label,
+  caption = null,
   onPress,
   disabled = false,
   loading = false,
@@ -31,7 +34,7 @@ export function SecondaryButton({
 
   return (
     <Pressable
-      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityLabel={accessibilityLabel ?? (caption ? `${label}, ${caption}` : label)}
       accessibilityRole="button"
       disabled={isDisabled}
       onPress={onPress}
@@ -45,7 +48,10 @@ export function SecondaryButton({
       {loading ? (
         <ActivityIndicator color={theme.colors.textPrimary} />
       ) : (
-        <Text style={styles.label}>{label}</Text>
+        <>
+          <Text style={styles.label}>{label}</Text>
+          {caption ? <Text style={styles.caption}>{caption}</Text> : null}
+        </>
       )}
     </Pressable>
   );
@@ -59,6 +65,11 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     borderWidth: 1,
     justifyContent: 'center',
+  },
+  caption: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.caption.size,
+    lineHeight: theme.type.caption.lineHeight,
   },
   disabled: {
     opacity: theme.opacity.disabled,

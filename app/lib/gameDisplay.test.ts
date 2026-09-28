@@ -22,6 +22,7 @@ import {
   localRouteOption,
   watchCta,
   watchOptionLabel,
+  watchOptionParts,
   type GameBroadcast,
 } from './gameDisplay';
 import type { GameSummary } from './flagEventPayload';
@@ -242,6 +243,21 @@ describe('watchCta', () => {
   it('shows nothing when there is neither an option nor a known airing', () => {
     expect(watchCta([], [])).toEqual({ kind: 'none' });
     expect(watchCta([], [{ network: 'dumont' }])).toEqual({ kind: 'none' });
+  });
+});
+
+describe('watchOptionParts', () => {
+  it('gives a plain option a title and no caption', () => {
+    expect(watchOptionParts(option('sunday_ticket', true))).toEqual({
+      title: 'NFL Sunday Ticket',
+      caption: null,
+    });
+  });
+
+  it('splits the in-market local route into title and caption', () => {
+    expect(
+      watchOptionParts(option('youtube_tv', false, { route_hint: 'in_market_local' })),
+    ).toEqual({ title: 'FOX on YouTube TV', caption: 'If this game is in your market' });
   });
 });
 

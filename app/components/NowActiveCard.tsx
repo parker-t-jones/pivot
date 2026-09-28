@@ -6,7 +6,7 @@ import {
   opponentAbbreviation,
   reasonLabel,
   serviceLabel,
-  watchOptionLabel,
+  watchOptionParts,
   type CurrentFlag,
   type GameBroadcast,
   type WatchCta,
@@ -67,6 +67,7 @@ export function NowActiveCard({
     hexWithAlpha(matchup.leftPrimaryColor, TEAM_NAME_WASH_ALPHA) ?? theme.colors.surface;
   const rightWash =
     hexWithAlpha(matchup.rightPrimaryColor, TEAM_NAME_WASH_ALPHA) ?? theme.colors.surface;
+  const localParts = localRoute ? watchOptionParts(localRoute) : null;
 
   return (
     <View style={styles.card}>
@@ -125,9 +126,10 @@ export function NowActiveCard({
             onPress={() => onSwitch(cta.broadcast)}
             labelStyle={styles.ctaLabel}
           />
-          {localRoute && localRoute !== cta.broadcast ? (
+          {localRoute && localParts && localRoute !== cta.broadcast ? (
             <SecondaryButton
-              label={watchOptionLabel(localRoute)}
+              label={localParts.title}
+              caption={localParts.caption}
               onPress={() => onSwitch(localRoute)}
             />
           ) : null}
