@@ -23,16 +23,27 @@ const STATE: GameState = {
 };
 
 describe('RedisGameStateProvider', () => {
-  it('sets the game_state hash and refreshes its TTL on every write', async () => {
-    const calls: unknown[][] = [];
+  it('sets the game_state hash and refreshes its TTL in one MULTI on every write', async () => {
+    const transactions: unknown[][][] = [];
     const redis = {
-      hset: (...args: unknown[]) => {
-        calls.push(['hset', ...args]);
-        return Promise.resolve(1);
-      },
-      expire: (...args: unknown[]) => {
-        calls.push(['expire', ...args]);
-        return Promise.resolve(1);
+      multi: () => {
+        const queued: unknown[][] = [];
+        transactions.push(queued);
+        const chain = {
+          hset: (...args: unknown[]) => {
+            queued.push(['hset', ...args]);
+            return chain;
+          },
+          expire: (...args: unknown[]) => {
+            queued.push(['expire', ...args]);
+            return chain;
+          },
+          exec: () => {
+            queued.push(['exec']);
+            return Promise.resolve([1, 1]);
+          },
+        };
+        return chain;
       },
     } as unknown as Redis;
     const provider = new RedisGameStateProvider(redis);
@@ -40,11 +51,17 @@ describe('RedisGameStateProvider', () => {
     await provider.setGameState('g1', STATE);
     await provider.setGameState('g1', { ...STATE, quarter: 2 });
 
-    expect(calls).toEqual([
-      ['hset', 'game_state:g1', serializeGameState(STATE)],
-      ['expire', 'game_state:g1', GAME_STATE_KEY_TTL_SECONDS],
-      ['hset', 'game_state:g1', serializeGameState({ ...STATE, quarter: 2 })],
-      ['expire', 'game_state:g1', GAME_STATE_KEY_TTL_SECONDS],
+    expect(transactions).toEqual([
+      [
+        ['hset', 'game_state:g1', serializeGameState(STATE)],
+        ['expire', 'game_state:g1', GAME_STATE_KEY_TTL_SECONDS],
+        ['exec'],
+      ],
+      [
+        ['hset', 'game_state:g1', serializeGameState({ ...STATE, quarter: 2 })],
+        ['expire', 'game_state:g1', GAME_STATE_KEY_TTL_SECONDS],
+        ['exec'],
+      ],
     ]);
   });
 });

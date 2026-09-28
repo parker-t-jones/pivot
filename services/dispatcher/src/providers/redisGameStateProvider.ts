@@ -48,8 +48,11 @@ export class RedisGameStateProvider implements GameStateStore {
 
   async setGameState(gameId: string, state: GameState): Promise<void> {
     const key = gameStateKey(gameId);
-    await this.redis.hset(key, serializeGameState(state));
-    await this.redis.expire(key, GAME_STATE_KEY_TTL_SECONDS);
+    await this.redis
+      .multi()
+      .hset(key, serializeGameState(state))
+      .expire(key, GAME_STATE_KEY_TTL_SECONDS)
+      .exec();
   }
 
   async getUserFlagState(userId: string, gameId: string): Promise<FlagState | null> {

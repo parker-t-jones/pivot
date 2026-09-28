@@ -22,30 +22,67 @@ const STATE: GameState = {
   updatedAt: 1,
 };
 
+/** Records each MULTI as one entry: the queued commands, ending in `exec`. */
+function fakeRedis(
+  execResults: [Error | null, unknown][] = [
+    [null, 1],
+    [null, 1],
+  ],
+): { redis: Redis; transactions: unknown[][][] } {
+  const transactions: unknown[][][] = [];
+  const redis = {
+    multi: () => {
+      const queued: unknown[][] = [];
+      transactions.push(queued);
+      const chain = {
+        hset: (...args: unknown[]) => {
+          queued.push(['hset', ...args]);
+          return chain;
+        },
+        expire: (...args: unknown[]) => {
+          queued.push(['expire', ...args]);
+          return chain;
+        },
+        exec: () => {
+          queued.push(['exec']);
+          return Promise.resolve(execResults);
+        },
+      };
+      return chain;
+    },
+  } as unknown as Redis;
+  return { redis, transactions };
+}
+
 describe('tcpGameState', () => {
-  it('sets the game_state hash and refreshes its TTL on every write', async () => {
-    const calls: unknown[][] = [];
-    const redis = {
-      hset: (...args: unknown[]) => {
-        calls.push(['hset', ...args]);
-        return Promise.resolve(1);
-      },
-      expire: (...args: unknown[]) => {
-        calls.push(['expire', ...args]);
-        return Promise.resolve(1);
-      },
-    } as unknown as Redis;
+  it('sets the game_state hash and refreshes its TTL in one MULTI on every write', async () => {
+    const { redis, transactions } = fakeRedis();
     const store = tcpGameState(redis);
 
     await store.setGameState('g1', STATE);
     await store.setGameState('g1', { ...STATE, status: 'final' });
 
     expect(GAME_STATE_KEY_TTL_SECONDS).toBe(6 * 60 * 60);
-    expect(calls).toEqual([
-      ['hset', 'game_state:g1', serializeGameState(STATE)],
-      ['expire', 'game_state:g1', GAME_STATE_KEY_TTL_SECONDS],
-      ['hset', 'game_state:g1', serializeGameState({ ...STATE, status: 'final' })],
-      ['expire', 'game_state:g1', GAME_STATE_KEY_TTL_SECONDS],
+    expect(transactions).toEqual([
+      [
+        ['hset', 'game_state:g1', serializeGameState(STATE)],
+        ['expire', 'game_state:g1', GAME_STATE_KEY_TTL_SECONDS],
+        ['exec'],
+      ],
+      [
+        ['hset', 'game_state:g1', serializeGameState({ ...STATE, status: 'final' })],
+        ['expire', 'game_state:g1', GAME_STATE_KEY_TTL_SECONDS],
+        ['exec'],
+      ],
     ]);
+  });
+
+  it('rejects when a command inside the MULTI fails', async () => {
+    const { redis } = fakeRedis([
+      [new Error('WRONGTYPE'), null],
+      [null, 1],
+    ]);
+
+    await expect(tcpGameState(redis).setGameState('g1', STATE)).rejects.toThrow('WRONGTYPE');
   });
 });

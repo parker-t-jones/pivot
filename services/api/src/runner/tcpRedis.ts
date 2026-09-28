@@ -137,8 +137,14 @@ export function tcpGameState(redis: Redis): GameStateStore {
     },
     async setGameState(gameId: string, state: GameState): Promise<void> {
       const key = gameStateKey(gameId);
-      await redis.hset(key, serializeGameState(state));
-      await redis.expire(key, GAME_STATE_KEY_TTL_SECONDS);
+      const results = await redis
+        .multi()
+        .hset(key, serializeGameState(state))
+        .expire(key, GAME_STATE_KEY_TTL_SECONDS)
+        .exec();
+      // ioredis reports per-command failures in the results instead of rejecting.
+      const failed = results?.find(([error]) => error !== null)?.[0];
+      if (failed) throw failed;
     },
     async getUserFlagState(userId: string, gameId: string): Promise<FlagState | null> {
       const raw = await redis.hgetall(userFlagStateKey(userId, gameId));
