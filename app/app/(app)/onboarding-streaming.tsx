@@ -2,17 +2,14 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { UserService } from '@pivot/shared';
 
 import { ErrorState } from '../../components/ErrorState';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextButton } from '../../components/TextButton';
 import { ApiRequestError } from '../../lib/apiClient';
 import { setAppPresence } from '../../lib/me';
-import {
-  STREAMING_SERVICES,
-  streamingServiceLabel,
-  type StreamingService,
-} from '../../lib/streamingServices';
+import { USER_SERVICE_OPTIONS, userServiceLabel } from '../../lib/streamingServices';
 import { theme } from '../../lib/theme';
 
 /** PLAN.md Section 10 onboarding step 4 ("Streaming services — multi-select grid, persists to
@@ -21,11 +18,11 @@ import { theme } from '../../lib/theme';
 export default function OnboardingStreamingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [selected, setSelected] = useState<Set<StreamingService>>(new Set());
+  const [selected, setSelected] = useState<Set<UserService>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const toggle = (service: StreamingService) => {
+  const toggle = (service: UserService) => {
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(service)) next.delete(service);
@@ -40,7 +37,7 @@ export default function OnboardingStreamingScreen() {
     try {
       if (selected.size > 0) {
         await setAppPresence(
-          STREAMING_SERVICES.map((service) => ({
+          USER_SERVICE_OPTIONS.map((service) => ({
             service,
             has_subscription: selected.has(service),
           })),
@@ -67,7 +64,7 @@ export default function OnboardingStreamingScreen() {
       </Text>
 
       <View style={styles.grid}>
-        {STREAMING_SERVICES.map((service) => {
+        {USER_SERVICE_OPTIONS.map((service) => {
           const isSelected = selected.has(service);
           return (
             <Pressable
@@ -80,7 +77,7 @@ export default function OnboardingStreamingScreen() {
               ]}
             >
               <Text style={[styles.blockText, isSelected && styles.blockTextSelected]}>
-                {streamingServiceLabel(service)}
+                {userServiceLabel(service)}
               </Text>
             </Pressable>
           );

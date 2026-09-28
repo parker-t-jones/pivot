@@ -1,5 +1,5 @@
+import type { UserService } from '@pivot/shared';
 import { apiClient } from './apiClient';
-import type { StreamingService } from './streamingServices';
 
 export interface QuietHours {
   enabled: boolean;
@@ -17,7 +17,7 @@ export interface Preferences {
 }
 
 export interface AppPresenceEntry {
-  service: StreamingService;
+  service: UserService;
   has_subscription: boolean;
 }
 
@@ -44,7 +44,7 @@ export async function patchPreferences(patch: {
 }
 
 export async function setAppPresence(
-  services: { service: StreamingService; has_subscription: boolean }[],
+  services: { service: UserService; has_subscription: boolean }[],
 ): Promise<{ app_presence: AppPresenceEntry[] }> {
   return await apiClient.post('/me/app-presence', { services });
 }

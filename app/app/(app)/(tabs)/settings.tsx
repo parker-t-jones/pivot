@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { UserService } from '@pivot/shared';
 
 import { ErrorState } from '../../../components/ErrorState';
 import { LoadingState } from '../../../components/LoadingState';
@@ -31,7 +32,11 @@ import {
   type MeResponse,
 } from '../../../lib/me';
 import { unregisterPushNotificationsAsync } from '../../../lib/pushNotifications';
-import { STREAMING_SERVICES, streamingServiceLabel } from '../../../lib/streamingServices';
+import {
+  showsSundayTicketHint,
+  USER_SERVICE_OPTIONS,
+  userServiceLabel,
+} from '../../../lib/streamingServices';
 import { supabase } from '../../../lib/supabase';
 import { theme } from '../../../lib/theme';
 
@@ -356,41 +361,46 @@ function StreamingServicesSection({
   onChange,
 }: {
   appPresence: MeResponse['app_presence'];
-  onChange: (
-    service: (typeof STREAMING_SERVICES)[number],
-    hasSubscription: boolean,
-  ) => Promise<void>;
+  onChange: (service: UserService, hasSubscription: boolean) => Promise<void>;
 }) {
   const [savingService, setSavingService] = useState<string | null>(null);
   const presenceByService = useMemo(
-    () => new Map(appPresence.map((row) => [row.service, row.has_subscription])),
+    () => new Map<string, boolean>(appPresence.map((row) => [row.service, row.has_subscription])),
     [appPresence],
   );
+  const showTicketHint = showsSundayTicketHint(presenceByService);
 
   return (
     <SectionCard title="Streaming services">
       <Text style={styles.sectionHint}>
         Tell us which of these you subscribe to so we can recommend the right one to switch to.
       </Text>
-      {STREAMING_SERVICES.map((service) => (
-        <View key={service} style={styles.toggleRow}>
-          <Text style={styles.rowLabel}>{streamingServiceLabel(service)}</Text>
-          <Switch
-            disabled={savingService === service}
-            onValueChange={async (value) => {
-              setSavingService(service);
-              try {
-                await onChange(service, value);
-              } catch (error) {
-                Alert.alert('Could not save', errorMessage(error));
-              } finally {
-                setSavingService(null);
-              }
-            }}
-            thumbColor={SWITCH_THUMB}
-            trackColor={SWITCH_TRACK}
-            value={presenceByService.get(service) ?? false}
-          />
+      {USER_SERVICE_OPTIONS.map((service) => (
+        <View key={service}>
+          <View style={styles.toggleRow}>
+            <Text style={styles.rowLabel}>{userServiceLabel(service)}</Text>
+            <Switch
+              disabled={savingService === service}
+              onValueChange={async (value) => {
+                setSavingService(service);
+                try {
+                  await onChange(service, value);
+                } catch (error) {
+                  Alert.alert('Could not save', errorMessage(error));
+                } finally {
+                  setSavingService(null);
+                }
+              }}
+              thumbColor={SWITCH_THUMB}
+              trackColor={SWITCH_TRACK}
+              value={presenceByService.get(service) ?? false}
+            />
+          </View>
+          {service === 'youtube_tv' && showTicketHint ? (
+            <Text style={styles.ticketHint}>
+              Also have NFL Sunday Ticket? Turn it on below.
+            </Text>
+          ) : null}
         </View>
       ))}
     </SectionCard>
@@ -566,6 +576,11 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
     marginBottom: theme.spacing.md,
     padding: theme.spacing.xs,
+  },
+  ticketHint: {
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.caption.size,
+    marginBottom: theme.spacing.xs,
   },
   toggleRow: {
     alignItems: 'center',

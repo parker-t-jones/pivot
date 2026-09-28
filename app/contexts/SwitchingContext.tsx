@@ -16,7 +16,7 @@ import { SecondaryButton } from '../components/SecondaryButton';
 import { apiClient } from '../lib/apiClient';
 import type { GameBroadcast, GameBroadcastsResponse } from '../lib/gameDisplay';
 import { serviceLabel } from '../lib/gameDisplay';
-import { streamingServiceAppStoreUrl } from '../lib/streamingServices';
+import { userServiceAppStoreUrl } from '../lib/streamingServices';
 import { resolveSwitch } from '../lib/switching';
 import { theme } from '../lib/theme';
 
@@ -323,7 +323,7 @@ function AlternateBroadcastRow({
   onSelect: (broadcast: GameBroadcast) => void;
 }) {
   const hasDeepLink = broadcast.deep_link_url.length > 0;
-  const appStoreUrl = streamingServiceAppStoreUrl(broadcast.service);
+  const appStoreUrl = userServiceAppStoreUrl(broadcast.service);
 
   const trailing = hasDeepLink ? (
     <PrimaryButton label="Watch" onPress={() => onSelect(broadcast)} />
