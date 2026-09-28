@@ -409,9 +409,9 @@ Single Fly.io app for v1. Three processes: API server (handles REST + WebSocket)
 | `detected_at`      | timestamptz | default `now()`     |
 
 
-`service` enum: `'sunday_ticket' \| 'espn_plus' \| 'paramount_plus' \| 'peacock' \| 'amazon_prime' \| 'nfl_plus' \| 'nfl_network' \| 'hulu' \| 'fubo' \| 'directv' \| 'fox' \| 'cbs' \| 'nbc' \| 'abc'`
+`service` enum (user services — CHECK `is_valid_user_service`, source of truth `USER_SERVICES` in `shared/src/broadcast/types.ts`): `'youtube_tv' \| 'sunday_ticket' \| 'hulu_live' \| 'fubo' \| 'directv' \| 'sling' \| 'amazon_prime' \| 'peacock' \| 'paramount_plus' \| 'espn_plus' \| 'nfl_plus'`
 
-`sunday_ticket` is the wire key for YouTube TV (Google carries NFL Sunday Ticket inside YouTube TV). User-facing copy is **YouTube TV**, not "Sunday Ticket". Do not rename the key — existing `user_app_presence` / `game_broadcasts` rows use it.
+Networks (`cbs`, `fox`, `nbc`, `abc`, `espn`, `nfl_network`, …) are airing networks, not presence values; see `game_broadcasts` below. `sunday_ticket` means **NFL Sunday Ticket**. Before B1 it was the wire key for YouTube TV and this section said not to rename it; B1 reversed that (`docs/B1-BROADCAST-DESIGN.md` §2.2 — migration `20260927230000` remapped those rows to `youtube_tv`, `hulu` to `hulu_live`, and dropped the network keys).
 
 Unique constraint: `(user_id, service)`.
 
@@ -549,12 +549,12 @@ Composite index: `(season_type, scheduled_start)` — covers opener `MIN(schedul
 | ----------------------- | ------- | ---------------------------------------- |
 | `id`                    | uuid    | PK                                       |
 | `game_id`               | uuid    | FK → games, indexed                      |
-| `service`               | text    | same enum as `user_app_presence.service` |
+| `service`               | text    | airing network (CHECK `is_valid_airing_network`) |
 | `deep_link_url`         | text    |                                          |
 | `requires_subscription` | boolean |                                          |
 
 
-Multiple rows per game (e.g., FOX broadcast + Sunday Ticket simulcast).
+Multiple rows per game (e.g., ESPN + ABC simulcast). Airing-network keys: `'cbs' \| 'fox' \| 'nbc' \| 'abc' \| 'espn' \| 'amazon_prime' \| 'peacock' \| 'nfl_network' \| 'netflix' \| 'espn_plus' \| 'nfl_plus' \| 'paramount_plus'` (`AIRING_NETWORKS` in `shared/src/broadcast/types.ts`). `game_airings` (B1.3, `docs/B1-BROADCAST-DESIGN.md` §1.2) replaces this table when readers switch in B1.4.
 
 ### Event entities
 
