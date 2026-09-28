@@ -33,24 +33,28 @@ export interface GameBroadcastsResponse {
   broadcasts: GameBroadcast[];
 }
 
-/** Human labels for `game_broadcasts.service` (Section 7 enum) — drives the Section 10 CTA copy
- *  (`Watch on {preferred service}`). `sunday_ticket` displays as YouTube TV (Google carries NFL
- *  Sunday Ticket inside YouTube TV). Unknown services fall back to the raw value. */
+/** Human labels for airing networks and user services (docs/B1-BROADCAST-DESIGN.md §1.3–1.4) —
+ *  drives the Section 10 CTA copy (`Watch on {preferred service}`). Unknown services fall back to
+ *  the raw value. */
 const SERVICE_LABELS: Record<string, string> = {
-  sunday_ticket: 'YouTube TV',
+  youtube_tv: 'YouTube TV',
+  sunday_ticket: 'NFL Sunday Ticket',
+  hulu_live: 'Hulu + Live TV',
+  fubo: 'Fubo',
+  directv: 'DIRECTV',
+  sling: 'Sling TV',
   espn_plus: 'ESPN+',
   paramount_plus: 'Paramount+',
   peacock: 'Peacock',
   amazon_prime: 'Prime Video',
   nfl_plus: 'NFL+',
   nfl_network: 'NFL Network',
+  netflix: 'Netflix',
   fox: 'FOX',
   cbs: 'CBS',
   nbc: 'NBC',
   abc: 'ABC',
-  hulu: 'Hulu',
-  fubo: 'Fubo',
-  directv: 'DIRECTV',
+  espn: 'ESPN',
 };
 
 export function serviceLabel(service: string): string {

@@ -5,10 +5,10 @@
  * unit-testable the same way `homeState.ts` is. `loadHome` must not grow to accommodate the board —
  * the screen calls these in render via `useMemo` over data it already has.
  */
+import type { AiringNetwork } from '@pivot/shared';
 import { serviceLabel, type GameBroadcast } from './gameDisplay';
 import type { HomeBranch, LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
-import { STREAMING_SERVICES, type StreamingService } from './streamingServices';
 
 /**
  * The two Home branches that share the pre-game presentation (PIVOT-STAKES-PLAN.md §11.3).
@@ -21,66 +21,60 @@ export function isPregameBranch(branch: HomeBranch['branch'] | null): boolean {
   return branch === 'state3' || branch === 'state4';
 }
 
-function isStreamingService(service: string): service is StreamingService {
-  return (STREAMING_SERVICES as readonly string[]).includes(service);
-}
-
 /**
- * Ranks a service as the game's *airing network*, or null when it can't be one.
+ * Ranks a `game_broadcasts.service` as the game's *airing network*, or null when it isn't one.
  *
- * Single exhaustive switch over `StreamingService` on purpose: a new key in the enum becomes a
- * compile error here rather than silently falling through to "no network". Lower rank wins.
+ * Single exhaustive switch over `AiringNetwork` on purpose: a new key in the catalog becomes a
+ * compile error here rather than silently falling through to "no network". Lower rank wins; ESPN
+ * beats ABC on a simulcast (docs/B1-BROADCAST-DESIGN.md §7.2).
  *
- * Carriers (`sunday_ticket`, `hulu`, `fubo`, `directv`) retransmit somebody else's feed. They are
- * how a viewer watches, never who is airing, so they never produce a label and never outrank a
- * real network.
+ * User services that only carry somebody else's feed (YouTube TV, Sunday Ticket, Fubo, …) are not
+ * airing networks, so they land in `default` and never produce a label.
  */
-function asNetwork(service: StreamingService): { rank: number; label: string } | null {
-  switch (service) {
+function asNetwork(service: string): { rank: number; label: string } | null {
+  const network = service as AiringNetwork;
+  switch (network) {
     // Linear networks holding the broadcast window.
     case 'cbs':
-      return { rank: 0, label: serviceLabel(service) };
+      return { rank: 0, label: serviceLabel(network) };
     case 'fox':
-      return { rank: 1, label: serviceLabel(service) };
+      return { rank: 1, label: serviceLabel(network) };
     case 'nbc':
-      return { rank: 2, label: serviceLabel(service) };
+      return { rank: 2, label: serviceLabel(network) };
+    case 'espn':
+      return { rank: 3, label: 'ESPN' };
     case 'abc':
-      return { rank: 3, label: serviceLabel(service) };
+      return { rank: 4, label: serviceLabel(network) };
     // Streaming exclusives. `serviceLabel`'s marketing names ("Prime Video", "NFL Network") are
     // too wide for a 38pt row, so those carry a short form here instead.
     case 'amazon_prime':
-      return { rank: 4, label: 'PRIME' };
+      return { rank: 5, label: 'PRIME' };
     case 'peacock':
-      return { rank: 5, label: 'PEACOCK' };
+      return { rank: 6, label: 'PEACOCK' };
     case 'nfl_network':
-      return { rank: 6, label: 'NFLN' };
+      return { rank: 7, label: 'NFLN' };
+    case 'netflix':
+      return { rank: 8, label: 'NETFLIX' };
     case 'espn_plus':
-      return { rank: 7, label: serviceLabel(service) };
+      return { rank: 9, label: serviceLabel(network) };
     case 'paramount_plus':
-      return { rank: 8, label: 'PARAMOUNT+' };
+      return { rank: 10, label: 'PARAMOUNT+' };
     case 'nfl_plus':
-      return { rank: 9, label: serviceLabel(service) };
-    case 'sunday_ticket':
-    case 'hulu':
-    case 'fubo':
-    case 'directv':
+      return { rank: 11, label: serviceLabel(network) };
+    default:
+      network satisfies never;
       return null;
-    default: {
-      const exhaustive: never = service;
-      return exhaustive;
-    }
   }
 }
 
 /**
- * The network airing this game, as board-column text, or null when only carriers are listed.
+ * The network airing this game, as board-column text, or null when no airing network is listed.
  * Deliberately not `rankBroadcasts` — that orders by what the *user* can watch, which is a
  * different question from who is airing the game.
  */
 export function networkLabel(broadcasts: GameBroadcast[]): string | null {
   let best: { rank: number; label: string } | null = null;
   for (const broadcast of broadcasts) {
-    if (!isStreamingService(broadcast.service)) continue;
     const network = asNetwork(broadcast.service);
     if (!network) continue;
     if (!best || network.rank < best.rank) best = network;

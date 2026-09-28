@@ -25,12 +25,15 @@ import type { GameSummary } from './flagEventPayload';
 
 describe('serviceLabel', () => {
   it('maps known services to display names', () => {
-    expect(serviceLabel('sunday_ticket')).toBe('YouTube TV');
+    expect(serviceLabel('youtube_tv')).toBe('YouTube TV');
+    expect(serviceLabel('sunday_ticket')).toBe('NFL Sunday Ticket');
     expect(serviceLabel('espn_plus')).toBe('ESPN+');
+    expect(serviceLabel('espn')).toBe('ESPN');
     expect(serviceLabel('fox')).toBe('FOX');
-    expect(serviceLabel('hulu')).toBe('Hulu');
+    expect(serviceLabel('hulu_live')).toBe('Hulu + Live TV');
     expect(serviceLabel('fubo')).toBe('Fubo');
     expect(serviceLabel('directv')).toBe('DIRECTV');
+    expect(serviceLabel('sling')).toBe('Sling TV');
   });
 
   it('falls back to the raw value for an unknown service', () => {

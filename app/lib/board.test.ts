@@ -13,7 +13,7 @@ import {
 import type { GameBroadcast } from './gameDisplay';
 import { resolveHomeBranch, type HomeBranch, type LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
-import { STREAMING_SERVICES } from './streamingServices';
+import { AIRING_NETWORKS, USER_SERVICES } from '@pivot/shared';
 
 function broadcast(service: string): GameBroadcast {
   return {
@@ -48,8 +48,10 @@ function game(
   };
 }
 
-/** Carriers retransmit a feed; they can never be the airing network. */
-const CARRIERS = ['sunday_ticket', 'hulu', 'fubo', 'directv'];
+/** User services that only carry somebody else's feed; they can never be the airing network. */
+const CARRIERS: readonly string[] = USER_SERVICES.filter(
+  (service) => !(AIRING_NETWORKS as readonly string[]).includes(service),
+);
 
 describe('networkLabel', () => {
   it('returns null when there are no broadcasts', () => {
@@ -57,14 +59,20 @@ describe('networkLabel', () => {
   });
 
   it('returns null when only carriers are listed', () => {
+    expect(CARRIERS).toEqual(['youtube_tv', 'sunday_ticket', 'hulu_live', 'fubo', 'directv', 'sling']);
     expect(networkLabel(CARRIERS.map(broadcast))).toBeNull();
   });
 
   it('prefers a linear network over the carriers alongside it', () => {
-    // The shape `seed-broadcasts.ts` actually produces: one OTA plus two paid options.
-    expect(networkLabel([broadcast('sunday_ticket'), broadcast('cbs'), broadcast('nfl_plus')])).toBe(
+    expect(networkLabel([broadcast('youtube_tv'), broadcast('cbs'), broadcast('nfl_plus')])).toBe(
       'CBS',
     );
+  });
+
+  it('labels the ESPN/ABC simulcast ESPN', () => {
+    // The shape `seed-broadcasts.ts` writes for Week 3 MNF (PHI @ CHI).
+    expect(networkLabel([broadcast('espn'), broadcast('abc')])).toBe('ESPN');
+    expect(networkLabel([broadcast('abc'), broadcast('espn')])).toBe('ESPN');
   });
 
   it('prefers a linear network over a streaming exclusive', () => {
@@ -81,6 +89,7 @@ describe('networkLabel', () => {
     expect(networkLabel([broadcast('nfl_network')])).toBe('NFLN');
     expect(networkLabel([broadcast('peacock')])).toBe('PEACOCK');
     expect(networkLabel([broadcast('paramount_plus')])).toBe('PARAMOUNT+');
+    expect(networkLabel([broadcast('netflix')])).toBe('NETFLIX');
   });
 
   it('reuses serviceLabel where it is already the short form', () => {
@@ -94,15 +103,21 @@ describe('networkLabel', () => {
     expect(networkLabel([broadcast('some_new_service'), broadcast('nbc')])).toBe('NBC');
   });
 
-  it('classifies every catalog service as either a network or a carrier', () => {
-    for (const service of STREAMING_SERVICES) {
+  it('labels every airing network without leaking the raw key', () => {
+    for (const network of AIRING_NETWORKS) {
+      const label = networkLabel([broadcast(network)]);
+      expect(label, network).toBeTruthy();
+      expect(label, network).not.toBe(network);
+    }
+  });
+
+  it('classifies every user service as either a network or a carrier', () => {
+    for (const service of USER_SERVICES) {
       const label = networkLabel([broadcast(service)]);
       if (CARRIERS.includes(service)) {
         expect(label, service).toBeNull();
       } else {
         expect(label, service).toBeTruthy();
-        // Never leak the raw enum key into the UI.
-        expect(label, service).not.toBe(service);
       }
     }
   });
@@ -166,7 +181,7 @@ describe('buildBoardRows', () => {
     game('g1', '2026-09-18T00:15:00Z', {
       away_team: 'BUF',
       home_team: 'MIA',
-      broadcasts: [broadcast('amazon_prime'), broadcast('sunday_ticket')],
+      broadcasts: [broadcast('amazon_prime')],
     }),
     game('g2', '2026-09-20T17:00:00Z', { away_team: 'NYJ', home_team: 'NE' }),
     game('g10', '2026-09-20T17:00:00Z', { away_team: 'DAL', home_team: 'PHI' }),
