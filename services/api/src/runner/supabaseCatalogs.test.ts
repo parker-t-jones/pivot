@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
-import { SupabaseBroadcastCatalog } from './supabaseCatalogs.js';
+import { SupabaseBroadcastCatalog, SupabaseGameAiringsStore } from './supabaseCatalogs.js';
 
 type Row = Record<string, unknown>;
 
@@ -78,5 +78,30 @@ describe('SupabaseBroadcastCatalog', () => {
 
   it('counts only services with has_subscription', async () => {
     expect([...(await catalog.getUserSubscribedServices('u1'))]).toEqual(['youtube_tv']);
+  });
+});
+
+describe('SupabaseGameAiringsStore', () => {
+  const store = new SupabaseGameAiringsStore(
+    fakeClient({
+      games: [
+        { id: 'g1', sportradar_id: 'seed:espn:401' },
+        { id: 'g2', sportradar_id: 'seed:espn:402' },
+      ],
+      game_airings: [
+        { id: 'a1', game_id: 'g1', network: 'fox', market: 'regional' },
+        { id: 'a2', game_id: 'g2', network: 'cbs', market: 'regional' },
+      ],
+    }),
+  );
+
+  it('maps the seeded ESPN external ids that exist to game ids', async () => {
+    expect(await store.gameIdsByExternalId(['seed:espn:401', 'seed:espn:999'])).toEqual(
+      new Map([['seed:espn:401', 'g1']]),
+    );
+  });
+
+  it("lists only that game's airing keys", async () => {
+    expect((await store.listForGame('g1')).map((row) => row.id)).toEqual(['a1']);
   });
 });

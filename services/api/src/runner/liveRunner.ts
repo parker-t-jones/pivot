@@ -4,7 +4,13 @@ import {
   type LineupCacheReader,
   type PlayEvent,
 } from '@pivot/engine';
-import { espnClient, translatePlay, type EspnClient } from '@pivot/ingestion';
+import {
+  espnClient,
+  ingestAirings,
+  translatePlay,
+  type EspnClient,
+  type GameAiringsStore,
+} from '@pivot/ingestion';
 import {
   ResumptionCeiling,
   ResumptionGatedDispatcher,
@@ -24,7 +30,10 @@ import {
 } from '@pivot/dispatcher';
 import type { PushNotifier } from '@pivot/dispatcher';
 import type { LineupCacheProvider } from '../cache/index.js';
+import { getCurrentNflState } from '../lib/nfl-state.js';
+import { deriveDisplayPhaseNow, derivePhaseOpeners, type NflPhase } from '../lib/phase-openers.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
+import { nextAiringsDelayMs, runAiringsCycle, type AiringsCycleDeps } from './airingsCycle.js';
 import {
   applyDiscovery,
   DISCOVERY_INTERVAL_MS,
@@ -59,6 +68,8 @@ export interface LiveRunnerDeps {
   gameCatalog: GameCatalog;
   players: PlayerCatalog;
   broadcasts: BroadcastCatalog;
+  /** `game_airings` writes for the airings cycle. */
+  airings: GameAiringsStore;
   persistence: FlagEventPersistence;
   pushNotifier: PushNotifier;
   scoreboard?: EspnClient;
@@ -240,8 +251,27 @@ async function runLeader(
     DISPATCHER_TICK_MS,
   );
 
+  const airingsCycle: AiringsCycleDeps = {
+    ingest: () =>
+      ingestAirings({
+        scoreboard,
+        store: deps.airings,
+        log: (line) => {
+          console.log(`[runner] airings: ${line}`);
+        },
+      }),
+    phase: () => displayPhase(deps.stakeCache),
+  };
+  const airings = pollWhileLeader(
+    signal,
+    gamesAbort,
+    held,
+    () => runAiringsCycle(airingsCycle),
+    () => nextAiringsDelayMs(airingsCycle),
+  );
+
   try {
-    await Promise.all([discovery, ticks]);
+    await Promise.all([discovery, ticks, airings]);
   } finally {
     gamesAbort.abort();
     ceiling.stop();
@@ -280,7 +310,7 @@ async function pollWhileLeader(
   gamesAbort: AbortController,
   held: () => Promise<HoldCheck>,
   tick: () => Promise<void>,
-  intervalMs: number,
+  interval: number | (() => Promise<number>),
 ): Promise<void> {
   while (!signal.aborted && !gamesAbort.signal.aborted) {
     const check = await held();
@@ -290,8 +320,16 @@ async function pollWhileLeader(
       return;
     }
     if (check === 'held') await tick();
-    await sleep(intervalMs, gamesAbort.signal);
+    await sleep(typeof interval === 'number' ? interval : await interval(), gamesAbort.signal);
   }
+}
+
+async function displayPhase(stakeCache: LiveRunnerDeps['stakeCache']): Promise<NflPhase> {
+  const [openers, nflState] = await Promise.all([
+    derivePhaseOpeners(stakeCache.supabase),
+    getCurrentNflState(stakeCache.lineupCache),
+  ]);
+  return deriveDisplayPhaseNow(openers, nflState.seasonType);
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {

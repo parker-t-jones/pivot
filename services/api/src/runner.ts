@@ -10,6 +10,7 @@ import { guardRunnerStart } from './runner/redisGuard.js';
 import { SupabaseFlagEventPersistence } from './runner/supabaseFlagEventPersistence.js';
 import {
   SupabaseBroadcastCatalog,
+  SupabaseGameAiringsStore,
   SupabaseGameCatalog,
   SupabaseGameDirectory,
   SupabasePlayerCatalog,
@@ -63,6 +64,7 @@ const handle = startLiveRunner({
   gameCatalog: new SupabaseGameCatalog(supabase),
   players: new SupabasePlayerCatalog(supabase),
   broadcasts: new SupabaseBroadcastCatalog(supabase),
+  airings: new SupabaseGameAiringsStore(supabase),
   persistence: new SupabaseFlagEventPersistence(supabase),
   pushNotifier: createPushNotifier({
     pushDriver: env.PUSH_DRIVER,

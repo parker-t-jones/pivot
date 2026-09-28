@@ -9,6 +9,7 @@ import type {
   UserDirectory,
   ViewingSessionSnapshot,
 } from '@pivot/dispatcher';
+import type { AiringSeedRow, GameAiringsStore, StoredAiringKey } from '@pivot/ingestion';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import { AIRING_COLUMNS, weekGameAirings } from '../lib/watchOptions.js';
 import type { GameDirectory, StaleGame, SeededGame } from './discovery.js';
@@ -78,6 +79,48 @@ export class SupabaseGameDirectory implements GameDirectory {
       .order('scheduled_start');
     if (error) throw new Error(`stale scheduled games lookup failed: ${error.message}`);
     return (data ?? []).map(toStaleGame);
+  }
+}
+
+/** `games` lookup and `game_airings` writes for the runner's airings cycle (B1.6 / P0.13). */
+export class SupabaseGameAiringsStore implements GameAiringsStore {
+  constructor(private readonly client: SupabaseServiceClient) {}
+
+  async gameIdsByExternalId(externalIds: readonly string[]): Promise<Map<string, string>> {
+    const { data, error } = await this.client
+      .from('games')
+      .select('id, sportradar_id')
+      .in('sportradar_id', [...externalIds]);
+    if (error) throw new Error(`games lookup failed: ${error.message}`);
+    return new Map(
+      (data ?? []).flatMap((game) =>
+        game.sportradar_id === null ? [] : [[game.sportradar_id, game.id] as const],
+      ),
+    );
+  }
+
+  async upsert(rows: readonly AiringSeedRow[]): Promise<void> {
+    const { error } = await this.client
+      .from('game_airings')
+      .upsert([...rows], { onConflict: 'game_id,network,market' });
+    if (error) throw new Error(`game_airings upsert failed: ${error.message}`);
+  }
+
+  async listForGame(gameId: string): Promise<StoredAiringKey[]> {
+    const { data, error } = await this.client
+      .from('game_airings')
+      .select('id, network, market')
+      .eq('game_id', gameId);
+    if (error) throw new Error(`game_airings lookup failed: ${error.message}`);
+    return data ?? [];
+  }
+
+  async deleteByIds(ids: readonly string[]): Promise<void> {
+    const { error } = await this.client
+      .from('game_airings')
+      .delete()
+      .in('id', [...ids]);
+    if (error) throw new Error(`game_airings delete failed: ${error.message}`);
   }
 }
 
