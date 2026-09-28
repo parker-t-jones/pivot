@@ -1,12 +1,15 @@
 /**
- * Seeds `public.game_broadcasts` from a real ESPN scoreboard (B1.2, docs/B1-BROADCAST-DESIGN.md §6):
- * saved JSON (default `experiments/logs/espn-scoreboard-2026-week3.json`) or `--live` for the
- * current week. Airings go through the same `parseEspnAirings` as production and join to `games` on
+ * Seeds `public.game_airings` and `public.game_broadcasts` from a real ESPN scoreboard
+ * (docs/B1-BROADCAST-DESIGN.md §6): saved JSON (default
+ * `experiments/logs/espn-scoreboard-2026-week3.json`) or `--live` for the current week. Airings go
+ * through the same `parseEspnAirings` as production and join to `games` on
  * `sportradar_id = 'seed:espn:' || event.id`.
  *
- * Temporary compatibility dump: writes the old `game_broadcasts` shape as *networks only* — no
- * synthetic `sunday_ticket` / `nfl_plus` rows. Networks without a template below are skipped and
- * logged.
+ * `game_airings` uses §3.4's per-game upsert plus stale-row delete.
+ *
+ * `game_broadcasts` is a temporary compatibility dump for readers not yet on `game_airings`: the old
+ * shape as *networks only* — no synthetic `sunday_ticket` / `nfl_plus` rows. Networks without a
+ * template below are skipped and logged.
  *
  * ⚠️ TWO DIFFERENT THINGS ARE AT STAKE HERE, and only the first is verified. Keep them apart.
  *
@@ -32,8 +35,8 @@
  * `cbs` and `nbc` are knowingly left broken: cbssports.com serves an AASA with zero app entries and
  * nbcsports.com serves none at all, so no URL on those domains can open an app. Not fixable by us.
  *
- * Idempotent: deletes existing rows for the games on the scoreboard, then re-inserts (there is no
- * UNIQUE(game_id, service) constraint to upsert on).
+ * Idempotent: `game_broadcasts` deletes existing rows for the games on the scoreboard, then
+ * re-inserts (there is no UNIQUE(game_id, service) constraint to upsert on).
  *
  * Usage (repo root):
  *   pnpm seed:broadcasts                     # saved Week 3 scoreboard
@@ -43,8 +46,14 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createClient } from '@supabase/supabase-js';
-import { parseEspnAirings, type EspnBroadcastEvent, type UnmappedMediaLog } from '@pivot/shared';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+  parseEspnAirings,
+  type AiringMarket,
+  type AiringNetwork,
+  type EspnBroadcastEvent,
+  type UnmappedMediaLog,
+} from '@pivot/shared';
 import { bootstrapSeedScript, RemoteSafetyError } from './remoteSafety.js';
 
 export interface ServiceTemplate {
@@ -182,6 +191,128 @@ export function buildNetworkRows(
   return { rows, skipped, unmatchedEventIds };
 }
 
+export type AiringSource = 'espn_scoreboard' | 'espn_scoreboard_fixture';
+
+/** §1.2: a saved payload is a fixture; `--live` is a real scoreboard read. */
+export function airingSourceFor(source: ScoreboardSource): AiringSource {
+  return source.kind === 'live' ? 'espn_scoreboard' : 'espn_scoreboard_fixture';
+}
+
+export interface AiringSeedRow {
+  game_id: string;
+  network: AiringNetwork;
+  market: AiringMarket;
+  source: AiringSource;
+  espn_media_name: string;
+  espn_type: string | null;
+  fetched_at: string;
+}
+
+export interface AiringRowsResult {
+  /** Candidate rows per matched game, one per `(network, market)`; a game with no airings maps to `[]`. */
+  rowsByGame: Map<string, AiringSeedRow[]>;
+  /** Scoreboard events with no seeded game. */
+  unmatchedEventIds: string[];
+}
+
+/** §3.4 step 1: each matched event's geos → candidate `game_airings` rows. */
+export function buildAiringRows(
+  events: readonly EspnBroadcastEvent[],
+  gameIdByExternalId: ReadonlyMap<string, string>,
+  source: AiringSource,
+  fetchedAt: string,
+  logUnmapped: UnmappedMediaLog,
+): AiringRowsResult {
+  const rowsByGame = new Map<string, AiringSeedRow[]>();
+  const unmatchedEventIds: string[] = [];
+
+  for (const event of events) {
+    const gameId = gameIdByExternalId.get(espnGameExternalId(event.id));
+    if (gameId === undefined) {
+      unmatchedEventIds.push(event.id);
+      continue;
+    }
+    const rows = rowsByGame.get(gameId) ?? [];
+    const seen = new Set(rows.map((row) => `${row.network}|${row.market}`));
+    for (const airing of parseEspnAirings(event, logUnmapped)) {
+      const key = `${airing.network}|${airing.market}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        game_id: gameId,
+        network: airing.network,
+        market: airing.market,
+        source,
+        espn_media_name: airing.espnMediaName,
+        espn_type: airing.espnType,
+        fetched_at: fetchedAt,
+      });
+    }
+    rowsByGame.set(gameId, rows);
+  }
+
+  return { rowsByGame, unmatchedEventIds };
+}
+
+export interface StoredAiringKey {
+  id: string;
+  network: string;
+  market: string;
+}
+
+/** The `game_airings` writes §3.4 needs, behind an interface so the per-game logic is testable. */
+export interface GameAiringsStore {
+  /** `INSERT … ON CONFLICT (game_id, network, market) DO UPDATE`. */
+  upsert(rows: readonly AiringSeedRow[]): Promise<void>;
+  listForGame(gameId: string): Promise<StoredAiringKey[]>;
+  deleteByIds(ids: readonly string[]): Promise<void>;
+}
+
+/**
+ * §3.4 for one game: upsert the candidates, then delete that game's rows whose `(network, market)`
+ * is not a candidate (a FOX→NBC flex drops FOX). Upsert runs first so readers never see the game
+ * with no airings. Never touches another game's rows.
+ */
+export async function writeGameAirings(
+  store: GameAiringsStore,
+  gameId: string,
+  rows: readonly AiringSeedRow[],
+): Promise<{ upserted: number; deleted: number }> {
+  if (rows.some((row) => row.game_id !== gameId)) {
+    throw new Error(`writeGameAirings: every row must belong to game ${gameId}`);
+  }
+  if (rows.length > 0) await store.upsert(rows);
+  const candidates = new Set(rows.map((row) => `${row.network}|${row.market}`));
+  const staleIds = (await store.listForGame(gameId))
+    .filter((row) => !candidates.has(`${row.network}|${row.market}`))
+    .map((row) => row.id);
+  if (staleIds.length > 0) await store.deleteByIds(staleIds);
+  return { upserted: rows.length, deleted: staleIds.length };
+}
+
+function supabaseGameAiringsStore(supabase: SupabaseClient): GameAiringsStore {
+  return {
+    async upsert(rows) {
+      const { error } = await supabase
+        .from('game_airings')
+        .upsert([...rows], { onConflict: 'game_id,network,market' });
+      if (error) throw error;
+    },
+    async listForGame(gameId) {
+      const { data, error } = await supabase
+        .from('game_airings')
+        .select('id, network, market')
+        .eq('game_id', gameId);
+      if (error) throw error;
+      return (data ?? []) as StoredAiringKey[];
+    },
+    async deleteByIds(ids) {
+      const { error } = await supabase.from('game_airings').delete().in('id', [...ids]);
+      if (error) throw error;
+    },
+  };
+}
+
 interface ScoreboardBody {
   events?: EspnBroadcastEvent[];
 }
@@ -229,11 +360,19 @@ export async function seedBroadcasts(source: ScoreboardSource): Promise<void> {
     throw new Error('No scoreboard events match seeded games. Run `pnpm seed:schedule` first.');
   }
 
-  const { rows, skipped, unmatchedEventIds } = buildNetworkRows(events, gameIdByExternalId, (info) => {
-    console.warn(
-      `unmapped media "${info.rawName}" on ${info.shortName ?? '?'} (${info.eventId}) via ${info.source} — skipped`,
-    );
-  });
+  const { rowsByGame, unmatchedEventIds } = buildAiringRows(
+    events,
+    gameIdByExternalId,
+    airingSourceFor(source),
+    new Date().toISOString(),
+    (info) => {
+      console.warn(
+        `unmapped media "${info.rawName}" on ${info.shortName ?? '?'} (${info.eventId}) via ${info.source} — skipped`,
+      );
+    },
+  );
+  // Same parse as above; unmapped names and unmatched events were already logged.
+  const { rows, skipped } = buildNetworkRows(events, gameIdByExternalId, () => undefined);
   for (const eventId of unmatchedEventIds) {
     console.warn(`no seeded game for ESPN event ${eventId} (${espnGameExternalId(eventId)}) — skipped`);
   }
@@ -253,6 +392,16 @@ export async function seedBroadcasts(source: ScoreboardSource): Promise<void> {
     const { error: insertError } = await supabase.from('game_broadcasts').insert(rows);
     if (insertError) throw insertError;
   }
+
+  const store = supabaseGameAiringsStore(supabase);
+  let upserted = 0;
+  let deleted = 0;
+  for (const [gameId, airingRows] of rowsByGame) {
+    const result = await writeGameAirings(store, gameId, airingRows);
+    upserted += result.upserted;
+    deleted += result.deleted;
+  }
+  console.log(`game_airings: upserted ${upserted}, deleted ${deleted} stale across ${rowsByGame.size} games.`);
 
   console.log(`Done. ${rows.length} rows, ${skipped.length} skipped airings, ${unmatchedEventIds.length} unmatched events.`);
 }
