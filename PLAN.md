@@ -411,7 +411,7 @@ Single Fly.io app for v1. Three processes: API server (handles REST + WebSocket)
 
 `service` enum (user services — CHECK `is_valid_user_service`, source of truth `USER_SERVICES` in `shared/src/broadcast/types.ts`): `'youtube_tv' \| 'sunday_ticket' \| 'hulu_live' \| 'fubo' \| 'directv' \| 'sling' \| 'amazon_prime' \| 'peacock' \| 'paramount_plus' \| 'espn_plus' \| 'nfl_plus'`
 
-Networks (`cbs`, `fox`, `nbc`, `abc`, `espn`, `nfl_network`, …) are airing networks, not presence values; see `game_broadcasts` below. `sunday_ticket` means **NFL Sunday Ticket**. Before B1 it was the wire key for YouTube TV and this section said not to rename it; B1 reversed that (`docs/B1-BROADCAST-DESIGN.md` §2.2 — migration `20260927230000` remapped those rows to `youtube_tv`, `hulu` to `hulu_live`, and dropped the network keys).
+Networks (`cbs`, `fox`, `nbc`, `abc`, `espn`, `nfl_network`, …) are airing networks, not presence values; see `game_airings` below. `sunday_ticket` means **NFL Sunday Ticket**. Before B1 it was the wire key for YouTube TV and this section said not to rename it; B1 reversed that (`docs/B1-BROADCAST-DESIGN.md` §2.2 — migration `20260927230000` remapped those rows to `youtube_tv`, `hulu` to `hulu_live`, and dropped the network keys).
 
 Unique constraint: `(user_id, service)`.
 
@@ -542,19 +542,22 @@ Composite index: `(team_id, position)`.
 
 Composite index: `(season_type, scheduled_start)` — covers opener `MIN(scheduled_start)` queries per phase.
 
-#### `game_broadcasts`
+#### `game_airings`
 
 
-| Column                  | Type    | Notes                                    |
-| ----------------------- | ------- | ---------------------------------------- |
-| `id`                    | uuid    | PK                                       |
-| `game_id`               | uuid    | FK → games, indexed                      |
-| `service`               | text    | airing network (CHECK `is_valid_airing_network`) |
-| `deep_link_url`         | text    |                                          |
-| `requires_subscription` | boolean |                                          |
+| Column            | Type        | Notes                                                        |
+| ----------------- | ----------- | ------------------------------------------------------------ |
+| `id`              | uuid        | PK                                                           |
+| `game_id`         | uuid        | FK → games, indexed                                          |
+| `network`         | text        | airing network (CHECK `is_valid_airing_network`)             |
+| `market`          | text        | `'national' \| 'regional' \| 'unknown'`                      |
+| `source`          | text        | `'espn_scoreboard' \| 'espn_scoreboard_fixture'`             |
+| `espn_media_name` | text        | raw ESPN media name the network was mapped from              |
+| `espn_type`       | text        | nullable                                                     |
+| `fetched_at`      | timestamptz | default `now()`                                              |
 
 
-Multiple rows per game (e.g., ESPN + ABC simulcast). Airing-network keys: `'cbs' \| 'fox' \| 'nbc' \| 'abc' \| 'espn' \| 'amazon_prime' \| 'peacock' \| 'nfl_network' \| 'netflix' \| 'espn_plus' \| 'nfl_plus' \| 'paramount_plus'` (`AIRING_NETWORKS` in `shared/src/broadcast/types.ts`). `game_airings` (B1.3, `docs/B1-BROADCAST-DESIGN.md` §1.2) replaces this table when readers switch in B1.4.
+One row per observed airing, unique on `(game_id, network, market)` (e.g., ESPN + ABC simulcast is two rows). Airing-network keys: `'cbs' \| 'fox' \| 'nbc' \| 'abc' \| 'espn' \| 'amazon_prime' \| 'peacock' \| 'nfl_network' \| 'netflix' \| 'espn_plus' \| 'nfl_plus' \| 'paramount_plus'` (`AIRING_NETWORKS` in `shared/src/broadcast/types.ts`). Deep links aren't stored: watch options are expanded from airings at read time and use `USER_SERVICE_LANDING_URLS` (`docs/B1-BROADCAST-DESIGN.md` §1.2, §1.6).
 
 ### Event entities
 
@@ -647,7 +650,8 @@ user_notifications:{user_id}      sorted set → { event_id : delivered_at_times
 - `games(sportradar_id)` unique
 - `games(week, scheduled_start)` composite
 - `games(season_type, scheduled_start)` composite
-- `game_broadcasts(game_id)`
+- `game_airings(game_id)`
+- `game_airings(game_id, network, market)` composite unique
 - `flag_events(user_id, fired_at DESC)` composite
 - `user_app_presence(user_id, service)` composite unique
 
@@ -1813,7 +1817,7 @@ Shipped:
 - `BroadcastResolver` server-side logic — `rankBroadcasts`/`resolveBroadcasts` (`services/dispatcher/src/broadcastResolver.ts`), kept independent of the lag-timing `pickBroadcastSource` and sharing only the `lagSecondsFor` primitive
 - `GET /games/:id/broadcasts` endpoint (Section 9), powered by `rankBroadcasts`
 - `delivery.ts` populates `action.recommended_source`/`action.deep_link_url` on the `flag_event` payload, kept lag-consistent with the dispatcher's timing source (falls back to the ranker's `preferred` only when there is no timing source)
-- `scripts/seed-broadcasts.ts` fixture seeder for `game_broadcasts` — ⚠️ deep-link URLs are UNVERIFIED placeholders (Open Question #2 audit still pending)
+- `scripts/seed-broadcasts.ts` fixture seeder for broadcasts (writes `game_airings` since B1) — ⚠️ deep-link URLs are UNVERIFIED placeholders (Open Question #2 audit still pending)
 - Home State 1 "Now active" card + "Watch on {service}" CTA; Switch (in-app banner + Home CTA) → `resolvePlaybackSource` → deep link, with the sub-1s "Switching to…" overlay and a deep-link error state, and a best-effort `PUT /session/primary` so the dispatcher's `decideAction` treats the switched game as primary (closes the Sprint 6 loop)
 - Goal met: tapping "Switch" opens the correct streaming app at the correct game via deep link (cast handoff is Sprint 8)
 
@@ -1927,7 +1931,7 @@ Issues that need resolution but don't block the build:
    YouTube identifier, unique per broadcast, and is not derivable from a matchup, team, date, or
    anything else in our schema. Getting it requires a provider-side source — a partner API, an
    authenticated listing endpoint, or scraping — per service, and scraping in particular is fragile
-   and legally uncertain. Until then `game_broadcasts.deep_link_url` stays app-level, which lands the
+   and legally uncertain. Until then `USER_SERVICE_LANDING_URLS` stays app-level, which lands the
    user in the right app on a generic screen and leaves them to find the game.
    So the real open question is no longer "is game-level deep linking possible?" but "how do we
    obtain per-broadcast content IDs at scale, per provider?" — a data-sourcing and possibly

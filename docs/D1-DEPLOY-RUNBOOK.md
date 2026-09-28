@@ -220,7 +220,7 @@ Migrations (already timestamp-ordered):
 npx supabase db push
 ```
 
-**Verify:** Dashboard → Table Editor shows `users`, `teams`, `players`, `games`, `game_broadcasts`, `leagues`, `lineup_slots`, `flag_events`, `viewing_sessions`, `user_app_presence`.  
+**Verify:** Dashboard → Table Editor shows `users`, `teams`, `players`, `games`, `game_airings`, `leagues`, `lineup_slots`, `flag_events`, `viewing_sessions`, `user_app_presence`.  
 Or: `npx supabase migration list` shows remote = local.
 
 ### 4.4 Seed (hosted) **[Parker]**
@@ -245,7 +245,7 @@ Or: `npx supabase migration list` shows remote = local.
 **Broadcasts — B1 seed only; no fixture rotation:**
 
 - Current `pnpm seed:broadcasts` writes the **OTA fixture rotation** (`fox`/`cbs`/… + synthetic `sunday_ticket` / `nfl_plus`). **Do not run it against hosted.**
-- B1 (`docs/B1-BROADCAST-DESIGN.md` §6) replaces that with ESPN scoreboard → `game_airings` (or network-only `game_broadcasts` as a temporary compat dump). Until B1.2/B1.6 land, hosted may have **empty** `game_broadcasts` — Switch CTAs / deep links degrade; auth, leagues, Home schedule still work.
+- B1 (`docs/B1-BROADCAST-DESIGN.md` §6) replaces that with ESPN scoreboard → `game_airings`. Until B1.6 lands, hosted may have **empty** `game_airings` — Switch CTAs / deep links degrade; auth, leagues, Home schedule still work.
 - When B1 seed exists: run `pnpm seed:broadcasts --live` (or the saved-scoreboard path), never the old `OTA_ROTATION` path, and only on a Tue/Wed (deploy freeze).
 
 **Optional:** `pnpm seed:test-user` — only if you want a known tester account; use a strong password on hosted.
@@ -276,7 +276,7 @@ Migrations enable RLS on user-owned and reference tables. Spot-check with the **
 | Expectation                                                                  | Check                                                    |
 | ---------------------------------------------------------------------------- | -------------------------------------------------------- |
 | Anon cannot read another user's `leagues`                                    | Query with user A's JWT vs user B's row → empty / denied |
-| Authenticated can `select` `teams` / `players` / `games` / `game_broadcasts` | Policies `*_select_authenticated`                        |
+| Authenticated can `select` `teams` / `players` / `games` / `game_airings`    | Policies `*_select_authenticated`                        |
 | Service role (API) bypasses RLS                                              | Lineup sync + seeds work                                 |
 
 
@@ -546,7 +546,7 @@ Do **not** deploy on Thu / Sun / Mon. Prefer Tue–Wed–Fri.
 ## 11. Out of scope for this deploy (honest TestFlight)
 
 - Live pushes. The `runner` process group is in the deploy, but `PUSH_DRIVER` stays unset (default `none`) until the weekday no-push check.
-- Fixture or live `game_broadcasts` / `game_airings` until B1 seed path exists.
+- Fixture or live `game_airings` until B1 seed path exists.
 - Apple Sign In.
 - Sleeper OAuth.
 - App icon / App Store metadata (B3 blockers, separate).
