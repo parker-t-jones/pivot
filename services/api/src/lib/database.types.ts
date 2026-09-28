@@ -144,38 +144,6 @@ export type Database = {
           },
         ]
       }
-      game_broadcasts: {
-        Row: {
-          deep_link_url: string
-          game_id: string
-          id: string
-          requires_subscription: boolean
-          service: string
-        }
-        Insert: {
-          deep_link_url: string
-          game_id: string
-          id?: string
-          requires_subscription: boolean
-          service: string
-        }
-        Update: {
-          deep_link_url?: string
-          game_id?: string
-          id?: string
-          requires_subscription?: boolean
-          service?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "game_broadcasts_game_id_fkey"
-            columns: ["game_id"]
-            isOneToOne: false
-            referencedRelation: "games"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       games: {
         Row: {
           away_team_id: string
