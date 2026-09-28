@@ -3,7 +3,7 @@
  *
  * - Loads env from `--env-file <path>` or `services/api/.env` by default.
  * - Refuses non-localhost `SUPABASE_URL` unless `--allow-remote` is passed.
- * - Fixture broadcast seeders set `forbidRemoteAlways` and never write to hosted.
+ * - Local-only seeders (e.g. `seed:broadcasts`) set `forbidRemoteAlways` and never write to hosted.
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -80,7 +80,7 @@ export function isLocalSupabaseUrl(url: string): boolean {
 export interface AssertDbTargetAllowedOptions {
   supabaseUrl: string | undefined;
   allowRemote: boolean;
-  /** Fixture broadcast seeders: refuse hosted even with `--allow-remote`. */
+  /** Local-only seeders: refuse hosted even with `--allow-remote`. */
   forbidRemoteAlways?: boolean;
   scriptName: string;
 }
@@ -101,8 +101,7 @@ export function assertDbTargetAllowed(options: AssertDbTargetAllowedOptions): vo
   if (forbidRemoteAlways) {
     throw new RemoteSafetyError(
       `${scriptName}: refuses remote SUPABASE_URL (${supabaseUrl}). ` +
-        `This script writes fixture broadcast rotation data and must not run against hosted. ` +
-        `Use the B1 ESPN seed path when it lands.`,
+        `This is a local-only seed and must never run against hosted, even with --allow-remote.`,
     );
   }
 

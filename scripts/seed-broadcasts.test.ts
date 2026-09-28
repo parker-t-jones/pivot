@@ -44,14 +44,14 @@ describe('buildNetworkRows', () => {
     expect(unmatchedEventIds).toEqual([]);
     expect(servicesFor(rows, '401872948')).toEqual(['amazon_prime']); // ATL @ GB (TNF)
     expect(servicesFor(rows, '401872962')).toEqual(['nbc']); // LAR @ DEN (SNF)
-    expect(servicesFor(rows, '401872963')).toEqual(['abc']); // PHI @ CHI (MNF)
+    expect(servicesFor(rows, '401872963')).toEqual(['espn', 'abc']); // PHI @ CHI (MNF)
     expect(rows.some((row) => row.service === 'sunday_ticket' || row.service === 'nfl_plus')).toBe(false);
-    expect(rows).toHaveLength(16);
+    expect(rows).toHaveLength(17);
   });
 
-  it('skips espn airings (not a game_broadcasts service) and reports them', () => {
+  it('skips nothing on the Week 3 scoreboard', () => {
     const { skipped } = buildNetworkRows(week3, allGames, vi.fn());
-    expect(skipped).toEqual([{ eventId: '401872963', shortName: 'PHI @ CHI', network: 'espn' }]);
+    expect(skipped).toEqual([]);
   });
 
   it('uses the service template for the deep link and subscription flag', () => {

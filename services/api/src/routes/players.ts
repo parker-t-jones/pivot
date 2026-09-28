@@ -22,7 +22,7 @@ const playersRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       const { data, error } = await fastify.supabase.rpc('search_players', {
         q,
-        filter_position: position ?? null,
+        ...(position !== undefined ? { filter_position: position } : {}),
       });
       if (error) throw error;
 

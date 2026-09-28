@@ -5,8 +5,8 @@
  * `sportradar_id = 'seed:espn:' || event.id`.
  *
  * Temporary compatibility dump: writes the old `game_broadcasts` shape as *networks only* — no
- * synthetic `sunday_ticket` / `nfl_plus` rows. `espn` has no row in the `is_valid_streaming_service`
- * CHECK, so ESPN airings are skipped and logged (MNF shows ABC until `game_airings` lands in B1.3).
+ * synthetic `sunday_ticket` / `nfl_plus` rows. Networks without a template below are skipped and
+ * logged.
  *
  * ⚠️ TWO DIFFERENT THINGS ARE AT STAKE HERE, and only the first is verified. Keep them apart.
  *
@@ -78,6 +78,8 @@ export const BROADCAST_TEMPLATES: Record<string, ServiceTemplate> = {
   cbs: { service: 'cbs', deepLinkUrl: 'https://www.cbssports.com/nfl/scoreboard/', requiresSubscription: false },
   nbc: { service: 'nbc', deepLinkUrl: 'https://www.nbcsports.com/nfl/scores', requiresSubscription: false },
   abc: { service: 'abc', deepLinkUrl: 'https://www.espn.com/nfl/team', requiresSubscription: false },
+  // Linear ESPN (not ESPN+): same production-claimed landing as abc/espn_plus; cable/MVPD auth.
+  espn: { service: 'espn', deepLinkUrl: 'https://www.espn.com/nfl/team', requiresSubscription: true },
   // Unverified app-level landings (AASA not audited this pass — Open Question #2).
   hulu: { service: 'hulu', deepLinkUrl: 'https://www.hulu.com/hub/sports', requiresSubscription: true },
   fubo: { service: 'fubo', deepLinkUrl: 'https://www.fubo.tv/', requiresSubscription: true },
@@ -137,7 +139,7 @@ export interface SkippedAiring {
 
 export interface NetworkRowsResult {
   rows: BroadcastSeedRow[];
-  /** Airings with no `game_broadcasts` service (today only `espn`, blocked by the CHECK). */
+  /** Airings whose network has no entry in `BROADCAST_TEMPLATES`. */
   skipped: SkippedAiring[];
   /** Scoreboard events with no seeded game. */
   unmatchedEventIds: string[];
@@ -237,7 +239,7 @@ export async function seedBroadcasts(source: ScoreboardSource): Promise<void> {
   }
   for (const skip of skipped) {
     console.warn(
-      `skip ${skip.network} on ${skip.shortName ?? '?'} (${skip.eventId}): not a game_broadcasts service`,
+      `skip ${skip.network} on ${skip.shortName ?? '?'} (${skip.eventId}): no broadcast template`,
     );
   }
 

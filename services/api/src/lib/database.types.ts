@@ -103,6 +103,47 @@ export type Database = {
           },
         ]
       }
+      game_airings: {
+        Row: {
+          espn_media_name: string
+          espn_type: string | null
+          fetched_at: string
+          game_id: string
+          id: string
+          market: string
+          network: string
+          source: string
+        }
+        Insert: {
+          espn_media_name: string
+          espn_type?: string | null
+          fetched_at?: string
+          game_id: string
+          id?: string
+          market: string
+          network: string
+          source: string
+        }
+        Update: {
+          espn_media_name?: string
+          espn_type?: string | null
+          fetched_at?: string
+          game_id?: string
+          id?: string
+          market?: string
+          network?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_airings_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_broadcasts: {
         Row: {
           deep_link_url: string
@@ -141,8 +182,8 @@ export type Database = {
           home_team_id: string
           id: string
           scheduled_start: string
-          season_year: number
           season_type: string
+          season_year: number
           sportradar_id: string | null
           status: string
           venue: string | null
@@ -153,8 +194,8 @@ export type Database = {
           home_team_id: string
           id?: string
           scheduled_start: string
-          season_year: number
           season_type: string
+          season_year: number
           sportradar_id?: string | null
           status: string
           venue?: string | null
@@ -165,8 +206,8 @@ export type Database = {
           home_team_id?: string
           id?: string
           scheduled_start?: string
-          season_year?: number
           season_type?: string
+          season_year?: number
           sportradar_id?: string | null
           status?: string
           venue?: string | null
@@ -488,21 +529,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      is_valid_airing_network: { Args: { s: string }; Returns: boolean }
       is_valid_flag_event_type: { Args: { t: string }; Returns: boolean }
       is_valid_flag_user_action: { Args: { a: string }; Returns: boolean }
       is_valid_league_platform: { Args: { p: string }; Returns: boolean }
+      is_valid_lineup_source: { Args: { s: string }; Returns: boolean }
       is_valid_slot_type: { Args: { s: string }; Returns: boolean }
-      is_valid_streaming_service: { Args: { s: string }; Returns: boolean }
+      is_valid_user_service: { Args: { s: string }; Returns: boolean }
       is_valid_viewing_session_source: { Args: { s: string }; Returns: boolean }
       search_players: {
-        Args: { q: string; filter_position?: string | null }
+        Args: { filter_position?: string; q: string }
         Returns: {
-          id: string
           first_name: string
+          id: string
           last_name: string
           position: string
-          team_id: string
           team_abbreviation: string
+          team_id: string
           team_name: string
         }[]
       }

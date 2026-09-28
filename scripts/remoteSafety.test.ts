@@ -71,7 +71,7 @@ describe('assertDbTargetAllowed', () => {
     ).not.toThrow();
   });
 
-  it('refuses remote forever when forbidRemoteAlways (fixture broadcasts)', () => {
+  it('refuses remote forever when forbidRemoteAlways (local-only seeds)', () => {
     expect(() =>
       assertDbTargetAllowed({
         supabaseUrl: 'https://example.supabase.co',
