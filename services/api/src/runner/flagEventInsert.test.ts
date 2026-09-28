@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config as loadEnv } from 'dotenv';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import type { FlagEvent, FlagState } from '@pivot/shared';
 import {
   CapturingPushNotifier,
@@ -147,6 +147,25 @@ async function ensureGame(
 }
 
 describe.skipIf(!localReady)('local flag_events insert', () => {
+  // A leftover past-kickoff `scheduled` game with no ESPN id trips the runner's reconcile.
+  afterAll(async () => {
+    if (!supabaseUrl || !serviceRoleKey || !isLoopback(supabaseUrl)) return;
+    const client = createClient<Database>(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const game = await client
+      .from('games')
+      .select('id')
+      .eq('sportradar_id', GAME_EXTERNAL_ID)
+      .maybeSingle();
+    if (game.error) throw game.error;
+    if (!game.data) return;
+    const events = await client.from('flag_events').delete().eq('game_id', game.data.id);
+    if (events.error) throw events.error;
+    const deleted = await client.from('games').delete().eq('id', game.data.id);
+    if (deleted.error) throw deleted.error;
+  });
+
   it('inserts one uuid row for a play and does not notify on the same key again', async () => {
     if (!supabaseUrl || !serviceRoleKey || !isLoopback(supabaseUrl)) {
       throw new Error('refusing flag_events insert against a non-local Supabase URL');

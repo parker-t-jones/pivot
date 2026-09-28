@@ -242,11 +242,11 @@ Or: `npx supabase migration list` shows remote = local.
   ```
    **Verify:**
 
-**Broadcasts — B1 seed only; no fixture rotation:**
+**Broadcasts — `game_airings` from ESPN:**
 
-- Current `pnpm seed:broadcasts` writes the **OTA fixture rotation** (`fox`/`cbs`/… + synthetic `sunday_ticket` / `nfl_plus`). **Do not run it against hosted.**
-- B1 (`docs/B1-BROADCAST-DESIGN.md` §6) replaces that with ESPN scoreboard → `game_airings`. Until B1.6 lands, hosted may have **empty** `game_airings` — Switch CTAs / deep links degrade; auth, leagues, Home schedule still work.
-- When B1 seed exists: run `pnpm seed:broadcasts --live` (or the saved-scoreboard path), never the old `OTA_ROTATION` path, and only on a Tue/Wed (deploy freeze).
+- `pnpm seed:broadcasts` writes `game_airings` from an ESPN scoreboard (saved Week 3 JSON by default, `-- --live` for the current week; `docs/B1-BROADCAST-DESIGN.md` §6). It refuses any remote DB, so it is local-only.
+- Hosted `game_airings` come from the runner's airings cycle (B1.6 / P0.13). Until the runner has run against hosted, `game_airings` is **empty** — Switch CTAs / deep links degrade; auth, leagues, Home schedule still work.
+- The first hosted `game_airings` write happens on a Tue/Wed (deploy freeze, B1 §3.6).
 
 **Optional:** `pnpm seed:test-user` — only if you want a known tester account; use a strong password on hosted.
 
