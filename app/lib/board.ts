@@ -5,7 +5,7 @@
  * unit-testable the same way `homeState.ts` is. `loadHome` must not grow to accommodate the board —
  * the screen calls these in render via `useMemo` over data it already has.
  */
-import type { AiringNetwork } from '@pivot/shared';
+import type { AiringNetwork } from '@pivot/shared/broadcast';
 import { serviceLabel, type GameBroadcast } from './gameDisplay';
 import type { HomeBranch, LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';

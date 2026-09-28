@@ -13,6 +13,7 @@
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@expo/metro-runtime": "^56.0.15",
+    "@pivot/shared": "workspace:^",
     "@supabase/supabase-js": "^2.108.2",
     "expo": "~56.0.12",
     "expo-constants": "~56.0.18",

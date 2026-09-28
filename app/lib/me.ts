@@ -1,4 +1,4 @@
-import type { UserService } from '@pivot/shared';
+import type { UserService } from '@pivot/shared/broadcast';
 import { apiClient } from './apiClient';
 
 export interface QuietHours {

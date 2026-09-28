@@ -4,7 +4,7 @@
  * state's alternate-broadcast picker need. Keyed by shared `UserService` (type-only import), so a
  * key missing here or not in the catalog is a compile error. Networks are not picker values.
  */
-import type { UserService } from '@pivot/shared';
+import type { UserService } from '@pivot/shared/broadcast';
 
 export interface UserServiceInfo {
   service: UserService;
