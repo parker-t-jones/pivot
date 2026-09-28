@@ -46,7 +46,7 @@ export type MarketConfidence = 'national' | 'unknown' | 'in' | 'out';
 
 export type RouteHint = 'in_market_local';
 
-/** Broadcast windows — same labels as `app/lib/board.ts` `WindowLabel`. */
+/** Broadcast windows — `groupWindow` output, and the app board's group headers. */
 export type WindowLabel =
   | 'THURSDAY NIGHT'
   | 'THURSDAY'
