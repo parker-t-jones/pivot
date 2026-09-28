@@ -77,8 +77,8 @@ interface Pipeline {
 }
 
 /** Wires one full pipeline: a user with an offensive stake in `HOME`, a lineup cache, a broadcast
- *  catalog resolving to `cbs` (8s lag), and every Phase 1-3 in-memory provider. Every scenario below
- *  builds its own fresh instance so state never bleeds between tests. */
+ *  catalog with the game on CBS for a YouTube TV user, and every Phase 1-3 in-memory provider. Every
+ *  scenario below builds its own fresh instance so state never bleeds between tests. */
 function buildPipeline(): Pipeline {
   const lineup: UserLineupCache = {
     userId: USER_ID,
@@ -92,10 +92,14 @@ function buildPipeline(): Pipeline {
   gameStateStore.addStake(HOME, USER_ID);
 
   const broadcastCatalog = new InMemoryBroadcastCatalog();
-  broadcastCatalog.setGameBroadcasts(GAME_ID, [
-    { service: 'cbs', deepLinkUrl: 'https://cbs.example/watch', requiresSubscription: false },
+  broadcastCatalog.setWeekAirings([
+    {
+      id: GAME_ID,
+      kickoff: new Date('2026-09-27T17:00:00Z'),
+      airings: [{ network: 'cbs', market: 'national', espnMediaName: 'CBS', espnType: 'TV' }],
+    },
   ]);
-  broadcastCatalog.setUserSubscribedServices(USER_ID, ['cbs']);
+  broadcastCatalog.setUserSubscribedServices(USER_ID, ['youtube_tv']);
 
   const queue = new InMemoryFlagEventQueue();
   const engineDispatcher = new QueueingEventDispatcher({ queue });

@@ -128,8 +128,15 @@ export function notificationTitle(
  * easily as a `priority_increased` (any state change while already in the red zone), and the more
  * urgent copy is worth showing either way; Section 10's "priority increased (e.g. red zone)" reads as
  * one illustrative trigger for this body, not a strict `event.type` gate.
+ *
+ * `airingWithoutOption` is the network label ("FOX") when the user has no service to open the game
+ * with: the body then ends "On FOX." instead of "Tap to watch." (docs/B1-BROADCAST-DESIGN.md §1.7).
  */
-export function notificationBody(event: FlagEvent, game: NotificationGameContext): string {
+export function notificationBody(
+  event: FlagEvent,
+  game: NotificationGameContext,
+  airingWithoutOption: string | null = null,
+): string {
   if (event.type === 'flag_removed') {
     const team = game.possessionTeamName;
     return team ? `Possession changed — ${team} has the ball now.` : 'Possession has changed.';
@@ -137,9 +144,10 @@ export function notificationBody(event: FlagEvent, game: NotificationGameContext
 
   const team = game.possessionTeamName ?? 'The offense';
   const clock = `${quarterLabel(game.quarter)}, ${formatClock(game.timeRemainingSec)}`;
+  const cta = airingWithoutOption === null ? 'Tap to watch.' : `On ${airingWithoutOption}.`;
 
   if (findReason(event.newState.reasons, 'red_zone')) {
-    return `${team} in the red zone — ${clock}. Tap to watch.`;
+    return `${team} in the red zone — ${clock}. ${cta}`;
   }
-  return `${team} have the ball — ${clock}. Tap to watch.`;
+  return `${team} have the ball — ${clock}. ${cta}`;
 }

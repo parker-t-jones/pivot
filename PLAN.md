@@ -1288,8 +1288,9 @@ not seeded in v1. Home supplies `week` from this response into `GET /games?week=
 score/clock (those live on `GET /games/live`). Broadcasts are watch options computed from
 `game_airings` through the carriage map and ranked against the user's services
 (docs/B1-BROADCAST-DESIGN.md §1.6), with **one** `user_app_presence` load reused across the whole
-slate — not `pickBroadcastSource` (timing / lag-only among subscribed services). Only services the
-user has are listed; a user with no services gets an empty `broadcasts` list.
+slate. The ranking is the shared `watchOptionsForGame`, which the dispatcher's `pickBroadcastSource`
+also uses for the push's recommended source. Only services the user has are listed; a user with no
+services gets an empty `broadcasts` list.
 
 `GET /games/live` **response (Sprint 10):**
 

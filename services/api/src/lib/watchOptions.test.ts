@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildWeekWatch, USER_SERVICE_LANDING_URLS, type AiringRow, type SlateGameRow } from './watchOptions.js';
+import { buildWeekWatch, type AiringRow, type SlateGameRow } from './watchOptions.js';
 
 /** Week 3 shape: TNF on Prime, a 1pm FOX/CBS regional split, SNF on NBC, MNF on ESPN + ABC. */
 const GAMES: SlateGameRow[] = [
@@ -112,12 +112,5 @@ describe('buildWeekWatch', () => {
   it('ignores airing rows with a network outside the catalog', () => {
     const watch = buildWeekWatch([GAMES[0] as SlateGameRow], [row('tnf', 'dumont')], new Set(['youtube_tv']));
     expect(watch.get('tnf')).toEqual({ broadcasts: [], airings: [] });
-  });
-
-  it('only omits a landing URL for Sling, which has no confirmed carriage', () => {
-    const missing = Object.entries(USER_SERVICE_LANDING_URLS)
-      .filter(([, url]) => url === '')
-      .map(([service]) => service);
-    expect(missing).toEqual(['sling']);
   });
 });

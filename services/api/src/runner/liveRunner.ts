@@ -6,10 +6,10 @@ import {
 } from '@pivot/engine';
 import { espnClient, translatePlay, type EspnClient } from '@pivot/ingestion';
 import {
-  InMemoryBroadcastCatalog,
   ResumptionCeiling,
   ResumptionGatedDispatcher,
   runDispatcherTick,
+  type BroadcastCatalog,
   type DeliveryDeps,
   type DispatcherTickDeps,
   type FlagEventPersistence,
@@ -58,6 +58,7 @@ export interface LiveRunnerDeps {
   users: UserDirectory;
   gameCatalog: GameCatalog;
   players: PlayerCatalog;
+  broadcasts: BroadcastCatalog;
   persistence: FlagEventPersistence;
   pushNotifier: PushNotifier;
   scoreboard?: EspnClient;
@@ -254,7 +255,7 @@ function deliveryDeps(deps: LiveRunnerDeps): DeliveryDeps {
     gameStateStore: deps.gameState,
     gameCatalog: deps.gameCatalog,
     playerCatalog: deps.players,
-    broadcastCatalog: new InMemoryBroadcastCatalog(),
+    broadcastCatalog: deps.broadcasts,
     userDirectory: deps.users,
     persistence: deps.persistence,
     realtimeBus: deps.realtime,

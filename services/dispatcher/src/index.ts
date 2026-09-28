@@ -31,15 +31,8 @@ export {
   pickBroadcastSource,
   resolveLikelyBroadcastSource,
   type BroadcastCatalog,
-  type GameBroadcastOption,
+  type LikelyBroadcast,
 } from './broadcastLag.js';
-
-export {
-  preferredBroadcast,
-  rankBroadcasts,
-  resolveBroadcasts,
-  type RankedBroadcast,
-} from './broadcastResolver.js';
 
 export {
   InMemoryRateLimitStore,

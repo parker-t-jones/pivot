@@ -1,38 +1,20 @@
 import {
   AIRING_NETWORKS,
-  expandWatchOptions,
   isRegionalSlate,
   networkRank,
-  rankWatchOptions,
+  toSlateGame,
+  USER_SERVICE_LANDING_URLS,
+  watchOptionsForGame,
   type AiringMarket,
   type AiringNetwork,
   type MarketConfidence,
   type ParsedAiring,
   type RouteHint,
-  type SlateGame,
   type UserService,
+  type WeekGameAirings,
 } from '@pivot/shared';
 
-/**
- * App-level landing per user service until the `(service, network)` deep-link table lands (B1.5).
- * Same URLs `scripts/seed-broadcasts.ts` writes for these apps; YouTube TV shares Sunday Ticket's
- * device-confirmed `/live` landing. None of these is a game-level link.
- */
-export const USER_SERVICE_LANDING_URLS: Record<UserService, string> = {
-  youtube_tv: 'https://tv.youtube.com/live',
-  sunday_ticket: 'https://tv.youtube.com/live',
-  hulu_live: 'https://www.hulu.com/hub/sports', // unverified AASA
-  fubo: 'https://www.fubo.tv/', // unverified AASA
-  directv: 'https://www.directv.com/', // unverified AASA
-  sling: '', // no confirmed carriage, so never emitted
-  amazon_prime: 'https://www.primevideo.com/',
-  peacock: 'https://www.peacocktv.com/watch/sports',
-  paramount_plus: 'https://www.paramountplus.com/',
-  espn_plus: 'https://www.espn.com/nfl/team',
-  nfl_plus: 'https://www.nfl.com/scores',
-};
-
-/** A `game_airings` row as selected by the games routes. */
+/** A `game_airings` row as selected by the games routes and the runner's broadcast catalog. */
 export interface AiringRow {
   game_id: string;
   network: string;
@@ -69,6 +51,8 @@ export interface GameWatch {
   airings: WireAiring[];
 }
 
+export const AIRING_COLUMNS = 'game_id, network, market, espn_media_name, espn_type';
+
 const AIRING_NETWORK_SET = new Set<string>(AIRING_NETWORKS);
 const REGIONAL_NETWORKS = new Set<AiringNetwork>(['cbs', 'fox']);
 
@@ -84,17 +68,11 @@ function toParsedAiring(row: AiringRow): ParsedAiring | null {
   };
 }
 
-/**
- * Per-game watch options and airings for a week slate (docs/B1-BROADCAST-DESIGN.md §1.6): airings →
- * `expandWatchOptions` → `rankWatchOptions`, keeping only services the user has. A user with no
- * services gets no options. Regional-slate detection needs every game of the week, so this builds
- * the whole slate at once.
- */
-export function buildWeekWatch(
+/** A week's games with their `game_airings` rows attached. Rows outside the catalog are dropped. */
+export function weekGameAirings(
   games: readonly SlateGameRow[],
   airingRows: readonly AiringRow[],
-  subscribedServices: ReadonlySet<string>,
-): Map<string, GameWatch> {
+): WeekGameAirings[] {
   const airingsByGame = new Map<string, ParsedAiring[]>();
   for (const row of airingRows) {
     const airing = toParsedAiring(row);
@@ -103,25 +81,32 @@ export function buildWeekWatch(
     list.push(airing);
     airingsByGame.set(row.game_id, list);
   }
-
-  const slate: SlateGame[] = games.map((game) => ({
+  return games.map((game) => ({
     id: game.id,
     kickoff: new Date(game.scheduled_start),
-    networks: (airingsByGame.get(game.id) ?? []).map((a) => a.network),
+    airings: airingsByGame.get(game.id) ?? [],
   }));
+}
+
+/**
+ * Per-game watch options and airings for a week slate (docs/B1-BROADCAST-DESIGN.md §1.6), ranked by
+ * the shared `watchOptionsForGame`. A user with no services gets no options. Regional-slate
+ * detection needs every game of the week, so this builds the whole slate at once.
+ */
+export function buildWeekWatch(
+  games: readonly SlateGameRow[],
+  airingRows: readonly AiringRow[],
+  subscribedServices: ReadonlySet<string>,
+): Map<string, GameWatch> {
+  const week = weekGameAirings(games, airingRows);
+  const slate = week.map(toSlateGame);
 
   const result = new Map<string, GameWatch>();
-  for (const slateGame of slate) {
-    const airings = airingsByGame.get(slateGame.id) ?? [];
-    const regional = isRegionalSlate(slateGame, slate);
+  for (const game of week) {
+    const regional = isRegionalSlate(toSlateGame(game), slate);
 
-    const broadcasts = rankWatchOptions(
-      expandWatchOptions(airings, slateGame.kickoff, regional),
-      subscribedServices,
-      regional,
-    )
-      .filter((option) => subscribedServices.has(option.service))
-      .map((option): WireWatchOption => ({
+    const broadcasts = watchOptionsForGame(game.id, week, subscribedServices).map(
+      (option): WireWatchOption => ({
         service: option.service,
         deep_link_url: USER_SERVICE_LANDING_URLS[option.service],
         requires_subscription: true,
@@ -131,9 +116,10 @@ export function buildWeekWatch(
         network: option.network,
         market_confidence: option.marketConfidence,
         ...(option.routeHint !== undefined ? { route_hint: option.routeHint } : {}),
-      }));
+      }),
+    );
 
-    const wireAirings = airings
+    const wireAirings = game.airings
       .map((airing): WireAiring => ({
         network: airing.network,
         market: airing.market,
@@ -145,7 +131,7 @@ export function buildWeekWatch(
           (networkRank(b.network) ?? Number.MAX_SAFE_INTEGER),
       );
 
-    result.set(slateGame.id, { broadcasts, airings: wireAirings });
+    result.set(game.id, { broadcasts, airings: wireAirings });
   }
   return result;
 }

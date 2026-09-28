@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { deriveDisplayPhaseNow, derivePhaseOpeners } from '../lib/phase-openers.js';
-import { buildWeekWatch } from '../lib/watchOptions.js';
+import { AIRING_COLUMNS, buildWeekWatch } from '../lib/watchOptions.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
 
@@ -27,8 +27,6 @@ function teamFields(home: TeamDisplay | undefined, away: TeamDisplay | undefined
     away_team_secondary_color: away?.secondary_color ?? '',
   };
 }
-
-const AIRING_COLUMNS = 'game_id, network, market, espn_media_name, espn_type';
 
 function subscribedServicesFrom(rows: { service: string; has_subscription: boolean }[] | null) {
   return new Set((rows ?? []).filter((row) => row.has_subscription).map((row) => row.service));

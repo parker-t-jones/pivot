@@ -1,70 +1,87 @@
 import { describe, expect, it } from 'vitest';
+import type { AiringNetwork, WeekGameAirings } from '@pivot/shared';
 import {
   InMemoryBroadcastCatalog,
   pickBroadcastSource,
   resolveLikelyBroadcastSource,
 } from './broadcastLag.js';
 
-function broadcast(service: string) {
-  return { service, deepLinkUrl: `https://example.com/${service}`, requiresSubscription: true };
+function game(id: string, kickoff: string, networks: AiringNetwork[]): WeekGameAirings {
+  return {
+    id,
+    kickoff: new Date(kickoff),
+    airings: networks.map((network) => ({
+      network,
+      market: 'national',
+      espnMediaName: network.toUpperCase(),
+      espnType: 'TV',
+    })),
+  };
 }
 
-describe('pickBroadcastSource (deterministic tie-break)', () => {
-  it('returns null when the user has none of the airing services', () => {
-    expect(pickBroadcastSource([broadcast('amazon_prime')], new Set(['espn_plus']))).toBeNull();
+/** Week 3 shape: TNF on Prime, two 1pm FOX games (a regional split), MNF on ESPN + ABC. */
+const WEEK: WeekGameAirings[] = [
+  game('tnf', '2026-09-25T00:15:00Z', ['amazon_prime']),
+  game('fox1', '2026-09-27T17:00:00Z', ['fox']),
+  game('fox2', '2026-09-27T17:00:00Z', ['fox']),
+  game('mnf', '2026-09-29T00:15:00Z', ['espn', 'abc']),
+];
+
+describe('pickBroadcastSource', () => {
+  it('returns null when the user has no service carrying the game', () => {
+    expect(pickBroadcastSource('tnf', WEEK, new Set(['youtube_tv']))).toBeNull();
+    expect(pickBroadcastSource('fox1', WEEK, new Set())).toBeNull();
   });
 
-  it('never matches a network against an MVPD until carriage expansion (B1.4)', () => {
-    expect(pickBroadcastSource([broadcast('fox')], new Set(['youtube_tv']))).toBeNull();
+  it('carries FOX through YouTube TV', () => {
+    expect(pickBroadcastSource('fox1', WEEK, new Set(['youtube_tv']))).toMatchObject({
+      service: 'youtube_tv',
+      network: 'fox',
+      preferred: true,
+    });
   });
 
-  it('returns the only matching candidate', () => {
+  it('takes Sunday Ticket over YouTube TV on a regional FOX game', () => {
     expect(
-      pickBroadcastSource(
-        [broadcast('fox'), broadcast('amazon_prime')],
-        new Set(['amazon_prime']),
-      ),
-    ).toBe('amazon_prime');
+      pickBroadcastSource('fox1', WEEK, new Set(['youtube_tv', 'sunday_ticket']))?.service,
+    ).toBe('sunday_ticket');
   });
 
-  it('prefers the lowest-lag candidate', () => {
-    const broadcasts = [broadcast('espn_plus'), broadcast('amazon_prime'), broadcast('peacock')];
-    const userServices = new Set(['espn_plus', 'amazon_prime', 'peacock']);
-    expect(pickBroadcastSource(broadcasts, userServices)).toBe('amazon_prime'); // lag 40 < 45 < 60
+  it('names the ESPN airing on MNF', () => {
+    expect(pickBroadcastSource('mnf', WEEK, new Set(['youtube_tv']))?.network).toBe('espn');
   });
 
-  it('breaks ties on equal lag alphabetically by service name', () => {
-    // nfl_plus and espn_plus both have lag 60 — alphabetical tie-break picks 'espn_plus'.
-    const broadcasts = [broadcast('nfl_plus'), broadcast('espn_plus')];
-    const userServices = new Set(['nfl_plus', 'espn_plus']);
-    expect(pickBroadcastSource(broadcasts, userServices)).toBe('espn_plus');
-  });
-
-  it('is deterministic regardless of input ordering', () => {
-    const userServices = new Set(['espn_plus', 'amazon_prime', 'peacock']);
-    const forward = pickBroadcastSource(
-      [broadcast('espn_plus'), broadcast('amazon_prime'), broadcast('peacock')],
-      userServices,
-    );
-    const reversed = pickBroadcastSource(
-      [broadcast('peacock'), broadcast('amazon_prime'), broadcast('espn_plus')],
-      userServices,
-    );
-    expect(forward).toBe(reversed);
+  it('returns null for a game outside the week', () => {
+    expect(pickBroadcastSource('missing', WEEK, new Set(['youtube_tv']))).toBeNull();
   });
 });
 
-describe('resolveLikelyBroadcastSource (I/O wrapper)', () => {
-  it('intersects the catalog game broadcasts with the user app presence', async () => {
+describe('resolveLikelyBroadcastSource', () => {
+  it('loads the week and presence from the catalog', async () => {
     const catalog = new InMemoryBroadcastCatalog();
-    catalog.setGameBroadcasts('g1', [broadcast('fox'), broadcast('amazon_prime')]);
+    catalog.setWeekAirings(WEEK);
     catalog.setUserSubscribedServices('u1', ['amazon_prime']);
 
-    expect(await resolveLikelyBroadcastSource('g1', 'u1', catalog)).toBe('amazon_prime');
+    const likely = await resolveLikelyBroadcastSource('tnf', 'u1', catalog);
+    expect(likely.source?.service).toBe('amazon_prime');
+    expect(likely.airings.map((a) => a.network)).toEqual(['amazon_prime']);
   });
 
-  it('returns null when the catalog has no data for the game or user', async () => {
+  it('returns the airings even when the user has no option', async () => {
     const catalog = new InMemoryBroadcastCatalog();
-    expect(await resolveLikelyBroadcastSource('missing-game', 'missing-user', catalog)).toBeNull();
+    catalog.setWeekAirings(WEEK);
+    catalog.setUserSubscribedServices('u1', ['youtube_tv']);
+
+    const likely = await resolveLikelyBroadcastSource('tnf', 'u1', catalog);
+    expect(likely.source).toBeNull();
+    expect(likely.airings.map((a) => a.network)).toEqual(['amazon_prime']);
+  });
+
+  it('returns nothing when the catalog has no data for the game or user', async () => {
+    const catalog = new InMemoryBroadcastCatalog();
+    expect(await resolveLikelyBroadcastSource('missing-game', 'missing-user', catalog)).toEqual({
+      source: null,
+      airings: [],
+    });
   });
 });

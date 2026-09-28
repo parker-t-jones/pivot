@@ -37,9 +37,9 @@
  *     always answers "not limited" but logs every event production would have dropped, so the policy
  *     question is answered with data instead of being hidden.
  *
- *  4. IN-MEMORY CATALOGS. No Postgres adapter exists for `BroadcastCatalog`, `GameCatalog`,
- *     `PlayerCatalog`, `UserDirectory`, or `FlagEventPersistence`. They are seeded at startup from
- *     each game's ESPN context plus a synthetic lineup.
+ *  4. IN-MEMORY CATALOGS. `BroadcastCatalog`, `GameCatalog`, `PlayerCatalog`, `UserDirectory` and
+ *     `FlagEventPersistence` are in-memory here. They are seeded at startup from each game's ESPN
+ *     context, the scoreboard's airings, and a synthetic lineup.
  *
  * WATCHED VS DATA-ONLY GAMES. Ground truth only exists for games actually on screen, so pushes are
  * restricted to `--watch`. That is enforced through the real code path rather than a special case:
@@ -125,7 +125,7 @@ import {
   type EspnGameContext,
   type EspnSummary,
 } from '@pivot/ingestion';
-import type { UserLineupCache } from '@pivot/shared';
+import { parseEspnAirings, type EspnBroadcastEvent, type UserLineupCache } from '@pivot/shared';
 
 import { teamInfo } from './nflTeams.js';
 
@@ -134,20 +134,10 @@ const LOG_DIR = path.resolve(__dirname, 'logs');
 
 const WATCHED_USER_ID = 'harness-watched-user';
 const DATA_ONLY_USER_ID = 'harness-dataonly-user';
-/** YouTube TV's live entry point — fallback for any game without a known per-broadcast videoId. */
-const YOUTUBE_TV_DEEP_LINK = 'https://tv.youtube.com/live';
-/**
- * Per-game YouTube TV `videoId`s, hand-captured from the browser address bar while each broadcast
- * was live (see PLAN.md's deep-link open question: `tv.youtube.com/watch/<videoId>` opens directly
- * into the live game, but the videoId isn't derivable from the matchup — it has to come from
- * somewhere per-broadcast). Filled in only for today's watched games; anything absent here falls
- * back to `YOUTUBE_TV_DEEP_LINK` (opens YouTube TV's home/live tab instead of the exact game).
- */
-const GAME_VIDEO_IDS: Readonly<Record<string, string>> = {
-  '401872661': '_XYzBeHLxpU', // Bears (CAR @ CHI)
-  '401872660': 'skeSQ9ZXBXc', // Bills (HOU @ BUF)
-  '401872931': 'MrXg0chrojg', // MNF (DEN @ KC)
-};
+/** Raw scoreboard: `espnClient`'s schema strips the `geoBroadcasts` and `date` airings need. */
+const ESPN_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
+/** Both harness users, so every CBS/FOX/NBC/ABC/ESPN game resolves an option that opens YouTube TV. */
+const HARNESS_SERVICES = ['youtube_tv', 'sunday_ticket'];
 /**
  * Overrides which team's offense the watched user is staked in, keyed by gameId. Defaults to
  * `context.homeTeamId` (see `stakeTeamFor`) when a game has no entry here.
@@ -540,27 +530,34 @@ function seedGameCatalog(catalog: InMemoryGameCatalog, contexts: EspnGameContext
 }
 
 /**
- * Seeds `sunday_ticket` for every game and subscribes both users to it, so `deliverFlagEvent` resolves
- * a real `action.deep_link_url` and a notification tap opens YouTube TV.
+ * Seeds today's airings from the raw ESPN scoreboard through `parseEspnAirings` (the parser
+ * `seed-broadcasts` uses) and gives both users `HARNESS_SERVICES`, so `deliverFlagEvent` ranks real
+ * watch options and a notification tap opens YouTube TV. The whole scoreboard is one week, so
+ * regional-slate ranking sees every game in each window.
  *
- * `sunday_ticket` also carries a `USER_SERVICE_LAG_SECONDS` entry, but that value cannot affect
- * this run: `scheduledFireAt` comes from `ResumptionGatedDispatcher`, never from `lagSecondsFor`. Here
- * the resolved source only selects which broadcast the CTA points at.
+ * Every service carries a `USER_SERVICE_LAG_SECONDS` entry, but that value cannot affect this run:
+ * `scheduledFireAt` comes from `ResumptionGatedDispatcher`, never from `lagSecondsFor`. Here the
+ * top-ranked option only selects where the CTA points.
  */
-function seedBroadcasts(catalog: InMemoryBroadcastCatalog, contexts: EspnGameContext[]): void {
-  for (const context of contexts) {
-    const videoId = GAME_VIDEO_IDS[context.gameId];
-    const deepLinkUrl = videoId ? `https://tv.youtube.com/watch/${videoId}` : YOUTUBE_TV_DEEP_LINK;
-    catalog.setGameBroadcasts(context.gameId, [
-      {
-        service: 'sunday_ticket',
-        deepLinkUrl,
-        requiresSubscription: true,
-      },
-    ]);
+async function seedBroadcasts(catalog: InMemoryBroadcastCatalog): Promise<void> {
+  const response = await fetch(ESPN_SCOREBOARD_URL);
+  if (!response.ok) {
+    throw new Error(`ESPN scoreboard failed: ${response.status} ${response.statusText}`);
   }
-  catalog.setUserSubscribedServices(WATCHED_USER_ID, ['sunday_ticket']);
-  catalog.setUserSubscribedServices(DATA_ONLY_USER_ID, ['sunday_ticket']);
+  const body = (await response.json()) as { events?: EspnBroadcastEvent[] };
+  catalog.setWeekAirings(
+    (body.events ?? []).map((event) => ({
+      id: event.id,
+      kickoff: new Date(event.date ?? 0),
+      airings: parseEspnAirings(event, (info) => {
+        console.warn(
+          `[harness] unmapped network ${info.rawName} on ${info.shortName ?? info.eventId}`,
+        );
+      }),
+    })),
+  );
+  catalog.setUserSubscribedServices(WATCHED_USER_ID, HARNESS_SERVICES);
+  catalog.setUserSubscribedServices(DATA_ONLY_USER_ID, HARNESS_SERVICES);
 }
 
 function makeUser(id: string, expoPushToken: string | null): DispatchUser {
@@ -684,7 +681,7 @@ async function runHarness(config: HarnessConfig): Promise<void> {
   const allContexts = [...watchedContexts, ...dataOnlyContexts];
   seedGameCatalog(gameCatalog, allContexts);
   seedPlayers(playerCatalog, allContexts);
-  seedBroadcasts(broadcastCatalog, allContexts);
+  await seedBroadcasts(broadcastCatalog);
 
   // Shim 1: stakes keyed by ESPN abbreviation. Watched games belong to the token-bearing user so
   // only they generate pushes (Shim/see header "watched vs data-only").

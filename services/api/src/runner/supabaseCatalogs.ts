@@ -1,5 +1,6 @@
-import { parsePreferences, type Preferences } from '@pivot/shared';
+import { parsePreferences, type Preferences, type WeekGameAirings } from '@pivot/shared';
 import type {
+  BroadcastCatalog,
   DispatchUser,
   GameCatalog,
   GameSummaryInfo,
@@ -9,6 +10,7 @@ import type {
   ViewingSessionSnapshot,
 } from '@pivot/dispatcher';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
+import { AIRING_COLUMNS, weekGameAirings } from '../lib/watchOptions.js';
 import type { GameDirectory, InProgressGame, SeededGame } from './discovery.js';
 
 const ESPN_SEED_PREFIX = 'seed:espn:';
@@ -142,6 +144,50 @@ export class SupabaseGameCatalog implements GameCatalog {
       awayTeamPrimaryColor: away.primary_color,
       awayTeamSecondaryColor: away.secondary_color,
     };
+  }
+}
+
+/** `game_airings` for the game's week (same week + season type as `GET /games/:id/broadcasts`) and
+ *  `user_app_presence` services with `has_subscription = true`. */
+export class SupabaseBroadcastCatalog implements BroadcastCatalog {
+  constructor(private readonly client: SupabaseServiceClient) {}
+
+  async getWeekAirings(gameId: string): Promise<WeekGameAirings[]> {
+    const { data: game, error } = await this.client
+      .from('games')
+      .select('week, season_type')
+      .eq('id', gameId)
+      .maybeSingle();
+    if (error) throw new Error(`broadcast game lookup failed: ${error.message}`);
+    if (!game) return [];
+
+    const { data: week, error: weekError } = await this.client
+      .from('games')
+      .select('id, scheduled_start')
+      .eq('week', game.week)
+      .eq('season_type', game.season_type);
+    if (weekError) throw new Error(`broadcast week lookup failed: ${weekError.message}`);
+    const games = week ?? [];
+
+    const { data: airings, error: airingsError } = await this.client
+      .from('game_airings')
+      .select(AIRING_COLUMNS)
+      .in(
+        'game_id',
+        games.map((g) => g.id),
+      );
+    if (airingsError) throw new Error(`game airings lookup failed: ${airingsError.message}`);
+    return weekGameAirings(games, airings ?? []);
+  }
+
+  async getUserSubscribedServices(userId: string): Promise<ReadonlySet<string>> {
+    const { data, error } = await this.client
+      .from('user_app_presence')
+      .select('service')
+      .eq('user_id', userId)
+      .eq('has_subscription', true);
+    if (error) throw new Error(`app presence lookup failed: ${error.message}`);
+    return new Set((data ?? []).map((row) => row.service));
   }
 }
 

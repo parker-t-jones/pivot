@@ -28,7 +28,12 @@ import {
   type FlagEventQueue,
   type RateLimitStore,
 } from '@pivot/dispatcher';
-import { parsePreferences, type FlagEvent, type FlagState } from '@pivot/shared';
+import {
+  parsePreferences,
+  type AiringNetwork,
+  type FlagEvent,
+  type FlagState,
+} from '@pivot/shared';
 import { createPlaySession } from './runner/playSession.js';
 
 const FIXTURE = fileURLToPath(
@@ -46,6 +51,18 @@ const ABBR_TO_UUID = new Map<string, string>([
   ['GB', HOME_ID],
   ['ATL', AWAY_ID],
 ]);
+
+interface ReplayAiring {
+  network: AiringNetwork;
+  kickoff: string;
+}
+const TNF_ON_PRIME: ReplayAiring = { network: 'amazon_prime', kickoff: '2026-09-25T00:15:00Z' };
+const SUNDAY_ON_FOX: ReplayAiring = { network: 'fox', kickoff: '2026-09-27T17:00:00Z' };
+
+interface SentPush {
+  body: string;
+  action: unknown;
+}
 
 interface SeenPlay {
   id: string;
@@ -152,7 +169,7 @@ describe('ATL @ GB replay', () => {
   for (const prefix of prefixes.slice(0, -1)) markInProgress(prefix);
 
   it('one team, no socket', async () => {
-    const stats = await replay({ roster: 'one', active: false, prefixes });
+    const stats = await replay({ roster: 'one', active: false, prefixes, airing: TNF_ON_PRIME });
     expect(stats.plays).toBe(playCount);
     expect(Array.isArray(drives) ? drives.length : 0).toBe(21);
     expect(stats.enqueued).toEqual({
@@ -163,10 +180,33 @@ describe('ATL @ GB replay', () => {
     expect(stats.rows).toEqual(stats.enqueued);
     expect(stats.pushes).toBe(9);
     expect(stats.rateLimited).toBe(0);
+    // TNF is Prime-only and the user has YouTube TV: every push still sends, with no option.
+    expect(stats.pushed).toHaveLength(9);
+    for (const push of stats.pushed) {
+      expect(push.action).toEqual(
+        expect.objectContaining({ recommended_source: null, deep_link_url: null }),
+      );
+      expect(push.body).toMatch(/ On PRIME\.$/);
+    }
+  }, 120_000);
+
+  it('the same plays on a Sunday FOX game carry a YouTube TV deep link', async () => {
+    const stats = await replay({ roster: 'one', active: false, prefixes, airing: SUNDAY_ON_FOX });
+    expect(stats.pushes).toBe(9);
+    expect(stats.pushed).toHaveLength(9);
+    for (const push of stats.pushed) {
+      expect(push.action).toEqual(
+        expect.objectContaining({
+          recommended_source: 'youtube_tv',
+          deep_link_url: 'https://tv.youtube.com/live',
+        }),
+      );
+      expect(push.body).toMatch(/ Tap to watch\.$/);
+    }
   }, 120_000);
 
   it('both teams', async () => {
-    const stats = await replay({ roster: 'both', active: true, prefixes });
+    const stats = await replay({ roster: 'both', active: true, prefixes, airing: TNF_ON_PRIME });
     expect(stats.plays).toBe(playCount);
     expect(stats.enqueued).toEqual({
       flag_added: 16,
@@ -189,11 +229,13 @@ async function replay(input: {
   roster: 'one' | 'both';
   active: boolean;
   prefixes: unknown[];
+  airing: ReplayAiring;
 }): Promise<{
   plays: number;
   enqueued: Record<string, number>;
   rows: Record<string, number>;
   pushes: number;
+  pushed: SentPush[];
   rateLimited: number;
 }> {
   let fetchIndex = 0;
@@ -214,6 +256,7 @@ async function replay(input: {
     },
   };
   const pushes: { rowId: string; at: number }[] = [];
+  const pushed: SentPush[] = [];
   const sends = new Map<string, number>();
   let failNext = true;
   let failedRowId: string | null = null;
@@ -222,6 +265,7 @@ async function replay(input: {
   const first = await playGame({
     roster: input.roster,
     active: input.active,
+    airing: input.airing,
     persistence,
     rateStore,
     clock,
@@ -237,6 +281,10 @@ async function replay(input: {
           return { success: false, error: 'offline' };
         }
         pushes.push({ rowId: id, at: clock.now });
+        pushed.push({
+          body: payload.body,
+          action: isRecord(payload.data) ? payload.data['action'] : undefined,
+        });
         return { success: true };
       },
     },
@@ -268,6 +316,7 @@ async function replay(input: {
   await playGame({
     roster: input.roster,
     active: input.active,
+    airing: input.airing,
     persistence,
     rateStore,
     clock: { now: 0, last: 0 },
@@ -288,6 +337,7 @@ async function replay(input: {
     enqueued: countBy(first.enqueued.map((item) => item.eventType)),
     rows: countBy(persistence.records.map((row) => row.eventType)),
     pushes: pushesAfter,
+    pushed,
     rateLimited: first.rateLimited,
   };
 }
@@ -295,6 +345,7 @@ async function replay(input: {
 async function playGame(input: {
   roster: 'one' | 'both';
   active: boolean;
+  airing: ReplayAiring;
   persistence: InMemoryFlagEventPersistence;
   rateStore: RateLimitStore;
   clock: { now: number; last: number };
@@ -373,12 +424,29 @@ async function playGame(input: {
   });
   trackers.set(GAME_ID, session.tracker);
 
+  const broadcasts = new InMemoryBroadcastCatalog();
+  broadcasts.setWeekAirings([
+    {
+      id: GAME_ID,
+      kickoff: new Date(input.airing.kickoff),
+      airings: [
+        {
+          network: input.airing.network,
+          market: 'national',
+          espnMediaName: input.airing.network.toUpperCase(),
+          espnType: 'TV',
+        },
+      ],
+    },
+  ]);
+  broadcasts.setUserSubscribedServices(USER_ID, ['youtube_tv']);
+
   const realtime = new InMemoryRealtimeBus();
   const delivery: DeliveryDeps = {
     gameStateStore: gameState,
     gameCatalog: catalog,
     playerCatalog: new InMemoryPlayerCatalog(),
-    broadcastCatalog: new InMemoryBroadcastCatalog(),
+    broadcastCatalog: broadcasts,
     userDirectory: users,
     persistence: input.persistence,
     realtimeBus: realtime,

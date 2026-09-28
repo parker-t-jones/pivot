@@ -10,11 +10,14 @@ import {
   networkLabelFromAirings,
   parseEspnAirings,
   rankWatchOptions,
+  USER_SERVICE_LANDING_URLS,
+  watchOptionsForGame,
   type CarriageMapVersion,
   type EspnBroadcastEvent,
   type ParsedAiring,
   type SlateGame,
   type WatchOption,
+  type WeekGameAirings,
 } from './index.js';
 
 const FIXTURE_PATH = join(
@@ -310,6 +313,49 @@ describe('expandWatchOptions + rankWatchOptions', () => {
     const options = expandWatchOptions([nbc], snfKickoff, false);
     expect(options.find((o) => o.service === 'sunday_ticket')).toBeUndefined();
     expect(options.find((o) => o.service === 'youtube_tv')?.network).toBe('nbc');
+  });
+});
+
+describe('watchOptionsForGame', () => {
+  function airing(network: ParsedAiring['network']): ParsedAiring {
+    return { network, market: 'national', espnMediaName: network.toUpperCase(), espnType: 'TV' };
+  }
+  const week: WeekGameAirings[] = [
+    { id: 'tnf', kickoff: new Date('2026-09-25T00:15:00Z'), airings: [airing('amazon_prime')] },
+    { id: 'fox1', kickoff: new Date('2026-09-27T17:00:00Z'), airings: [airing('fox')] },
+    { id: 'fox2', kickoff: new Date('2026-09-27T17:00:00Z'), airings: [airing('fox')] },
+  ];
+
+  it('keeps only services the user has, best first', () => {
+    const options = watchOptionsForGame('fox1', week, new Set(['youtube_tv', 'sunday_ticket']));
+    expect(options.map((o) => [o.service, o.preferred, o.routeHint])).toEqual([
+      ['sunday_ticket', true, undefined],
+      ['youtube_tv', false, 'in_market_local'],
+    ]);
+  });
+
+  it('reads the regional slate from the rest of the week', () => {
+    const alone = week.filter((g) => g.id !== 'fox2');
+    const options = watchOptionsForGame('fox1', alone, new Set(['youtube_tv', 'sunday_ticket']));
+    expect(options.every((o) => o.marketConfidence === 'national')).toBe(true);
+    expect(options.some((o) => o.routeHint !== undefined)).toBe(false);
+  });
+
+  it('is empty when the user has none of the carrying services', () => {
+    expect(watchOptionsForGame('tnf', week, new Set(['youtube_tv']))).toEqual([]);
+  });
+
+  it('is empty for a game outside the week', () => {
+    expect(watchOptionsForGame('missing', week, new Set(['youtube_tv']))).toEqual([]);
+  });
+});
+
+describe('USER_SERVICE_LANDING_URLS', () => {
+  it('only omits a landing URL for Sling, which has no confirmed carriage', () => {
+    const missing = Object.entries(USER_SERVICE_LANDING_URLS)
+      .filter(([, url]) => url === '')
+      .map(([service]) => service);
+    expect(missing).toEqual(['sling']);
   });
 });
 

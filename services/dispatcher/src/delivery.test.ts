@@ -70,6 +70,24 @@ function buildDeps(overrides: Partial<DeliveryDeps> = {}): DeliveryDeps {
   };
 }
 
+/** `g1` is one of two Sunday 1pm FOX games (a regional slate); u1 has `services`. */
+function weekCatalog(services: string[]): InMemoryBroadcastCatalog {
+  const fox = {
+    network: 'fox' as const,
+    market: 'national' as const,
+    espnMediaName: 'FOX',
+    espnType: 'TV',
+  };
+  const kickoff = new Date('2026-09-27T17:00:00Z');
+  const catalog = new InMemoryBroadcastCatalog();
+  catalog.setWeekAirings([
+    { id: 'g1', kickoff, airings: [fox] },
+    { id: 'g2', kickoff, airings: [fox] },
+  ]);
+  catalog.setUserSubscribedServices('u1', services);
+  return catalog;
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 describe('deliverFlagEvent', () => {
@@ -147,25 +165,34 @@ describe('deliverFlagEvent', () => {
     ]);
   });
 
-  it('enriches the action with recommended_source/deep_link_url from the broadcast catalog', async () => {
-    const broadcastCatalog = new InMemoryBroadcastCatalog();
-    broadcastCatalog.setGameBroadcasts('g1', [
-      { service: 'fox', deepLinkUrl: 'https://fox.example/g1', requiresSubscription: false },
-    ]);
-    broadcastCatalog.setUserSubscribedServices('u1', ['fox']);
+  it('recommends the top-ranked option and its landing URL', async () => {
+    const broadcastCatalog = weekCatalog(['youtube_tv']);
     const bus = new InMemoryRealtimeBus();
     const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
 
     await deliverFlagEvent(deps, makeEvent(), freeUser);
 
     const envelope = bus.published[0]?.message as FlagEventEnvelope;
-    expect(envelope.payload.action.recommended_source).toBe('fox');
-    expect(envelope.payload.action.deep_link_url).toBe('https://fox.example/g1');
+    expect(envelope.payload.action.recommended_source).toBe('youtube_tv');
+    expect(envelope.payload.action.deep_link_url).toBe('https://tv.youtube.com/live');
   });
 
-  it('leaves recommended_source/deep_link_url null when no broadcast resolves', async () => {
+  it('recommends Sunday Ticket over YouTube TV on a regional FOX game', async () => {
+    const broadcastCatalog = weekCatalog(['youtube_tv', 'sunday_ticket']);
     const bus = new InMemoryRealtimeBus();
-    const deps = buildDeps({ realtimeBus: bus });
+    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
+
+    await deliverFlagEvent(deps, makeEvent(), freeUser);
+
+    const envelope = bus.published[0]?.message as FlagEventEnvelope;
+    expect(envelope.payload.action.recommended_source).toBe('sunday_ticket');
+    expect(envelope.payload.action.deep_link_url).toBe('https://tv.youtube.com/live');
+  });
+
+  it('leaves recommended_source/deep_link_url null when the user has no carrying service', async () => {
+    const broadcastCatalog = weekCatalog(['amazon_prime']);
+    const bus = new InMemoryRealtimeBus();
+    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
 
     await deliverFlagEvent(deps, makeEvent(), freeUser);
 
@@ -174,56 +201,9 @@ describe('deliverFlagEvent', () => {
     expect(envelope.payload.action.deep_link_url).toBeNull();
   });
 
-  it('recommends the SAME source used for timing, even when a lower-lag free broadcast exists (Phase 3b)', async () => {
-    // User is subscribed to espn_plus (lag 60). The game also airs on free fox (lag 8), which
-    // rankBroadcasts would prefer — but resolveLikelyBroadcastSource times the fire against espn_plus
-    // (fox isn't in the user's presence), so the CTA must point at espn_plus for consistency.
-    const broadcastCatalog = new InMemoryBroadcastCatalog();
-    broadcastCatalog.setGameBroadcasts('g1', [
-      { service: 'espn_plus', deepLinkUrl: 'https://espn.example/g1', requiresSubscription: true },
-      { service: 'fox', deepLinkUrl: 'https://fox.example/g1', requiresSubscription: false },
-    ]);
-    broadcastCatalog.setUserSubscribedServices('u1', ['espn_plus']);
+  it('leaves recommended_source/deep_link_url null when the game has no airings', async () => {
     const bus = new InMemoryRealtimeBus();
-    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
-
-    await deliverFlagEvent(deps, makeEvent(), freeUser);
-
-    const envelope = bus.published[0]?.message as FlagEventEnvelope;
-    expect(envelope.payload.action.recommended_source).toBe('espn_plus');
-    expect(envelope.payload.action.deep_link_url).toBe('https://espn.example/g1');
-  });
-
-  it('falls back to the ranker preferred broadcast when there is no timing source (Phase 3b)', async () => {
-    // User has zero subscribed services -> resolveLikelyBroadcastSource returns null -> fall back to
-    // BroadcastResolver's preferred, which is the free broadcast the user can still watch.
-    const broadcastCatalog = new InMemoryBroadcastCatalog();
-    broadcastCatalog.setGameBroadcasts('g1', [
-      { service: 'nbc', deepLinkUrl: 'https://nbc.example/g1', requiresSubscription: false },
-    ]);
-    // No setUserSubscribedServices -> empty set.
-    const bus = new InMemoryRealtimeBus();
-    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
-
-    await deliverFlagEvent(deps, makeEvent(), freeUser);
-
-    const envelope = bus.published[0]?.message as FlagEventEnvelope;
-    expect(envelope.payload.action.recommended_source).toBe('nbc');
-    expect(envelope.payload.action.deep_link_url).toBe('https://nbc.example/g1');
-  });
-
-  it('degrades to null when the only broadcast is ineligible and there is no timing source (Phase 3b)', async () => {
-    const broadcastCatalog = new InMemoryBroadcastCatalog();
-    broadcastCatalog.setGameBroadcasts('g1', [
-      {
-        service: 'amazon_prime',
-        deepLinkUrl: 'https://prime.example/g1',
-        requiresSubscription: true,
-      },
-    ]);
-    // User isn't subscribed -> not a timing source AND not eligible for the ranker.
-    const bus = new InMemoryRealtimeBus();
-    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
+    const deps = buildDeps({ realtimeBus: bus });
 
     await deliverFlagEvent(deps, makeEvent(), freeUser);
 
@@ -765,6 +745,26 @@ describe('deliverFlagEvent', () => {
       expect(pushNotifier.calls[0]?.body).toBe(notificationBody(event, game));
       expect(pushNotifier.calls[0]?.title).toBe('Jonathan Taylor active');
       expect(pushNotifier.calls[0]?.body).toBe('Colts have the ball — Q2, 7:14. Tap to watch.');
+    });
+
+    it('still pushes with no option, naming the airing instead of "Tap to watch"', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const gameStateStore = new InMemoryGameStateStore();
+      await setPossessingHomeGameState(gameStateStore);
+      const deps = buildDeps({
+        pushNotifier,
+        gameStateStore,
+        gameCatalog: gameCatalogWithNames(),
+        broadcastCatalog: weekCatalog([]),
+      });
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+
+      expect(pushNotifier.calls).toHaveLength(1);
+      expect(pushNotifier.calls[0]?.body).toBe('Colts have the ball — Q2, 7:14. On FOX.');
+      const data = pushNotifier.calls[0]?.data as FlagEventEnvelope['payload'];
+      expect(data.action.deep_link_url).toBeNull();
+      expect(data.action.recommended_source).toBeNull();
     });
 
     it('push data carries the identical envelope payload published over the realtime bus', async () => {

@@ -233,6 +233,29 @@ describe('notificationBody', () => {
     });
   });
 
+  describe('no watch option -> names the airing', () => {
+    it('ends with "On FOX." instead of "Tap to watch."', () => {
+      const event = makeEvent({ newState: makeFlagState({ reasons: [reason('offense_active', ['p1'])] }) });
+      expect(notificationBody(event, makeGame(), 'FOX')).toBe('Colts have the ball — Q2, 7:14. On FOX.');
+    });
+
+    it('applies to the red-zone body too', () => {
+      const event = makeEvent({
+        newState: makeFlagState({ reasons: [reason('offense_active', ['p1']), reason('red_zone')] }),
+      });
+      expect(notificationBody(event, makeGame(), 'PRIME')).toBe('Colts in the red zone — Q2, 7:14. On PRIME.');
+    });
+
+    it('leaves the flag_removed body alone', () => {
+      const event = makeEvent({
+        type: 'flag_removed',
+        oldState: makeFlagState({ reasons: [reason('offense_active', ['p1'])] }),
+        newState: makeFlagState({ flagged: false, reasons: [] }),
+      });
+      expect(notificationBody(event, makeGame(), 'FOX')).toBe(notificationBody(event, makeGame()));
+    });
+  });
+
   it('close_game and star_player_active bonuses do NOT trigger the red-zone-style body', () => {
     const event = makeEvent({
       newState: makeFlagState({

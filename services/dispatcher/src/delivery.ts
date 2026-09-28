@@ -1,12 +1,17 @@
 import { defaultClock, type Clock } from '@pivot/engine';
 import {
+  networkLabelFromAirings,
   resolvePossessionAbbreviation,
+  USER_SERVICE_LANDING_URLS,
   type FlagEvent,
   type FlagState,
   type GameState,
 } from '@pivot/shared';
-import { resolveLikelyBroadcastSource, type BroadcastCatalog } from './broadcastLag.js';
-import { preferredBroadcast, resolveBroadcasts } from './broadcastResolver.js';
+import {
+  resolveLikelyBroadcastSource,
+  type BroadcastCatalog,
+  type LikelyBroadcast,
+} from './broadcastLag.js';
 import type {
   DispatchUser,
   FlagEventPersistence,
@@ -142,37 +147,28 @@ async function resolveNotificationPlayers(
 }
 
 /**
- * Sprint 7 Phase 3b — resolves the Section 9 `action.recommended_source`/`action.deep_link_url`.
- *
- * The switch CTA must stay consistent with the timing engine: `scheduleFlagEvent` (Section 8) already
- * calibrated the deferred fire time against the source `resolveLikelyBroadcastSource` picked, so the
- * recommendation points at that SAME source (its deep link is the catalog lookup for it). A second,
- * independently-computed pick that disagreed would be a real bug — the notification would be timed for
- * one broadcast while the CTA sent the user to another. (The timing heuristic itself is known-imperfect
- * in the multi-broadcast case; that gap is filed separately as a v1.5 Known Issue, out of scope here.)
- *
- * Only when there's no timing source at all (the user has zero subscribed services, so there's nothing
- * to be consistent with) do we fall back to `BroadcastResolver`'s authoritative `preferred` result —
- * e.g. a free broadcast the user has no presence row for. Both branches degrade to `null` cleanly when
- * neither yields a result (the common case until Phase 4 seeds `game_broadcasts` fixtures).
+ * The Section 9 `action.recommended_source`/`action.deep_link_url`: the top-ranked watch option
+ * (`resolveLikelyBroadcastSource`, the same ranking `GET /games/:id/broadcasts` serves) and its
+ * service landing URL. With no option, both are null and `airingWithoutOption` names the network for
+ * the push copy ("On FOX").
  */
-async function resolveActionRecommendation(
-  deps: DeliveryDeps,
-  gameId: string,
-  userId: string,
-  timingSource: string | null,
-): Promise<{ recommendedSource: string | null; deepLinkUrl: string | null }> {
-  if (timingSource !== null) {
-    const broadcasts = await deps.broadcastCatalog.getGameBroadcasts(gameId);
-    const deepLinkUrl = broadcasts.find((b) => b.service === timingSource)?.deepLinkUrl ?? null;
-    return { recommendedSource: timingSource, deepLinkUrl };
+function actionRecommendation(likely: LikelyBroadcast): {
+  recommendedSource: string | null;
+  deepLinkUrl: string | null;
+  airingWithoutOption: string | null;
+} {
+  if (likely.source === null) {
+    return {
+      recommendedSource: null,
+      deepLinkUrl: null,
+      airingWithoutOption: networkLabelFromAirings(likely.airings),
+    };
   }
-  const preferred = preferredBroadcast(
-    await resolveBroadcasts(gameId, userId, deps.broadcastCatalog),
-  );
+  const url = USER_SERVICE_LANDING_URLS[likely.source.service];
   return {
-    recommendedSource: preferred?.service ?? null,
-    deepLinkUrl: preferred?.deepLinkUrl ?? null,
+    recommendedSource: likely.source.service,
+    deepLinkUrl: url === '' ? null : url,
+    airingWithoutOption: null,
   };
 }
 
@@ -201,7 +197,7 @@ export async function deliverFlagEvent(
   const clock = deps.clock ?? defaultClock;
   const deliveredAt = clock();
 
-  const [session, gameState, gameSummaryInfo, broadcastSource] = await Promise.all([
+  const [session, gameState, gameSummaryInfo, likelyBroadcast] = await Promise.all([
     deps.userDirectory.getViewingSession(event.userId),
     deps.gameStateStore.getGameState(event.gameId),
     deps.gameCatalog.getGameSummary(event.gameId),
@@ -217,12 +213,8 @@ export async function deliverFlagEvent(
     event,
   );
 
-  const { recommendedSource, deepLinkUrl } = await resolveActionRecommendation(
-    deps,
-    event.gameId,
-    event.userId,
-    broadcastSource,
-  );
+  const { recommendedSource, deepLinkUrl, airingWithoutOption } =
+    actionRecommendation(likelyBroadcast);
 
   const triggeringPlayerIds = [
     ...new Set(event.newState.reasons.flatMap((r) => r.triggeringPlayerIds)),
@@ -304,7 +296,7 @@ export async function deliverFlagEvent(
       payload = {
         token: user.expoPushToken,
         title: notificationTitle(event, game, notificationPlayers),
-        body: notificationBody(event, game),
+        body: notificationBody(event, game, airingWithoutOption),
         data: envelope.payload,
       };
       const result = await deps.pushNotifier.sendPush(payload);

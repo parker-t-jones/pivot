@@ -103,10 +103,14 @@ async function main(): Promise<void> {
     position: 'RB',
   });
 
-  broadcastCatalog.setGameBroadcasts(GAME_ID, [
-    { service: 'sunday_ticket', deepLinkUrl: 'https://tv.youtube.com/live', requiresSubscription: true },
+  broadcastCatalog.setWeekAirings([
+    {
+      id: GAME_ID,
+      kickoff: new Date('2026-09-13T17:00:00Z'),
+      airings: [{ network: 'fox', market: 'national', espnMediaName: 'FOX', espnType: 'TV' }],
+    },
   ]);
-  broadcastCatalog.setUserSubscribedServices(USER_ID, ['sunday_ticket']);
+  broadcastCatalog.setUserSubscribedServices(USER_ID, ['youtube_tv']);
 
   const user: DispatchUser = {
     id: USER_ID,

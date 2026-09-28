@@ -1,73 +1,73 @@
-import { lagSecondsFor } from '@pivot/shared';
-
-export interface GameBroadcastOption {
-  service: string;
-  deepLinkUrl: string;
-  requiresSubscription: boolean;
-}
+import {
+  watchOptionsForGame,
+  type ParsedAiring,
+  type WatchOption,
+  type WeekGameAirings,
+} from '@pivot/shared';
 
 /**
- * Pure tie-break (sprint decision #6): intersect the game's broadcasts with the user's subscribed
- * services. Among matches, deterministically prefer the one with the LOWEST configured stream lag
- * (the shared `USER_SERVICE_LAG_SECONDS`). Since B1.3 broadcasts are airing networks and presence holds user
- * services, so only keys on both lists (amazon_prime, peacock, paramount_plus, espn_plus, nfl_plus)
- * can match until B1.4 expands carriage. Ties on lag break alphabetically by service name. Returns `null` if no candidate matches (falls
- * back to the shared `DEFAULT_LAG_SECONDS` via `lagSecondsFor(null)`).
+ * The switch target for one user and game: the top option from the shared `watchOptionsForGame`
+ * ranking (docs/B1-BROADCAST-DESIGN.md §1.6) — the same ranking `GET /games/:id/broadcasts` serves,
+ * so the push and the app name the same service. `null` when the user has no service that carries
+ * the game.
  */
 export function pickBroadcastSource(
-  gameBroadcasts: readonly GameBroadcastOption[],
+  gameId: string,
+  week: readonly WeekGameAirings[],
   userServices: ReadonlySet<string>,
-): string | null {
-  const candidates = [
-    ...new Set(gameBroadcasts.map((b) => b.service).filter((s) => userServices.has(s))),
-  ];
-  if (candidates.length === 0) return null;
-
-  candidates.sort((a, b) => {
-    const lagDelta = lagSecondsFor(a) - lagSecondsFor(b);
-    return lagDelta !== 0 ? lagDelta : a.localeCompare(b);
-  });
-  return candidates[0] ?? null;
+): WatchOption | null {
+  return watchOptionsForGame(gameId, week, userServices)[0] ?? null;
 }
 
 /**
- * I/O wrapper matching Section 8's `resolveLikelyBroadcastSource(gameId, user)` signature (here split
- * into `gameId`/`userId` since the pure lookup only needs ids, not a full `User` object).
+ * Where the dispatcher reads airings and presence. Airings come per week because regional-slate
+ * ranking compares a game against the rest of its window.
  */
 export interface BroadcastCatalog {
-  getGameBroadcasts(gameId: string): Promise<GameBroadcastOption[]>;
+  /** Every game in `gameId`'s week (including it) with its airings; empty for an unknown game. */
+  getWeekAirings(gameId: string): Promise<WeekGameAirings[]>;
   getUserSubscribedServices(userId: string): Promise<ReadonlySet<string>>;
 }
 
+export interface LikelyBroadcast {
+  source: WatchOption | null;
+  /** The game's airings, for naming the network when there is no `source` ("On FOX"). */
+  airings: readonly ParsedAiring[];
+}
+
+/** Section 8's `resolveLikelyBroadcastSource(gameId, user)`, split into ids. */
 export async function resolveLikelyBroadcastSource(
   gameId: string,
   userId: string,
   catalog: BroadcastCatalog,
-): Promise<string | null> {
-  const [broadcasts, services] = await Promise.all([
-    catalog.getGameBroadcasts(gameId),
+): Promise<LikelyBroadcast> {
+  const [week, services] = await Promise.all([
+    catalog.getWeekAirings(gameId),
     catalog.getUserSubscribedServices(userId),
   ]);
-  return pickBroadcastSource(broadcasts, services);
+  return {
+    source: pickBroadcastSource(gameId, week, services),
+    airings: week.find((game) => game.id === gameId)?.airings ?? [],
+  };
 }
 
-/** In-memory `BroadcastCatalog` for local dev and tests (Postgres-backed adapter lands when `/games`
- * routes are wired against `game_broadcasts`/`user_app_presence` — both tables already exist from
- * earlier sprints, but there's no reason to write that adapter before it has a caller). */
+/** In-memory `BroadcastCatalog` for tests and the harness. `runner/supabaseCatalogs.ts` has the
+ *  Postgres one. */
 export class InMemoryBroadcastCatalog implements BroadcastCatalog {
-  private readonly broadcasts = new Map<string, GameBroadcastOption[]>();
+  private readonly weekByGame = new Map<string, WeekGameAirings[]>();
   private readonly userServices = new Map<string, Set<string>>();
 
-  async getGameBroadcasts(gameId: string): Promise<GameBroadcastOption[]> {
-    return this.broadcasts.get(gameId) ?? [];
+  async getWeekAirings(gameId: string): Promise<WeekGameAirings[]> {
+    return this.weekByGame.get(gameId) ?? [];
   }
 
   async getUserSubscribedServices(userId: string): Promise<ReadonlySet<string>> {
     return this.userServices.get(userId) ?? new Set();
   }
 
-  setGameBroadcasts(gameId: string, options: GameBroadcastOption[]): void {
-    this.broadcasts.set(gameId, options);
+  /** Registers one week's games; each game's lookup returns the whole list. */
+  setWeekAirings(games: WeekGameAirings[]): void {
+    for (const game of games) this.weekByGame.set(game.id, games);
   }
 
   setUserSubscribedServices(userId: string, services: string[]): void {
