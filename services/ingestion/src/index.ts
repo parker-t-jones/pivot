@@ -32,6 +32,20 @@ export {
   type ShapeFailureReportThrottleOptions,
 } from './espn/errors.js';
 
+export {
+  buildAiringRows,
+  espnGameExternalId,
+  ingestAirings,
+  writeGameAirings,
+  type AiringRowsResult,
+  type AiringSeedRow,
+  type AiringSource,
+  type GameAiringsStore,
+  type IngestAiringsDeps,
+  type IngestAiringsResult,
+  type StoredAiringKey,
+} from './airings/ingestAirings.js';
+
 export type {
   EspnDrive,
   EspnPlay,

@@ -100,11 +100,35 @@ export const espnCompetitorSchema = z.object({
  */
 export const espnScoreboardEventSchema = z.object({
   id: z.string(),
+  shortName: z.string().optional().catch(undefined),
+  date: z.string().optional().catch(undefined),
   competitions: z
     .array(
       z.object({
         competitors: z.array(espnCompetitorSchema).optional(),
         status: espnStatusSchema.optional(),
+        // Broadcast fields `parseEspnAirings` reads (B1 §3.1). Each falls back to undefined so a
+        // malformed broadcast block can't fail the scoreboard discovery and reconcile also read.
+        broadcast: z.string().optional().catch(undefined),
+        broadcasts: z
+          .array(
+            z.object({
+              market: z.string().optional(),
+              names: z.array(z.string()).optional(),
+            }),
+          )
+          .optional()
+          .catch(undefined),
+        geoBroadcasts: z
+          .array(
+            z.object({
+              type: z.object({ shortName: z.string().optional() }).optional(),
+              market: z.object({ type: z.string().optional() }).optional(),
+              media: z.object({ shortName: z.string().optional() }).optional(),
+            }),
+          )
+          .optional()
+          .catch(undefined),
       }),
     )
     .optional(),

@@ -251,5 +251,69 @@ describe('espnClient', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.kind).toBe('invalid_shape');
     });
+
+    it('keeps the broadcast fields parseEspnAirings reads', async () => {
+      const geo = {
+        type: { shortName: 'TV' },
+        market: { type: 'National' },
+        media: { shortName: 'NBC' },
+      };
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          events: [
+            {
+              id: '1',
+              shortName: 'LAR @ DEN',
+              date: '2026-09-28T00:20Z',
+              competitions: [
+                {
+                  broadcast: 'NBC',
+                  broadcasts: [{ market: 'national', names: ['NBC'] }],
+                  geoBroadcasts: [geo],
+                },
+              ],
+            },
+          ],
+        }),
+      );
+
+      const result = await espnClient.getScoreboard();
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.events?.[0]).toMatchObject({
+          shortName: 'LAR @ DEN',
+          date: '2026-09-28T00:20Z',
+          competitions: [
+            {
+              broadcast: 'NBC',
+              broadcasts: [{ market: 'national', names: ['NBC'] }],
+              geoBroadcasts: [geo],
+            },
+          ],
+        });
+      }
+    });
+
+    it('drops a malformed broadcast block instead of failing the scoreboard', async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          events: [
+            {
+              id: '1',
+              competitions: [{ geoBroadcasts: 'not-a-list', broadcasts: [{ names: 7 }] }],
+            },
+          ],
+        }),
+      );
+
+      const result = await espnClient.getScoreboard();
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.events?.[0]?.competitions?.[0]?.geoBroadcasts).toBeUndefined();
+        expect(result.data.events?.[0]?.competitions?.[0]?.broadcasts).toBeUndefined();
+      }
+    });
   });
 });

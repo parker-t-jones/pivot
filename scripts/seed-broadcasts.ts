@@ -1,8 +1,8 @@
 /**
  * Seeds `public.game_airings` from a real ESPN scoreboard (docs/B1-BROADCAST-DESIGN.md §6): saved
  * JSON (default `experiments/logs/espn-scoreboard-2026-week3.json`) or `--live` for the current
- * week. Airings go through the same `parseEspnAirings` as production and join to `games` on
- * `sportradar_id = 'seed:espn:' || event.id`.
+ * week. Both run `ingestAirings` (B1.6), the same function the runner's airings cycle calls, which
+ * joins to `games` on `sportradar_id = 'seed:espn:' || event.id`.
  *
  * Idempotent: §3.4's per-game upsert plus stale-row delete.
  *
@@ -16,12 +16,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
-  parseEspnAirings,
-  type AiringMarket,
-  type AiringNetwork,
-  type EspnBroadcastEvent,
-  type UnmappedMediaLog,
-} from '@pivot/shared';
+  espnClient,
+  ingestAirings,
+  type AiringSource,
+  type EspnClient,
+  type EspnScoreboard,
+  type GameAiringsStore,
+  type StoredAiringKey,
+} from '@pivot/ingestion';
 import { bootstrapSeedScript, RemoteSafetyError } from './remoteSafety.js';
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
@@ -29,8 +31,6 @@ export const DEFAULT_SCOREBOARD_PATH = path.resolve(
   scriptsDir,
   '../experiments/logs/espn-scoreboard-2026-week3.json',
 );
-export const ESPN_LIVE_SCOREBOARD_URL =
-  'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 
 export type ScoreboardSource = { kind: 'file'; path: string } | { kind: 'live' };
 
@@ -57,112 +57,34 @@ export function parseScoreboardSource(rest: readonly string[]): ScoreboardSource
   return live ? { kind: 'live' } : { kind: 'file', path: path.resolve(file ?? DEFAULT_SCOREBOARD_PATH) };
 }
 
-/** `games.sportradar_id` written by `seed:schedule` for an ESPN event. */
-export function espnGameExternalId(eventId: string): string {
-  return `seed:espn:${eventId}`;
-}
-
-export type AiringSource = 'espn_scoreboard' | 'espn_scoreboard_fixture';
-
 /** §1.2: a saved payload is a fixture; `--live` is a real scoreboard read. */
 export function airingSourceFor(source: ScoreboardSource): AiringSource {
   return source.kind === 'live' ? 'espn_scoreboard' : 'espn_scoreboard_fixture';
 }
 
-export interface AiringSeedRow {
-  game_id: string;
-  network: AiringNetwork;
-  market: AiringMarket;
-  source: AiringSource;
-  espn_media_name: string;
-  espn_type: string | null;
-  fetched_at: string;
-}
-
-export interface AiringRowsResult {
-  /** Candidate rows per matched game, one per `(network, market)`; a game with no airings maps to `[]`. */
-  rowsByGame: Map<string, AiringSeedRow[]>;
-  /** Scoreboard events with no seeded game. */
-  unmatchedEventIds: string[];
-}
-
-/** §3.4 step 1: each matched event's geos → candidate `game_airings` rows. */
-export function buildAiringRows(
-  events: readonly EspnBroadcastEvent[],
-  gameIdByExternalId: ReadonlyMap<string, string>,
-  source: AiringSource,
-  fetchedAt: string,
-  logUnmapped: UnmappedMediaLog,
-): AiringRowsResult {
-  const rowsByGame = new Map<string, AiringSeedRow[]>();
-  const unmatchedEventIds: string[] = [];
-
-  for (const event of events) {
-    const gameId = gameIdByExternalId.get(espnGameExternalId(event.id));
-    if (gameId === undefined) {
-      unmatchedEventIds.push(event.id);
-      continue;
-    }
-    const rows = rowsByGame.get(gameId) ?? [];
-    const seen = new Set(rows.map((row) => `${row.network}|${row.market}`));
-    for (const airing of parseEspnAirings(event, logUnmapped)) {
-      const key = `${airing.network}|${airing.market}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      rows.push({
-        game_id: gameId,
-        network: airing.network,
-        market: airing.market,
-        source,
-        espn_media_name: airing.espnMediaName,
-        espn_type: airing.espnType,
-        fetched_at: fetchedAt,
-      });
-    }
-    rowsByGame.set(gameId, rows);
-  }
-
-  return { rowsByGame, unmatchedEventIds };
-}
-
-export interface StoredAiringKey {
-  id: string;
-  network: string;
-  market: string;
-}
-
-/** The `game_airings` writes §3.4 needs, behind an interface so the per-game logic is testable. */
-export interface GameAiringsStore {
-  /** `INSERT … ON CONFLICT (game_id, network, market) DO UPDATE`. */
-  upsert(rows: readonly AiringSeedRow[]): Promise<void>;
-  listForGame(gameId: string): Promise<StoredAiringKey[]>;
-  deleteByIds(ids: readonly string[]): Promise<void>;
-}
-
-/**
- * §3.4 for one game: upsert the candidates, then delete that game's rows whose `(network, market)`
- * is not a candidate (a FOX→NBC flex drops FOX). Upsert runs first so readers never see the game
- * with no airings. Never touches another game's rows.
- */
-export async function writeGameAirings(
-  store: GameAiringsStore,
-  gameId: string,
-  rows: readonly AiringSeedRow[],
-): Promise<{ upserted: number; deleted: number }> {
-  if (rows.some((row) => row.game_id !== gameId)) {
-    throw new Error(`writeGameAirings: every row must belong to game ${gameId}`);
-  }
-  if (rows.length > 0) await store.upsert(rows);
-  const candidates = new Set(rows.map((row) => `${row.network}|${row.market}`));
-  const staleIds = (await store.listForGame(gameId))
-    .filter((row) => !candidates.has(`${row.network}|${row.market}`))
-    .map((row) => row.id);
-  if (staleIds.length > 0) await store.deleteByIds(staleIds);
-  return { upserted: rows.length, deleted: staleIds.length };
+/** A saved scoreboard served through the same interface as `espnClient`. */
+function fileScoreboard(filePath: string): Pick<EspnClient, 'getScoreboard'> {
+  return {
+    getScoreboard: () =>
+      Promise.resolve({
+        ok: true as const,
+        data: JSON.parse(readFileSync(filePath, 'utf8')) as EspnScoreboard,
+      }),
+  };
 }
 
 function supabaseGameAiringsStore(supabase: SupabaseClient): GameAiringsStore {
   return {
+    async gameIdsByExternalId(externalIds) {
+      const { data, error } = await supabase
+        .from('games')
+        .select('id, sportradar_id')
+        .in('sportradar_id', [...externalIds]);
+      if (error) throw error;
+      return new Map(
+        (data ?? []).map((game: { id: string; sportradar_id: string }) => [game.sportradar_id, game.id]),
+      );
+    },
     async upsert(rows) {
       const { error } = await supabase
         .from('game_airings')
@@ -184,30 +106,6 @@ function supabaseGameAiringsStore(supabase: SupabaseClient): GameAiringsStore {
   };
 }
 
-interface ScoreboardBody {
-  events?: EspnBroadcastEvent[];
-}
-
-async function loadScoreboardEvents(source: ScoreboardSource): Promise<EspnBroadcastEvent[]> {
-  let body: ScoreboardBody;
-  if (source.kind === 'live') {
-    console.log(`Fetching live scoreboard from ${ESPN_LIVE_SCOREBOARD_URL}...`);
-    const response = await fetch(ESPN_LIVE_SCOREBOARD_URL);
-    if (!response.ok) {
-      throw new Error(`ESPN scoreboard request failed: ${response.status} ${response.statusText}`);
-    }
-    body = (await response.json()) as ScoreboardBody;
-  } else {
-    console.log(`Reading scoreboard from ${source.path}...`);
-    body = JSON.parse(readFileSync(source.path, 'utf8')) as ScoreboardBody;
-  }
-  const events = body.events ?? [];
-  if (events.length === 0) {
-    throw new Error('Scoreboard has no events.');
-  }
-  return events;
-}
-
 export async function seedBroadcasts(source: ScoreboardSource): Promise<void> {
   const supabaseUrl = process.env['SUPABASE_URL'];
   const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
@@ -215,48 +113,26 @@ export async function seedBroadcasts(source: ScoreboardSource): Promise<void> {
     throw new Error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY. Set them in services/api/.env.');
   }
 
-  const events = await loadScoreboardEvents(source);
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-  const externalIds = events.map((event) => espnGameExternalId(event.id));
-  const { data: games, error: gamesError } = await supabase
-    .from('games')
-    .select('id, sportradar_id')
-    .in('sportradar_id', externalIds);
-  if (gamesError) throw gamesError;
-  const gameIdByExternalId = new Map<string, string>(
-    (games ?? []).map((game: { id: string; sportradar_id: string }) => [game.sportradar_id, game.id]),
+  console.log(
+    source.kind === 'live' ? 'Fetching the current ESPN scoreboard...' : `Reading scoreboard from ${source.path}...`,
   );
-  if (gameIdByExternalId.size === 0) {
+  const result = await ingestAirings({
+    scoreboard: source.kind === 'live' ? espnClient : fileScoreboard(source.path),
+    store: supabaseGameAiringsStore(createClient(supabaseUrl, serviceRoleKey)),
+    source: airingSourceFor(source),
+    log: (line) => console.warn(line),
+  });
+
+  if (result.events === 0) {
+    throw new Error('Scoreboard has no events.');
+  }
+  if (result.games === 0) {
     throw new Error('No scoreboard events match seeded games. Run `pnpm seed:schedule` first.');
   }
-
-  const { rowsByGame, unmatchedEventIds } = buildAiringRows(
-    events,
-    gameIdByExternalId,
-    airingSourceFor(source),
-    new Date().toISOString(),
-    (info) => {
-      console.warn(
-        `unmapped media "${info.rawName}" on ${info.shortName ?? '?'} (${info.eventId}) via ${info.source} — skipped`,
-      );
-    },
+  console.log(
+    `game_airings: upserted ${result.rows}, deleted ${result.deleted} stale across ${result.games} games.`,
   );
-  for (const eventId of unmatchedEventIds) {
-    console.warn(`no seeded game for ESPN event ${eventId} (${espnGameExternalId(eventId)}) — skipped`);
-  }
-
-  const store = supabaseGameAiringsStore(supabase);
-  let upserted = 0;
-  let deleted = 0;
-  for (const [gameId, airingRows] of rowsByGame) {
-    const result = await writeGameAirings(store, gameId, airingRows);
-    upserted += result.upserted;
-    deleted += result.deleted;
-  }
-  console.log(`game_airings: upserted ${upserted}, deleted ${deleted} stale across ${rowsByGame.size} games.`);
-
-  console.log(`Done. ${unmatchedEventIds.length} unmatched events.`);
+  console.log(`Done. ${result.unmapped} unmapped, ${result.unmatchedEventIds.length} unmatched events.`);
 }
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);

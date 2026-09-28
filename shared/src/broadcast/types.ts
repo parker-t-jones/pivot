@@ -97,17 +97,21 @@ export interface WatchOption {
 /** Minimal ESPN event shape parseEspnAirings reads. */
 export interface EspnBroadcastEvent {
   id: string;
-  shortName?: string;
-  date?: string;
-  competitions?: {
-    broadcast?: string;
-    broadcasts?: { market?: string; names?: string[] }[];
-    geoBroadcasts?: {
-      type?: { shortName?: string };
-      market?: { type?: string };
-      media?: { shortName?: string };
-    }[];
-  }[];
+  shortName?: string | undefined;
+  date?: string | undefined;
+  competitions?:
+    | {
+        broadcast?: string | undefined;
+        broadcasts?: { market?: string | undefined; names?: string[] | undefined }[] | undefined;
+        geoBroadcasts?:
+          | {
+              type?: { shortName?: string | undefined } | undefined;
+              market?: { type?: string | undefined } | undefined;
+              media?: { shortName?: string | undefined } | undefined;
+            }[]
+          | undefined;
+      }[]
+    | undefined;
 }
 
 export type UnmappedMediaLog = (info: {
