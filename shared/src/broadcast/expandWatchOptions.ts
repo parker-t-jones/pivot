@@ -1,6 +1,6 @@
 import { CARRIAGE_2026_1 } from './carriageMap.js';
 import { groupWindow } from './groupWindow.js';
-import { lagSecondsForUserService } from './lag.js';
+import { lagSecondsFor } from './lag.js';
 import { networkRank } from './networkLabelFromAirings.js';
 import type {
   CarriageMapVersion,
@@ -45,7 +45,7 @@ export function expandWatchOptions(
         network: airing.network,
         requiresSubscription: true,
         marketConfidence: confidenceFor(entry.marketRule, regionalSlate),
-        typicalLagSeconds: lagSecondsForUserService(entry.service),
+        typicalLagSeconds: lagSecondsFor(entry.service),
         preferred: false,
       };
 

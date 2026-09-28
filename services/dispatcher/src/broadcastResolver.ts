@@ -1,4 +1,5 @@
-import { lagSecondsFor, type BroadcastCatalog, type GameBroadcastOption } from './broadcastLag.js';
+import { lagSecondsFor } from '@pivot/shared';
+import type { BroadcastCatalog, GameBroadcastOption } from './broadcastLag.js';
 
 /**
  * PLAN.md Section 2's `BroadcastResolver` — authoritative deep-link resolution: given a game's

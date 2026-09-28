@@ -23,7 +23,7 @@ describe('rankBroadcasts', () => {
         deepLinkUrl: 'https://example.com/fox',
         requiresSubscription: false,
         userHasSubscription: false,
-        typicalLagSeconds: 8,
+        typicalLagSeconds: 60,
         preferred: true,
       },
     ]);
@@ -60,14 +60,15 @@ describe('rankBroadcasts', () => {
   });
 
   it('breaks ties among eligible broadcasts by lowest lag, then alphabetically', () => {
-    // All eligible (fox/cbs free, espn_plus subscribed). Lags: espn_plus 60, fox 8, cbs 8.
+    // All eligible (cbs free, espn_plus/amazon_prime subscribed). Lags: amazon_prime 40,
+    // espn_plus 60, cbs 60 (networks fall back to the default).
     const ranked = rankBroadcasts(
-      [broadcast('espn_plus', true), broadcast('fox', false), broadcast('cbs', false)],
-      new Set(['espn_plus']),
+      [broadcast('espn_plus', true), broadcast('cbs', false), broadcast('amazon_prime', true)],
+      new Set(['espn_plus', 'amazon_prime']),
     );
 
-    // fox & cbs both lag 8 -> alphabetical (cbs before fox); espn_plus (60) last.
-    expect(ranked.map((b) => b.service)).toEqual(['cbs', 'fox', 'espn_plus']);
+    // amazon_prime (40) first; cbs & espn_plus both 60 -> alphabetical.
+    expect(ranked.map((b) => b.service)).toEqual(['amazon_prime', 'cbs', 'espn_plus']);
     expect(ranked[0]?.preferred).toBe(true);
     expect(ranked.filter((b) => b.preferred)).toHaveLength(1);
   });
@@ -84,7 +85,7 @@ describe('rankBroadcasts', () => {
     );
 
     expect(forward).toEqual(reversed);
-    expect(forward[0]?.service).toBe('fox'); // lowest lag (8) among the three eligible
+    expect(forward[0]?.service).toBe('amazon_prime'); // lowest lag (40) among the three eligible
   });
 
   it('prefers a low-lag eligible broadcast over a lower-lag ineligible one', () => {
@@ -113,9 +114,9 @@ describe('resolveBroadcasts (I/O wrapper)', () => {
 
     const ranked = await resolveBroadcasts('g1', 'u1', catalog);
 
-    // Both eligible (fox free, amazon_prime subscribed); fox wins on lag (8 < 40).
-    expect(ranked.map((b) => b.service)).toEqual(['fox', 'amazon_prime']);
-    expect(preferredBroadcast(ranked)?.service).toBe('fox');
+    // Both eligible (fox free, amazon_prime subscribed); amazon_prime wins on lag (40 < 60).
+    expect(ranked.map((b) => b.service)).toEqual(['amazon_prime', 'fox']);
+    expect(preferredBroadcast(ranked)?.service).toBe('amazon_prime');
   });
 
   it('returns an empty ranking when the catalog has no data for the game', async () => {

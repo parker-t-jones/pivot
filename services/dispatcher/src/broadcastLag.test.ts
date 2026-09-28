@@ -1,47 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BROADCAST_LAG_SECONDS,
-  DEFAULT_LAG_SECONDS,
   InMemoryBroadcastCatalog,
-  lagSecondsFor,
   pickBroadcastSource,
   resolveLikelyBroadcastSource,
 } from './broadcastLag.js';
-
-describe('BROADCAST_LAG_SECONDS', () => {
-  it('matches PLAN.md Section 8, with hulu renamed hulu_live', () => {
-    expect(BROADCAST_LAG_SECONDS).toEqual({
-      sunday_ticket: 75,
-      espn_plus: 60,
-      paramount_plus: 50,
-      peacock: 45,
-      amazon_prime: 40,
-      hulu_live: 45,
-      fubo: 50,
-      directv: 40,
-      nfl_plus: 60,
-      nfl_network: 20,
-      fox: 8,
-      cbs: 8,
-      nbc: 8,
-      abc: 8,
-    });
-  });
-});
-
-describe('lagSecondsFor', () => {
-  it('looks up a known service', () => {
-    expect(lagSecondsFor('sunday_ticket')).toBe(75);
-  });
-
-  it('falls back to 60 for an unknown service', () => {
-    expect(lagSecondsFor('some_future_service')).toBe(DEFAULT_LAG_SECONDS);
-  });
-
-  it('falls back to 60 for a null (unresolved) source', () => {
-    expect(lagSecondsFor(null)).toBe(DEFAULT_LAG_SECONDS);
-  });
-});
 
 function broadcast(service: string) {
   return { service, deepLinkUrl: `https://example.com/${service}`, requiresSubscription: true };

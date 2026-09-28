@@ -27,10 +27,7 @@ export { RedisFlagEventQueue } from './redisQueue.js';
 export { isEventStateFresh, isStillRelevant } from './isStillRelevant.js';
 
 export {
-  BROADCAST_LAG_SECONDS,
-  DEFAULT_LAG_SECONDS,
   InMemoryBroadcastCatalog,
-  lagSecondsFor,
   pickBroadcastSource,
   resolveLikelyBroadcastSource,
   type BroadcastCatalog,

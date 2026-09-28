@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FlagEvent, FlagState } from '@pivot/shared';
-import { lagSecondsFor } from './broadcastLag.js';
+import { lagSecondsFor, type FlagEvent, type FlagState } from '@pivot/shared';
 import { InMemoryFlagEventQueue } from './inMemoryQueue.js';
 import { QueueingEventDispatcher } from './scheduleFlagEvent.js';
 
