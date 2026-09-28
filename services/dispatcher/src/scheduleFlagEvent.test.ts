@@ -32,7 +32,7 @@ const CLOCK = 1_700_000_050_000;
 
 describe('QueueingEventDispatcher (implements the engine EventDispatcher interface)', () => {
   it('does not add sunday_ticket lag to scheduledFireAt', async () => {
-    expect(lagSecondsFor('sunday_ticket')).toBe(75);
+    expect(lagSecondsFor('sunday_ticket')).toBe(30);
 
     const queue = new InMemoryFlagEventQueue();
     const dispatcher = new QueueingEventDispatcher({ queue, clock: () => CLOCK });

@@ -543,7 +543,7 @@ function seedGameCatalog(catalog: InMemoryGameCatalog, contexts: EspnGameContext
  * Seeds `sunday_ticket` for every game and subscribes both users to it, so `deliverFlagEvent` resolves
  * a real `action.deep_link_url` and a notification tap opens YouTube TV.
  *
- * `sunday_ticket` also carries a 75s `USER_SERVICE_LAG_SECONDS` entry, but that value cannot affect
+ * `sunday_ticket` also carries a `USER_SERVICE_LAG_SECONDS` entry, but that value cannot affect
  * this run: `scheduledFireAt` comes from `ResumptionGatedDispatcher`, never from `lagSecondsFor`. Here
  * the resolved source only selects which broadcast the CTA points at.
  */

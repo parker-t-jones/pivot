@@ -6,12 +6,14 @@
 import type { UserService } from './types.js';
 
 export const USER_SERVICE_LAG_SECONDS: Record<UserService, number> = {
-  sunday_ticket: 75,
-  youtube_tv: 75, // unmeasured: sunday_ticket's value
-  hulu_live: 75, // unmeasured: sunday_ticket's value
-  fubo: 75, // unmeasured: sunday_ticket's value
-  directv: 75, // unmeasured: sunday_ticket's value
-  sling: 75, // unmeasured: sunday_ticket's value
+  // Measured preseason 2026 via dual method, YouTube TV ~28–32s behind ESPN; Sunday Ticket streams
+  // through YouTube TV.
+  sunday_ticket: 30,
+  youtube_tv: 30,
+  hulu_live: 75, // unmeasured
+  fubo: 75, // unmeasured
+  directv: 75, // unmeasured
+  sling: 75, // unmeasured
   amazon_prime: 40,
   peacock: 45,
   paramount_plus: 50,

@@ -7,10 +7,10 @@ describe('USER_SERVICE_LAG_SECONDS', () => {
     expect(Object.keys(USER_SERVICE_LAG_SECONDS).sort()).toEqual([...USER_SERVICES].sort());
   });
 
-  it("keeps PLAN.md Section 8's standalone values and gives unmeasured services sunday_ticket's 75", () => {
+  it('uses the measured YouTube TV value for YouTube TV and Sunday Ticket, 75 for unmeasured vMVPDs', () => {
     expect(USER_SERVICE_LAG_SECONDS).toEqual({
-      sunday_ticket: 75,
-      youtube_tv: 75,
+      sunday_ticket: 30,
+      youtube_tv: 30,
       hulu_live: 75,
       fubo: 75,
       directv: 75,
@@ -26,7 +26,7 @@ describe('USER_SERVICE_LAG_SECONDS', () => {
 
 describe('lagSecondsFor', () => {
   it('looks up a user service', () => {
-    expect(lagSecondsFor('sunday_ticket')).toBe(75);
+    expect(lagSecondsFor('sunday_ticket')).toBe(30);
     expect(lagSecondsFor('amazon_prime')).toBe(40);
   });
 
