@@ -83,8 +83,22 @@ async function fetchAndValidate<T>(url: string, schema: z.ZodType<T>): Promise<E
   }
 }
 
+/** One scoreboard week, matching a `games` row's `season_year` / `season_type` / `week`. */
+export interface EspnScoreboardWeek {
+  seasonYear: number;
+  seasonType: 'pre' | 'regular' | 'post';
+  week: number;
+}
+
+const ESPN_SEASON_TYPE: Record<EspnScoreboardWeek['seasonType'], number> = {
+  pre: 1,
+  regular: 2,
+  post: 3,
+};
+
 export interface EspnClient {
-  getScoreboard(): Promise<EspnFetchResult<EspnScoreboard>>;
+  /** Without `week`, ESPN returns the current week. */
+  getScoreboard(week?: EspnScoreboardWeek): Promise<EspnFetchResult<EspnScoreboard>>;
   getSummary(eventId: string): Promise<EspnFetchResult<EspnSummary>>;
 }
 
@@ -92,8 +106,12 @@ export interface EspnClient {
  *  `sleeperClient`'s shape (a plain object of async methods) while diverging on error handling for
  *  the reasons in `fetchAndValidate`'s doc comment. */
 export const espnClient: EspnClient = {
-  async getScoreboard(): Promise<EspnFetchResult<EspnScoreboard>> {
-    return fetchAndValidate(SCOREBOARD_URL, espnScoreboardSchema);
+  async getScoreboard(week?: EspnScoreboardWeek): Promise<EspnFetchResult<EspnScoreboard>> {
+    const url =
+      week === undefined
+        ? SCOREBOARD_URL
+        : `${SCOREBOARD_URL}?dates=${week.seasonYear}&seasontype=${ESPN_SEASON_TYPE[week.seasonType]}&week=${week.week}`;
+    return fetchAndValidate(url, espnScoreboardSchema);
   },
 
   async getSummary(eventId: string): Promise<EspnFetchResult<EspnSummary>> {

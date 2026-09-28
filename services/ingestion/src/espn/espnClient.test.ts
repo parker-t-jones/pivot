@@ -223,6 +223,26 @@ describe('espnClient', () => {
       }
     });
 
+    it('requests a specific season, season type and week when given one', async () => {
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse(VALID_SCOREBOARD))
+        .mockResolvedValueOnce(jsonResponse(VALID_SCOREBOARD));
+
+      await espnClient.getScoreboard({ seasonYear: 2026, seasonType: 'regular', week: 2 });
+      await espnClient.getScoreboard({ seasonYear: 2027, seasonType: 'post', week: 1 });
+
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=2026&seasontype=2&week=2',
+        { signal: expect.any(AbortSignal) },
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=2027&seasontype=3&week=1',
+        { signal: expect.any(AbortSignal) },
+      );
+    });
+
     it('returns an invalid_shape failure when an event is missing its id', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ events: [{ competitions: [] }] }));
 

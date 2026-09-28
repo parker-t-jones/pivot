@@ -48,6 +48,9 @@ export interface InProgressGame {
   id: string;
   espnEventId: string | null;
   scheduledStart: string;
+  seasonYear: number;
+  seasonType: 'pre' | 'regular' | 'post';
+  week: number;
 }
 
 export interface GameDirectory {

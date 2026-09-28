@@ -13,6 +13,12 @@ import type { GameDirectory, InProgressGame, SeededGame } from './discovery.js';
 
 const ESPN_SEED_PREFIX = 'seed:espn:';
 
+/** `games.season_type` is CHECKed to these three values. */
+function parseSeasonType(value: string): InProgressGame['seasonType'] {
+  if (value === 'pre' || value === 'regular' || value === 'post') return value;
+  throw new Error(`unexpected games.season_type ${value}`);
+}
+
 export class SupabaseGameDirectory implements GameDirectory {
   constructor(private readonly client: SupabaseServiceClient) {}
 
@@ -55,7 +61,7 @@ export class SupabaseGameDirectory implements GameDirectory {
   async listInProgress(): Promise<InProgressGame[]> {
     const { data, error } = await this.client
       .from('games')
-      .select('id, sportradar_id, scheduled_start')
+      .select('id, sportradar_id, scheduled_start, season_year, season_type, week')
       .eq('status', 'in_progress');
     if (error) throw new Error(`in-progress games lookup failed: ${error.message}`);
     return (data ?? []).map((row) => ({
@@ -64,6 +70,9 @@ export class SupabaseGameDirectory implements GameDirectory {
         ? row.sportradar_id.slice(ESPN_SEED_PREFIX.length)
         : null,
       scheduledStart: row.scheduled_start,
+      seasonYear: row.season_year,
+      seasonType: parseSeasonType(row.season_type),
+      week: row.week,
     }));
   }
 }

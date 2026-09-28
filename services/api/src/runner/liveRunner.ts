@@ -93,18 +93,13 @@ async function runLeader(
     console.error(`[runner] stake cache rebuild failed: ${failureReason(error)}`);
   }
   try {
-    const board = await scoreboard.getScoreboard();
-    if (board.ok) {
-      await reconcileInProgress({
-        events: board.data.events ?? [],
-        games: deps.games,
-        gameState: deps.gameState,
-        catalog: deps.gameCatalog,
-        realtime: deps.realtime,
-      });
-    } else {
-      console.error(`[runner] reconcile skipped, scoreboard failed: ${board.reason}`);
-    }
+    await reconcileInProgress({
+      scoreboard,
+      games: deps.games,
+      gameState: deps.gameState,
+      catalog: deps.gameCatalog,
+      realtime: deps.realtime,
+    });
   } catch (error) {
     console.error(`[runner] reconcile failed: ${failureReason(error)}`);
   }

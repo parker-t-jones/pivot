@@ -4,6 +4,7 @@ export {
   type EspnFetchFailure,
   type EspnFetchFailureKind,
   type EspnFetchResult,
+  type EspnScoreboardWeek,
 } from './espn/espnClient.js';
 
 export {
