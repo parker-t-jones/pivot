@@ -290,6 +290,7 @@ describe('findNextStakeGames / formatPlayersActiveInGame', () => {
       away_team_primary_color: '',
       away_team_secondary_color: '',
       broadcasts: [],
+      airings: [],
     };
   }
 

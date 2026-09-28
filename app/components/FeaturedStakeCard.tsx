@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { networkLabel } from '../lib/board';
+import { networkLabelFromAirings } from '@pivot/shared/broadcast';
 import { fonts } from '../lib/fonts';
+import { watchCta } from '../lib/gameDisplay';
 import { formatNextGameWhen, type LineupGameGroup } from '../lib/homeState';
 import type { ScheduleGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
@@ -31,7 +32,8 @@ export function FeaturedStakeCard({
   players = [],
   eyebrow = 'BIGGEST STAKE',
 }: FeaturedStakeCardProps) {
-  const network = networkLabel(game.broadcasts);
+  const network = networkLabelFromAirings(game.airings);
+  const cta = watchCta(game.broadcasts, game.airings);
   const when = formatNextGameWhen(game.scheduled_start);
 
   return (
@@ -69,12 +71,19 @@ export function FeaturedStakeCard({
             ))}
           </View>
         ) : null}
+
+        {cta.kind === 'airing' ? <Text style={styles.airing}>{cta.text}</Text> : null}
       </View>
     </Slip>
   );
 }
 
 const styles = StyleSheet.create({
+  airing: {
+    color: theme.colors.textSecondary,
+    fontFamily: fonts.monoMedium,
+    fontSize: theme.type.caption.size,
+  },
   at: {
     color: theme.colors.textTertiary,
     fontFamily: fonts.monoMedium,

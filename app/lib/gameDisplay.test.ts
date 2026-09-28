@@ -19,6 +19,9 @@ import {
   fieldAlignedMatchup,
   hexWithAlpha,
   opponentAbbreviation,
+  localRouteOption,
+  watchCta,
+  watchOptionLabel,
   type GameBroadcast,
 } from './gameDisplay';
 import type { GameSummary } from './flagEventPayload';
@@ -168,26 +171,100 @@ describe('fieldGaugeShowsRedZone', () => {
   });
 });
 
-describe('pickPreferredBroadcast', () => {
-  const b = (service: string, preferred: boolean): GameBroadcast => ({
+function option(
+  service: string,
+  preferred: boolean,
+  overrides: Partial<GameBroadcast> = {},
+): GameBroadcast {
+  return {
     service,
     deep_link_url: `https://x/${service}`,
-    requires_subscription: false,
+    requires_subscription: true,
     user_has_subscription: true,
-    typical_lag_seconds: 8,
+    typical_lag_seconds: 30,
     preferred,
-  });
+    network: 'fox',
+    market_confidence: 'unknown',
+    ...overrides,
+  };
+}
+
+describe('pickPreferredBroadcast', () => {
+  const b = option;
 
   it('returns the preferred broadcast when present', () => {
-    expect(pickPreferredBroadcast([b('fox', false), b('cbs', true)])?.service).toBe('cbs');
+    expect(
+      pickPreferredBroadcast([b('youtube_tv', false), b('sunday_ticket', true)])?.service,
+    ).toBe('sunday_ticket');
   });
 
   it('falls back to the first broadcast when none is preferred', () => {
-    expect(pickPreferredBroadcast([b('fox', false), b('cbs', false)])?.service).toBe('fox');
+    expect(
+      pickPreferredBroadcast([b('youtube_tv', false), b('sunday_ticket', false)])?.service,
+    ).toBe('youtube_tv');
   });
 
   it('returns null for an empty list', () => {
     expect(pickPreferredBroadcast([])).toBeNull();
+  });
+});
+
+describe('watchCta', () => {
+  const fox = [{ network: 'fox' }];
+
+  it('offers the preferred option when the user has one', () => {
+    const yttv = option('youtube_tv', true);
+    expect(watchCta([yttv], fox)).toEqual({ kind: 'watch', broadcast: yttv });
+  });
+
+  it('falls back to the airing as plain text with no options', () => {
+    expect(watchCta([], fox)).toEqual({ kind: 'airing', text: 'On FOX' });
+  });
+
+  it('uses the board token for the airing, ESPN over ABC', () => {
+    expect(watchCta([], [{ network: 'abc' }, { network: 'espn' }])).toEqual({
+      kind: 'airing',
+      text: 'On ESPN',
+    });
+    expect(watchCta([], [{ network: 'amazon_prime' }])).toEqual({
+      kind: 'airing',
+      text: 'On PRIME',
+    });
+  });
+
+  it('treats an option with no deep link as nothing to open', () => {
+    expect(watchCta([option('sling', true, { deep_link_url: '' })], fox)).toEqual({
+      kind: 'airing',
+      text: 'On FOX',
+    });
+  });
+
+  it('shows nothing when there is neither an option nor a known airing', () => {
+    expect(watchCta([], [])).toEqual({ kind: 'none' });
+    expect(watchCta([], [{ network: 'dumont' }])).toEqual({ kind: 'none' });
+  });
+});
+
+describe('watchOptionLabel', () => {
+  it('names a plain option by its service', () => {
+    expect(watchOptionLabel(option('sunday_ticket', true))).toBe('NFL Sunday Ticket');
+  });
+
+  it('spells out when to use the in-market local route', () => {
+    expect(watchOptionLabel(option('youtube_tv', false, { route_hint: 'in_market_local' }))).toBe(
+      'FOX on YouTube TV — if this game is in your market',
+    );
+  });
+});
+
+describe('localRouteOption', () => {
+  it('finds the option carrying the in-market hint', () => {
+    const local = option('youtube_tv', false, { route_hint: 'in_market_local' });
+    expect(localRouteOption([option('sunday_ticket', true), local])).toBe(local);
+  });
+
+  it('returns null without one', () => {
+    expect(localRouteOption([option('youtube_tv', true)])).toBeNull();
   });
 });
 

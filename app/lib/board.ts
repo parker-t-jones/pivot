@@ -5,8 +5,7 @@
  * unit-testable the same way `homeState.ts` is. `loadHome` must not grow to accommodate the board —
  * the screen calls these in render via `useMemo` over data it already has.
  */
-import { groupWindow, type AiringNetwork, type WindowLabel } from '@pivot/shared/broadcast';
-import { serviceLabel, type GameBroadcast } from './gameDisplay';
+import { groupWindow, networkLabelFromAirings, type WindowLabel } from '@pivot/shared/broadcast';
 import type { HomeBranch, LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
 
@@ -19,67 +18,6 @@ import type { ScheduleGame } from './schedule';
  */
 export function isPregameBranch(branch: HomeBranch['branch'] | null): boolean {
   return branch === 'state3' || branch === 'state4';
-}
-
-/**
- * Ranks a `game_broadcasts.service` as the game's *airing network*, or null when it isn't one.
- *
- * Single exhaustive switch over `AiringNetwork` on purpose: a new key in the catalog becomes a
- * compile error here rather than silently falling through to "no network". Lower rank wins; ESPN
- * beats ABC on a simulcast (docs/B1-BROADCAST-DESIGN.md §7.2).
- *
- * User services that only carry somebody else's feed (YouTube TV, Sunday Ticket, Fubo, …) are not
- * airing networks, so they land in `default` and never produce a label.
- */
-function asNetwork(service: string): { rank: number; label: string } | null {
-  const network = service as AiringNetwork;
-  switch (network) {
-    // Linear networks holding the broadcast window.
-    case 'cbs':
-      return { rank: 0, label: serviceLabel(network) };
-    case 'fox':
-      return { rank: 1, label: serviceLabel(network) };
-    case 'nbc':
-      return { rank: 2, label: serviceLabel(network) };
-    case 'espn':
-      return { rank: 3, label: 'ESPN' };
-    case 'abc':
-      return { rank: 4, label: serviceLabel(network) };
-    // Streaming exclusives. `serviceLabel`'s marketing names ("Prime Video", "NFL Network") are
-    // too wide for a 38pt row, so those carry a short form here instead.
-    case 'amazon_prime':
-      return { rank: 5, label: 'PRIME' };
-    case 'peacock':
-      return { rank: 6, label: 'PEACOCK' };
-    case 'nfl_network':
-      return { rank: 7, label: 'NFLN' };
-    case 'netflix':
-      return { rank: 8, label: 'NETFLIX' };
-    case 'espn_plus':
-      return { rank: 9, label: serviceLabel(network) };
-    case 'paramount_plus':
-      return { rank: 10, label: 'PARAMOUNT+' };
-    case 'nfl_plus':
-      return { rank: 11, label: serviceLabel(network) };
-    default:
-      network satisfies never;
-      return null;
-  }
-}
-
-/**
- * The network airing this game, as board-column text, or null when no airing network is listed.
- * Deliberately not `rankBroadcasts` — that orders by what the *user* can watch, which is a
- * different question from who is airing the game.
- */
-export function networkLabel(broadcasts: GameBroadcast[]): string | null {
-  let best: { rank: number; label: string } | null = null;
-  for (const broadcast of broadcasts) {
-    const network = asNetwork(broadcast.service);
-    if (!network) continue;
-    if (!best || network.rank < best.rank) best = network;
-  }
-  return best?.label ?? null;
 }
 
 export { groupWindow };
@@ -152,7 +90,7 @@ export function buildBoardRows(
       homeTeamId: game.home_team,
       awayTeamColor: game.away_team_primary_color,
       homeTeamColor: game.home_team_primary_color,
-      network: networkLabel(game.broadcasts),
+      network: networkLabelFromAirings(game.airings),
       stakeCount: refs.length,
       // Tie goes to the home team, so the stripe is stable rather than order-dependent.
       stripeSide: refs.length === 0 ? null : awayStakes > homeStakes ? 'away' : 'home',

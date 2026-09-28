@@ -1,3 +1,9 @@
+import {
+  networkLabelFromAirings,
+  type AiringMarket,
+  type MarketConfidence,
+  type RouteHint,
+} from '@pivot/shared/broadcast';
 import type { FlaggedPlayer, GameSummary } from './flagEventPayload';
 
 /** `GET /flags/current` flag entry (Section 9). `game` reuses the shared `GameSummary` wire shape.
@@ -18,7 +24,8 @@ export interface FlagsCurrentResponse {
   generated_at: string;
 }
 
-/** One entry of the `GET /games/:id/broadcasts` response (Section 9). */
+/** One watch option from `GET /games/:id/broadcasts` / `GET /games?week=` (Section 9): a service
+ *  the user has, carrying one of the game's airings. */
 export interface GameBroadcast {
   service: string;
   deep_link_url: string;
@@ -26,6 +33,16 @@ export interface GameBroadcast {
   user_has_subscription: boolean;
   typical_lag_seconds: number;
   preferred: boolean;
+  network: string;
+  market_confidence: MarketConfidence;
+  route_hint?: RouteHint;
+}
+
+/** One airing of a game (`GET /games?week=` `airings`) — who is broadcasting it. */
+export interface GameAiring {
+  network: string;
+  market: AiringMarket;
+  market_confidence: MarketConfidence;
 }
 
 export interface GameBroadcastsResponse {
@@ -278,6 +295,41 @@ export function alsoFlaggedSituationLines(game: GameSummary): string[] {
 }
 
 /** The `preferred` broadcast (the switch target), or the first available, or null. */
-export function pickPreferredBroadcast(broadcasts: GameBroadcast[]): GameBroadcast | null {
+export function pickPreferredBroadcast(broadcasts: readonly GameBroadcast[]): GameBroadcast | null {
   return broadcasts.find((b) => b.preferred) ?? broadcasts[0] ?? null;
+}
+
+/** The local-channel option ranked second behind Sunday Ticket (docs/B1-BROADCAST-DESIGN.md §4.4). */
+export function localRouteOption(broadcasts: readonly GameBroadcast[]): GameBroadcast | null {
+  return broadcasts.find((b) => b.route_hint === 'in_market_local') ?? null;
+}
+
+/** An option's name in lists and CTAs. The in-market local route says when to use it (§4.4). */
+export function watchOptionLabel(broadcast: GameBroadcast): string {
+  const service = serviceLabel(broadcast.service);
+  return broadcast.route_hint === 'in_market_local'
+    ? `${serviceLabel(broadcast.network)} on ${service} — if this game is in your market`
+    : service;
+}
+
+export type WatchCta =
+  | { kind: 'watch'; broadcast: GameBroadcast }
+  | { kind: 'airing'; text: string }
+  | { kind: 'none' };
+
+/**
+ * What goes where a card's Switch/Watch button sits (docs/B1-BROADCAST-DESIGN.md §1.7): the
+ * preferred option when the user has one that opens, otherwise the airing as plain text
+ * ("On FOX") — never a disabled button.
+ */
+export function watchCta(
+  broadcasts: readonly GameBroadcast[],
+  airings: readonly { network: string }[],
+): WatchCta {
+  const preferred = pickPreferredBroadcast(broadcasts);
+  if (preferred && preferred.deep_link_url.length > 0) {
+    return { kind: 'watch', broadcast: preferred };
+  }
+  const network = networkLabelFromAirings(airings);
+  return network === null ? { kind: 'none' } : { kind: 'airing', text: `On ${network}` };
 }

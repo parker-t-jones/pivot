@@ -15,7 +15,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { SecondaryButton } from '../components/SecondaryButton';
 import { apiClient } from '../lib/apiClient';
 import type { GameBroadcast, GameBroadcastsResponse } from '../lib/gameDisplay';
-import { serviceLabel } from '../lib/gameDisplay';
+import { watchOptionLabel } from '../lib/gameDisplay';
 import { userServiceAppStoreUrl } from '../lib/streamingServices';
 import { resolveSwitch } from '../lib/switching';
 import { theme } from '../lib/theme';
@@ -69,10 +69,10 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function openBroadcast(broadcast: GameBroadcast): Promise<boolean> {
-  if (!broadcast.deep_link_url) return false;
+async function openDeepLink(url: string): Promise<boolean> {
+  if (!url) return false;
   try {
-    await Linking.openURL(broadcast.deep_link_url);
+    await Linking.openURL(url);
     return true;
   } catch {
     return false;
@@ -188,14 +188,7 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
 
           await delay(MIN_OVERLAY_MS);
 
-          const opened = await openBroadcast({
-            service: resolution.session.source,
-            deep_link_url: resolution.session.deepLinkUrl,
-            requires_subscription: false,
-            user_has_subscription: true,
-            typical_lag_seconds: 0,
-            preferred: true,
-          });
+          const opened = await openDeepLink(resolution.session.deepLinkUrl);
 
           if (opened) {
             setPhase({ status: 'idle' });
@@ -219,7 +212,7 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
 
   const onSelectAlternate = useCallback((broadcast: GameBroadcast) => {
     void (async () => {
-      const opened = await openBroadcast(broadcast);
+      const opened = await openDeepLink(broadcast.deep_link_url);
       if (opened) {
         setPhase({ status: 'idle' });
       }
@@ -331,7 +324,7 @@ function AlternateBroadcastRow({
     <SecondaryButton label="Get app" onPress={() => void Linking.openURL(appStoreUrl)} />
   ) : null;
 
-  return <ListRow title={serviceLabel(broadcast.service)} trailing={trailing} />;
+  return <ListRow title={watchOptionLabel(broadcast)} trailing={trailing} />;
 }
 
 export function useSwitching(): SwitchingContextValue {

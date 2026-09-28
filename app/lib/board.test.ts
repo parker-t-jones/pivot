@@ -5,25 +5,17 @@ import {
   flattenRows,
   groupWindow,
   isPregameBranch,
-  networkLabel,
   nextKickoff,
   pickFeaturedGame,
   type StakeRef,
 } from './board';
-import type { GameBroadcast } from './gameDisplay';
+import type { GameAiring, GameBroadcast } from './gameDisplay';
 import { resolveHomeBranch, type HomeBranch, type LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
-import { AIRING_NETWORKS, USER_SERVICES } from '@pivot/shared/broadcast';
+import { AIRING_NETWORKS } from '@pivot/shared/broadcast';
 
-function broadcast(service: string): GameBroadcast {
-  return {
-    service,
-    deep_link_url: `https://example.test/${service}`,
-    requires_subscription: false,
-    user_has_subscription: false,
-    typical_lag_seconds: 0,
-    preferred: false,
-  };
+function airing(network: string): GameAiring {
+  return { network, market: 'national', market_confidence: 'national' };
 }
 
 function game(
@@ -44,81 +36,60 @@ function game(
     away_team_primary_color: '#00338D',
     away_team_secondary_color: '#C60C30',
     broadcasts: [],
+    airings: [],
     ...overrides,
   };
 }
 
-/** User services that only carry somebody else's feed; they can never be the airing network. */
-const CARRIERS: readonly string[] = USER_SERVICES.filter(
-  (service) => !(AIRING_NETWORKS as readonly string[]).includes(service),
-);
-
-describe('networkLabel', () => {
-  it('returns null when there are no broadcasts', () => {
-    expect(networkLabel([])).toBeNull();
-  });
-
-  it('returns null when only carriers are listed', () => {
-    expect(CARRIERS).toEqual(['youtube_tv', 'sunday_ticket', 'hulu_live', 'fubo', 'directv', 'sling']);
-    expect(networkLabel(CARRIERS.map(broadcast))).toBeNull();
-  });
-
-  it('prefers a linear network over the carriers alongside it', () => {
-    expect(networkLabel([broadcast('youtube_tv'), broadcast('cbs'), broadcast('nfl_plus')])).toBe(
-      'CBS',
+describe('board network column', () => {
+  function networkFor(airings: GameAiring[], broadcasts: GameBroadcast[] = []): string | null {
+    const [row] = flattenRows(
+      buildBoardRows([game('g1', '2026-09-20T17:00:00Z', { airings, broadcasts })], []),
     );
+    return row?.network ?? null;
+  }
+
+  it('is null when the game has no airings', () => {
+    expect(networkFor([])).toBeNull();
   });
 
   it('labels the ESPN/ABC simulcast ESPN', () => {
-    // The shape `seed-broadcasts.ts` writes for Week 3 MNF (PHI @ CHI).
-    expect(networkLabel([broadcast('espn'), broadcast('abc')])).toBe('ESPN');
-    expect(networkLabel([broadcast('abc'), broadcast('espn')])).toBe('ESPN');
+    // Week 3 MNF (PHI @ CHI).
+    expect(networkFor([airing('espn'), airing('abc')])).toBe('ESPN');
+    expect(networkFor([airing('abc'), airing('espn')])).toBe('ESPN');
   });
 
-  it('prefers a linear network over a streaming exclusive', () => {
-    expect(networkLabel([broadcast('amazon_prime'), broadcast('fox')])).toBe('FOX');
+  it('comes from airings, never from the user\'s watch options', () => {
+    const yttvOnFox: GameBroadcast = {
+      service: 'youtube_tv',
+      deep_link_url: 'https://tv.youtube.com/live',
+      requires_subscription: true,
+      user_has_subscription: true,
+      typical_lag_seconds: 30,
+      preferred: true,
+      network: 'fox',
+      market_confidence: 'unknown',
+    };
+    expect(networkFor([], [yttvOnFox])).toBeNull();
+    expect(networkFor([airing('fox')], [yttvOnFox])).toBe('FOX');
   });
 
-  it('ranks deterministically when two networks are listed', () => {
-    expect(networkLabel([broadcast('nbc'), broadcast('cbs')])).toBe('CBS');
-    expect(networkLabel([broadcast('cbs'), broadcast('nbc')])).toBe('CBS');
+  it('uses the short board tokens for streaming exclusives', () => {
+    expect(networkFor([airing('amazon_prime')])).toBe('PRIME');
+    expect(networkFor([airing('nfl_network')])).toBe('NFLN');
+    expect(networkFor([airing('paramount_plus')])).toBe('PARAMOUNT+');
   });
 
-  it('shortens the streaming exclusives that serviceLabel spells out', () => {
-    expect(networkLabel([broadcast('amazon_prime')])).toBe('PRIME');
-    expect(networkLabel([broadcast('nfl_network')])).toBe('NFLN');
-    expect(networkLabel([broadcast('peacock')])).toBe('PEACOCK');
-    expect(networkLabel([broadcast('paramount_plus')])).toBe('PARAMOUNT+');
-    expect(networkLabel([broadcast('netflix')])).toBe('NETFLIX');
-  });
-
-  it('reuses serviceLabel where it is already the short form', () => {
-    expect(networkLabel([broadcast('espn_plus')])).toBe('ESPN+');
-    expect(networkLabel([broadcast('nfl_plus')])).toBe('NFL+');
-    expect(networkLabel([broadcast('abc')])).toBe('ABC');
-  });
-
-  it('ignores a service outside the catalog instead of echoing it', () => {
-    expect(networkLabel([broadcast('some_new_service')])).toBeNull();
-    expect(networkLabel([broadcast('some_new_service'), broadcast('nbc')])).toBe('NBC');
+  it('ignores a network outside the catalog instead of echoing it', () => {
+    expect(networkFor([airing('some_new_network')])).toBeNull();
+    expect(networkFor([airing('some_new_network'), airing('nbc')])).toBe('NBC');
   });
 
   it('labels every airing network without leaking the raw key', () => {
     for (const network of AIRING_NETWORKS) {
-      const label = networkLabel([broadcast(network)]);
+      const label = networkFor([airing(network)]);
       expect(label, network).toBeTruthy();
       expect(label, network).not.toBe(network);
-    }
-  });
-
-  it('classifies every user service as either a network or a carrier', () => {
-    for (const service of USER_SERVICES) {
-      const label = networkLabel([broadcast(service)]);
-      if (CARRIERS.includes(service)) {
-        expect(label, service).toBeNull();
-      } else {
-        expect(label, service).toBeTruthy();
-      }
     }
   });
 });
@@ -181,7 +152,7 @@ describe('buildBoardRows', () => {
     game('g1', '2026-09-18T00:15:00Z', {
       away_team: 'BUF',
       home_team: 'MIA',
-      broadcasts: [broadcast('amazon_prime')],
+      airings: [airing('amazon_prime')],
     }),
     game('g2', '2026-09-20T17:00:00Z', { away_team: 'NYJ', home_team: 'NE' }),
     game('g10', '2026-09-20T17:00:00Z', { away_team: 'DAL', home_team: 'PHI' }),
@@ -431,23 +402,23 @@ describe('buildMyCardGames', () => {
   const early = game('g2', '2026-09-21T17:00:00Z', {
     home_team: 'MIA',
     away_team: 'KC',
-    broadcasts: [broadcast('abc')],
+    airings: [airing('abc')],
   });
   const late = game('g10', '2026-09-21T17:00:00Z', {
     home_team: 'BUF',
     away_team: 'LAC',
-    broadcasts: [broadcast('cbs')],
+    airings: [airing('cbs')],
   });
   const night = game('g1', '2026-09-20T00:15:00Z', {
     home_team: 'GB',
     away_team: 'ATL',
     status: 'final',
-    broadcasts: [broadcast('amazon_prime')],
+    airings: [airing('amazon_prime')],
   });
   const noStake = game('g9', '2026-09-21T20:25:00Z', {
     home_team: 'DAL',
     away_team: 'BAL',
-    broadcasts: [broadcast('nbc')],
+    airings: [airing('nbc')],
   });
 
   const slate = [early, late, night, noStake];

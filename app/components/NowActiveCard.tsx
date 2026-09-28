@@ -6,37 +6,48 @@ import {
   opponentAbbreviation,
   reasonLabel,
   serviceLabel,
+  watchOptionLabel,
   type CurrentFlag,
   type GameBroadcast,
+  type WatchCta,
 } from '../lib/gameDisplay';
 import { fonts } from '../lib/fonts';
 import { reasonChipParts, resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../lib/teamDisplay';
 import { theme } from '../lib/theme';
 import { FieldGauge } from './FieldGauge';
 import { PrimaryButton } from './PrimaryButton';
+import { SecondaryButton } from './SecondaryButton';
 
 /** Semi-transparent team primary wash behind each side (nickname + score). */
 const TEAM_NAME_WASH_ALPHA = 0.32;
 interface NowActiveCardProps {
   flag: CurrentFlag;
-  /** The preferred broadcast to route to, or null when none resolved (deep-link degradation). */
-  broadcast: GameBroadcast | null;
+  /** `watchCta` for this game: the preferred option, or the airing as plain text. */
+  cta: WatchCta;
+  /** The in-market local route shown under Sunday Ticket (`localRouteOption`), or null. */
+  localRoute: GameBroadcast | null;
   /** `player_id -> team` map built from the caller's own lineup fetch (see `lib/leagues.ts`) — the
    *  only source of "which team does this flagged player play for" (see `teamDisplay.ts`'s
    *  docstring on why `flagged_players` alone can't answer that). */
   playerTeamMap: PlayerTeamMap;
-  onSwitch: () => void;
+  onSwitch: (broadcast: GameBroadcast) => void;
 }
 
 /**
  * PLAN.md Section 10 Home State 1 "Now active" card: field-aligned team names + centered split
  * score, numbered field gauge (UI-SPEC.md §3.1), outlined reason chip with amber wash, and the
- * primary CTA (`Watch on {preferred service}`). CTA disabled when no resolvable broadcast.
+ * primary CTA (`Watch on {preferred service}`), plus the local route beneath it when Sunday Ticket
+ * outranks it. With no option to open, the airing sits there as plain text ("On FOX").
  * Card uses `accentBorder` + `panelGlow` and `colors.background` (same as Home canvas).
  */
-export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowActiveCardProps) {
+export function NowActiveCard({
+  flag,
+  cta,
+  localRoute,
+  playerTeamMap,
+  onSwitch,
+}: NowActiveCardProps) {
   const { game } = flag;
-  const canSwitch = broadcast !== null && broadcast.deep_link_url.length > 0;
   const primaryReason = flag.reasons[0];
   const flaggedTeam = resolveFlaggedTeamDisplay(game, flag.flagged_players, playerTeamMap);
   const chipParts =
@@ -107,22 +118,34 @@ export function NowActiveCard({ flag, broadcast, playerTeamMap, onSwitch }: NowA
         </View>
       ) : null}
 
-      <PrimaryButton
-        inactive={!canSwitch}
-        label={
-          canSwitch && broadcast
-            ? `Watch on ${serviceLabel(broadcast.service)}`
-            : 'No broadcast available'
-        }
-        onPress={onSwitch}
-        style={styles.cta}
-        labelStyle={styles.ctaLabel}
-      />
+      {cta.kind === 'watch' ? (
+        <View style={styles.cta}>
+          <PrimaryButton
+            label={`Watch on ${serviceLabel(cta.broadcast.service)}`}
+            onPress={() => onSwitch(cta.broadcast)}
+            labelStyle={styles.ctaLabel}
+          />
+          {localRoute && localRoute !== cta.broadcast ? (
+            <SecondaryButton
+              label={watchOptionLabel(localRoute)}
+              onPress={() => onSwitch(localRoute)}
+            />
+          ) : null}
+        </View>
+      ) : cta.kind === 'airing' ? (
+        <Text style={[styles.cta, styles.airing]}>{cta.text}</Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  airing: {
+    color: theme.colors.textSecondary,
+    fontFamily: fonts.teamNickname,
+    fontSize: theme.type.button.size,
+    textAlign: 'center',
+  },
   card: {
     backgroundColor: theme.colors.background,
     borderColor: theme.colors.accentBorder,
@@ -134,6 +157,7 @@ const styles = StyleSheet.create({
     ...theme.effects.panelGlow,
   },
   cta: {
+    gap: theme.spacing.sm,
     marginTop: theme.spacing.sm,
   },
   ctaLabel: {

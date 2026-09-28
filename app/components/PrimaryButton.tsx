@@ -16,8 +16,6 @@ interface PrimaryButtonProps {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
-  /** Border fill + primary text — Now Active when no broadcast can be opened. */
-  inactive?: boolean;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
   /** Optional label override (e.g. type-trial face on Now Active CTA). */
@@ -29,12 +27,11 @@ export function PrimaryButton({
   onPress,
   disabled = false,
   loading = false,
-  inactive = false,
   accessibilityLabel,
   style,
   labelStyle,
 }: PrimaryButtonProps) {
-  const isDisabled = disabled || loading || inactive;
+  const isDisabled = disabled || loading;
 
   return (
     <Pressable
@@ -44,16 +41,15 @@ export function PrimaryButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        inactive && styles.inactive,
-        !inactive && isDisabled && styles.disabled,
+        isDisabled && styles.disabled,
         pressed && !isDisabled && styles.pressed,
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={inactive ? theme.colors.textPrimary : theme.colors.onAccent} />
+        <ActivityIndicator color={theme.colors.onAccent} />
       ) : (
-        <Text style={[styles.label, inactive && styles.inactiveLabel, labelStyle]}>{label}</Text>
+        <Text style={[styles.label, labelStyle]}>{label}</Text>
       )}
     </Pressable>
   );
@@ -68,12 +64,6 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: theme.opacity.disabled,
-  },
-  inactive: {
-    backgroundColor: theme.colors.border,
-  },
-  inactiveLabel: {
-    color: theme.colors.textPrimary,
   },
   label: {
     color: theme.colors.onAccent,

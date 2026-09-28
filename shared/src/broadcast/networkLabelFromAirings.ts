@@ -1,8 +1,8 @@
 import type { AiringNetwork } from './types.js';
 
 /**
- * Board-column label from airings (§7.2). ESPN beats ABC on MNF.
- * Lives beside app `networkLabel`; does not replace it until B1.4.
+ * Board-column label from airings (§7.2). ESPN beats ABC on MNF. The app's only network label:
+ * the board, the featured card and the "On FOX" fallback all read it.
  */
 const NETWORK_RANK_AND_LABEL: Record<AiringNetwork, { rank: number; label: string }> = {
   cbs: { rank: 0, label: 'CBS' },

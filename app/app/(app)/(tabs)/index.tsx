@@ -26,7 +26,9 @@ import {
 } from '../../../lib/board';
 import type { FlagEventPayload } from '../../../lib/flagEventPayload';
 import {
+  localRouteOption,
   pickPreferredBroadcast,
+  watchCta,
   type CurrentFlag,
   type FlagsCurrentResponse,
   type GameBroadcast,
@@ -369,25 +371,28 @@ export default function HomeScreen() {
     }
   }, [refreshLeagues, loadHome]);
 
-  const onSwitch = useCallback(() => {
-    if (!homeData?.flag) return;
-    const { flag, broadcast } = homeData;
-    const flaggedTeam = resolveFlaggedTeamDisplay(
-      flag.game,
-      flag.flagged_players,
-      homeData.playerTeamMap,
-    );
-    switchToGame({
-      gameId: flag.game_id,
-      deepLinkUrl: broadcast?.deep_link_url ?? null,
-      label: `${flag.game.away_team} @ ${flag.game.home_team}`,
-      teamName: flaggedTeam?.name,
-      teamColors: flaggedTeam
-        ? { primary: flaggedTeam.primaryColor, secondary: flaggedTeam.secondaryColor }
-        : null,
-      broadcasts: homeData.broadcasts,
-    });
-  }, [homeData, switchToGame]);
+  const onSwitch = useCallback(
+    (broadcast: GameBroadcast) => {
+      if (!homeData?.flag) return;
+      const { flag } = homeData;
+      const flaggedTeam = resolveFlaggedTeamDisplay(
+        flag.game,
+        flag.flagged_players,
+        homeData.playerTeamMap,
+      );
+      switchToGame({
+        gameId: flag.game_id,
+        deepLinkUrl: broadcast.deep_link_url,
+        label: `${flag.game.away_team} @ ${flag.game.home_team}`,
+        teamName: flaggedTeam?.name,
+        teamColors: flaggedTeam
+          ? { primary: flaggedTeam.primaryColor, secondary: flaggedTeam.secondaryColor }
+          : null,
+        broadcasts: homeData.broadcasts,
+      });
+    },
+    [homeData, switchToGame],
+  );
 
   /**
    * "Also flagged" row Switch button — resolves that game's broadcast on demand and switches
@@ -426,6 +431,20 @@ export default function HomeScreen() {
   );
 
   const isPregame = isPregameBranch(homeData?.branch.branch ?? null);
+
+  const weekGameById = useMemo(
+    () => new Map((homeData?.weekGames ?? []).map((game) => [game.game_id, game])),
+    [homeData?.weekGames],
+  );
+
+  /** Also-flagged tiles read the week slate; a game missing from it keeps the on-tap Switch. */
+  const alsoFlaggedCta = useCallback(
+    (flag: CurrentFlag) => {
+      const game = weekGameById.get(flag.game_id);
+      return game ? watchCta(game.broadcasts, game.airings) : null;
+    },
+    [weekGameById],
+  );
 
   /**
    * Countdown tick, focused-only. `useFocusEffect` tears the interval down on blur, so Home
@@ -522,11 +541,19 @@ export default function HomeScreen() {
           <View style={styles.state1}>
             <NowActiveCard
               flag={homeData.flag}
-              broadcast={homeData.broadcast}
+              cta={watchCta(
+                homeData.broadcasts,
+                weekGameById.get(homeData.flag.game_id)?.airings ?? [],
+              )}
+              localRoute={localRouteOption(homeData.broadcasts)}
               playerTeamMap={homeData.playerTeamMap}
               onSwitch={onSwitch}
             />
-            <AlsoFlaggedRow flags={homeData.otherFlags} onSwitch={onSwitchOther} />
+            <AlsoFlaggedRow
+              flags={homeData.otherFlags}
+              onSwitch={onSwitchOther}
+              ctaFor={alsoFlaggedCta}
+            />
           </View>
         ) : null;
       case 'state2':

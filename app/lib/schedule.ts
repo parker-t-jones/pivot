@@ -2,7 +2,7 @@
  * Client types + fetch for PLAN.md Section 9 `GET /games?week=` and `GET /games/live` (Sprint 10).
  */
 import { apiClient } from './apiClient';
-import type { GameBroadcast } from './gameDisplay';
+import type { GameAiring, GameBroadcast } from './gameDisplay';
 
 export interface ScheduleGame {
   game_id: string;
@@ -16,7 +16,9 @@ export interface ScheduleGame {
   home_team_secondary_color: string;
   away_team_primary_color: string;
   away_team_secondary_color: string;
+  /** The user's watch options, ranked; empty when they have none of the carrying services. */
   broadcasts: GameBroadcast[];
+  airings: GameAiring[];
 }
 
 export interface GamesWeekResponse {

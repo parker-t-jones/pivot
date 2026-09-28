@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import {
   alsoFlaggedSituationLines,
   type CurrentFlag,
+  type WatchCta,
 } from '../lib/gameDisplay';
 import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
@@ -16,6 +17,11 @@ interface AlsoFlaggedRowProps {
    * card is primary on Home — see report ("also-flagged-switch" scope note).
    */
   onSwitch: (flag: CurrentFlag) => Promise<void>;
+  /**
+   * `watchCta` for a flagged game from the week slate, or null when the slate doesn't have it (the
+   * Switch button then resolves on tap). An `airing` result replaces the button with "On FOX".
+   */
+  ctaFor: (flag: CurrentFlag) => WatchCta | null;
 }
 
 function teamDotColor(hex: string): string {
@@ -30,7 +36,7 @@ function teamDotColor(hex: string): string {
  * (UI-SPEC.md §3.3). NFL team logos are a non-goal (no logo field on `GameSummary`).
  * Renders nothing when there's nothing to show.
  */
-export function AlsoFlaggedRow({ flags, onSwitch }: AlsoFlaggedRowProps) {
+export function AlsoFlaggedRow({ flags, onSwitch, ctaFor }: AlsoFlaggedRowProps) {
   const [switchingGameId, setSwitchingGameId] = useState<string | null>(null);
 
   if (flags.length === 0) return null;
@@ -47,6 +53,7 @@ export function AlsoFlaggedRow({ flags, onSwitch }: AlsoFlaggedRowProps) {
         {flags.map((flag) => {
           const isSwitching = switchingGameId === flag.game_id;
           const situation = alsoFlaggedSituationLines(flag.game);
+          const cta = ctaFor(flag);
           return (
             <View key={flag.game_id} style={styles.card}>
               <View style={styles.teams}>
@@ -66,22 +73,26 @@ export function AlsoFlaggedRow({ flags, onSwitch }: AlsoFlaggedRowProps) {
                     {line}
                   </Text>
                 ))}
-                <Pressable
-                  accessibilityLabel={`Switch to ${flag.game.away_team} at ${flag.game.home_team}`}
-                  accessibilityRole="button"
-                  disabled={isSwitching}
-                  onPress={() => onPressSwitch(flag)}
-                  style={({ pressed }) => [
-                    styles.switchButton,
-                    pressed && !isSwitching && styles.switchButtonPressed,
-                  ]}
-                >
-                  {isSwitching ? (
-                    <ActivityIndicator color={theme.colors.accent} size="small" />
-                  ) : (
-                    <Text style={styles.switchLabel}>Switch</Text>
-                  )}
-                </Pressable>
+                {cta?.kind === 'airing' ? (
+                  <Text style={styles.airing}>{cta.text}</Text>
+                ) : cta?.kind === 'none' ? null : (
+                  <Pressable
+                    accessibilityLabel={`Switch to ${flag.game.away_team} at ${flag.game.home_team}`}
+                    accessibilityRole="button"
+                    disabled={isSwitching}
+                    onPress={() => onPressSwitch(flag)}
+                    style={({ pressed }) => [
+                      styles.switchButton,
+                      pressed && !isSwitching && styles.switchButtonPressed,
+                    ]}
+                  >
+                    {isSwitching ? (
+                      <ActivityIndicator color={theme.colors.accent} size="small" />
+                    ) : (
+                      <Text style={styles.switchLabel}>Switch</Text>
+                    )}
+                  </Pressable>
+                )}
               </View>
             </View>
           );
@@ -106,6 +117,14 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sansBold,
     fontSize: 16,
     letterSpacing: -0.3,
+  },
+  airing: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.caption.size,
+    fontWeight: theme.type.smallStrong.weight,
+    marginTop: theme.spacing.xs,
+    paddingVertical: theme.spacing.xs,
+    textAlign: 'right',
   },
   card: {
     // Same canvas black as NowActiveCard (not `surface`).
