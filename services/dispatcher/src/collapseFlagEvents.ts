@@ -31,11 +31,7 @@ export function collapseByUser<T extends { event: FlagEvent }>(items: readonly T
     list.push(item);
     groups.set(item.event.userId, list);
   }
-  return [...groups.values()].map((group) => {
-    let winner = group[0]!;
-    for (const item of group.slice(1)) {
-      if (outranks(item.event, winner.event)) winner = item;
-    }
-    return winner;
-  });
+  return [...groups.values()].map((group) =>
+    group.reduce((winner, item) => (outranks(item.event, winner.event) ? item : winner)),
+  );
 }

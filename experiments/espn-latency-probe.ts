@@ -126,7 +126,7 @@ interface EspnBoxscoreTeamEntry {
 
 interface EspnSummary {
   header?: {
-    competitions?: Array<{ status?: { type?: EspnStatusType } }>;
+    competitions?: { status?: { type?: EspnStatusType } }[];
   };
   drives?: {
     previous?: EspnDrive[];

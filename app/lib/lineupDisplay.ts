@@ -6,10 +6,10 @@ import type { LineupSlot } from './leagues';
  */
 export function formatPositionInLineup(positionInLineup: string): string {
   const match = /^([A-Za-z_]+)(\d+)?$/.exec(positionInLineup);
-  if (!match) return positionInLineup;
+  const [, rawBase, ordinal = ''] = match ?? [];
+  if (!rawBase) return positionInLineup;
 
-  const base = match[1]!.toUpperCase();
-  const ordinal = match[2] ?? '';
+  const base = rawBase.toUpperCase();
   const pretty = SLOT_BASE_LABELS[base] ?? base;
   return `${pretty}${ordinal}`;
 }

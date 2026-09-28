@@ -72,7 +72,11 @@ function wire(): {
     clock: () => Date.now(),
   });
   const pending: Promise<void>[] = [];
-  let ceiling!: ResumptionCeiling;
+  const ceiling = new ResumptionCeiling({
+    store,
+    clock: () => Date.now(),
+    onFire: () => tracker.applyWallClockCeiling(Date.now()),
+  });
   const tracker = new IncrementalResumptionTracker('g1', {
     onWindowOpened: (gameId, window: ResumptionWindowOpened) => {
       pending.push(ceiling.onWindowOpened(gameId, window));
@@ -82,11 +86,6 @@ function wire(): {
       pending.push(ceiling.onResolved(gameId));
       pending.push(gate.noteResolution(gameId, resolution));
     },
-  });
-  ceiling = new ResumptionCeiling({
-    store,
-    clock: () => Date.now(),
-    onFire: () => tracker.applyWallClockCeiling(Date.now()),
   });
   return {
     tracker,

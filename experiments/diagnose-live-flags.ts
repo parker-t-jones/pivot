@@ -46,7 +46,7 @@ interface RedisReader {
   get(key: string): Promise<string | null>;
   smembers(key: string): Promise<string[]>;
   scard(key: string): Promise<number>;
-  scan(cursor: string, ...args: Array<string | number>): Promise<[string, string[]]>;
+  scan(cursor: string, ...args: (string | number)[]): Promise<[string, string[]]>;
   quit(): Promise<unknown>;
 }
 
@@ -363,7 +363,7 @@ async function main(): Promise<void> {
   };
 
   const innerQueue = new InMemoryFlagEventQueue();
-  const enqueued: Array<{ type: FlagEvent['type']; userId: string; playId: string | null }> = [];
+  const enqueued: { type: FlagEvent['type']; userId: string; playId: string | null }[] = [];
   const queue: FlagEventQueue = {
     async enqueue(event: FlagEvent, triggeringPlayId: string | null = null): Promise<void> {
       enqueued.push({ type: event.type, userId: event.userId, playId: triggeringPlayId });

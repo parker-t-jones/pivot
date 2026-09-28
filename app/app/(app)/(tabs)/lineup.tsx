@@ -322,8 +322,8 @@ function LeagueSwitcher({
   watchedIds: Set<string>;
   onSelect: (leagueId: string) => void;
 }) {
-  if (leagues.length === 1) {
-    const league = leagues[0]!;
+  const [league] = leagues;
+  if (leagues.length === 1 && league) {
     const watching = watchedIds.size === 0 || watchedIds.has(league.league_id);
     return (
       <View style={styles.switcherSingle}>

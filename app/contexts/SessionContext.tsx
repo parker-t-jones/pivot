@@ -11,11 +11,11 @@ import {
 import { supabase } from '../lib/supabase';
 import { configurePurchases } from '../lib/purchases';
 
-type SessionContextValue = {
+interface SessionContextValue {
   isLoading: boolean;
   session: Session | null;
   user: User | null;
-};
+}
 
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 

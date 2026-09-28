@@ -164,7 +164,7 @@ export function UpgradeSheet() {
       >
         {/* Stops backdrop-dismiss taps from also passing through the card itself. */}
         <Slip
-          onPress={() => {}}
+          onPress={() => undefined}
           style={{
             maxHeight: '80%',
             paddingBottom: theme.spacing.lg,

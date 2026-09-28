@@ -126,7 +126,7 @@ describe('parseEspnAirings', () => {
   });
 
   it('logs an unmapped name and produces no row', () => {
-    const logs: Array<{ eventId: string; rawName: string }> = [];
+    const logs: { eventId: string; rawName: string }[] = [];
     const event: EspnBroadcastEvent = {
       id: 'test-unmapped',
       shortName: 'X @ Y',

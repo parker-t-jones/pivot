@@ -34,8 +34,8 @@ export function parseScriptCliArgs(argv: readonly string[]): ScriptCliOptions {
   const rest: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]!;
-    if (arg === '--') {
+    const arg = argv[i];
+    if (arg === undefined || arg === '--') {
       continue;
     }
     if (arg === '--allow-remote') {

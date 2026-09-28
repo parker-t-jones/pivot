@@ -25,7 +25,7 @@ describe('connectDeferredSession', () => {
 
     // Simulate LeaguesGateProvider unmount + remount: React state would reset to false;
     // the session module must not.
-    let providerMirrorDeferred = false; // fresh provider useState(false)
+    const providerMirrorDeferred = false; // fresh provider useState(false)
     expect(providerMirrorDeferred).toBe(false);
     expect(isConnectDeferredForSession()).toBe(true);
 

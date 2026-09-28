@@ -53,10 +53,10 @@ interface EspnCompetitor {
 interface EspnEvent {
   id: string;
   date: string;
-  competitions: Array<{
+  competitions: {
     competitors: EspnCompetitor[];
     venue?: { fullName?: string };
-  }>;
+  }[];
 }
 
 interface EspnScoreboard {
@@ -112,7 +112,7 @@ export async function fetchNflSchedule(seasonYear: number = SEASON_YEAR): Promis
   const seen = new Set<string>();
 
   // Preseason: ESPN weeks 1–4 (HOF + Pre Wk 1–3). Regular: weeks 1–18. No postseason.
-  const phases: Array<{ espnType: 1 | 2; seasonType: ScheduleSeasonType; weeks: number }> = [
+  const phases: { espnType: 1 | 2; seasonType: ScheduleSeasonType; weeks: number }[] = [
     { espnType: 1, seasonType: 'pre', weeks: 4 },
     { espnType: 2, seasonType: 'regular', weeks: 18 },
   ];

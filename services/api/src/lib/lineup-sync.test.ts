@@ -223,8 +223,8 @@ describe('syncLeagueLineup', () => {
       | { playerToTeam: Map<string, string>; teamPositions: Map<string, Set<string>> }
       | undefined;
     expect(cacheArg).toBeDefined();
-    expect([...cacheArg!.playerToTeam.keys()].sort()).toEqual(['p-qb', 'p-rb']);
-    expect(cacheArg!.teamPositions.size).toBe(2);
+    expect([...(cacheArg?.playerToTeam.keys() ?? [])].sort()).toEqual(['p-qb', 'p-rb']);
+    expect(cacheArg?.teamPositions.size).toBe(2);
   });
 
   it('fails loud when roster IDs resolve to zero seeded players', async () => {

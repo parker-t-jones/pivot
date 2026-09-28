@@ -24,7 +24,7 @@ export function isPurchasesConfigured(): boolean {
  * can update `users.subscription_tier` for the same id.
  */
 export async function configurePurchases(userId: string): Promise<void> {
-  if (!isPurchasesConfigured() || Platform.OS !== 'ios') {
+  if (!API_KEY || Platform.OS !== 'ios') {
     return;
   }
   if (configuredForUserId === userId) {
@@ -35,7 +35,7 @@ export async function configurePurchases(userId: string): Promise<void> {
     Purchases.setLogLevel(LOG_LEVEL.DEBUG);
   }
 
-  Purchases.configure({ apiKey: API_KEY!, appUserID: userId });
+  Purchases.configure({ apiKey: API_KEY, appUserID: userId });
   configuredForUserId = userId;
 }
 

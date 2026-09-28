@@ -153,7 +153,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
     if (teamsError) throw teamsError;
     const teamById = new Map((teamRows ?? []).map((t) => [t.id, t]));
 
-    const liveGames: Array<{
+    const liveGames: {
       game_id: string;
       status: 'in_progress';
       scheduled_start: string;
@@ -173,7 +173,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       down: number | null;
       distance: number | null;
       in_red_zone: boolean;
-    }> = [];
+    }[] = [];
 
     for (const game of candidates) {
       const gameState = await fastify.gameStateStore.getGameState(game.id);

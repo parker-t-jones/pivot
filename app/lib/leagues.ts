@@ -141,7 +141,7 @@ export async function renameManualLeague(leagueId: string, name: string): Promis
 export async function putManualLineup(
   leagueId: string,
   week: number,
-  players: Array<{ player_id: string; position: string }>,
+  players: { player_id: string; position: string }[],
 ): Promise<LineupResponse> {
   return await apiClient.put(`/leagues/${leagueId}/lineup`, {
     week,

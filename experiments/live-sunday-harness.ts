@@ -317,7 +317,9 @@ class LoggingFlagEventPersistence implements FlagEventPersistence {
     return { inserted: true, id };
   }
 
-  async recordPushOutcome(_outcome: PushOutcome): Promise<void> {}
+  async recordPushOutcome(_outcome: PushOutcome): Promise<void> {
+    // The harness never retries pushes (duePushRetries is always empty), so outcomes aren't kept.
+  }
 
   async duePushRetries(_now: number): Promise<PendingPushRetry[]> {
     return [];

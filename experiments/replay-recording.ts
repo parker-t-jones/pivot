@@ -54,8 +54,8 @@ function isFinal(summary: EspnSummary): boolean {
   return Boolean(statusType?.completed) || statusType?.state === 'post';
 }
 
-function flatten(summary: EspnSummary): Array<{ play: EspnPlay; drive: EspnDrive }> {
-  const flattened: Array<{ play: EspnPlay; drive: EspnDrive }> = [];
+function flatten(summary: EspnSummary): { play: EspnPlay; drive: EspnDrive }[] {
+  const flattened: { play: EspnPlay; drive: EspnDrive }[] = [];
   for (const drive of summary.drives?.previous ?? []) {
     for (const play of drive.plays ?? []) flattened.push({ play, drive });
   }

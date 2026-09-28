@@ -181,7 +181,7 @@ export function findNextStakeGames(
   now: Date,
 ): ScheduleGame[] {
   const nowMs = now.getTime();
-  const candidates: Array<{ game: ScheduleGame; kickoffMs: number }> = [];
+  const candidates: { game: ScheduleGame; kickoffMs: number }[] = [];
   for (const game of weekGames) {
     if (game.status === 'final') continue;
     if (!gameHasStake(game.home_team, game.away_team, stakeTeams)) continue;
@@ -238,13 +238,13 @@ export function listStakePlayersInGame(
   lineups: LineupResponse[],
   homeTeam: string,
   awayTeam: string,
-): Array<{
+): {
   player_id: string;
   first_name: string;
   last_name: string;
   position: string;
   team_abbreviation: string;
-}> {
+}[] {
   const byId = new Map<
     string,
     {
@@ -277,7 +277,7 @@ export function listStakePlayersInGame(
  * State 4 player line: "Active Players: Josh Allen, James Cook".
  */
 export function formatPlayersActiveInGame(
-  players: Array<{ first_name: string; last_name: string }>,
+  players: { first_name: string; last_name: string }[],
 ): string {
   const names = players.map((p) => `${p.first_name} ${p.last_name}`.trim()).filter(Boolean);
   if (names.length === 0) return 'Active Players: —';
@@ -327,13 +327,13 @@ export function upcomingStakeGameGroups(
 
 export interface LineupGameGroup {
   game: ScheduleGame;
-  players: Array<{
+  players: {
     player_id: string;
     first_name: string;
     last_name: string;
     position: string;
     team_abbreviation: string;
-  }>;
+  }[];
 }
 
 /** Active-roster (starter/flex) slots grouped under stake games, sorted by kickoff ascending. */
@@ -344,13 +344,13 @@ export function groupLineupByGame(
 ): LineupGameGroup[] {
   const playersByTeam = new Map<
     string,
-    Array<{
+    {
       player_id: string;
       first_name: string;
       last_name: string;
       position: string;
       team_abbreviation: string;
-    }>
+    }[]
   >();
 
   for (const lineup of lineups) {

@@ -23,7 +23,7 @@ export interface RealtimeEnvelope {
   payload: unknown;
 }
 
-export type WebSocketLike = {
+export interface WebSocketLike {
   readyState: number;
   send: (data: string) => void;
   close: (code?: number, reason?: string) => void;
@@ -31,7 +31,7 @@ export type WebSocketLike = {
   onclose: ((ev?: unknown) => void) | null;
   onmessage: ((ev: { data: string }) => void) | null;
   onerror: ((ev?: unknown) => void) | null;
-};
+}
 
 export type WebSocketConstructor = new (url: string) => WebSocketLike;
 

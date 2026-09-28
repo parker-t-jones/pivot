@@ -13,8 +13,9 @@ export function resolveWatchedLeagueIds(input: {
   const owned = new Set(input.ownedLeagueIds);
   let watched = input.preferences.watchedLeagueIds.filter((id) => owned.has(id));
 
-  if (watched.length === 0 && input.ownedLeagueIds.length > 0) {
-    watched = [input.ownedLeagueIds[0]!];
+  const [firstOwned] = input.ownedLeagueIds;
+  if (watched.length === 0 && firstOwned !== undefined) {
+    watched = [firstOwned];
   }
 
   if (input.subscriptionTier !== 'pro' && watched.length > FREE_MAX_WATCHED_LEAGUES) {
@@ -122,8 +123,9 @@ export async function onLeagueDisconnected(
     (id) => id !== removedLeagueId && ownedIds.includes(id),
   );
 
-  if (watched.length === 0 && ownedIds.length > 0) {
-    watched = [ownedIds[0]!];
+  const [firstOwned] = ownedIds;
+  if (watched.length === 0 && firstOwned !== undefined) {
+    watched = [firstOwned];
   }
 
   if (userRow.subscription_tier !== 'pro') {

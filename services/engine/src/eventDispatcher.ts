@@ -22,7 +22,7 @@ export interface EventDispatcher {
 /** Records every dispatched event in order, so tests can assert on the engine's output. */
 export class CapturingEventDispatcher implements EventDispatcher {
   readonly events: FlagEvent[] = [];
-  readonly triggeringPlayIds: Array<string | null> = [];
+  readonly triggeringPlayIds: (string | null)[] = [];
 
   async dispatch(event: FlagEvent, triggeringPlayId: string | null = null): Promise<void> {
     this.events.push(event);

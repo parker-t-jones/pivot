@@ -323,7 +323,8 @@ describe('RealtimeClient', () => {
 
     await vi.advanceTimersByTimeAsync(REALTIME_PING_INTERVAL_MS);
     expect(socket.sent).toHaveLength(1);
-    expect(JSON.parse(socket.sent[0]!).type).toBe('ping');
+    const [ping = ''] = socket.sent;
+    expect(JSON.parse(ping).type).toBe('ping');
 
     await vi.advanceTimersByTimeAsync(REALTIME_PONG_TIMEOUT_MS);
     await vi.advanceTimersByTimeAsync(1000);
@@ -353,7 +354,7 @@ describe('RealtimeClient', () => {
     expect(MockWebSocket.instances).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(MockWebSocket.instances).toHaveLength(2);
-    MockWebSocket.instances[1]!.close();
+    MockWebSocket.instances[1]?.close();
 
     await vi.advanceTimersByTimeAsync(1999);
     expect(MockWebSocket.instances).toHaveLength(2);
