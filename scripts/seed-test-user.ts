@@ -13,7 +13,7 @@
  *    `is_star: true` to exercise the Sprint 9 Phase 2 star-player data layer.
  *  - Two `user_app_presence` rows so the Settings screen's streaming section has something to show.
  *
- * Deliberately does NOT seed `games`/`game_broadcasts` — there's no real schedule data behind a
+ * Deliberately does NOT seed `games`/`game_airings` — there's no real schedule data behind a
  * fixture game yet (Sportradar ingestion is still deferred), and Sprint 10 is already adding a
  * schedule endpoint for live-game Home states. Fabricating a fake game here would either duplicate
  * that work or drift from it. `pnpm seed:broadcasts` remains the way to backfill broadcasts once
