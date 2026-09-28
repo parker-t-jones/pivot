@@ -1,12 +1,12 @@
-/** PLAN.md Section 8 "Deferred event scheduling" — verbatim. */
-/** `hulu` / `fubo` / `directv` lags are unmeasured vMVPD estimates, not device-calibrated. */
+/** PLAN.md Section 8 "Deferred event scheduling", with `hulu` renamed `hulu_live` (B1.3). */
+/** `hulu_live` / `fubo` / `directv` lags are unmeasured vMVPD estimates, not device-calibrated. */
 export const BROADCAST_LAG_SECONDS: Record<string, number> = {
   sunday_ticket: 75,
   espn_plus: 60,
   paramount_plus: 50,
   peacock: 45,
   amazon_prime: 40,
-  hulu: 45,
+  hulu_live: 45,
   fubo: 50,
   directv: 40,
   nfl_plus: 60,
@@ -34,10 +34,9 @@ export interface GameBroadcastOption {
 /**
  * Pure tie-break (sprint decision #6): intersect the game's broadcasts with the user's subscribed
  * services. Among matches, deterministically prefer the one with the LOWEST configured stream lag
- * (`BROADCAST_LAG_SECONDS`) — this naturally prefers broadcast TV (fox/cbs/nbc/abc = 8s, nfl_network
- * = 20s) over paid streaming (40-75s) without inventing a separate priority table divorced from the
- * one Section 8 already gives us. Ties on lag (shouldn't occur with the given table, but kept
- * deterministic) break alphabetically by service name. Returns `null` if no candidate matches (falls
+ * (`BROADCAST_LAG_SECONDS`). Since B1.3 broadcasts are airing networks and presence holds user
+ * services, so only keys on both lists (amazon_prime, peacock, paramount_plus, espn_plus, nfl_plus)
+ * can match until B1.4 expands carriage. Ties on lag break alphabetically by service name. Returns `null` if no candidate matches (falls
  * back to `DEFAULT_LAG_SECONDS` via `lagSecondsFor(null)`).
  */
 export function pickBroadcastSource(

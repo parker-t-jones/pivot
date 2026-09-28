@@ -334,10 +334,10 @@ describe('GET /games/:id/broadcasts', () => {
     app = await buildTestApp({
       games: [{ id: GAME_1, week: 1, status: 'scheduled', scheduled_start: '2026-09-10T17:00:00Z', home_team_id: TEAM_HOME, away_team_id: TEAM_AWAY }],
       broadcasts: [
-        { game_id: GAME_1, service: 'sunday_ticket', deep_link_url: 'https://st/g1', requires_subscription: true },
+        { game_id: GAME_1, service: 'amazon_prime', deep_link_url: 'https://prime/g1', requires_subscription: true },
         { game_id: GAME_1, service: 'fox', deep_link_url: 'https://fox/g1', requires_subscription: false },
       ],
-      presence: new Map([['user-1', [{ service: 'sunday_ticket', has_subscription: true }]]]),
+      presence: new Map([['user-1', [{ service: 'amazon_prime', has_subscription: true }]]]),
     });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
@@ -360,11 +360,11 @@ describe('GET /games/:id/broadcasts', () => {
           preferred: true,
         },
         {
-          service: 'sunday_ticket',
-          deep_link_url: 'https://st/g1',
+          service: 'amazon_prime',
+          deep_link_url: 'https://prime/g1',
           requires_subscription: true,
           user_has_subscription: true,
-          typical_lag_seconds: 75,
+          typical_lag_seconds: 40,
           preferred: false,
         },
       ],
@@ -375,9 +375,9 @@ describe('GET /games/:id/broadcasts', () => {
     app = await buildTestApp({
       games: [{ id: GAME_1, week: 1, status: 'scheduled', scheduled_start: '2026-09-10T17:00:00Z', home_team_id: TEAM_HOME, away_team_id: TEAM_AWAY }],
       broadcasts: [
-        { game_id: GAME_1, service: 'sunday_ticket', deep_link_url: 'https://st/g1', requires_subscription: true },
+        { game_id: GAME_1, service: 'amazon_prime', deep_link_url: 'https://prime/g1', requires_subscription: true },
       ],
-      presence: new Map([['user-1', [{ service: 'sunday_ticket', has_subscription: false }]]]),
+      presence: new Map([['user-1', [{ service: 'amazon_prime', has_subscription: false }]]]),
     });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
@@ -456,11 +456,11 @@ describe('GET /games?week=', () => {
         },
       ],
       broadcasts: [
-        { game_id: GAME_1, service: 'sunday_ticket', deep_link_url: 'https://st/g1', requires_subscription: true },
+        { game_id: GAME_1, service: 'amazon_prime', deep_link_url: 'https://prime/g1', requires_subscription: true },
         { game_id: GAME_1, service: 'fox', deep_link_url: 'https://fox/g1', requires_subscription: false },
         { game_id: GAME_2, service: 'cbs', deep_link_url: 'https://cbs/g2', requires_subscription: false },
       ],
-      presence: new Map([['user-1', [{ service: 'sunday_ticket', has_subscription: true }]]]),
+      presence: new Map([['user-1', [{ service: 'amazon_prime', has_subscription: true }]]]),
     });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
@@ -493,11 +493,11 @@ describe('GET /games?week=', () => {
           preferred: true,
         },
         {
-          service: 'sunday_ticket',
-          deep_link_url: 'https://st/g1',
+          service: 'amazon_prime',
+          deep_link_url: 'https://prime/g1',
           requires_subscription: true,
           user_has_subscription: true,
-          typical_lag_seconds: 75,
+          typical_lag_seconds: 40,
           preferred: false,
         },
       ],

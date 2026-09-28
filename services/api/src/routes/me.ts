@@ -1,30 +1,10 @@
-import { parsePreferences, FREE_MAX_WATCHED_LEAGUES } from '@pivot/shared';
+import { parsePreferences, FREE_MAX_WATCHED_LEAGUES, USER_SERVICES } from '@pivot/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
 import { getLineupSyncContext, rebuildUserLineupCache } from '../lib/lineup-sync.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
-
-/** Same enum backing `user_app_presence.service`'s `is_valid_streaming_service` DB check
- *  (`supabase/migrations/20260510120000_users_user_app_presence.sql`) — kept in sync by hand, same
- *  pattern as `flags.ts`'s `FLAG_USER_ACTIONS` constant relative to its own DB check constraint. */
-const STREAMING_SERVICES = [
-  'sunday_ticket',
-  'espn_plus',
-  'paramount_plus',
-  'peacock',
-  'amazon_prime',
-  'nfl_plus',
-  'nfl_network',
-  'hulu',
-  'fubo',
-  'directv',
-  'fox',
-  'cbs',
-  'nbc',
-  'abc',
-] as const;
 
 /**
  * Expo push tokens are either the current `ExponentPushToken[...]` or the legacy `ExpoPushToken[...]`
@@ -100,7 +80,7 @@ const appPresenceBody = z.object({
   services: z
     .array(
       z.object({
-        service: z.enum(STREAMING_SERVICES),
+        service: z.enum(USER_SERVICES),
         has_subscription: z.boolean(),
       }),
     )
@@ -233,9 +213,9 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
   /**
    * Upserts one or more streaming-service presence rows (Settings' "Streaming services" section
-   * and onboarding step 4 both write through here) — `service` is constrained to the same enum as
-   * the DB's `is_valid_streaming_service` check, so a bad value fails schema validation before ever
-   * reaching Supabase. Bulk (`services: [...]`) rather than one-at-a-time so a user flipping several
+   * and onboarding step 4 both write through here) — `service` is constrained to shared
+   * `USER_SERVICES`, the same set as the DB's `is_valid_user_service` check, so a bad value (including
+   * a network key like `cbs`) fails schema validation before ever reaching Supabase. Bulk (`services: [...]`) rather than one-at-a-time so a user flipping several
    * toggles before leaving the screen costs one round trip, not N.
    */
   fastify.post('/me/app-presence', { schema: { body: appPresenceBody } }, async (request) => {

@@ -216,8 +216,8 @@ describe('deliverFlagEvent', () => {
     const broadcastCatalog = new InMemoryBroadcastCatalog();
     broadcastCatalog.setGameBroadcasts('g1', [
       {
-        service: 'sunday_ticket',
-        deepLinkUrl: 'https://st.example/g1',
+        service: 'amazon_prime',
+        deepLinkUrl: 'https://prime.example/g1',
         requiresSubscription: true,
       },
     ]);

@@ -517,6 +517,46 @@ describe('POST /me/app-presence', () => {
     expect(response.json().error.code).toBe('validation_error');
   });
 
+  it('accepts the split user-service keys', async () => {
+    app = await buildTestApp();
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/app-presence',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        services: [
+          { service: 'youtube_tv', has_subscription: true },
+          { service: 'sunday_ticket', has_subscription: false },
+          { service: 'hulu_live', has_subscription: true },
+          { service: 'sling', has_subscription: false },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().app_presence).toHaveLength(4);
+  });
+
+  it.each(['cbs', 'fox', 'nbc', 'abc', 'espn', 'nfl_network', 'hulu'])(
+    'rejects the retired or network key %s with validation_error',
+    async (service) => {
+      app = await buildTestApp();
+      const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+      const response = await app.fastify.inject({
+        method: 'POST',
+        url: '/me/app-presence',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { services: [{ service, has_subscription: true }] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('validation_error');
+    },
+  );
+
   it('rejects an unauthenticated request', async () => {
     app = await buildTestApp();
     const response = await app.fastify.inject({

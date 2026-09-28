@@ -1,6 +1,6 @@
 /**
  * Broadcast airing / user-service catalogs (docs/B1-BROADCAST-DESIGN.md §1.3–1.5).
- * New types for B1.1 — do not replace app `StreamingService` until B1.3.
+ * Must match `is_valid_airing_network` / `is_valid_user_service` in Postgres.
  */
 
 /** Keys that may appear on a game airing. Not picker values. */
@@ -21,7 +21,7 @@ export const AIRING_NETWORKS = [
 
 export type AiringNetwork = (typeof AIRING_NETWORKS)[number];
 
-/** Keys that may appear on user_app_presence after B1.3. Picker values. */
+/** Keys that may appear on user_app_presence. Picker values. */
 export const USER_SERVICES = [
   'youtube_tv',
   'sunday_ticket',

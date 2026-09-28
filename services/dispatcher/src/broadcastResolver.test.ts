@@ -30,34 +30,40 @@ describe('rankBroadcasts', () => {
   });
 
   it('marks a paid broadcast eligible only when the user is subscribed', () => {
-    const withSub = rankBroadcasts([broadcast('sunday_ticket', true)], new Set(['sunday_ticket']));
+    const withSub = rankBroadcasts([broadcast('amazon_prime', true)], new Set(['amazon_prime']));
     expect(withSub[0]?.userHasSubscription).toBe(true);
     expect(withSub[0]?.preferred).toBe(true);
 
-    const withoutSub = rankBroadcasts([broadcast('sunday_ticket', true)], new Set());
+    const withoutSub = rankBroadcasts([broadcast('amazon_prime', true)], new Set());
     expect(withoutSub[0]?.userHasSubscription).toBe(false);
     // Ineligible (paid, not subscribed) — no preferred at all.
     expect(withoutSub[0]?.preferred).toBe(false);
     expect(preferredBroadcast(withoutSub)).toBeNull();
   });
 
+  it('does not match a network row against an MVPD user service (no carriage until B1.4)', () => {
+    const ranked = rankBroadcasts([broadcast('espn', true)], new Set(['youtube_tv']));
+    expect(ranked[0]?.userHasSubscription).toBe(false);
+    expect(preferredBroadcast(ranked)).toBeNull();
+  });
+
   it('orders eligible broadcasts before ineligible ones', () => {
     // paid+unsubscribed (ineligible) listed first in input, free (eligible) second.
     const ranked = rankBroadcasts(
-      [broadcast('sunday_ticket', true), broadcast('nbc', false)],
+      [broadcast('amazon_prime', true), broadcast('nbc', false)],
       new Set(),
     );
 
-    expect(ranked.map((b) => b.service)).toEqual(['nbc', 'sunday_ticket']);
+    expect(ranked.map((b) => b.service)).toEqual(['nbc', 'amazon_prime']);
     expect(ranked[0]?.preferred).toBe(true); // nbc, eligible
-    expect(ranked[1]?.preferred).toBe(false); // sunday_ticket, ineligible
+    expect(ranked[1]?.preferred).toBe(false); // amazon_prime, ineligible
   });
 
   it('breaks ties among eligible broadcasts by lowest lag, then alphabetically', () => {
-    // All eligible (user subscribed to all). Lags: espn_plus 60, fox 8, cbs 8.
+    // All eligible (fox/cbs free, espn_plus subscribed). Lags: espn_plus 60, fox 8, cbs 8.
     const ranked = rankBroadcasts(
-      [broadcast('espn_plus', true), broadcast('fox', true), broadcast('cbs', true)],
-      new Set(['espn_plus', 'fox', 'cbs']),
+      [broadcast('espn_plus', true), broadcast('fox', false), broadcast('cbs', false)],
+      new Set(['espn_plus']),
     );
 
     // fox & cbs both lag 8 -> alphabetical (cbs before fox); espn_plus (60) last.
@@ -67,13 +73,13 @@ describe('rankBroadcasts', () => {
   });
 
   it('is deterministic regardless of input ordering', () => {
-    const userServices = new Set(['sunday_ticket', 'fox', 'espn_plus']);
+    const userServices = new Set(['amazon_prime', 'espn_plus']);
     const forward = rankBroadcasts(
-      [broadcast('sunday_ticket', true), broadcast('fox', true), broadcast('espn_plus', true)],
+      [broadcast('amazon_prime', true), broadcast('fox', false), broadcast('espn_plus', true)],
       userServices,
     );
     const reversed = rankBroadcasts(
-      [broadcast('espn_plus', true), broadcast('fox', true), broadcast('sunday_ticket', true)],
+      [broadcast('espn_plus', true), broadcast('fox', false), broadcast('amazon_prime', true)],
       userServices,
     );
 
@@ -82,14 +88,14 @@ describe('rankBroadcasts', () => {
   });
 
   it('prefers a low-lag eligible broadcast over a lower-lag ineligible one', () => {
-    // fox (lag 8) is paid+unsubscribed -> ineligible; espn_plus (lag 60) is subscribed -> eligible.
+    // amazon_prime (lag 40) is paid+unsubscribed -> ineligible; espn_plus (lag 60) is subscribed.
     const ranked = rankBroadcasts(
-      [broadcast('fox', true), broadcast('espn_plus', true)],
+      [broadcast('amazon_prime', true), broadcast('espn_plus', true)],
       new Set(['espn_plus']),
     );
 
     expect(preferredBroadcast(ranked)?.service).toBe('espn_plus');
-    expect(ranked.map((b) => b.service)).toEqual(['espn_plus', 'fox']);
+    expect(ranked.map((b) => b.service)).toEqual(['espn_plus', 'amazon_prime']);
   });
 });
 
@@ -102,13 +108,13 @@ describe('preferredBroadcast', () => {
 describe('resolveBroadcasts (I/O wrapper)', () => {
   it('ranks the catalog broadcasts against the user subscribed services', async () => {
     const catalog = new InMemoryBroadcastCatalog();
-    catalog.setGameBroadcasts('g1', [broadcast('sunday_ticket', true), broadcast('fox', false)]);
-    catalog.setUserSubscribedServices('u1', ['sunday_ticket']);
+    catalog.setGameBroadcasts('g1', [broadcast('amazon_prime', true), broadcast('fox', false)]);
+    catalog.setUserSubscribedServices('u1', ['amazon_prime']);
 
     const ranked = await resolveBroadcasts('g1', 'u1', catalog);
 
-    // Both eligible (fox free, sunday_ticket subscribed); fox wins on lag (8 < 75).
-    expect(ranked.map((b) => b.service)).toEqual(['fox', 'sunday_ticket']);
+    // Both eligible (fox free, amazon_prime subscribed); fox wins on lag (8 < 40).
+    expect(ranked.map((b) => b.service)).toEqual(['fox', 'amazon_prime']);
     expect(preferredBroadcast(ranked)?.service).toBe('fox');
   });
 
