@@ -33,6 +33,8 @@ import {
 } from '../../../lib/leagues';
 import { orderLineupSlots, slotLabel } from '../../../lib/lineupOrder';
 import { fetchMe, type MeResponse } from '../../../lib/me';
+import { formatGameLine, gameForTeam } from '../../../lib/playerGame';
+import { fetchGamesWeek, type ScheduleGame } from '../../../lib/schedule';
 import { theme } from '../../../lib/theme';
 
 const SWITCH_TRACK = { false: theme.colors.border, true: theme.colors.accent } as const;
@@ -54,19 +56,20 @@ function rosterMeta(slot: LineupSlot): string {
   return team.length > 0 ? team : position;
 }
 
-function rowAccessibilityLabel(slot: LineupSlot): string {
+function rowAccessibilityLabel(slot: LineupSlot, gameLine: string | null): string {
   const name = `${slot.player.first_name} ${slot.player.last_name}`.trim();
   const team = slot.player.team?.abbreviation ?? '';
   const position = slot.player.position;
   const detail = [team, position].filter((part) => part.length > 0).join(' ');
-  return [slotLabel(slot.position_in_lineup), name, detail]
+  return [slotLabel(slot.position_in_lineup), name, detail, gameLine ?? '']
     .filter((part) => part.length > 0)
     .join(', ');
 }
 
 /**
- * PLAN.md §10 Lineup tab — fantasy hub. Week comes from the lineup response
- * already loaded by `fetchLineup` (no extra request). Star toggles stay behind
+ * PLAN.md §10 Lineup tab — fantasy hub. Week comes from the lineup response.
+ * This week's games load with it (no polling) so each row can show the game
+ * and the player's team color. Star toggles stay behind
  * `SHOW_STAR_TOGGLES`. Pull-to-refresh syncs Sleeper.
  * Live points / opponent / detail sheet deferred.
  */
@@ -86,6 +89,8 @@ export default function LineupScreen() {
 
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
   const [lineup, setLineup] = useState<LineupResponse | null>(null);
+  /** `null` when this week's games did not load — rows then omit the game line. */
+  const [weekGames, setWeekGames] = useState<ScheduleGame[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -119,14 +124,23 @@ export default function LineupScreen() {
   const loadLineup = useCallback(async (league: LeagueSummary | null) => {
     if (!league) {
       setLineup(null);
+      setWeekGames(null);
       setLoadError(null);
       return;
     }
     setLoadError(null);
     try {
-      setLineup(await fetchLineup(league.league_id));
+      const response = await fetchLineup(league.league_id);
+      setLineup(response);
+      try {
+        const slate = await fetchGamesWeek(response.week);
+        setWeekGames(slate.games);
+      } catch {
+        setWeekGames(null);
+      }
     } catch (error) {
       setLineup(null);
+      setWeekGames(null);
       setLoadError(error instanceof ApiRequestError ? error.message : 'Could not load lineup.');
     }
   }, []);
@@ -199,6 +213,8 @@ export default function LineupScreen() {
   );
   const starterSlots = orderedSlots.filter((slot) => !isBenchSlot(slot));
   const benchSlots = orderedSlots.filter((slot) => isBenchSlot(slot));
+  const now = new Date();
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const toggleStar = async (slot: LineupSlot, value: boolean) => {
     if (!lineup) return;
@@ -363,11 +379,14 @@ export default function LineupScreen() {
                   divided={index > 0}
                   key={slot.slot_id}
                   mutedName={false}
+                  now={now}
                   onToggleStar={(value) => {
                     void toggleStar(slot, value);
                   }}
                   saving={savingSlotId === slot.slot_id || !lineup}
                   slot={slot}
+                  timeZone={timeZone}
+                  weekGames={weekGames}
                 />
               ))}
             </View>
@@ -381,11 +400,14 @@ export default function LineupScreen() {
                     divided={index > 0}
                     key={slot.slot_id}
                     mutedName
+                    now={now}
                     onToggleStar={(value) => {
                       void toggleStar(slot, value);
                     }}
                     saving={savingSlotId === slot.slot_id || !lineup}
                     slot={slot}
+                    timeZone={timeZone}
+                    weekGames={weekGames}
                   />
                 ))}
               </View>
@@ -448,22 +470,33 @@ function PlayerRow({
   divided,
   mutedName,
   saving,
+  weekGames,
+  now,
+  timeZone,
   onToggleStar,
 }: {
   slot: LineupSlot;
   divided: boolean;
   mutedName: boolean;
   saving: boolean;
+  weekGames: ScheduleGame[] | null;
+  now: Date;
+  timeZone: string;
   onToggleStar: (value: boolean) => void;
 }) {
   const name = `${slot.player.first_name} ${slot.player.last_name}`.trim();
+  const teamId = slot.player.team?.abbreviation ?? '';
+  const game = weekGames == null ? null : gameForTeam(weekGames, teamId, now);
+  const gameLine = game == null ? null : formatGameLine(game, now, timeZone);
+  const stripeColor =
+    game != null && game.kind !== 'bye' && game.teamColor != null
+      ? game.teamColor
+      : theme.colors.wellBorder;
   return (
     <View style={[styles.playerRow, divided && styles.playerRowDivider]}>
-      {/* Lineup payload has no team primary color, and app/lib/teamColors.ts does not exist.
-          Board rows use accent when a catalog hex is missing. */}
-      <View style={styles.stripe} />
+      <View style={[styles.stripe, { backgroundColor: stripeColor }]} />
       <View
-        accessibilityLabel={rowAccessibilityLabel(slot)}
+        accessibilityLabel={rowAccessibilityLabel(slot, gameLine)}
         accessible
         style={styles.playerMain}
       >
@@ -478,6 +511,11 @@ function PlayerRow({
             {rosterMeta(slot)}
           </Text>
         </View>
+        {gameLine ? (
+          <Text numberOfLines={1} style={[styles.gameLine, gameLineToneStyle(gameLine)]}>
+            {gameLine}
+          </Text>
+        ) : null}
       </View>
       {SHOW_STAR_TOGGLES ? (
         <Switch
@@ -490,6 +528,12 @@ function PlayerRow({
       ) : null}
     </View>
   );
+}
+
+function gameLineToneStyle(line: string): { color: string } | null {
+  if (line === 'LIVE') return styles.gameLineLive;
+  if (line.startsWith('TODAY')) return styles.gameLineToday;
+  return null;
 }
 
 function errorMessage(error: unknown): string {
@@ -511,6 +555,19 @@ const styles = StyleSheet.create({
   },
   benchName: {
     color: theme.colors.textSecondary,
+  },
+  gameLine: {
+    color: theme.colors.textTertiary,
+    fontFamily: fonts.monoMedium,
+    fontSize: theme.type.ticker.size,
+    fontVariant: [...theme.type.ticker.fontVariant],
+    fontWeight: '400',
+  },
+  gameLineLive: {
+    color: theme.colors.flare,
+  },
+  gameLineToday: {
+    color: theme.colors.accent,
   },
   emptyCopy: {
     color: theme.colors.textSecondary,
@@ -607,7 +664,6 @@ const styles = StyleSheet.create({
   },
   stripe: {
     alignSelf: 'stretch',
-    backgroundColor: theme.colors.accent,
     width: STRIPE_WIDTH,
   },
   switcherBlock: {
