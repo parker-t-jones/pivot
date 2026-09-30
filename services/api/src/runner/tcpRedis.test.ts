@@ -2,7 +2,7 @@ import type { Redis } from 'ioredis';
 import { describe, expect, it } from 'vitest';
 import { GAME_STATE_KEY_TTL_SECONDS, serializeGameState } from '@pivot/dispatcher';
 import type { GameState } from '@pivot/shared';
-import { tcpGameState } from './tcpRedis.js';
+import { createTcpRedis, tcpGameState } from './tcpRedis.js';
 
 const STATE: GameState = {
   gameId: 'g1',
@@ -84,5 +84,23 @@ describe('tcpGameState', () => {
     ]);
 
     await expect(tcpGameState(redis).setGameState('g1', STATE)).rejects.toThrow('WRONGTYPE');
+  });
+});
+
+describe('createTcpRedis address family', () => {
+  // Fly's private network is IPv6-only; production REDIS_URL carries `?family=6`.
+  function familyFor(url: string): unknown {
+    const redis = createTcpRedis(url, 'test');
+    redis.disconnect();
+    return redis.options.family;
+  }
+
+  it('uses IPv6 for the Fly .internal URL', () => {
+    expect(familyFor('redis://default:pw@pivot-sports-redis.internal:6379?family=6')).toBe(6);
+  });
+
+  it('leaves local Docker URLs on the default lookup', () => {
+    expect(familyFor('redis://localhost:6379')).not.toBe(6);
+    expect(familyFor('redis://127.0.0.1:6379')).not.toBe(6);
   });
 });
