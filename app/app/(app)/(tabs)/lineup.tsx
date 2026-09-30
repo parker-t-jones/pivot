@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActionSheetIOS,
   Alert,
   Pressable,
   RefreshControl,
@@ -37,11 +38,20 @@ const SWITCH_TRACK = { false: theme.colors.border, true: theme.colors.accent } a
 const SWITCH_THUMB = theme.colors.textPrimary;
 
 /**
- * PLAN.md §10 Lineup tab — fantasy hub: league switcher + manage, roster in
- * canonical slot order (`orderLineupSlots`). Star toggles stay behind
+ * PLAN.md §10 Lineup tab — fantasy hub. Week comes from the lineup response
+ * already loaded by `fetchLineup` (no extra request). Star toggles stay behind
  * `SHOW_STAR_TOGGLES`. Pull-to-refresh syncs Sleeper.
  * Live points / opponent / detail sheet deferred.
  */
+
+/** Empty `watchedLeagueIds` means nothing has been picked yet, which Home treats as watching every league. */
+function isWatchingLeague(watchedIds: Set<string>, leagueId: string): boolean {
+  return watchedIds.size === 0 || watchedIds.has(leagueId);
+}
+
+function weekEyebrow(week: number | null): string {
+  return week == null ? 'FANTASY' : `WEEK ${week} · FANTASY`;
+}
 export default function LineupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -161,10 +171,78 @@ export default function LineupScreen() {
     [lineup],
   );
 
+  const watchingSelected =
+    selectedLeague != null && isWatchingLeague(watchedIds, selectedLeague.league_id);
+  const manageBusy = busyLeagueId != null && busyLeagueId === selectedLeague?.league_id;
+
+  const openManage = () => {
+    if (!selectedLeague || manageBusy) return;
+    const sleeper = selectedLeague.platform === 'sleeper';
+    const options = sleeper
+      ? ['Sync', 'Connect another team', 'Disconnect', 'Cancel']
+      : ['Edit lineup', 'Rename', 'Connect another team', 'Disconnect', 'Cancel'];
+    const cancelButtonIndex = options.length - 1;
+    const destructiveButtonIndex = options.indexOf('Disconnect');
+    ActionSheetIOS.showActionSheetWithOptions(
+      { options, cancelButtonIndex, destructiveButtonIndex },
+      (buttonIndex) => {
+        const choice = options[buttonIndex];
+        if (choice === 'Sync') {
+          void (async () => {
+            setBusyLeagueId(selectedLeague.league_id);
+            try {
+              await syncLeague(selectedLeague.league_id);
+              const rows = await refreshLeagues();
+              const next =
+                rows.find((league) => league.league_id === selectedLeague.league_id) ?? null;
+              await loadLineup(next);
+            } catch (error) {
+              Alert.alert('Sync failed', errorMessage(error));
+            } finally {
+              setBusyLeagueId(null);
+            }
+          })();
+        } else if (choice === 'Edit lineup') {
+          router.push(
+            `/(app)/edit-manual-lineup?leagueId=${encodeURIComponent(selectedLeague.league_id)}`,
+          );
+        } else if (choice === 'Rename') {
+          promptRename(selectedLeague);
+        } else if (choice === 'Connect another team') {
+          router.push('/(app)/connect-team');
+        } else if (choice === 'Disconnect') {
+          Alert.alert('Disconnect league?', `Remove "${selectedLeague.name}" from Pivot?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Disconnect',
+              style: 'destructive',
+              onPress: () => {
+                void (async () => {
+                  setBusyLeagueId(selectedLeague.league_id);
+                  try {
+                    await disconnectLeague(selectedLeague.league_id);
+                    const rows = await refreshLeagues();
+                    if (rows.length === 0) {
+                      deferConnect();
+                    }
+                  } catch (error) {
+                    Alert.alert('Could not disconnect', errorMessage(error));
+                  } finally {
+                    setBusyLeagueId(null);
+                  }
+                })();
+              },
+            },
+          ]);
+        }
+      },
+    );
+  };
+
   if (isLoading && !lineup) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top + theme.spacing.lg }]}>
-        <Text style={styles.screenTitle}>Lineup</Text>
+        <LineupHeader week={null} />
         <LoadingState message="Loading lineup…" />
       </View>
     );
@@ -173,7 +251,7 @@ export default function LineupScreen() {
   if (leagues.length === 0) {
     return (
       <View style={[styles.screen, styles.emptyScreen, { paddingTop: insets.top + theme.spacing.lg }]}>
-        <Text style={styles.screenTitle}>Lineup</Text>
+        <LineupHeader week={null} />
         <Text style={styles.emptyCopy}>Connect a fantasy team to manage your lineup.</Text>
         <SecondaryButton
           label="Connect a team"
@@ -198,65 +276,32 @@ export default function LineupScreen() {
         />
       }
     >
-      <Text style={styles.screenTitle}>Lineup</Text>
+      <LineupHeader week={lineup?.week ?? null} />
 
-      <LeagueSwitcher
-        leagues={leagues}
-        selectedLeagueId={selectedLeague?.league_id ?? null}
-        watchedIds={watchedIds}
-        onSelect={setSelectedLeagueId}
-      />
-
-      {selectedLeague ? (
-        <LeagueManageRow
-          league={selectedLeague}
-          busy={busyLeagueId === selectedLeague.league_id}
-          onConnectAnother={() => router.push('/(app)/connect-team')}
-          onEditLineup={() =>
-            router.push(
-              `/(app)/edit-manual-lineup?leagueId=${encodeURIComponent(selectedLeague.league_id)}`,
-            )
-          }
-          onRename={() => promptRename(selectedLeague)}
-          onSync={async () => {
-            setBusyLeagueId(selectedLeague.league_id);
-            try {
-              await syncLeague(selectedLeague.league_id);
-              const rows = await refreshLeagues();
-              const next =
-                rows.find((league) => league.league_id === selectedLeague.league_id) ?? null;
-              await loadLineup(next);
-            } catch (error) {
-              Alert.alert('Sync failed', errorMessage(error));
-            } finally {
-              setBusyLeagueId(null);
-            }
-          }}
-          onDisconnect={() =>
-            Alert.alert('Disconnect league?', `Remove "${selectedLeague.name}" from Pivot?`, [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Disconnect',
-                style: 'destructive',
-                onPress: async () => {
-                  setBusyLeagueId(selectedLeague.league_id);
-                  try {
-                    await disconnectLeague(selectedLeague.league_id);
-                    const rows = await refreshLeagues();
-                    if (rows.length === 0) {
-                      deferConnect();
-                    }
-                  } catch (error) {
-                    Alert.alert('Could not disconnect', errorMessage(error));
-                  } finally {
-                    setBusyLeagueId(null);
-                  }
-                },
-              },
-            ])
-          }
+      <View style={styles.switcherBlock}>
+        <LeagueSwitcher
+          leagues={leagues}
+          selectedLeagueId={selectedLeague?.league_id ?? null}
+          onSelect={setSelectedLeagueId}
         />
-      ) : null}
+        {selectedLeague ? (
+          <Text style={watchingSelected ? styles.watching : styles.notWatching}>
+            {watchingSelected ? 'WATCHING' : 'NOT WATCHING'}
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={styles.rosterSection}>
+        {selectedLeague ? (
+          <View style={styles.rosterHeader}>
+            <TextButton
+              disabled={manageBusy}
+              label="Manage"
+              onPress={openManage}
+              size="smallStrong"
+            />
+          </View>
+        ) : null}
 
       {loadError ? (
         <ErrorState
@@ -312,110 +357,53 @@ export default function LineupScreen() {
           ))}
         </View>
       )}
+      </View>
     </ScrollView>
+  );
+}
+
+function LineupHeader({ week }: { week: number | null }) {
+  return (
+    <View style={styles.headerBlock}>
+      <Text style={styles.eyebrow}>{weekEyebrow(week)}</Text>
+      <Text style={styles.screenTitle}>Lineup</Text>
+    </View>
   );
 }
 
 function LeagueSwitcher({
   leagues,
   selectedLeagueId,
-  watchedIds,
   onSelect,
 }: {
   leagues: LeagueSummary[];
   selectedLeagueId: string | null;
-  watchedIds: Set<string>;
   onSelect: (leagueId: string) => void;
 }) {
-  const [league] = leagues;
-  if (leagues.length === 1 && league) {
-    const watching = watchedIds.size === 0 || watchedIds.has(league.league_id);
-    return (
-      <View style={styles.switcherSingle}>
-        <Text style={styles.leagueName}>{league.name}</Text>
-        <Text style={styles.leagueMeta}>
-          {league.platform === 'sleeper' ? 'Sleeper' : 'Manual'} · {league.season_year}
-          {!watching ? ' · Not watching' : ''}
-        </Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.switcherList}>
+    <ScrollView
+      horizontal
+      contentContainerStyle={styles.switcherContent}
+      showsHorizontalScrollIndicator={false}
+      style={styles.switcherTrack}
+    >
       {leagues.map((league) => {
         const selected = league.league_id === selectedLeagueId;
-        const watching = watchedIds.size === 0 || watchedIds.has(league.league_id);
         return (
           <Pressable
             key={league.league_id}
             accessibilityRole="button"
+            accessibilityState={{ selected }}
             onPress={() => onSelect(league.league_id)}
             style={[styles.switcherChip, selected && styles.switcherChipSelected]}
           >
             <Text style={[styles.switcherChipLabel, selected && styles.switcherChipLabelSelected]}>
               {league.name}
             </Text>
-            {!watching ? <Text style={styles.notWatching}>Not watching</Text> : null}
           </Pressable>
         );
       })}
-    </View>
-  );
-}
-
-function LeagueManageRow({
-  league,
-  busy,
-  onConnectAnother,
-  onEditLineup,
-  onRename,
-  onSync,
-  onDisconnect,
-}: {
-  league: LeagueSummary;
-  busy: boolean;
-  onConnectAnother: () => void;
-  onEditLineup: () => void;
-  onRename: () => void;
-  onSync: () => Promise<void>;
-  onDisconnect: () => void;
-}) {
-  return (
-    <View style={styles.manageBlock}>
-      <View style={styles.manageActions}>
-        {league.platform === 'sleeper' ? (
-          <TextButton
-            disabled={busy}
-            label="Sync"
-            onPress={() => void onSync()}
-            size="smallStrong"
-          />
-        ) : (
-          <>
-            <TextButton
-              disabled={busy}
-              label="Edit lineup"
-              onPress={onEditLineup}
-              size="smallStrong"
-            />
-            <TextButton disabled={busy} label="Rename" onPress={onRename} size="smallStrong" />
-          </>
-        )}
-        <TextButton
-          disabled={busy}
-          label="Disconnect"
-          onPress={onDisconnect}
-          size="smallStrong"
-          tone="danger"
-        />
-      </View>
-      <SecondaryButton
-        label="Connect another team"
-        onPress={onConnectAnother}
-        style={styles.connectAnother}
-      />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -424,9 +412,6 @@ function errorMessage(error: unknown): string {
 }
 
 const styles = StyleSheet.create({
-  connectAnother: {
-    marginTop: theme.spacing.md,
-  },
   content: {
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg2,
@@ -440,35 +425,22 @@ const styles = StyleSheet.create({
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg2,
   },
-  leagueMeta: {
-    color: theme.colors.textTertiary,
-    fontFamily: fonts.monoMedium,
-    fontSize: theme.type.caption.size,
-    fontWeight: '400',
-    marginTop: theme.spacing.xs,
+  eyebrow: {
+    color: theme.colors.brass,
+    fontFamily: theme.type.eyebrow.fontFamily,
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
+    textTransform: 'uppercase',
   },
-  leagueName: {
-    color: theme.colors.textPrimary,
-    fontFamily: fonts.sansBold,
-    fontSize: theme.type.heading.size,
-    fontWeight: '400',
-  },
-  manageActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.md,
-  },
-  manageBlock: {
-    borderTopColor: theme.colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: theme.spacing.md,
+  headerBlock: {
+    gap: theme.spacing.xs,
   },
   notWatching: {
     color: theme.colors.textTertiary,
-    fontFamily: fonts.monoMedium,
-    fontSize: 10,
-    fontWeight: '400',
-    marginTop: 2,
+    fontFamily: fonts.monoBold,
+    fontSize: theme.type.eyebrow.size,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
   },
   playerInfo: {
     flex: 1,
@@ -495,8 +467,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: theme.spacing.md,
   },
+  rosterHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
   rosterList: {
     marginTop: theme.spacing.sm,
+  },
+  rosterSection: {
+    gap: theme.spacing.sm,
   },
   screen: {
     backgroundColor: theme.colors.background,
@@ -516,32 +496,43 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     width: 88,
   },
+  switcherBlock: {
+    gap: theme.spacing.sm,
+  },
   switcherChip: {
-    borderColor: theme.colors.border,
     borderRadius: theme.radii.md,
-    borderWidth: 1,
+    justifyContent: 'center',
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
   },
   switcherChipLabel: {
-    color: theme.colors.textSecondary,
-    fontFamily: fonts.sansSemiBold,
-    fontSize: theme.type.caption.size,
-    fontWeight: '400',
+    color: theme.colors.textTertiary,
+    fontFamily: fonts.monoMedium,
+    fontSize: theme.type.eyebrow.size,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
   },
   switcherChipLabelSelected: {
     color: theme.colors.accent,
   },
   switcherChipSelected: {
-    backgroundColor: theme.colors.accentMuted,
-    borderColor: theme.colors.accentBorder,
+    backgroundColor: theme.colors.surfaceRaised,
   },
-  switcherList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+  switcherContent: {
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    padding: theme.spacing.xs,
   },
-  switcherSingle: {
-    marginBottom: theme.spacing.xs,
+  switcherTrack: {
+    backgroundColor: theme.colors.well,
+    borderColor: theme.colors.wellBorder,
+    borderRadius: theme.radii.md,
+    borderWidth: theme.effects.panelBorderWidth,
+    flexGrow: 0,
+  },
+  watching: {
+    color: theme.colors.brass,
+    fontFamily: fonts.monoBold,
+    fontSize: theme.type.eyebrow.size,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
   },
 });
