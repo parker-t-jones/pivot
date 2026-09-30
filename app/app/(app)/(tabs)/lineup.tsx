@@ -29,6 +29,7 @@ import {
   syncLeague,
   type LeagueSummary,
   type LineupResponse,
+  type LineupSlot,
 } from '../../../lib/leagues';
 import { orderLineupSlots, slotLabel } from '../../../lib/lineupOrder';
 import { fetchMe, type MeResponse } from '../../../lib/me';
@@ -36,6 +37,32 @@ import { theme } from '../../../lib/theme';
 
 const SWITCH_TRACK = { false: theme.colors.border, true: theme.colors.accent } as const;
 const SWITCH_THUMB = theme.colors.textPrimary;
+const STRIPE_WIDTH = 3;
+const ROW_MIN_HEIGHT = 52;
+const SLOT_COLUMN_WIDTH = 44;
+
+function isBenchSlot(slot: LineupSlot): boolean {
+  if (slot.slot_type === 'bench') return true;
+  const raw = slot.position_in_lineup.trim().toUpperCase();
+  return raw === 'BN' || raw === 'BENCH' || raw === 'IR' || raw === 'TAXI';
+}
+
+function rosterMeta(slot: LineupSlot): string {
+  const team = slot.player.team?.abbreviation ?? '';
+  const position = slot.player.position;
+  if (team.length > 0 && position.length > 0) return `${team} · ${position}`;
+  return team.length > 0 ? team : position;
+}
+
+function rowAccessibilityLabel(slot: LineupSlot): string {
+  const name = `${slot.player.first_name} ${slot.player.last_name}`.trim();
+  const team = slot.player.team?.abbreviation ?? '';
+  const position = slot.player.position;
+  const detail = [team, position].filter((part) => part.length > 0).join(' ');
+  return [slotLabel(slot.position_in_lineup), name, detail]
+    .filter((part) => part.length > 0)
+    .join(', ');
+}
 
 /**
  * PLAN.md §10 Lineup tab — fantasy hub. Week comes from the lineup response
@@ -170,6 +197,21 @@ export default function LineupScreen() {
     () => orderLineupSlots(lineup?.slots ?? []),
     [lineup],
   );
+  const starterSlots = orderedSlots.filter((slot) => !isBenchSlot(slot));
+  const benchSlots = orderedSlots.filter((slot) => isBenchSlot(slot));
+
+  const toggleStar = async (slot: LineupSlot, value: boolean) => {
+    if (!lineup) return;
+    setSavingSlotId(slot.slot_id);
+    try {
+      await setStarPlayer(lineup.league_id, lineup.week, slot.player.player_id, value);
+      await loadLineup(selectedLeague);
+    } catch (error) {
+      Alert.alert('Could not update star', errorMessage(error));
+    } finally {
+      setSavingSlotId(null);
+    }
+  };
 
   const watchingSelected =
     selectedLeague != null && isWatchingLeague(watchedIds, selectedLeague.league_id);
@@ -313,49 +355,43 @@ export default function LineupScreen() {
       ) : orderedSlots.length === 0 ? (
         <Text style={styles.emptyCopy}>No players in this lineup yet.</Text>
       ) : (
-        <View style={styles.rosterList}>
-          {orderedSlots.map((slot) => (
-            <View key={slot.slot_id} style={styles.playerRow}>
-              <Text style={styles.slotLabel}>{slotLabel(slot.position_in_lineup)}</Text>
-              <View style={styles.playerInfo}>
-                <Text style={styles.playerName}>
-                  {slot.player.first_name} {slot.player.last_name}
-                </Text>
-                <Text style={styles.playerMeta}>
-                  {slot.player.position}
-                  {slot.player.team?.abbreviation
-                    ? ` · ${slot.player.team.abbreviation}`
-                    : ''}
-                </Text>
-              </View>
-              {SHOW_STAR_TOGGLES ? (
-                <Switch
-                  disabled={savingSlotId === slot.slot_id || !lineup}
-                  onValueChange={async (value) => {
-                    if (!lineup) return;
-                    setSavingSlotId(slot.slot_id);
-                    try {
-                      await setStarPlayer(
-                        lineup.league_id,
-                        lineup.week,
-                        slot.player.player_id,
-                        value,
-                      );
-                      await loadLineup(selectedLeague);
-                    } catch (error) {
-                      Alert.alert('Could not update star', errorMessage(error));
-                    } finally {
-                      setSavingSlotId(null);
-                    }
+        <>
+          {starterSlots.length > 0 ? (
+            <View style={styles.rosterWell}>
+              {starterSlots.map((slot, index) => (
+                <PlayerRow
+                  divided={index > 0}
+                  key={slot.slot_id}
+                  mutedName={false}
+                  onToggleStar={(value) => {
+                    void toggleStar(slot, value);
                   }}
-                  thumbColor={SWITCH_THUMB}
-                  trackColor={SWITCH_TRACK}
-                  value={slot.is_star}
+                  saving={savingSlotId === slot.slot_id || !lineup}
+                  slot={slot}
                 />
-              ) : null}
+              ))}
             </View>
-          ))}
-        </View>
+          ) : null}
+          {benchSlots.length > 0 ? (
+            <>
+              <Text style={styles.benchEyebrow}>BENCH</Text>
+              <View style={styles.rosterWell}>
+                {benchSlots.map((slot, index) => (
+                  <PlayerRow
+                    divided={index > 0}
+                    key={slot.slot_id}
+                    mutedName
+                    onToggleStar={(value) => {
+                      void toggleStar(slot, value);
+                    }}
+                    saving={savingSlotId === slot.slot_id || !lineup}
+                    slot={slot}
+                  />
+                ))}
+              </View>
+            </>
+          ) : null}
+        </>
       )}
       </View>
     </ScrollView>
@@ -407,6 +443,55 @@ function LeagueSwitcher({
   );
 }
 
+function PlayerRow({
+  slot,
+  divided,
+  mutedName,
+  saving,
+  onToggleStar,
+}: {
+  slot: LineupSlot;
+  divided: boolean;
+  mutedName: boolean;
+  saving: boolean;
+  onToggleStar: (value: boolean) => void;
+}) {
+  const name = `${slot.player.first_name} ${slot.player.last_name}`.trim();
+  return (
+    <View style={[styles.playerRow, divided && styles.playerRowDivider]}>
+      {/* Lineup payload has no team primary color, and app/lib/teamColors.ts does not exist.
+          Board rows use accent when a catalog hex is missing. */}
+      <View style={styles.stripe} />
+      <View
+        accessibilityLabel={rowAccessibilityLabel(slot)}
+        accessible
+        style={styles.playerMain}
+      >
+        <Text numberOfLines={1} style={styles.slotTag}>
+          {slotLabel(slot.position_in_lineup)}
+        </Text>
+        <View style={styles.playerInfo}>
+          <Text numberOfLines={1} style={[styles.playerName, mutedName && styles.benchName]}>
+            {name}
+          </Text>
+          <Text numberOfLines={1} style={styles.playerMeta}>
+            {rosterMeta(slot)}
+          </Text>
+        </View>
+      </View>
+      {SHOW_STAR_TOGGLES ? (
+        <Switch
+          disabled={saving}
+          onValueChange={onToggleStar}
+          thumbColor={SWITCH_THUMB}
+          trackColor={SWITCH_TRACK}
+          value={slot.is_star}
+        />
+      ) : null}
+    </View>
+  );
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof ApiRequestError ? error.message : 'Something went wrong.';
 }
@@ -415,6 +500,17 @@ const styles = StyleSheet.create({
   content: {
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg2,
+  },
+  benchEyebrow: {
+    color: theme.colors.brass,
+    fontFamily: theme.type.eyebrow.fontFamily,
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  benchName: {
+    color: theme.colors.textSecondary,
   },
   emptyCopy: {
     color: theme.colors.textSecondary,
@@ -444,7 +540,13 @@ const styles = StyleSheet.create({
   },
   playerInfo: {
     flex: 1,
-    paddingRight: theme.spacing.md,
+    paddingRight: theme.spacing.sm,
+  },
+  playerMain: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    minHeight: ROW_MIN_HEIGHT,
   },
   playerMeta: {
     color: theme.colors.textTertiary,
@@ -461,22 +563,28 @@ const styles = StyleSheet.create({
   },
   playerRow: {
     alignItems: 'center',
-    borderTopColor: theme.colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: theme.spacing.md,
+    minHeight: ROW_MIN_HEIGHT,
+    paddingRight: theme.spacing.md,
+  },
+  playerRowDivider: {
+    borderTopColor: theme.colors.rowDivider,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   rosterHeader: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
-  rosterList: {
-    marginTop: theme.spacing.sm,
-  },
   rosterSection: {
     gap: theme.spacing.sm,
+  },
+  rosterWell: {
+    backgroundColor: theme.colors.well,
+    borderColor: theme.colors.wellBorder,
+    borderRadius: theme.radii.md,
+    borderWidth: theme.effects.panelBorderWidth,
+    overflow: 'hidden',
   },
   screen: {
     backgroundColor: theme.colors.background,
@@ -488,13 +596,19 @@ const styles = StyleSheet.create({
     fontSize: theme.type.heading.size,
     fontWeight: '400',
   },
-  slotLabel: {
-    color: theme.colors.accent,
+  slotTag: {
+    color: theme.colors.brass,
     fontFamily: fonts.monoBold,
-    fontSize: theme.type.caption.size,
-    fontWeight: '400',
-    letterSpacing: 0.4,
-    width: 88,
+    fontSize: theme.type.eyebrow.size,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
+    marginLeft: theme.spacing.md,
+    textTransform: 'uppercase',
+    width: SLOT_COLUMN_WIDTH,
+  },
+  stripe: {
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.accent,
+    width: STRIPE_WIDTH,
   },
   switcherBlock: {
     gap: theme.spacing.sm,
