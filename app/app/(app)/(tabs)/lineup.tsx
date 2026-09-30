@@ -56,8 +56,18 @@ function rosterMeta(slot: LineupSlot): string {
   return team.length > 0 ? team : position;
 }
 
+/** DEF rows show the team name (`player.team.name`). A blank name falls back to the abbreviation. */
+function playerDisplayName(slot: LineupSlot): string {
+  const person = `${slot.player.first_name} ${slot.player.last_name}`.trim();
+  if (slot.player.position.trim().toUpperCase() !== 'DEF') return person;
+  const teamName = slot.player.team?.name.trim() ?? '';
+  if (teamName.length > 0) return teamName;
+  const abbreviation = slot.player.team?.abbreviation.trim() ?? '';
+  return abbreviation.length > 0 ? abbreviation : person;
+}
+
 function rowAccessibilityLabel(slot: LineupSlot, gameLine: string | null): string {
-  const name = `${slot.player.first_name} ${slot.player.last_name}`.trim();
+  const name = playerDisplayName(slot);
   const team = slot.player.team?.abbreviation ?? '';
   const position = slot.player.position;
   const detail = [team, position].filter((part) => part.length > 0).join(' ');
@@ -350,16 +360,17 @@ export default function LineupScreen() {
       </View>
 
       <View style={styles.rosterSection}>
-        {selectedLeague ? (
-          <View style={styles.rosterHeader}>
+        <View style={styles.rosterHeader}>
+          <Text style={styles.benchEyebrow}>STARTERS</Text>
+          {selectedLeague ? (
             <TextButton
               disabled={manageBusy}
               label="Manage"
               onPress={openManage}
               size="smallStrong"
             />
-          </View>
-        ) : null}
+          ) : null}
+        </View>
 
       {loadError ? (
         <ErrorState
@@ -484,7 +495,7 @@ function PlayerRow({
   timeZone: string;
   onToggleStar: (value: boolean) => void;
 }) {
-  const name = `${slot.player.first_name} ${slot.player.last_name}`.trim();
+  const name = playerDisplayName(slot);
   const teamId = slot.player.team?.abbreviation ?? '';
   const game = weekGames == null ? null : gameForTeam(weekGames, teamId, now);
   const gameLine = game == null ? null : formatGameLine(game, now, timeZone);
@@ -631,7 +642,7 @@ const styles = StyleSheet.create({
   rosterHeader: {
     alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
   },
   rosterSection: {
     gap: theme.spacing.sm,
@@ -680,6 +691,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.monoMedium,
     fontSize: theme.type.eyebrow.size,
     letterSpacing: theme.type.eyebrow.letterSpacing,
+    textTransform: 'uppercase',
   },
   switcherChipLabelSelected: {
     color: theme.colors.accent,
