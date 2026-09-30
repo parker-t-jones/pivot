@@ -4,6 +4,7 @@
     "slug": "fantasy-focus",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "pivot",
     "ios": {
       "supportsTablet": false,
