@@ -28,7 +28,7 @@ import {
   type LeagueSummary,
   type LineupResponse,
 } from '../../../lib/leagues';
-import { formatPositionInLineup, sortLineupSlots } from '../../../lib/lineupDisplay';
+import { orderLineupSlots, slotLabel } from '../../../lib/lineupOrder';
 import { fetchMe, type MeResponse } from '../../../lib/me';
 import { theme } from '../../../lib/theme';
 
@@ -36,8 +36,8 @@ const SWITCH_TRACK = { false: theme.colors.border, true: theme.colors.accent } a
 const SWITCH_THUMB = theme.colors.textPrimary;
 
 /**
- * PLAN.md §10 Lineup tab — fantasy hub: league switcher + manage, roster in Sleeper
- * slot order (`position_in_lineup`), star toggles, pull-to-refresh Sleeper sync.
+ * PLAN.md §10 Lineup tab — fantasy hub: league switcher + manage, roster in
+ * canonical slot order (`orderLineupSlots`), star toggles, pull-to-refresh Sleeper sync.
  * Live points / opponent / detail sheet deferred.
  */
 export default function LineupScreen() {
@@ -153,8 +153,9 @@ export default function LineupScreen() {
     );
   };
 
+  // Load, pull-to-refresh, and Sync all write `lineup` through `loadLineup`.
   const orderedSlots = useMemo(
-    () => sortLineupSlots(lineup?.slots ?? []),
+    () => orderLineupSlots(lineup?.slots ?? []),
     [lineup],
   );
 
@@ -268,7 +269,7 @@ export default function LineupScreen() {
         <View style={styles.rosterList}>
           {orderedSlots.map((slot) => (
             <View key={slot.slot_id} style={styles.playerRow}>
-              <Text style={styles.slotLabel}>{formatPositionInLineup(slot.position_in_lineup)}</Text>
+              <Text style={styles.slotLabel}>{slotLabel(slot.position_in_lineup)}</Text>
               <View style={styles.playerInfo}>
                 <Text style={styles.playerName}>
                   {slot.player.first_name} {slot.player.last_name}
