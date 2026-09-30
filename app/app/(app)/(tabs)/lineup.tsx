@@ -31,6 +31,7 @@ import {
   type LineupResponse,
   type LineupSlot,
 } from '../../../lib/leagues';
+import { leagueChipScrollOffset, leagueChipWidth } from '../../../lib/leagueChipScroll';
 import { orderLineupSlots, slotLabel } from '../../../lib/lineupOrder';
 import { fetchMe, type MeResponse } from '../../../lib/me';
 import { formatGameLine, gameForTeam } from '../../../lib/playerGame';
@@ -440,8 +441,8 @@ function LineupHeader({ week }: { week: number | null }) {
   );
 }
 
-/** Scroll mode: each chip is this fraction of the track so the next one peeks. */
-const SWITCHER_PEEK_FRACTION = 0.45;
+const SWITCHER_GAP = theme.spacing.xs;
+const SWITCHER_INSET = theme.spacing.xs;
 
 function LeagueSwitcher({
   leagues,
@@ -453,23 +454,30 @@ function LeagueSwitcher({
   onSelect: (leagueId: string) => void;
 }) {
   const scrollRef = useRef<ScrollView>(null);
-  const chipOffset = useRef(new Map<string, number>());
-  const [trackWidth, setTrackWidth] = useState(0);
+  const offsetRef = useRef(0);
+  const [viewportWidth, setViewportWidth] = useState(0);
   const scrolls = leagues.length >= 3;
-
-  const scrollSelectedIntoView = useCallback(
-    (animated: boolean) => {
-      if (!scrolls || selectedLeagueId == null) return;
-      const x = chipOffset.current.get(selectedLeagueId);
-      if (x == null) return;
-      scrollRef.current?.scrollTo({ x: Math.max(0, x - theme.spacing.xs), animated });
-    },
-    [scrolls, selectedLeagueId],
-  );
+  // Leading inset is outside the chip lane, so the 2.3-chip formula still peeks at the track's right edge.
+  const laneWidth = Math.max(0, viewportWidth - SWITCHER_INSET);
+  const chipWidth = laneWidth > 0 ? leagueChipWidth(laneWidth, SWITCHER_GAP) : 0;
+  const selectedIndex = leagues.findIndex((league) => league.league_id === selectedLeagueId);
 
   useEffect(() => {
-    scrollSelectedIntoView(true);
-  }, [scrollSelectedIntoView]);
+    if (!scrolls || chipWidth <= 0 || selectedIndex < 0) return;
+    const target = leagueChipScrollOffset({
+      leagueCount: leagues.length,
+      selectedIndex,
+      chipWidth,
+      gap: SWITCHER_GAP,
+      viewportWidth,
+      currentOffset: offsetRef.current,
+      leadingInset: SWITCHER_INSET,
+      trailingInset: SWITCHER_INSET,
+    });
+    if (Math.abs(target - offsetRef.current) < 0.5) return;
+    offsetRef.current = target;
+    scrollRef.current?.scrollTo({ x: target, animated: true });
+  }, [chipWidth, leagues.length, scrolls, selectedIndex, viewportWidth]);
 
   const chips = leagues.map((league) => {
     const selected = league.league_id === selectedLeagueId;
@@ -478,18 +486,10 @@ function LeagueSwitcher({
         key={league.league_id}
         accessibilityRole="button"
         accessibilityState={{ selected }}
-        onLayout={
-          scrolls
-            ? (event) => {
-                chipOffset.current.set(league.league_id, event.nativeEvent.layout.x);
-                if (selected) scrollSelectedIntoView(false);
-              }
-            : undefined
-        }
         onPress={() => onSelect(league.league_id)}
         style={[
           styles.switcherChip,
-          scrolls ? { width: trackWidth * SWITCHER_PEEK_FRACTION } : styles.switcherChipFill,
+          scrolls ? { width: chipWidth } : styles.switcherChipFill,
           selected && styles.switcherChipSelected,
         ]}
       >
@@ -509,19 +509,25 @@ function LeagueSwitcher({
   }
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      horizontal
-      contentContainerStyle={styles.switcherContent}
-      onLayout={(event) => {
-        const width = event.nativeEvent.layout.width;
-        setTrackWidth((current) => (current === width ? current : width));
-      }}
-      showsHorizontalScrollIndicator={false}
-      style={styles.switcherTrack}
-    >
-      {chips}
-    </ScrollView>
+    <View style={[styles.switcherTrack, styles.switcherScrollTrack]}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        contentContainerStyle={styles.switcherContent}
+        onLayout={(event) => {
+          const width = event.nativeEvent.layout.width;
+          setViewportWidth((current) => (current === width ? current : width));
+        }}
+        onScroll={(event) => {
+          offsetRef.current = event.nativeEvent.contentOffset.x;
+        }}
+        scrollEventThrottle={16}
+        showsHorizontalScrollIndicator={false}
+        style={styles.switcherScroll}
+      >
+        {chips}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -762,6 +768,13 @@ const styles = StyleSheet.create({
   switcherFit: {
     flexDirection: 'row',
     padding: theme.spacing.xs,
+  },
+  switcherScroll: {
+    flexGrow: 0,
+    width: '100%',
+  },
+  switcherScrollTrack: {
+    overflow: 'hidden',
   },
   switcherTrack: {
     backgroundColor: theme.colors.well,
