@@ -18,6 +18,7 @@ import { SecondaryButton } from '../../../components/SecondaryButton';
 import { TextButton } from '../../../components/TextButton';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
 import { ApiRequestError } from '../../../lib/apiClient';
+import { SHOW_STAR_TOGGLES } from '../../../lib/flags';
 import { fonts } from '../../../lib/fonts';
 import {
   disconnectLeague,
@@ -37,7 +38,8 @@ const SWITCH_THUMB = theme.colors.textPrimary;
 
 /**
  * PLAN.md §10 Lineup tab — fantasy hub: league switcher + manage, roster in
- * canonical slot order (`orderLineupSlots`), star toggles, pull-to-refresh Sleeper sync.
+ * canonical slot order (`orderLineupSlots`). Star toggles stay behind
+ * `SHOW_STAR_TOGGLES`. Pull-to-refresh syncs Sleeper.
  * Live points / opponent / detail sheet deferred.
  */
 export default function LineupScreen() {
@@ -281,29 +283,31 @@ export default function LineupScreen() {
                     : ''}
                 </Text>
               </View>
-              <Switch
-                disabled={savingSlotId === slot.slot_id || !lineup}
-                onValueChange={async (value) => {
-                  if (!lineup) return;
-                  setSavingSlotId(slot.slot_id);
-                  try {
-                    await setStarPlayer(
-                      lineup.league_id,
-                      lineup.week,
-                      slot.player.player_id,
-                      value,
-                    );
-                    await loadLineup(selectedLeague);
-                  } catch (error) {
-                    Alert.alert('Could not update star', errorMessage(error));
-                  } finally {
-                    setSavingSlotId(null);
-                  }
-                }}
-                thumbColor={SWITCH_THUMB}
-                trackColor={SWITCH_TRACK}
-                value={slot.is_star}
-              />
+              {SHOW_STAR_TOGGLES ? (
+                <Switch
+                  disabled={savingSlotId === slot.slot_id || !lineup}
+                  onValueChange={async (value) => {
+                    if (!lineup) return;
+                    setSavingSlotId(slot.slot_id);
+                    try {
+                      await setStarPlayer(
+                        lineup.league_id,
+                        lineup.week,
+                        slot.player.player_id,
+                        value,
+                      );
+                      await loadLineup(selectedLeague);
+                    } catch (error) {
+                      Alert.alert('Could not update star', errorMessage(error));
+                    } finally {
+                      setSavingSlotId(null);
+                    }
+                  }}
+                  thumbColor={SWITCH_THUMB}
+                  trackColor={SWITCH_TRACK}
+                  value={slot.is_star}
+                />
+              ) : null}
             </View>
           ))}
         </View>
