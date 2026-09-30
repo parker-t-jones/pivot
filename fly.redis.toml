@@ -1,0 +1,19 @@
+# Private Redis for pivot-sports-api. Deploy with `fly deploy -c fly.redis.toml --ha=false`.
+# No [http_service] or [[services]]: no public IP; reachable only at
+# pivot-sports-redis.internal:6379 over Fly's IPv6 private network.
+# No volume and no persistence: a restarted machine comes back empty.
+app = 'pivot-sports-redis'
+primary_region = 'iad'
+
+[build]
+  image = 'redis:7-alpine'
+
+[processes]
+  app = """sh -c 'exec redis-server --requirepass "$REDIS_PASSWORD" --bind "* -::*" --maxmemory 128mb --maxmemory-policy noeviction --save "" --appendonly no'"""
+
+[[restart]]
+  policy = 'always'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
