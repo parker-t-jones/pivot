@@ -38,23 +38,28 @@ const EMPTY_SLOT_PLAYER_ID = '0';
  *
  * @param rosterPositions Sleeper `league.roster_positions`, ordered, includes bench/IDP slots.
  * @param starters Sleeper `matchup.starters` for this roster/week — one player_id per
- *   non-bench slot in `rosterPositions`, in the same order (Sleeper's contract).
+ *   non-bench slot in `rosterPositions`, in the same order (Sleeper's contract). Null (the
+ *   whole list, or a slot) means that assignment is missing; indexes stay aligned.
  * @param players Sleeper `matchup.players` for this roster/week — every player_id on the roster.
  */
 export function mapRosterToLineupSlots(
   rosterPositions: readonly string[],
-  starters: readonly string[],
-  players: readonly string[],
+  starters: readonly (string | null)[] | null,
+  players: readonly (string | null)[] | null,
 ): RosterMappingSlot[] {
+  const starterList = starters ?? [];
+  const playerList = players ?? [];
+
   const startingRosterPositions = rosterPositions.filter(
     (position) => !BENCH_LIKE_ROSTER_POSITIONS.has(position),
   );
 
   const eligiblePairs = startingRosterPositions
-    .map((position, index) => ({ position, playerId: starters[index] }))
+    .map((position, index) => ({ position, playerId: starterList[index] }))
     .filter(
       (pair): pair is { position: string; playerId: string } =>
-        pair.playerId !== undefined &&
+        typeof pair.playerId === 'string' &&
+        pair.playerId.length > 0 &&
         pair.playerId !== EMPTY_SLOT_PLAYER_ID &&
         ALLOWED_LINEUP_POSITIONS.has(pair.position),
     );
@@ -76,9 +81,17 @@ export function mapRosterToLineupSlots(
     };
   });
 
-  const starterIds = new Set(starters);
-  const benchSlots: RosterMappingSlot[] = players
-    .filter((playerId) => playerId !== EMPTY_SLOT_PLAYER_ID && !starterIds.has(playerId))
+  const starterIds = new Set(
+    starterList.filter((playerId): playerId is string => typeof playerId === 'string' && playerId.length > 0),
+  );
+  const benchSlots: RosterMappingSlot[] = playerList
+    .filter(
+      (playerId): playerId is string =>
+        typeof playerId === 'string' &&
+        playerId.length > 0 &&
+        playerId !== EMPTY_SLOT_PLAYER_ID &&
+        !starterIds.has(playerId),
+    )
     .map((playerId) => ({
       externalPlayerId: playerId,
       slotType: 'bench',

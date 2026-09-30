@@ -118,8 +118,9 @@ async function getOwnedRoster(externalLeagueId: string, externalRosterId: string
 }
 
 /**
- * Returns mapped slots when a matching week matchup exists; `null` when matchups are unavailable
- * or don't include this roster (caller should fall back to `/rosters`).
+ * Returns mapped slots when a matching week matchup has a starters array; `null` when matchups
+ * are unavailable, don't include this roster, or `starters` is still null (Sleeper publishes the
+ * matchup before it snapshots lineups). Caller falls back to `/rosters`.
  */
 async function tryLineupFromMatchups(
   externalLeagueId: string,
@@ -142,9 +143,9 @@ async function tryLineupFromMatchups(
   }
 
   const matchup = matchups.find((m) => String(m.roster_id) === externalRosterId);
-  if (!matchup) {
+  if (!matchup || !Array.isArray(matchup.starters)) {
     return null;
   }
 
-  return mapRosterToLineupSlots(rosterPositions, matchup.starters, matchup.players);
+  return mapRosterToLineupSlots(rosterPositions, matchup.starters, matchup.players ?? []);
 }

@@ -92,6 +92,22 @@ describe('mapRosterToLineupSlots', () => {
     ]);
   });
 
+  it('does not throw when Sleeper sends a null starters list', () => {
+    const slots = mapRosterToLineupSlots(['QB', 'RB', 'BN'], null, ['qb1', 'rb1']);
+    expect(slots).toEqual([
+      { externalPlayerId: 'qb1', slotType: 'bench', positionInLineup: 'BN' },
+      { externalPlayerId: 'rb1', slotType: 'bench', positionInLineup: 'BN' },
+    ]);
+  });
+
+  it('skips null starter slots without shifting later positions', () => {
+    const slots = mapRosterToLineupSlots(['QB', 'RB', 'BN'], ['qb1', null], ['qb1', 'bench1']);
+    expect(slots).toEqual([
+      { externalPlayerId: 'qb1', slotType: 'starter', positionInLineup: 'QB' },
+      { externalPlayerId: 'bench1', slotType: 'bench', positionInLineup: 'BN' },
+    ]);
+  });
+
   it('skips empty roster slots (Sleeper placeholder player_id "0")', () => {
     const rosterPositions = ['QB', 'RB', 'BN'];
     const starters = ['qb1', '0'];

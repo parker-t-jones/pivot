@@ -25,8 +25,12 @@ export interface SleeperRoster {
 
 export interface SleeperMatchup {
   roster_id: number;
-  starters: string[];
-  players: string[];
+  /**
+   * Null until Sleeper snapshots the week's lineup (common early in the week, before
+   * Thursday). An array — including an empty one — means the matchup is usable.
+   */
+  starters: string[] | null;
+  players: string[] | null;
 }
 
 export type SleeperSeasonType = 'pre' | 'regular' | 'post' | 'off';

@@ -116,6 +116,33 @@ describe('SleeperProvider', () => {
       expect(getLeagueRosters).not.toHaveBeenCalled();
     });
 
+    it('falls back to getLeagueRosters when the matchup exists but starters is still null', async () => {
+      vi.spyOn(sleeperClient, 'getLeague').mockResolvedValue(league);
+      vi.spyOn(sleeperClient, 'getLeagueMatchups').mockResolvedValue([
+        { roster_id: 2, starters: null, players: ['qb1', 'bench1'] },
+      ]);
+      const getLeagueRosters = vi.spyOn(sleeperClient, 'getLeagueRosters').mockResolvedValue([
+        {
+          roster_id: 2,
+          owner_id: 'user-abc',
+          starters: ['qb1'],
+          players: ['qb1', 'bench1'],
+        },
+      ]);
+
+      const slots = await new SleeperProvider().fetchLineup({
+        externalLeagueId: 'league-1',
+        externalRosterId: '2',
+        week: 4,
+      });
+
+      expect(slots).toEqual([
+        { externalPlayerId: 'qb1', slotType: 'starter', positionInLineup: 'QB' },
+        { externalPlayerId: 'bench1', slotType: 'bench', positionInLineup: 'BN' },
+      ]);
+      expect(getLeagueRosters).toHaveBeenCalledWith('league-1');
+    });
+
     it('falls back to getLeagueRosters when matchups are empty (offseason)', async () => {
       vi.spyOn(sleeperClient, 'getLeague').mockResolvedValue(league);
       vi.spyOn(sleeperClient, 'getLeagueMatchups').mockResolvedValue([]);
