@@ -428,13 +428,13 @@ Rough, always-on, one region (pre–Oct 2026 Fly list prices; Oct 1 2026 bump ~+
 
 | Item                                                         | Estimate                                                                       |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| Fly API machine (`shared-cpu-1x` @ 512MB, may scale to zero) | ~$4–8/mo                                                                       |
-| Fly worker (`shared-cpu-1x` @ 256MB, always on)              | ~$2–4/mo                                                                       |
-| Fly runner (`shared-cpu-1x` @ 512MB, always on)              | ~$4–8/mo                                                                       |
-| Fly bandwidth                                                | low for API JSON — a few $                                                     |
-| Upstash Redis                                                | $0–10/mo (PLAN.md)                                                             |
+| Fly API machine (`shared-cpu-1x` @ 512MB, may scale to zero) | ~$3.30/mo (less when stopped)                                                  |
+| Fly worker (`shared-cpu-1x` @ 256MB, always on)              | ~$2/mo                                                                         |
+| Fly runner (`shared-cpu-1x` @ 512MB, always on)              | ~$3.30/mo                                                                      |
+| Fly Redis `pivot-sports-redis` (`shared-cpu-1x` @ 256MB, always on) | ~$2/mo                                                                  |
+| Fly bandwidth                                                | low for API JSON — a few cents                                                 |
 | Supabase Free                                                | $0 (pause risk) or **Pro ~$25/mo**                                             |
-| **Ballpark**                                                 | **~$15–40/mo** free Supabase + always-on Fly; **~$40–60/mo** with Supabase Pro |
+| **Total**                                                    | **~$10.70/mo** with Supabase Free; **~$35.70/mo** with Supabase Pro            |
 
 
 PLAN.md's $20–50 Fly + $25 Supabase remains the planning band. EAS Production tier is separate (builds/push).

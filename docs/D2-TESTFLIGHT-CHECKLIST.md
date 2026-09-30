@@ -5,7 +5,7 @@
 
 Where this differs from `docs/D1-DEPLOY-RUNBOOK.md` or `docs/FLY-DEPLOY-CHECKLIST.md`, this file wins:
 
-- **Upstash is the Fixed 250 MB plan, not free** (§B; the free tier runs out in about a day).
+- **Redis is a private Fly app, `pivot-sports-redis`** (§B), not Upstash. `REDIS_URL` is plain `redis://` on the IPv6 private network.
 - **`PUSH_DRIVER=expo` is set** (D1 said leave it unset).
 - **Teams seed uses `supabase db query`.** D1 §4.4's `supabase db execute` does not exist in CLI 2.109.
 - **There are 14 migrations**, not 10.
@@ -65,29 +65,56 @@ Dashboard → Authentication → Providers: **Email on**. Sign In / Up: **Confir
 
 ---
 
-## B. Upstash Redis
+## B. Redis on Fly (`pivot-sports-redis`)
 
-### B1. Plan: **Fixed 250 MB ($10/month)**
-The estimate is in the appendix. The runner alone issues about 366K commands a day with no games on; a full slate adds 75–100K. That totals about **13M commands a month**.
+`fly.redis.toml` runs `redis:7-alpine` on one `shared-cpu-1x` 256 MB machine in `iad`, with `requirepass`, `maxmemory 128mb` and `noeviction`. It has no `[http_service]` or `[[services]]`, so there's no public IP; it's reachable only at `pivot-sports-redis.internal:6379` from apps in the same Fly org. It restarts on crash (`[[restart]] policy = "always"`). Nothing auto-stops it, because Fly only auto-stops machines behind a service.
 
-| Plan (Upstash pricing, checked Sep 30 2026) | Fit |
-| --- | --- |
-| Free: 500K commands/month, 256 MB | Used up in ~1.2 days. After that Redis rejects commands and the runner stops. **No.** |
-| Pay-as-you-go: $0.20 per 100K | ≈ $26/month. A budget cap **stops the database** when reached, which would kill the runner mid-game. |
-| **Fixed 250 MB: $10/month flat, no command billing, 50 GB bandwidth, 10K cmd/s** | Our peak is under 100 cmd/s and our data is a few MB. **Yes.** |
+**No persistence** (no volume, `--save ""`, `--appendonly no`). Any restart or redeploy of this app comes back **empty**. That drops:
+- the leader lock;
+- `game_state` and the seen-play sets;
+- the lineup cache and stake sets;
+- `flag_event_queue` (queued pushes).
 
-Region: **AWS us-east-1 (N. Virginia)**, next to Fly `iad`. If you already created a free database, change its plan in the console before deploying. Don't create a second database.
+The app recovers without intervention:
+- The runner's renew fails, it stands by, re-acquires the lock within about 5 s, and rebuilds the stake cache on becoming leader.
+- Discovery re-seeds `game_state` from the scoreboard.
+- Each live game re-seeds its seen set from the current ESPN summary, so plays during the gap are skipped, not replayed.
+- The worker rewrites lineup caches within 5 minutes.
 
-**Spending cap:** none needed; Fixed has no command overage. Set a billing email alert only. If you ever switch to pay-as-you-go, set the budget to **≥ $40** (about 1.5× the estimate), never lower.
+Pushes that were queued at the moment of the restart are lost. So is per-user flag state; the first play after the restart can re-send a flag the user already got.
 
-### B2. TCP URL
-Console → the database → **Connect** → TCP / ioredis. Copy:
-- `REDIS_URL` = `rediss://default:<password>@<endpoint>.upstash.io:6379`
-- `PRODUCTION_REDIS_HOST` = `<endpoint>.upstash.io` (the hostname only; no scheme, password or port)
+Redeploying `pivot-sports-api` does **not** touch Redis. **Never restart or redeploy `pivot-sports-redis` on Thu/Sun/Mon.**
 
-**Check (optional, needs `redis-cli`):** `redis-cli --tls -u '<REDIS_URL>' ping` → `PONG`. `PING` is not billed.
+### B1. Create the app and its password
+```bash
+fly apps list                                   # note the org pivot-sports-api is in
+fly apps create pivot-sports-redis --org <that org>
+openssl rand -hex 32                            # save the output in your password manager as REDIS_PASSWORD
+fly secrets set REDIS_PASSWORD='<that value>' -a pivot-sports-redis
+fly secrets list -a pivot-sports-redis
+```
+**Expect:** `New app created: pivot-sports-redis`. The secrets list shows only `REDIS_PASSWORD`.
 
-You don't need the REST URL or token: every process uses `REDIS_URL` when it's set.
+Fly never shows the value again, and you need it for `REDIS_URL` in §C. Use hex (not base64) so the password needs no escaping inside the URL. **The org must match `pivot-sports-api`**; `.internal` names only resolve inside one org.
+
+### B2. Deploy
+```bash
+fly deploy -c fly.redis.toml --ha=false
+fly machines list -a pivot-sports-redis
+fly ips list -a pivot-sports-redis
+fly logs -a pivot-sports-redis --no-tail | grep -i 'ready to accept'
+```
+**Expect:**
+- The deploy pulls `redis:7-alpine` and finishes without a "Visit your newly deployed app" line (there's no public service).
+- `fly machines list` shows **exactly one** machine in `iad`, state `started`. `--ha=false` matters: two machines would be two separate, empty Redis servers behind one `.internal` name.
+- `fly ips list` shows **nothing** (header only). If any address is listed, release it: `fly ips release <address> -a pivot-sports-redis`, then list again.
+- The logs show `Ready to accept connections tcp`.
+
+### B3. Values for §C
+- `REDIS_URL` = `redis://default:<REDIS_PASSWORD>@pivot-sports-redis.internal:6379?family=6`
+- `PRODUCTION_REDIS_HOST` = `pivot-sports-redis.internal`
+
+`?family=6` makes ioredis look up the IPv6 address; Fly's private network is IPv6-only. It's `redis://`, not `rediss://`: the private network is already an encrypted WireGuard mesh, and Redis here has no TLS.
 
 ---
 
@@ -101,15 +128,15 @@ fly secrets set -a pivot-sports-api --stage \
   SUPABASE_SERVICE_ROLE_KEY='<service_role>' \
   SUPABASE_JWT_SECRET='<jwt_secret>' \
   CACHE_DRIVER='redis' \
-  REDIS_URL='rediss://default:<password>@<endpoint>.upstash.io:6379' \
-  PRODUCTION_REDIS_HOST='<endpoint>.upstash.io' \
+  REDIS_URL='redis://default:<REDIS_PASSWORD>@pivot-sports-redis.internal:6379?family=6' \
+  PRODUCTION_REDIS_HOST='pivot-sports-redis.internal' \
   PUSH_DRIVER='expo' \
   REVENUECAT_WEBHOOK_SECRET='<openssl rand -hex 32 output>'
 ```
 Optional ninth: `EXPO_ACCESS_TOKEN='<token>'`, only if "Enhanced push security" is on for the project at expo.dev. Without it, `expo` push still works.
 
 **Do not set:**
-- `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `UPSTASH_REDIS_TCP_URL` (fallbacks only);
+- `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `UPSTASH_REDIS_TCP_URL` (Upstash-only fallbacks; unused);
 - `NODE_ENV` (`fly.toml` sets `production`), `PORT`, `GIT_SHA` (a build arg);
 - `SUPABASE_ANON_KEY`, `SEED_*`.
 
@@ -136,10 +163,16 @@ fly status -a pivot-sports-api
 ### D2. Smoke checks
 ```bash
 curl -s https://pivot-sports-api.fly.dev/health
-fly logs -a pivot-sports-api --no-tail | grep -E '\[runner\]|\[lineup-sync-worker\]|refusing'
+fly ssh console -a pivot-sports-api -C "node --input-type=module -e 'const {createTcpRedis}=await import(\"/app/dist/runner/tcpRedis.js\");const r=createTcpRedis(process.env.REDIS_URL,\"smoke\");console.log(await r.ping());await r.quit()'"
+fly logs -a pivot-sports-api --no-tail | grep -E '\[runner\]|\[lineup-sync-worker\]|refusing|redis:'
 ```
 **Expect:**
 - `/health` → `{"ok":true,"version":"<short sha>"}`, with the same SHA as `git rev-parse --short HEAD`.
+- The `ssh` PING prints `PONG`. It uses the app's own `createTcpRedis` and the machine's `REDIS_URL`, so this proves the `.internal` name, IPv6 and the password together.
+  - `getaddrinfo ENOTFOUND` means a wrong host name or a different org.
+  - `ETIMEDOUT` means `?family=6` is missing or Redis isn't running.
+  - `WRONGPASS` / `NOAUTH` means the password in `REDIS_URL` doesn't match `REDIS_PASSWORD`.
+- No repeating `[runner] redis:` / `[api] redis:` / `[cache] redis:` error lines.
 - Runner lines, within about 30 s of boot:
   - `[runner] leader <machine-id>:<n>`: this machine holds the lock.
   - `[runner] stake cache: <u> users, <t> teams`: `0 users, 0 teams` is correct before anyone has connected a league.
@@ -238,9 +271,9 @@ Backend is frozen; everything here is App Store Connect.
 
 ---
 
-## Appendix: Upstash command estimate
+## Appendix: Redis load
 
-This counts Redis commands only. Pub/sub deliveries to subscribers and `PING`/`AUTH` are not billed.
+This is for sizing only; self-hosted Redis has no per-command billing.
 
 **Runner, idle (no live games), per day:**
 
@@ -270,4 +303,11 @@ This counts Redis commands only. Pub/sub deliveries to subscribers and `PING`/`A
 - **Sunday:** ~0.49–0.51M/day.
 - **Month (in season):** ~12.5–13.5M.
 
-The heartbeat is about 4% of the idle total, so its interval was left at 5 s (TTL 15 s, three missed renews before loss). About 84% comes from the dispatcher loop's per-tick lock `GET` and queue read. That cost doesn't matter on the Fixed plan, so the runner code is unchanged.
+The peak is under 100 commands/s, which is trivial for one `shared-cpu-1x` Redis.
+
+**Memory:** `maxmemory 128mb` with `noeviction`, so when full, writes fail rather than dropping keys. Three key families have no TTL and grow all season:
+- `espn_seen_plays:*`,
+- `user_flag_state:*`,
+- `user_lineup_cache:*`.
+
+At 10 users that's roughly 5 MB by season's end. A Redis restart resets it to zero. Adding TTLs is a planned follow-up.
