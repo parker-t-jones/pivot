@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
@@ -440,6 +440,9 @@ function LineupHeader({ week }: { week: number | null }) {
   );
 }
 
+/** Scroll mode: each chip is this fraction of the track so the next one peeks. */
+const SWITCHER_PEEK_FRACTION = 0.45;
+
 function LeagueSwitcher({
   leagues,
   selectedLeagueId,
@@ -449,29 +452,75 @@ function LeagueSwitcher({
   selectedLeagueId: string | null;
   onSelect: (leagueId: string) => void;
 }) {
+  const scrollRef = useRef<ScrollView>(null);
+  const chipOffset = useRef(new Map<string, number>());
+  const [trackWidth, setTrackWidth] = useState(0);
+  const scrolls = leagues.length >= 3;
+
+  const scrollSelectedIntoView = useCallback(
+    (animated: boolean) => {
+      if (!scrolls || selectedLeagueId == null) return;
+      const x = chipOffset.current.get(selectedLeagueId);
+      if (x == null) return;
+      scrollRef.current?.scrollTo({ x: Math.max(0, x - theme.spacing.xs), animated });
+    },
+    [scrolls, selectedLeagueId],
+  );
+
+  useEffect(() => {
+    scrollSelectedIntoView(true);
+  }, [scrollSelectedIntoView]);
+
+  const chips = leagues.map((league) => {
+    const selected = league.league_id === selectedLeagueId;
+    return (
+      <Pressable
+        key={league.league_id}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        onLayout={
+          scrolls
+            ? (event) => {
+                chipOffset.current.set(league.league_id, event.nativeEvent.layout.x);
+                if (selected) scrollSelectedIntoView(false);
+              }
+            : undefined
+        }
+        onPress={() => onSelect(league.league_id)}
+        style={[
+          styles.switcherChip,
+          scrolls ? { width: trackWidth * SWITCHER_PEEK_FRACTION } : styles.switcherChipFill,
+          selected && styles.switcherChipSelected,
+        ]}
+      >
+        <Text
+          ellipsizeMode="tail"
+          numberOfLines={1}
+          style={[styles.switcherChipLabel, selected && styles.switcherChipLabelSelected]}
+        >
+          {league.name}
+        </Text>
+      </Pressable>
+    );
+  });
+
+  if (!scrolls) {
+    return <View style={[styles.switcherTrack, styles.switcherFit]}>{chips}</View>;
+  }
+
   return (
     <ScrollView
+      ref={scrollRef}
       horizontal
       contentContainerStyle={styles.switcherContent}
+      onLayout={(event) => {
+        const width = event.nativeEvent.layout.width;
+        setTrackWidth((current) => (current === width ? current : width));
+      }}
       showsHorizontalScrollIndicator={false}
       style={styles.switcherTrack}
     >
-      {leagues.map((league) => {
-        const selected = league.league_id === selectedLeagueId;
-        return (
-          <Pressable
-            key={league.league_id}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            onPress={() => onSelect(league.league_id)}
-            style={[styles.switcherChip, selected && styles.switcherChipSelected]}
-          >
-            <Text style={[styles.switcherChipLabel, selected && styles.switcherChipLabelSelected]}>
-              {league.name}
-            </Text>
-          </Pressable>
-        );
-      })}
+      {chips}
     </ScrollView>
   );
 }
@@ -681,17 +730,23 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   switcherChip: {
+    alignItems: 'center',
     borderRadius: theme.radii.md,
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
+  },
+  switcherChipFill: {
+    flex: 1,
   },
   switcherChipLabel: {
     color: theme.colors.textTertiary,
     fontFamily: fonts.monoMedium,
     fontSize: theme.type.eyebrow.size,
     letterSpacing: theme.type.eyebrow.letterSpacing,
+    textAlign: 'center',
     textTransform: 'uppercase',
+    width: '100%',
   },
   switcherChipLabelSelected: {
     color: theme.colors.accent,
@@ -700,8 +755,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceRaised,
   },
   switcherContent: {
-    alignItems: 'center',
+    alignItems: 'stretch',
     gap: theme.spacing.xs,
+    padding: theme.spacing.xs,
+  },
+  switcherFit: {
+    flexDirection: 'row',
     padding: theme.spacing.xs,
   },
   switcherTrack: {
