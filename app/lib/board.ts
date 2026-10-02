@@ -8,6 +8,7 @@
 import { groupWindow, networkLabelFromAirings, type WindowLabel } from '@pivot/shared/broadcast';
 import type { HomeBranch, LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
+import { isDefensePosition } from './teamDisplay';
 
 /**
  * The two Home branches that share the pre-game presentation (PIVOT-STAKES-PLAN.md §11.3).
@@ -182,6 +183,23 @@ export interface MyCardGame {
   stakes: MyCardStakeLine[];
 }
 
+/** A team defense's player row is named "Defense", so it reads "{nickname} D/ST" instead. */
+function stakeLineLabel(
+  player: LineupGameGroup['players'][number],
+  game: ScheduleGame | null,
+): string {
+  if (!isDefensePosition(player.position)) {
+    return `${player.first_name} ${player.last_name}`.trim();
+  }
+  const nickname =
+    player.team_abbreviation === game?.home_team
+      ? game.home_team_name
+      : player.team_abbreviation === game?.away_team
+        ? game.away_team_name
+        : null;
+  return nickname ? `${nickname} D/ST` : 'D/ST';
+}
+
 /**
  * The week's games the user has at least one rostered starter in, kickoff-ascending
  * (game-id tie-break). Includes finals so MY CARD keeps a record of games already played.
@@ -199,6 +217,7 @@ export function buildMyCardGames(
   const playersByGame = new Map(
     lineupGroups.map((group) => [group.game.game_id, group.players] as const),
   );
+  const playersGame = new Map(lineupGroups.map((group) => [group.game.game_id, group.game]));
 
   const games: MyCardGame[] = [];
   for (const row of rows) {
@@ -217,7 +236,7 @@ export function buildMyCardGames(
       stripeSide: row.stripeSide,
       stakes: players.map((player) => ({
         tag: 'FANTASY',
-        label: `${player.first_name} ${player.last_name}`.trim(),
+        label: stakeLineLabel(player, playersGame.get(row.gameId) ?? null),
         value: player.position,
       })),
     });

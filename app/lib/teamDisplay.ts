@@ -91,6 +91,11 @@ export function resolveFlaggedTeamDisplay(
 
 const DEFENSE_POSITIONS = new Set(['DEF', 'DST', 'D/ST']);
 
+/** Team defense roster slot, whichever spelling the provider uses. */
+export function isDefensePosition(position: string): boolean {
+  return DEFENSE_POSITIONS.has(position.toUpperCase());
+}
+
 function fullName(player: FlaggedPlayer): string {
   return `${player.first_name} ${player.last_name}`.trim();
 }
@@ -106,7 +111,8 @@ export interface ReasonChipParts {
  * Section 10 reason chip, split for the Now Active pill layout:
  *   left  → "{name}[+N more] active" (and position when a single player); a team defense
  *           leads as "{nickname} D/ST" ("Browns D/ST active")
- *   right → team nickname only ("Bills")
+ *   right → team nickname only ("Bills"); null when a defense leads, since the left already
+ *           names the team
  *
  * Falls back gracefully when data is missing rather than guessing:
  *  - No flagged players at all -> `{ players: reasonType, team: null }` (callers usually check
@@ -123,7 +129,7 @@ export function reasonChipParts(
   if (!lead) return { players: reasonType, team: null };
 
   // A team defense's player row is named "Defense", so it reads "{nickname} D/ST" instead.
-  const leadIsDefense = DEFENSE_POSITIONS.has(lead.position.toUpperCase());
+  const leadIsDefense = isDefensePosition(lead.position);
   const leadName = leadIsDefense
     ? flaggedTeam
       ? `${flaggedTeam.name} D/ST`
@@ -138,7 +144,7 @@ export function reasonChipParts(
 
   return {
     players,
-    team: flaggedTeam?.name ?? null,
+    team: leadIsDefense ? null : (flaggedTeam?.name ?? null),
   };
 }
 

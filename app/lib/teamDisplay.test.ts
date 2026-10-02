@@ -155,7 +155,7 @@ describe('reasonChipCopy / reasonChipParts', () => {
     }
   });
 
-  it('names a team defense "{nickname} D/ST" with no position suffix', () => {
+  it('names a team defense "{nickname} D/ST" with no position suffix or team segment', () => {
     const browns = {
       name: 'Browns',
       abbreviation: 'CLE',
@@ -170,8 +170,9 @@ describe('reasonChipCopy / reasonChipParts', () => {
     };
     expect(reasonChipParts('defense_active', [defense], browns)).toEqual({
       players: 'Browns D/ST active',
-      team: 'Browns',
+      team: null,
     });
+    expect(reasonChipCopy('defense_active', [defense], browns)).toBe('Browns D/ST active');
     expect(reasonChipParts('defense_active', [defense, jonathanTaylor], browns).players).toBe(
       'Browns D/ST +1 more active',
     );

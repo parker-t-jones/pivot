@@ -594,6 +594,7 @@ export default function HomeScreen() {
             sections={liveBoardSections}
             groups={boardGroups}
             lineupGroups={homeData.lineupGroups}
+            liveGames={homeData.liveGames}
           />
         );
       // One pre-game presentation for both branches (PIVOT-STAKES-PLAN.md §11.3). The branches

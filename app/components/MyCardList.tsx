@@ -8,7 +8,9 @@ import {
   type MyCardGame,
 } from '../lib/board';
 import { fonts } from '../lib/fonts';
+import { compactScoreLabel, liveClockLabel } from '../lib/gameDisplay';
 import type { LineupGameGroup } from '../lib/homeState';
+import type { LiveGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { ManageLineupLink } from './HomeSegmentRow';
 
@@ -22,43 +24,44 @@ interface MyCardListProps {
   groups: BoardWindowGroup[];
   /** Active-roster groups — same `lineupGroups` Home already holds. */
   lineupGroups: LineupGameGroup[];
+  /** Games in progress, for the clock and score on live headers. */
+  liveGames?: LiveGame[];
 }
 
 function formatKickoffTime(kickoff: Date): string {
   return kickoff.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function timeColumnLabel(game: MyCardGame): string {
-  if (game.status === 'final') return 'FINAL';
-  return formatKickoffTime(game.kickoff);
-}
-
 /** The MY CARD segment (PIVOT-STAKES-PLAN.md §11.3): one `well` block per stake game. */
-export function MyCardList({ groups, lineupGroups }: MyCardListProps) {
+export function MyCardList({ groups, lineupGroups, liveGames = [] }: MyCardListProps) {
   const myCardGames = useMemo(
     () => buildMyCardGames(flattenRows(groups), lineupGroups),
     [groups, lineupGroups],
   );
-
-  if (myCardGames.length === 0) {
-    return (
-      <View style={styles.emptyCard}>
-        <Text style={styles.emptyCopy}>No starters this week.</Text>
-        <ManageLineupLink />
-      </View>
-    );
-  }
+  const liveById = useMemo(
+    () => new Map(liveGames.map((game) => [game.game_id, game])),
+    [liveGames],
+  );
+  const stakeCount = myCardGames.reduce((sum, game) => sum + game.stakes.length, 0);
 
   return (
     <View style={styles.myCardList}>
-      {myCardGames.map((game) => (
-        <MyCardGameBlock key={game.gameId} game={game} />
-      ))}
+      <View style={styles.stakesHeader}>
+        <Text style={styles.stakesEyebrow}>{`YOUR STAKES · ${stakeCount}`}</Text>
+        <ManageLineupLink />
+      </View>
+      {myCardGames.length === 0 ? (
+        <Text style={styles.emptyCopy}>No starters this week.</Text>
+      ) : (
+        myCardGames.map((game) => (
+          <MyCardGameBlock key={game.gameId} game={game} live={liveById.get(game.gameId) ?? null} />
+        ))
+      )}
     </View>
   );
 }
 
-function MyCardGameBlock({ game }: { game: MyCardGame }) {
+function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | null }) {
   const hasStripe = game.stripeSide !== null;
   const stripeColor =
     game.stripeSide === 'home'
@@ -66,7 +69,16 @@ function MyCardGameBlock({ game }: { game: MyCardGame }) {
       : game.stripeSide === 'away'
         ? game.awayTeamColor
         : '';
-  const time = timeColumnLabel(game);
+  const inProgress = game.status === 'in_progress' || (live !== null && game.status !== 'final');
+  const isFinal = game.status === 'final';
+  const time = isFinal
+    ? 'FINAL'
+    : inProgress
+      ? live
+        ? liveClockLabel(live.quarter, live.time_remaining_sec)
+        : 'LIVE'
+      : formatKickoffTime(game.kickoff);
+  const score = inProgress && live ? compactScoreLabel(live.score) : null;
   const matchup = `${game.awayTeamId} @ ${game.homeTeamId}`;
 
   return (
@@ -80,13 +92,22 @@ function MyCardGameBlock({ game }: { game: MyCardGame }) {
               : null,
           ]}
         />
-        <Text style={styles.cardTime}>{time}</Text>
+        <Text
+          style={[
+            styles.cardTime,
+            inProgress ? styles.cardTimeLive : null,
+            isFinal ? styles.cardTimeFinal : null,
+          ]}
+        >
+          {time}
+        </Text>
         <Text numberOfLines={1} style={styles.cardMatchup}>
           {matchup}
         </Text>
         <Text numberOfLines={1} style={styles.cardNetwork}>
           {game.network ?? ''}
         </Text>
+        {score !== null ? <Text style={styles.cardScore}>{score}</Text> : null}
       </View>
       {game.stakes.map((stake, index) => (
         <View
@@ -134,6 +155,14 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing.md,
     width: NETWORK_COLUMN_WIDTH,
   },
+  cardScore: {
+    color: theme.colors.textPrimary,
+    fontFamily: fonts.monoMedium,
+    fontSize: theme.type.ticker.size,
+    fontVariant: [...theme.type.ticker.fontVariant],
+    marginLeft: 'auto',
+    marginRight: theme.spacing.md,
+  },
   cardTime: {
     color: theme.colors.brass,
     fontFamily: fonts.monoMedium,
@@ -141,10 +170,11 @@ const styles = StyleSheet.create({
     fontVariant: [...theme.type.ticker.fontVariant],
     width: TIME_COLUMN_WIDTH,
   },
-  emptyCard: {
-    alignItems: 'flex-start',
-    gap: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+  cardTimeFinal: {
+    color: theme.colors.textTertiary,
+  },
+  cardTimeLive: {
+    color: theme.colors.flare,
   },
   emptyCopy: {
     color: theme.colors.textSecondary,
@@ -160,6 +190,18 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: theme.type.body.size,
     lineHeight: theme.type.body.lineHeight,
+  },
+  stakesEyebrow: {
+    color: theme.colors.brass,
+    fontFamily: theme.type.eyebrow.fontFamily,
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
+  },
+  stakesHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   stakeLine: {
     alignItems: 'center',

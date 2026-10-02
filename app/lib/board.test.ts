@@ -59,7 +59,7 @@ describe('board network column', () => {
     expect(networkFor([airing('abc'), airing('espn')])).toBe('ESPN');
   });
 
-  it('comes from airings, never from the user\'s watch options', () => {
+  it("comes from airings, never from the user's watch options", () => {
     const yttvOnFox: GameBroadcast = {
       service: 'youtube_tv',
       deep_link_url: 'https://tv.youtube.com/live',
@@ -375,10 +375,7 @@ describe('nextKickoff', () => {
   });
 });
 
-function lineupGroup(
-  g: ScheduleGame,
-  players: LineupGameGroup['players'],
-): LineupGameGroup {
+function lineupGroup(g: ScheduleGame, players: LineupGameGroup['players']): LineupGameGroup {
   return { game: g, players };
 }
 
@@ -482,14 +479,40 @@ describe('buildMyCardGames', () => {
   it('matches lineupGroups dedupe: one line per player_id, not once per league', () => {
     // groupLineupByGame / listStakePlayersInGame already collapse the same player across
     // leagues by player_id. buildMyCardGames consumes that shape as-is.
-    const groups = [
-      lineupGroup(early, [starter('p1', 'Rashee', 'Rice', 'WR', 'KC')]),
-    ];
+    const groups = [lineupGroup(early, [starter('p1', 'Rashee', 'Rice', 'WR', 'KC')])];
     const [card] = buildMyCardGames(rows, groups);
     expect(card?.stakes).toEqual([{ tag: 'FANTASY', label: 'Rashee Rice', value: 'WR' }]);
   });
 
   it('returns [] when the lineup is empty', () => {
     expect(buildMyCardGames(rows, [])).toEqual([]);
+  });
+
+  it('names a team defense "{nickname} D/ST" instead of "Defense"', () => {
+    const tnf = game('g20', '2026-10-02T00:15:00Z', {
+      home_team: 'CLE',
+      away_team: 'PIT',
+      home_team_name: 'Browns',
+      away_team_name: 'Steelers',
+    });
+    const snf = game('g21', '2026-10-05T00:20:00Z', {
+      home_team: 'CAR',
+      away_team: 'DET',
+      home_team_name: 'Panthers',
+      away_team_name: 'Lions',
+    });
+    const groups = [
+      lineupGroup(tnf, [
+        starter('p5', '', 'Defense', 'DEF', 'CLE'),
+        starter('p6', 'Jaylen', 'Warren', 'RB', 'PIT'),
+      ]),
+      lineupGroup(snf, [starter('p7', '', 'Defense', 'DEF', 'DET')]),
+    ];
+    const card = buildMyCardGames(flattenRows(buildBoardRows([tnf, snf], [])), groups);
+    expect(card.flatMap((g) => g.stakes.map((stake) => [stake.label, stake.value]))).toEqual([
+      ['Browns D/ST', 'DEF'],
+      ['Jaylen Warren', 'RB'],
+      ['Lions D/ST', 'DEF'],
+    ]);
   });
 });

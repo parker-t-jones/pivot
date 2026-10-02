@@ -6,6 +6,7 @@ import { fonts } from '../lib/fonts';
 import type { LineupGameGroup } from '../lib/homeState';
 import { useHomeSegment } from '../lib/homeSegment';
 import type { LiveBoardSection } from '../lib/liveBoard';
+import type { LiveGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { BoardRow } from './BoardRow';
 import { HomeSegmentRow } from './HomeSegmentRow';
@@ -27,6 +28,8 @@ interface HomeLiveViewProps {
   /** The full week's board groups, for MY CARD. */
   groups: BoardWindowGroup[];
   lineupGroups: LineupGameGroup[];
+  /** Every game in progress, for MY CARD's live headers. */
+  liveGames: LiveGame[];
 }
 
 /**
@@ -34,7 +37,13 @@ interface HomeLiveViewProps {
  * live board, or the MY CARD list. One element for both branches, so a flag firing or clearing
  * keeps it mounted; the segment itself is shared with the pre-game view (`useHomeSegment`).
  */
-export function HomeLiveView({ hero, sections, groups, lineupGroups }: HomeLiveViewProps) {
+export function HomeLiveView({
+  hero,
+  sections,
+  groups,
+  lineupGroups,
+  liveGames,
+}: HomeLiveViewProps) {
   const [segment, selectSegment] = useHomeSegment();
 
   return (
@@ -48,7 +57,7 @@ export function HomeLiveView({ hero, sections, groups, lineupGroups }: HomeLiveV
           ))}
         </>
       ) : (
-        <MyCardList groups={groups} lineupGroups={lineupGroups} />
+        <MyCardList groups={groups} lineupGroups={lineupGroups} liveGames={liveGames} />
       )}
     </View>
   );
