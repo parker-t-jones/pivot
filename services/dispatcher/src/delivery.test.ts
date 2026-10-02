@@ -507,12 +507,14 @@ describe('deliverFlagEvent', () => {
   it('reflects the viewing session + user in the decided action (e.g. auto_switch)', async () => {
     const userDirectory = new InMemoryUserDirectory();
     userDirectory.setViewingSession('u1', { primaryGameId: 'g2', primaryPriorityScore: 3 });
+    const gameStateStore = new InMemoryGameStateStore();
+    await gameStateStore.markUserActive('u1', 60_000);
     const bus = new InMemoryRealtimeBus();
     const autoSwitchUser: DispatchUser = {
       ...freeUser,
       preferences: { ...freeUser.preferences, autoSwitch: true },
     };
-    const deps = buildDeps({ userDirectory, realtimeBus: bus });
+    const deps = buildDeps({ userDirectory, realtimeBus: bus, gameStateStore });
 
     await deliverFlagEvent(
       deps,
@@ -606,16 +608,48 @@ describe('deliverFlagEvent', () => {
       expect(pushNotifier.calls).toHaveLength(0);
     });
 
-    it('does NOT send push when action.type is in_app_indicator (already-primary game)', async () => {
+    it('does NOT send push when the user is in the app and this game is already primary', async () => {
       const pushNotifier = new CapturingPushNotifier();
       const userDirectory = new InMemoryUserDirectory();
-      // Session's primary game IS this event's game -> decideAction returns in_app_indicator.
+      const gameStateStore = new InMemoryGameStateStore();
+      const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       userDirectory.setViewingSession('u1', { primaryGameId: 'g1', primaryPriorityScore: 5 });
-      const deps = buildDeps({ pushNotifier, userDirectory });
+      await gameStateStore.markUserActive('u1', 60_000);
+      const deps = buildDeps({ pushNotifier, userDirectory, gameStateStore });
 
       await deliverFlagEvent(deps, makeEvent(), pushUser);
 
       expect(pushNotifier.calls).toHaveLength(0);
+      expect(logs.mock.calls.map((call) => call[0])).toContain(
+        '[dispatcher] push decision user=u1 game=g1 flag=evt-1 result=skipped_primary_connected',
+      );
+      logs.mockRestore();
+    });
+
+    it('sends a push when the phone is off even if this game is still the stored primary', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const userDirectory = new InMemoryUserDirectory();
+      const gameStateStore = new InMemoryGameStateStore();
+      const bus = new InMemoryRealtimeBus();
+      const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      userDirectory.setViewingSession('u1', { primaryGameId: 'g1', primaryPriorityScore: 5 });
+      const deps = buildDeps({
+        pushNotifier,
+        userDirectory,
+        gameStateStore,
+        realtimeBus: bus,
+      });
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+
+      expect(await gameStateStore.isUserActive('u1')).toBe(false);
+      expect(pushNotifier.calls).toHaveLength(1);
+      const envelope = bus.published[0]?.message as FlagEventEnvelope;
+      expect(envelope.payload.action.type).toBe('prompt');
+      expect(logs.mock.calls.map((call) => call[0])).toContain(
+        '[dispatcher] push decision user=u1 game=g1 flag=evt-1 result=sent',
+      );
+      logs.mockRestore();
     });
 
     it('push failure does not prevent persistence or the realtime publish (order independence)', async () => {

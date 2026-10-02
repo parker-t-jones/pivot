@@ -212,7 +212,7 @@ describe('ResumptionGatedDispatcher', () => {
     expect(due.map((item) => item.event.id).sort()).toEqual(['clear', 'high']);
     expect(due.find((item) => item.event.id === 'clear')?.event.type).toBe('flag_removed');
     expect(logs.mock.calls.map((call) => call[0])).toEqual([
-      '[gate] collapsed flag_added g1 for u1 into flag_added',
+      '[dispatcher] push decision user=u1 game=g1 flag=low result=collapsed',
     ]);
     logs.mockRestore();
   });

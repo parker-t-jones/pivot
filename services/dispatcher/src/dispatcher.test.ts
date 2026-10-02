@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { FlagEvent, FlagState } from '@pivot/shared';
 import { InMemoryBroadcastCatalog } from './broadcastLag.js';
 import {
@@ -287,12 +287,17 @@ describe('runDispatcherTick', () => {
       await queue.enqueue(
         makeEvent({ id: `evt-${i}`, newState: state, scheduledFireAt: now - 1000 + i }),
       );
+      const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       const result = await runDispatcherTick(deps);
       if (i < 3) {
         expect(result.delivered).toBe(1);
       } else {
         expect(result.droppedRateLimited).toBe(1);
+        expect(logs.mock.calls.map((call) => call[0])).toContain(
+          `[dispatcher] push decision user=u1 game=g1 flag=evt-${i} result=rate_limited`,
+        );
       }
+      logs.mockRestore();
     }
 
     expect(persistence.records).toHaveLength(3);

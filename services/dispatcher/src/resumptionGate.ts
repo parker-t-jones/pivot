@@ -11,6 +11,7 @@ import type { EventDispatcher, ResumptionResolution } from '@pivot/engine';
 import { RESUMPTION_CEILING_MS } from '@pivot/engine';
 import type { FlagEvent } from '@pivot/shared';
 import { collapseByUser, isPushEligibleEvent } from './collapseFlagEvents.js';
+import { formatPushDecisionLog } from './pushDecision.js';
 import type { FlagEventQueue } from './queue.js';
 
 /** What the gate decided to do with an event at dispatch time. */
@@ -310,7 +311,12 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
       const winner = winnerByUser.get(item.event.userId);
       if (!winner || winner === item) continue;
       console.log(
-        `[gate] collapsed ${item.event.type} ${item.event.gameId} for ${item.event.userId} into ${winner.event.type}`,
+        formatPushDecisionLog({
+          userId: item.event.userId,
+          gameId: item.event.gameId,
+          flagId: item.event.id,
+          result: 'collapsed',
+        }),
       );
     }
     for (const winner of winners) {

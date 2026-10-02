@@ -5,6 +5,7 @@ import { retryPendingPushes } from './pushRetry.js';
 import { isStillRelevant } from './isStillRelevant.js';
 import type { FlagEventQueue } from './queue.js';
 import type { GameStateStore } from './providers/gameStateStore.js';
+import { formatPushDecisionLog } from './pushDecision.js';
 import { shouldRateLimit, type RateLimitStore } from './rateLimiter.js';
 import type { UserDirectory } from './catalogs.js';
 
@@ -75,6 +76,14 @@ export async function runDispatcherTick(deps: DispatcherTickDeps): Promise<Dispa
     }
 
     if (await shouldRateLimit(event, user.preferences, deps.rateLimitStore, now)) {
+      console.log(
+        formatPushDecisionLog({
+          userId: event.userId,
+          gameId: event.gameId,
+          flagId: event.id,
+          result: 'rate_limited',
+        }),
+      );
       await deps.queue.remove(item);
       result.droppedRateLimited += 1;
       continue;

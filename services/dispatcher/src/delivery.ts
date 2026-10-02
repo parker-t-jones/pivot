@@ -30,13 +30,14 @@ import {
 } from './notificationContent.js';
 import type { GameStateStore } from './providers/gameStateStore.js';
 import type { PushNotifier, PushPayload } from './pushNotifier.js';
+import { decidePushDelivery, formatPushDecisionLog } from './pushDecision.js';
 import { PUSH_RETRY_BACKOFF_MS } from './pushRetry.js';
 import type { RateLimitStore } from './rateLimiter.js';
 import { realtimeUserChannel, type RealtimeBus } from './realtimeBus.js';
 import { buildGameSummary, type GameSummary } from './gameSummary.js';
 
 export interface DeliveryDeps {
-  gameStateStore: Pick<GameStateStore, 'getGameState'>;
+  gameStateStore: Pick<GameStateStore, 'getGameState' | 'isUserActive'>;
   gameCatalog: GameCatalog;
   playerCatalog: PlayerCatalog;
   broadcastCatalog: BroadcastCatalog;
@@ -197,19 +198,25 @@ export async function deliverFlagEvent(
   const clock = deps.clock ?? defaultClock;
   const deliveredAt = clock();
 
-  const [session, gameState, gameSummaryInfo, likelyBroadcast] = await Promise.all([
+  const [session, present, gameState, gameSummaryInfo, likelyBroadcast] = await Promise.all([
     deps.userDirectory.getViewingSession(event.userId),
+    deps.gameStateStore.isUserActive(event.userId),
     deps.gameStateStore.getGameState(event.gameId),
     deps.gameCatalog.getGameSummary(event.gameId),
     resolveLikelyBroadcastSource(event.gameId, event.userId, deps.broadcastCatalog),
   ]);
 
+  // Open sockets live in the API process and are not in Redis, so this cannot see one.
+  // `isUserActive` is the presence entry the API sets on connect/ping and deletes on close.
+  // A stored primary only counts as on-screen while that entry is set.
   const action = decideAction(
     { subscriptionTier: user.subscriptionTier, autoSwitch: user.preferences.autoSwitch },
-    {
-      primaryGameId: session?.primaryGameId ?? null,
-      primaryPriorityScore: session?.primaryPriorityScore ?? null,
-    },
+    present
+      ? {
+          primaryGameId: session?.primaryGameId ?? null,
+          primaryPriorityScore: session?.primaryPriorityScore ?? null,
+        }
+      : { primaryGameId: null, primaryPriorityScore: null },
     event,
   );
 
@@ -280,10 +287,24 @@ export async function deliverFlagEvent(
   await deps.rateLimitStore.recordNotification(event.userId, event.id, deliveredAt);
 
   // Sprint 6 Phase 3: push, strictly after persistence/publish/rate-limit bookkeeping, and strictly
-  // best-effort. Skipped entirely (no catalog/notifier call at all) when there's no token to send to,
-  // or when the user is already looking at this game (`in_app_indicator` — a push would be noise on
-  // top of what's already on screen).
-  if (user.expoPushToken && action.type !== 'in_app_indicator') {
+  // best-effort. Skipped when there is no token, or when the user is present and this game is
+  // already their primary (`in_app_indicator`).
+  const pushDecision = decidePushDelivery({
+    connected: present,
+    primaryGameId: session?.primaryGameId ?? null,
+    gameId: event.gameId,
+    hasToken: Boolean(user.expoPushToken),
+  });
+  if (pushDecision !== 'sent') {
+    console.log(
+      formatPushDecisionLog({
+        userId: event.userId,
+        gameId: event.gameId,
+        flagId: event.id,
+        result: pushDecision,
+      }),
+    );
+  } else if (user.expoPushToken) {
     let payload: PushPayload | null = null;
     try {
       const notificationPlayers = await resolveNotificationPlayers(deps, event, players);
@@ -302,6 +323,14 @@ export async function deliverFlagEvent(
       const result = await deps.pushNotifier.sendPush(payload);
 
       if (result.success) {
+        console.log(
+          formatPushDecisionLog({
+            userId: event.userId,
+            gameId: event.gameId,
+            flagId: event.id,
+            result: 'sent',
+          }),
+        );
         await deps.persistence.recordPushOutcome({ id: persisted.id, status: 'sent' });
       } else {
         console.error('[push] delivery failed', {
