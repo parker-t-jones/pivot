@@ -82,6 +82,7 @@ describe('resolveLikelyBroadcastSource', () => {
     expect(await resolveLikelyBroadcastSource('missing-game', 'missing-user', catalog)).toEqual({
       source: null,
       airings: [],
+      kickoff: null,
     });
   });
 });

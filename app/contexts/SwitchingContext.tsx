@@ -18,7 +18,7 @@ import { watchOptionLabel } from '../lib/gameDisplay';
 import { userServiceAppStoreUrl } from '../lib/streamingServices';
 import { resolveSwitch } from '../lib/switching';
 import { theme } from '../lib/theme';
-import { selectWatchLink } from '../lib/watchLink';
+import { selectWatchLink, watchLinkInputFor } from '../lib/watchLink';
 
 export interface SwitchInput {
   gameId: string;
@@ -73,12 +73,11 @@ function delay(ms: number): Promise<void> {
  * Hands the watch URL to iOS via `Linking.openURL` so a universal link can open the installed
  * app. No in-app browser. A custom scheme, when the caller has one, is checked with
  * `Linking.canOpenURL` first and falls back to the https link (`selectWatchLink`).
- * The server still sends https landings; no scheme is attached here until one is confirmed
- * on a device (docs/DEEP-LINK-CANDIDATES.md). Declaring a scheme in `LSApplicationQueriesSchemes`
- * requires a new native build.
+ * ESPN https links also try `sportscenter://watch` first. That scheme is in
+ * `LSApplicationQueriesSchemes`, which a native build has to pick up.
  */
 async function openDeepLink(url: string): Promise<boolean> {
-  const chosen = await selectWatchLink({ httpsUrl: url }, (candidate) =>
+  const chosen = await selectWatchLink(watchLinkInputFor(url), (candidate) =>
     Linking.canOpenURL(candidate),
   );
   if (!chosen) return false;

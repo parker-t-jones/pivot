@@ -24,5 +24,11 @@ export { expandWatchOptions } from './expandWatchOptions.js';
 export { rankWatchOptions } from './rankWatchOptions.js';
 export { toSlateGame, watchOptionsForGame, type WeekGameAirings } from './watchOptionsForGame.js';
 export { USER_SERVICE_LANDING_URLS } from './serviceLandingUrls.js';
+export {
+  isThursdayEt,
+  matchupSearchQuery,
+  serviceWatchUrl,
+  type ServiceWatchUrlInput,
+} from './watchLinks.js';
 export { networkLabelFromAirings, networkRank } from './networkLabelFromAirings.js';
 export { DEFAULT_LAG_SECONDS, lagSecondsFor, USER_SERVICE_LAG_SECONDS } from './lag.js';

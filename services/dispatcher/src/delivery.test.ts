@@ -168,25 +168,51 @@ describe('deliverFlagEvent', () => {
   it('recommends the top-ranked option and its landing URL', async () => {
     const broadcastCatalog = weekCatalog(['youtube_tv']);
     const bus = new InMemoryRealtimeBus();
-    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
+    const gameCatalog = new InMemoryGameCatalog();
+    gameCatalog.setGame('g1', {
+      homeTeamAbbreviation: 'GB',
+      awayTeamAbbreviation: 'ATL',
+      homeTeamName: 'Packers',
+      awayTeamName: 'Falcons',
+      homeTeamPrimaryColor: '#203731',
+      homeTeamSecondaryColor: '#FFB612',
+      awayTeamPrimaryColor: '#A71930',
+      awayTeamSecondaryColor: '#000000',
+    });
+    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus, gameCatalog });
 
     await deliverFlagEvent(deps, makeEvent(), freeUser);
 
     const envelope = bus.published[0]?.message as FlagEventEnvelope;
     expect(envelope.payload.action.recommended_source).toBe('youtube_tv');
-    expect(envelope.payload.action.deep_link_url).toBe('https://tv.youtube.com/live');
+    expect(envelope.payload.action.deep_link_url).toBe(
+      'https://tv.youtube.com/search/Falcons%20vs%20Packers',
+    );
   });
 
   it('recommends Sunday Ticket over YouTube TV on a regional FOX game', async () => {
     const broadcastCatalog = weekCatalog(['youtube_tv', 'sunday_ticket']);
     const bus = new InMemoryRealtimeBus();
-    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus });
+    const gameCatalog = new InMemoryGameCatalog();
+    gameCatalog.setGame('g1', {
+      homeTeamAbbreviation: 'GB',
+      awayTeamAbbreviation: 'ATL',
+      homeTeamName: 'Packers',
+      awayTeamName: 'Falcons',
+      homeTeamPrimaryColor: '#203731',
+      homeTeamSecondaryColor: '#FFB612',
+      awayTeamPrimaryColor: '#A71930',
+      awayTeamSecondaryColor: '#000000',
+    });
+    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus, gameCatalog });
 
     await deliverFlagEvent(deps, makeEvent(), freeUser);
 
     const envelope = bus.published[0]?.message as FlagEventEnvelope;
     expect(envelope.payload.action.recommended_source).toBe('sunday_ticket');
-    expect(envelope.payload.action.deep_link_url).toBe('https://tv.youtube.com/live');
+    expect(envelope.payload.action.deep_link_url).toBe(
+      'https://tv.youtube.com/search/Falcons%20vs%20Packers',
+    );
   });
 
   it('leaves recommended_source/deep_link_url null when the user has no carrying service', async () => {

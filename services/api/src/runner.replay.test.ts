@@ -198,7 +198,7 @@ describe('ATL @ GB replay', () => {
       expect(push.action).toEqual(
         expect.objectContaining({
           recommended_source: 'youtube_tv',
-          deep_link_url: 'https://tv.youtube.com/live',
+          deep_link_url: 'https://tv.youtube.com/search/Falcons%20vs%20Packers',
         }),
       );
       expect(push.body).toMatch(/ Tap to watch\.$/);

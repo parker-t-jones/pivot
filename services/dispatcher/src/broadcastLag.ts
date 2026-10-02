@@ -33,6 +33,8 @@ export interface LikelyBroadcast {
   source: WatchOption | null;
   /** The game's airings, for naming the network when there is no `source` ("On FOX"). */
   airings: readonly ParsedAiring[];
+  /** Kickoff of the target game, for per-game watch URLs. Null when the game is unknown. */
+  kickoff: Date | null;
 }
 
 /** Section 8's `resolveLikelyBroadcastSource(gameId, user)`, split into ids. */
@@ -45,9 +47,11 @@ export async function resolveLikelyBroadcastSource(
     catalog.getWeekAirings(gameId),
     catalog.getUserSubscribedServices(userId),
   ]);
+  const game = week.find((entry) => entry.id === gameId);
   return {
     source: pickBroadcastSource(gameId, week, services),
-    airings: week.find((game) => game.id === gameId)?.airings ?? [],
+    airings: game?.airings ?? [],
+    kickoff: game?.kickoff ?? null,
   };
 }
 

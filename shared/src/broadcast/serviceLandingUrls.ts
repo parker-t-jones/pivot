@@ -8,22 +8,22 @@ import type { UserService } from './types.js';
  * paths the shipping app does not — match on the production app ID only). Bare homepages usually
  * fail this; YouTube TV's AASA carries a literal `NOT /`.
  *
- * Not verified: that the app lands on the right *content*. None of these is a game-level link
- * (PLAN.md Open Question #2); an AASA says which paths open an app, never which are valid content.
+ * YouTube TV, Sunday Ticket, and Prime Video are per game (`serviceWatchUrl`). The values below
+ * are what we emit when a matchup nickname or kickoff is missing, plus the static landings.
  */
 export const USER_SERVICE_LANDING_URLS: Record<UserService, string> = {
-  // Device-confirmed on a physical iPhone (Sprint 10 Track B); YouTube TV shares Sunday Ticket's app.
+  // Fallback when nicknames are missing. A real game uses `serviceWatchUrl`'s /search/ link.
   youtube_tv: 'https://tv.youtube.com/live',
   sunday_ticket: 'https://tv.youtube.com/live',
   hulu_live: 'https://www.hulu.com/hub/sports', // unverified AASA
   fubo: 'https://www.fubo.tv/', // unverified AASA
   directv: 'https://www.directv.com/', // unverified AASA
   sling: '', // no confirmed carriage, so never emitted
-  // Prime Video's AASA lives on primevideo.com; amazon.com/gp/video is claimed by no Amazon app.
+  // Fallback when nicknames or kickoff are missing. A real game uses the app.primevideo.com search.
   amazon_prime: 'https://www.primevideo.com/',
   peacock: 'https://www.peacocktv.com/watch/sports',
-  // Paramount+'s AASA claims `/` outright.
-  paramount_plus: 'https://www.paramountplus.com/',
+  // Device-tested Oct 2 2026: opens the app. Landing inside the app was unverified (no account).
+  paramount_plus: 'https://www.paramountplus.com/live-tv/',
   // `/watch/*` is claimed only by ESPN's dogfood/QA builds; production `com.espn.ScoreCenter` claims `/nfl/team`.
   espn_plus: 'https://www.espn.com/nfl/team',
   nfl_plus: 'https://www.nfl.com/scores',

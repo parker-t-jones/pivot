@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { selectWatchLink, watchLinkAttemptOrder } from './watchLink';
+import {
+  ESPN_WATCH_SCHEME_URL,
+  schemeUrlForWatchHttps,
+  selectWatchLink,
+  watchLinkAttemptOrder,
+  watchLinkInputFor,
+} from './watchLink';
 
 const HTTPS = 'https://www.primevideo.com/collection/tnf';
 const SCHEME = 'aiv://aiv/watch';
@@ -57,5 +63,25 @@ describe('selectWatchLink', () => {
   it('returns null when the only candidate is a scheme that cannot be opened', async () => {
     const canOpen = vi.fn(async () => false);
     await expect(selectWatchLink({ httpsUrl: '', schemeUrl: SCHEME }, canOpen)).resolves.toBeNull();
+  });
+});
+
+describe('ESPN scheme fallback', () => {
+  const espn = 'https://www.espn.com/nfl/team';
+
+  it('attaches sportscenter://watch only for an ESPN https link', () => {
+    expect(schemeUrlForWatchHttps(espn)).toBe(ESPN_WATCH_SCHEME_URL);
+    expect(watchLinkInputFor(espn)).toEqual({ httpsUrl: espn, schemeUrl: ESPN_WATCH_SCHEME_URL });
+    expect(schemeUrlForWatchHttps('https://app.primevideo.com/search?phrase=TNF')).toBeNull();
+    expect(watchLinkInputFor(HTTPS)).toEqual({ httpsUrl: HTTPS });
+  });
+
+  it('opens the scheme when canOpen accepts it, otherwise the https link', async () => {
+    const open = vi.fn(async () => true);
+    const closed = vi.fn(async () => false);
+    await expect(selectWatchLink(watchLinkInputFor(espn), open)).resolves.toBe(
+      ESPN_WATCH_SCHEME_URL,
+    );
+    await expect(selectWatchLink(watchLinkInputFor(espn), closed)).resolves.toBe(espn);
   });
 });

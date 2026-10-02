@@ -10,7 +10,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.fantasyfocus.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": ["sportscenter"]
       }
     },
     "plugins": [

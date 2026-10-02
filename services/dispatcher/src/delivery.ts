@@ -2,7 +2,7 @@ import { defaultClock, type Clock } from '@pivot/engine';
 import {
   networkLabelFromAirings,
   resolvePossessionAbbreviation,
-  USER_SERVICE_LANDING_URLS,
+  serviceWatchUrl,
   type FlagEvent,
   type FlagState,
   type GameState,
@@ -153,7 +153,10 @@ async function resolveNotificationPlayers(
  * service landing URL. With no option, both are null and `airingWithoutOption` names the network for
  * the push copy ("On FOX").
  */
-function actionRecommendation(likely: LikelyBroadcast): {
+function actionRecommendation(
+  likely: LikelyBroadcast,
+  matchup: { awayNickname: string; homeNickname: string },
+): {
   recommendedSource: string | null;
   deepLinkUrl: string | null;
   airingWithoutOption: string | null;
@@ -165,7 +168,12 @@ function actionRecommendation(likely: LikelyBroadcast): {
       airingWithoutOption: networkLabelFromAirings(likely.airings),
     };
   }
-  const url = USER_SERVICE_LANDING_URLS[likely.source.service];
+  const url = serviceWatchUrl({
+    service: likely.source.service,
+    awayNickname: matchup.awayNickname,
+    homeNickname: matchup.homeNickname,
+    kickoff: likely.kickoff,
+  });
   return {
     recommendedSource: likely.source.service,
     deepLinkUrl: url === '' ? null : url,
@@ -220,8 +228,13 @@ export async function deliverFlagEvent(
     event,
   );
 
-  const { recommendedSource, deepLinkUrl, airingWithoutOption } =
-    actionRecommendation(likelyBroadcast);
+  const { recommendedSource, deepLinkUrl, airingWithoutOption } = actionRecommendation(
+    likelyBroadcast,
+    {
+      awayNickname: gameSummaryInfo?.awayTeamName ?? '',
+      homeNickname: gameSummaryInfo?.homeTeamName ?? '',
+    },
+  );
 
   const triggeringPlayerIds = [
     ...new Set(event.newState.reasons.flatMap((r) => r.triggeringPlayerIds)),

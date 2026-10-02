@@ -3,13 +3,15 @@ import { buildWeekWatch, type AiringRow, type SlateGameRow } from './watchOption
 
 /** Week 3 shape: TNF on Prime, a 1pm FOX/CBS regional split, SNF on NBC, MNF on ESPN + ABC. */
 const GAMES: SlateGameRow[] = [
-  { id: 'tnf', scheduled_start: '2026-09-25T00:15:00Z' },
-  { id: 'fox1', scheduled_start: '2026-09-27T17:00:00Z' },
-  { id: 'fox2', scheduled_start: '2026-09-27T17:00:00Z' },
-  { id: 'cbs1', scheduled_start: '2026-09-27T17:00:00Z' },
-  { id: 'snf', scheduled_start: '2026-09-28T00:20:00Z' },
-  { id: 'mnf', scheduled_start: '2026-09-29T00:15:00Z' },
+  { id: 'tnf', scheduled_start: '2026-09-25T00:15:00Z', away_team_name: 'Packers', home_team_name: 'Lions' },
+  { id: 'fox1', scheduled_start: '2026-09-27T17:00:00Z', away_team_name: 'Bears', home_team_name: 'Packers' },
+  { id: 'fox2', scheduled_start: '2026-09-27T17:00:00Z', away_team_name: 'Cowboys', home_team_name: 'Giants' },
+  { id: 'cbs1', scheduled_start: '2026-09-27T17:00:00Z', away_team_name: 'Bills', home_team_name: 'Dolphins' },
+  { id: 'snf', scheduled_start: '2026-09-28T00:20:00Z', away_team_name: 'Chiefs', home_team_name: 'Ravens' },
+  { id: 'mnf', scheduled_start: '2026-09-29T00:15:00Z', away_team_name: 'Eagles', home_team_name: 'Buccaneers' },
 ];
+
+const FOX1_SEARCH = 'https://tv.youtube.com/search/Bears%20vs%20Packers';
 
 function row(gameId: string, network: string, market = 'national'): AiringRow {
   return { game_id: gameId, network, market, espn_media_name: network.toUpperCase(), espn_type: 'TV' };
@@ -33,7 +35,7 @@ describe('buildWeekWatch', () => {
     expect(watch.get('fox1')?.broadcasts).toEqual([
       {
         service: 'youtube_tv',
-        deep_link_url: 'https://tv.youtube.com/live',
+        deep_link_url: FOX1_SEARCH,
         requires_subscription: true,
         user_has_subscription: true,
         typical_lag_seconds: 30,
@@ -73,7 +75,7 @@ describe('buildWeekWatch', () => {
     expect(watch.get('fox1')?.broadcasts).toEqual([
       {
         service: 'sunday_ticket',
-        deep_link_url: 'https://tv.youtube.com/live',
+        deep_link_url: FOX1_SEARCH,
         requires_subscription: true,
         user_has_subscription: true,
         typical_lag_seconds: 30,
@@ -83,7 +85,7 @@ describe('buildWeekWatch', () => {
       },
       {
         service: 'youtube_tv',
-        deep_link_url: 'https://tv.youtube.com/live',
+        deep_link_url: FOX1_SEARCH,
         requires_subscription: true,
         user_has_subscription: true,
         typical_lag_seconds: 30,
@@ -99,7 +101,7 @@ describe('buildWeekWatch', () => {
 
   it('treats a lone game in its CBS/FOX window as national', () => {
     const watch = buildWeekWatch(
-      [{ id: 'solo', scheduled_start: '2026-09-27T17:00:00Z' }],
+      [{ id: 'solo', scheduled_start: '2026-09-27T17:00:00Z', away_team_name: 'Bears', home_team_name: 'Packers' }],
       [row('solo', 'fox')],
       new Set(['youtube_tv', 'sunday_ticket']),
     );

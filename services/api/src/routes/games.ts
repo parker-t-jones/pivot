@@ -98,7 +98,12 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       const teamById = new Map((teamsResult.data ?? []).map((t) => [t.id, t]));
       const watchByGameId = buildWeekWatch(
-        games,
+        games.map((game) => ({
+          id: game.id,
+          scheduled_start: game.scheduled_start,
+          away_team_name: teamById.get(game.away_team_id)?.name ?? '',
+          home_team_name: teamById.get(game.home_team_id)?.name ?? '',
+        })),
         airingsResult.data ?? [],
         subscribedServicesFrom(presenceResult.data),
       );
@@ -231,28 +236,40 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       const { data: weekGames, error: weekError } = await fastify.supabase
         .from('games')
-        .select('id, scheduled_start')
+        .select('id, scheduled_start, home_team_id, away_team_id')
         .eq('week', game.week)
         .eq('season_type', game.season_type)
         .order('scheduled_start', { ascending: true });
       if (weekError) throw weekError;
       const slate = weekGames ?? [];
+      const teamIds = [...new Set(slate.flatMap((g) => [g.home_team_id, g.away_team_id]))];
 
-      const [airingsResult, presenceResult] = await Promise.all([
+      const [airingsResult, presenceResult, teamsResult] = await Promise.all([
         fastify.supabase
           .from('game_airings')
           .select(AIRING_COLUMNS)
-          .in('game_id', slate.map((g) => g.id)),
+          .in(
+            'game_id',
+            slate.map((g) => g.id),
+          ),
         fastify.supabase
           .from('user_app_presence')
           .select('service, has_subscription')
           .eq('user_id', user.id),
+        fastify.supabase.from('teams').select('id, name').in('id', teamIds),
       ]);
       if (airingsResult.error) throw airingsResult.error;
       if (presenceResult.error) throw presenceResult.error;
+      if (teamsResult.error) throw teamsResult.error;
+      const teamNameById = new Map((teamsResult.data ?? []).map((team) => [team.id, team.name]));
 
       const watch = buildWeekWatch(
-        slate,
+        slate.map((row) => ({
+          id: row.id,
+          scheduled_start: row.scheduled_start,
+          away_team_name: teamNameById.get(row.away_team_id) ?? '',
+          home_team_name: teamNameById.get(row.home_team_id) ?? '',
+        })),
         airingsResult.data ?? [],
         subscribedServicesFrom(presenceResult.data),
       ).get(gameId);

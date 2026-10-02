@@ -363,7 +363,7 @@ describe('GET /games/:id/broadcasts', () => {
       broadcasts: [
         {
           service: 'sunday_ticket',
-          deep_link_url: 'https://tv.youtube.com/live',
+          deep_link_url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs',
           requires_subscription: true,
           user_has_subscription: true,
           typical_lag_seconds: 30,
@@ -373,7 +373,7 @@ describe('GET /games/:id/broadcasts', () => {
         },
         {
           service: 'youtube_tv',
-          deep_link_url: 'https://tv.youtube.com/live',
+          deep_link_url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs',
           requires_subscription: true,
           user_has_subscription: true,
           typical_lag_seconds: 30,
@@ -510,7 +510,7 @@ describe('GET /games?week=', () => {
       broadcasts: [
         {
           service: 'amazon_prime',
-          deep_link_url: 'https://www.primevideo.com/',
+          deep_link_url: 'https://app.primevideo.com/search?phrase=Thursday%20Night%20Football',
           requires_subscription: true,
           user_has_subscription: true,
           typical_lag_seconds: 40,

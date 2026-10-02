@@ -12,6 +12,30 @@
 
 const HTTP_URL = /^https?:\/\//i;
 
+/** Device-tested ESPN scheme. Used only after `canOpenURL`; the https link is the fallback. */
+export const ESPN_WATCH_SCHEME_URL = 'sportscenter://watch';
+
+/**
+ * ESPN's https landing gets the scheme fallback. Other services stay https-only.
+ * `LSApplicationQueriesSchemes` must include `sportscenter` or `canOpenURL` returns false.
+ */
+export function schemeUrlForWatchHttps(httpsUrl: string): string | null {
+  try {
+    const url = new URL(httpsUrl);
+    if (url.protocol === 'https:' && url.hostname === 'www.espn.com') {
+      return ESPN_WATCH_SCHEME_URL;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function watchLinkInputFor(httpsUrl: string): WatchLinkInput {
+  const schemeUrl = schemeUrlForWatchHttps(httpsUrl);
+  return schemeUrl ? { httpsUrl, schemeUrl } : { httpsUrl };
+}
+
 /** True for `aiv://…` and any other non-http(s) URL. */
 export function isCustomSchemeUrl(url: string): boolean {
   return !HTTP_URL.test(url);

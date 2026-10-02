@@ -3,7 +3,7 @@ import {
   isRegionalSlate,
   networkRank,
   toSlateGame,
-  USER_SERVICE_LANDING_URLS,
+  serviceWatchUrl,
   watchOptionsForGame,
   type AiringMarket,
   type AiringNetwork,
@@ -26,6 +26,8 @@ export interface AiringRow {
 export interface SlateGameRow {
   id: string;
   scheduled_start: string;
+  away_team_name?: string;
+  home_team_name?: string;
 }
 
 export interface WireWatchOption {
@@ -100,15 +102,27 @@ export function buildWeekWatch(
 ): Map<string, GameWatch> {
   const week = weekGameAirings(games, airingRows);
   const slate = week.map(toSlateGame);
+  const namesById = new Map(
+    games.map((game) => [
+      game.id,
+      { away: game.away_team_name ?? '', home: game.home_team_name ?? '' },
+    ]),
+  );
 
   const result = new Map<string, GameWatch>();
   for (const game of week) {
     const regional = isRegionalSlate(toSlateGame(game), slate);
+    const names = namesById.get(game.id);
 
     const broadcasts = watchOptionsForGame(game.id, week, subscribedServices).map(
       (option): WireWatchOption => ({
         service: option.service,
-        deep_link_url: USER_SERVICE_LANDING_URLS[option.service],
+        deep_link_url: serviceWatchUrl({
+          service: option.service,
+          awayNickname: names?.away ?? '',
+          homeNickname: names?.home ?? '',
+          kickoff: game.kickoff,
+        }),
         requires_subscription: true,
         user_has_subscription: true,
         typical_lag_seconds: option.typicalLagSeconds,
