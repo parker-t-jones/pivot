@@ -100,7 +100,12 @@ describe('resolveFlaggedTeamDisplay', () => {
 });
 
 describe('reasonChipCopy / reasonChipParts', () => {
-  const colts = { name: 'Colts', abbreviation: 'IND', primaryColor: '#000', secondaryColor: '#fff' };
+  const colts = {
+    name: 'Colts',
+    abbreviation: 'IND',
+    primaryColor: '#000',
+    secondaryColor: '#fff',
+  };
 
   it('splits a single flagged player into players + team nickname', () => {
     expect(reasonChipParts('offense_active', [jonathanTaylor], colts)).toEqual({
@@ -148,6 +153,32 @@ describe('reasonChipCopy / reasonChipParts', () => {
     ]) {
       expect(reasonChipParts(reason, [jonathanTaylor], colts).team).toBe('Colts');
     }
+  });
+
+  it('names a team defense "{nickname} D/ST" with no position suffix', () => {
+    const browns = {
+      name: 'Browns',
+      abbreviation: 'CLE',
+      primaryColor: '#311D00',
+      secondaryColor: '#FF3C00',
+    };
+    const defense: FlaggedPlayer = {
+      player_id: 'p-def',
+      first_name: '',
+      last_name: 'Defense',
+      position: 'DEF',
+    };
+    expect(reasonChipParts('defense_active', [defense], browns)).toEqual({
+      players: 'Browns D/ST active',
+      team: 'Browns',
+    });
+    expect(reasonChipParts('defense_active', [defense, jonathanTaylor], browns).players).toBe(
+      'Browns D/ST +1 more active',
+    );
+    expect(reasonChipParts('defense_active', [defense], null)).toEqual({
+      players: 'D/ST active',
+      team: null,
+    });
   });
 
   it('falls back to the bare reason type when there are no flagged players', () => {

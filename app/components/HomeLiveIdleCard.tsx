@@ -16,22 +16,14 @@ interface HomeLiveIdleCardProps {
 }
 
 /**
- * PLAN.md Section 10 Home State 2 — live games, no flags right now. Each row gets the same
- * field-aligned scoreboard treatment as `NowActiveCard` (team-color washes, split score divider)
- * so the card doesn't regress to a plain "@" matchup line the moment a flag clears.
- * Phase 3 will subscribe to the WebSocket flag stream and flip this into State 1 in place;
- * cold-start only for Phase 2 (leave that seam — do not build the WS client here).
+ * PLAN.md Section 10 Home State 2 — live stake games, no flags right now. The hero area of the
+ * live board (`HomeLiveView`). Each row gets the same field-aligned scoreboard treatment as
+ * `NowActiveCard` (team-color washes, split score divider) so the card doesn't regress to a plain
+ * "@" matchup line the moment a flag clears.
  */
 export function HomeLiveIdleCard({ liveGames }: HomeLiveIdleCardProps) {
   return (
     <View style={styles.wrap}>
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>Your next flag is incoming</Text>
-        <Text style={styles.heroBody}>
-          Possession is changing — we&apos;ll surface a game the moment your players get active.
-        </Text>
-      </View>
-
       <Text style={styles.sectionLabel}>Your live games</Text>
       {liveGames.map((game) => {
         const opponentTeam = opponentAbbreviation(
@@ -93,23 +85,6 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.accentBorder,
     borderWidth: theme.effects.panelBorderWidth,
     ...theme.effects.panelGlow,
-  },
-  hero: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.lg,
-    gap: theme.spacing.sm,
-    padding: theme.spacing.lg,
-  },
-  heroBody: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.type.body.size,
-    lineHeight: theme.type.body.lineHeight,
-  },
-  heroTitle: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.type.heading.fontFamily,
-    fontSize: theme.type.heading.size,
-    fontWeight: theme.type.heading.weight,
   },
   matchupRow: {
     alignItems: 'center',

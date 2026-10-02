@@ -19,6 +19,8 @@ interface BoardRowProps {
   row: BoardRowData;
   /** Hairline above the row. The caller passes `false` for the first row in a window group. */
   showDivider?: boolean;
+  /** `live` is the board under the live hero: in-progress rows read LIVE, finals are muted. */
+  mode?: 'pregame' | 'live';
 }
 
 function formatKickoffTime(kickoff: Date): string {
@@ -26,15 +28,15 @@ function formatKickoffTime(kickoff: Date): string {
   return kickoff.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function timeColumnLabel(row: BoardRowData): string {
+function timeColumnLabel(row: BoardRowData, mode: 'pregame' | 'live'): string {
   switch (row.status) {
     case 'final':
       // Deliberately no score: the board would spoil a game the user recorded to watch later.
       return 'FINAL';
     case 'in_progress':
-      // LIVE BRANCH (U4): this becomes the game clock in `flare` with the score on the right.
-      // Until then a live row reads exactly like a scheduled one.
-      return formatKickoffTime(row.kickoff);
+      // U4.3: the live board's LIVE becomes the game clock in `flare` with the score on the right.
+      // The pre-game board still reads a live row like a scheduled one.
+      return mode === 'live' ? 'LIVE' : formatKickoffTime(row.kickoff);
     default:
       return formatKickoffTime(row.kickoff);
   }
@@ -51,10 +53,12 @@ function stakeCountPhrase(stakeCount: number): string {
  * watchlist. Rows with a stake get the team stripe, the `ember` tint and a dot per stake; rows
  * without one stay muted and untinted.
  */
-export function BoardRow({ row, showDivider = true }: BoardRowProps) {
+export function BoardRow({ row, showDivider = true, mode = 'pregame' }: BoardRowProps) {
   const hasStake = row.stakeCount > 0;
   const stripeColor = row.stripeSide === 'home' ? row.homeTeamColor : row.awayTeamColor;
-  const time = timeColumnLabel(row);
+  const time = timeColumnLabel(row, mode);
+  const liveRow = mode === 'live' && row.status === 'in_progress';
+  const mutedFinal = mode === 'live' && row.status === 'final';
   const matchup = `${row.awayTeamId} @ ${row.homeTeamId}`;
 
   const dotCount = Math.min(row.stakeCount, MAX_STAKE_DOTS);
@@ -83,8 +87,20 @@ export function BoardRow({ row, showDivider = true }: BoardRowProps) {
             : null,
         ]}
       />
-      <Text style={[styles.time, hasStake ? styles.timeWithStake : null]}>{time}</Text>
-      <Text numberOfLines={1} style={[styles.matchup, hasStake ? null : styles.mutedText]}>
+      <Text
+        style={[
+          styles.time,
+          hasStake ? styles.timeWithStake : null,
+          liveRow ? styles.timeLive : null,
+          mutedFinal ? styles.timeFinal : null,
+        ]}
+      >
+        {time}
+      </Text>
+      <Text
+        numberOfLines={1}
+        style={[styles.matchup, hasStake && !mutedFinal ? null : styles.mutedText]}
+      >
         {matchup}
       </Text>
       <Text numberOfLines={1} style={styles.network}>
@@ -162,6 +178,12 @@ const styles = StyleSheet.create({
     fontSize: theme.type.ticker.size,
     fontVariant: [...theme.type.ticker.fontVariant],
     width: TIME_COLUMN_WIDTH,
+  },
+  timeFinal: {
+    color: theme.colors.textTertiary,
+  },
+  timeLive: {
+    color: theme.colors.flare,
   },
   timeWithStake: {
     color: theme.colors.brass,

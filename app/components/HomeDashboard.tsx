@@ -7,6 +7,8 @@ import { theme } from '../lib/theme';
 interface HomeDashboardProps {
   /** Optional trailing header control — omitted when Settings lives in the tab bar. */
   headerRight?: ReactNode;
+  /** Mode eyebrow above the "Home" title (live Home only). */
+  eyebrow?: ReactNode;
   children: ReactNode;
   contentTopInset: number;
   refreshing: boolean;
@@ -21,6 +23,7 @@ interface HomeDashboardProps {
  */
 export function HomeDashboard({
   headerRight,
+  eyebrow,
   children,
   contentTopInset,
   refreshing,
@@ -38,6 +41,7 @@ export function HomeDashboard({
         />
       }
     >
+      {eyebrow}
       <View style={styles.headerRow}>
         <Text style={styles.title}>Home</Text>
         {headerRight}

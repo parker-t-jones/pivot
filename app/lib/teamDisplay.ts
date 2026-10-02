@@ -89,6 +89,8 @@ export function resolveFlaggedTeamDisplay(
   return null;
 }
 
+const DEFENSE_POSITIONS = new Set(['DEF', 'DST', 'D/ST']);
+
 function fullName(player: FlaggedPlayer): string {
   return `${player.first_name} ${player.last_name}`.trim();
 }
@@ -102,7 +104,8 @@ export interface ReasonChipParts {
 
 /**
  * Section 10 reason chip, split for the Now Active pill layout:
- *   left  → "{name}[+N more] active" (and position when a single player)
+ *   left  → "{name}[+N more] active" (and position when a single player); a team defense
+ *           leads as "{nickname} D/ST" ("Browns D/ST active")
  *   right → team nickname only ("Bills")
  *
  * Falls back gracefully when data is missing rather than guessing:
@@ -119,9 +122,15 @@ export function reasonChipParts(
   const [lead, ...rest] = flaggedPlayers;
   if (!lead) return { players: reasonType, team: null };
 
-  const nameSegment =
-    rest.length > 0 ? `${fullName(lead)} +${rest.length} more` : fullName(lead);
-  const positionSegment = rest.length > 0 ? null : lead.position;
+  // A team defense's player row is named "Defense", so it reads "{nickname} D/ST" instead.
+  const leadIsDefense = DEFENSE_POSITIONS.has(lead.position.toUpperCase());
+  const leadName = leadIsDefense
+    ? flaggedTeam
+      ? `${flaggedTeam.name} D/ST`
+      : 'D/ST'
+    : fullName(lead);
+  const nameSegment = rest.length > 0 ? `${leadName} +${rest.length} more` : leadName;
+  const positionSegment = rest.length > 0 || leadIsDefense ? null : lead.position;
 
   const players = [`${nameSegment} active`, positionSegment]
     .filter((segment): segment is string => Boolean(segment))

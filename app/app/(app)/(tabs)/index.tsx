@@ -9,6 +9,7 @@ import { EmptyState } from '../../../components/EmptyState';
 import { ErrorState } from '../../../components/ErrorState';
 import { HomeDashboard } from '../../../components/HomeDashboard';
 import { HomeLiveIdleCard } from '../../../components/HomeLiveIdleCard';
+import { HomeLiveView, LiveModeEyebrow } from '../../../components/HomeLiveView';
 import { HomePregameView, type PregameHero } from '../../../components/HomePregameView';
 import { IdleHomeCard } from '../../../components/IdleHomeCard';
 import { LoadingState } from '../../../components/LoadingState';
@@ -57,6 +58,7 @@ import {
   type LeagueSummary,
   type LineupResponse,
 } from '../../../lib/leagues';
+import { buildLiveBoard, countLiveGames } from '../../../lib/liveBoard';
 import { fetchMe, type MeResponse } from '../../../lib/me';
 import { fetchNflState, type NflStateResponse } from '../../../lib/nflState';
 import {
@@ -480,6 +482,26 @@ export default function HomeScreen() {
     [homeData?.weekGames, stakeRefs],
   );
 
+  const branchKey = homeData?.branch.branch ?? null;
+  const isLive = branchKey === 'state1' || branchKey === 'state2';
+
+  const liveBoardSections = useMemo(() => {
+    if (!homeData || !isLive) return [];
+    const heroGameIds =
+      branchKey === 'state1'
+        ? homeData.flag
+          ? [homeData.flag.game_id]
+          : []
+        : homeData.liveStakeGames.map((game) => game.game_id);
+    return buildLiveBoard({
+      weekGames: homeData.weekGames,
+      liveGames: homeData.liveStakeGames,
+      flaggedGameIds: homeData.otherFlags.map((flag) => flag.game_id),
+      heroGameIds,
+      stakeRefs,
+    });
+  }, [homeData, isLive, branchKey, stakeRefs]);
+
   const { hero: pregameHero, countdownMs: pregameCountdownMs } = useMemo(() => {
     const rows = flattenRows(boardGroups);
     const now = new Date(pregameNowMs);
@@ -536,28 +558,43 @@ export default function HomeScreen() {
             regularSeasonStart={homeData.nflState?.regular_season_start ?? null}
           />
         );
+      // One element for both live branches, so a flag firing or clearing doesn't remount it.
       case 'state1':
-        return homeData.flag ? (
-          <View style={styles.state1}>
-            <NowActiveCard
-              flag={homeData.flag}
-              cta={watchCta(
-                homeData.broadcasts,
-                weekGameById.get(homeData.flag.game_id)?.airings ?? [],
-              )}
-              localRoute={localRouteOption(homeData.broadcasts)}
-              playerTeamMap={homeData.playerTeamMap}
-              onSwitch={onSwitch}
-            />
-            <AlsoFlaggedRow
-              flags={homeData.otherFlags}
-              onSwitch={onSwitchOther}
-              ctaFor={alsoFlaggedCta}
-            />
-          </View>
-        ) : null;
       case 'state2':
-        return <HomeLiveIdleCard liveGames={homeData.liveStakeGames} />;
+        return (
+          <HomeLiveView
+            hero={
+              homeData.branch.branch === 'state1' ? (
+                homeData.flag ? (
+                  <View style={styles.state1}>
+                    <View style={styles.flareHero}>
+                      <NowActiveCard
+                        flag={homeData.flag}
+                        cta={watchCta(
+                          homeData.broadcasts,
+                          weekGameById.get(homeData.flag.game_id)?.airings ?? [],
+                        )}
+                        localRoute={localRouteOption(homeData.broadcasts)}
+                        playerTeamMap={homeData.playerTeamMap}
+                        onSwitch={onSwitch}
+                      />
+                    </View>
+                    <AlsoFlaggedRow
+                      flags={homeData.otherFlags}
+                      onSwitch={onSwitchOther}
+                      ctaFor={alsoFlaggedCta}
+                    />
+                  </View>
+                ) : null
+              ) : (
+                <HomeLiveIdleCard liveGames={homeData.liveStakeGames} />
+              )
+            }
+            sections={liveBoardSections}
+            groups={boardGroups}
+            lineupGroups={homeData.lineupGroups}
+          />
+        );
       // One pre-game presentation for both branches (PIVOT-STAKES-PLAN.md §11.3). The branches
       // stay distinct in `resolveHomeBranch` because they still differ in whether a kickoff is
       // close enough to arm the live machine.
@@ -594,6 +631,13 @@ export default function HomeScreen() {
       onRefresh={onRefresh}
       refreshing={isRefreshing}
       headerRight={headerRight}
+      eyebrow={
+        homeData && isLive && !isLoading && !loadError ? (
+          <LiveModeEyebrow
+            liveCount={countLiveGames(homeData.weekGames, homeData.liveStakeGames)}
+          />
+        ) : undefined
+      }
     >
       {isLoading ? (
         <LoadingState message="Loading…" />
@@ -607,6 +651,10 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  flareHero: {
+    borderRadius: theme.radii.hero,
+    ...theme.effects.flareGlow,
+  },
   state1: {
     gap: theme.spacing.lg,
   },
