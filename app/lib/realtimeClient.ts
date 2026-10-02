@@ -114,7 +114,7 @@ export class RealtimeClient {
     return this.socket?.readyState === 1;
   }
 
-  /** Stake games on the week slate. Sent on the open socket, and again after each reconnect. */
+  /** Games on the week slate. Sent on the open socket, and again after each reconnect. */
   setSubscribedGames(gameIds: readonly string[]): void {
     this.subscribedGameIds = gameIds;
     this.sendGameSubscriptions();

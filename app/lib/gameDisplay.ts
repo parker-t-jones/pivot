@@ -107,6 +107,24 @@ export function quarterLabel(quarter: number): string {
   return quarter >= 5 ? 'OT' : `Q${quarter}`;
 }
 
+/**
+ * Live board clock, e.g. `"Q3 2:36"`, `"OT 7:12"`, `"HALF"`. `game_state` has no halftime status,
+ * so the end of Q2 reads as HALF. No quarter yet → `"LIVE"`; no clock → the quarter alone.
+ */
+export function liveClockLabel(quarter: number, timeRemainingSec: number | null): string {
+  if (!Number.isFinite(quarter) || quarter < 1) return 'LIVE';
+  if (timeRemainingSec === null || !Number.isFinite(timeRemainingSec)) {
+    return quarterLabel(quarter);
+  }
+  if (quarter === 2 && timeRemainingSec <= 0) return 'HALF';
+  return `${quarterLabel(quarter)} ${formatClock(timeRemainingSec)}`;
+}
+
+/** Compact live score in matchup order (away first), e.g. `"10–21"`. */
+export function compactScoreLabel(score: { away: number; home: number }): string {
+  return `${score.away}–${score.home}`;
+}
+
 const DOWN_ORDINALS: Record<number, string> = {
   1: '1st',
   2: '2nd',

@@ -42,7 +42,6 @@ import {
 } from '../../../lib/homeFlagUpdates';
 import {
   filterLiveStakeGames,
-  gameHasStake,
   groupLineupByGame,
   isLiveDisplayPhase,
   nextStakeKickoff,
@@ -84,6 +83,7 @@ interface HomeData {
   otherFlags: CurrentFlag[];
   broadcast: GameBroadcast | null;
   broadcasts: GameBroadcast[];
+  liveGames: LiveGame[];
   liveStakeGames: LiveGame[];
   weekGames: ScheduleGame[];
   lineupGroups: LineupGameGroup[];
@@ -110,6 +110,7 @@ function toFlagSlice(data: HomeData): HomeFlagSlice {
     otherFlags: data.otherFlags,
     broadcast: data.broadcast,
     broadcasts: data.broadcasts,
+    liveGames: data.liveGames,
     liveStakeGames: data.liveStakeGames,
     weekGames: data.weekGames,
     lineupGroups: data.lineupGroups,
@@ -129,6 +130,7 @@ function emptyHome(partial: Partial<HomeData> & Pick<HomeData, 'hasLeagues' | 'b
     otherFlags: [],
     broadcast: null,
     broadcasts: [],
+    liveGames: [],
     liveStakeGames: [],
     weekGames: [],
     lineupGroups: [],
@@ -287,6 +289,7 @@ export default function HomeScreen() {
         otherFlags,
         broadcast,
         broadcasts,
+        liveGames: liveResponse.games,
         liveStakeGames,
         weekGames,
         lineupGroups,
@@ -307,13 +310,11 @@ export default function HomeScreen() {
     });
   }, []);
 
-  const stakeGameIds = useMemo(() => {
-    if (!homeData) return [];
-    const teams = stakeTeamAbbreviations(homeData.playerTeamMap);
-    return homeData.weekGames
-      .filter((game) => gameHasStake(game.home_team, game.away_team, teams))
-      .map((game) => game.game_id);
-  }, [homeData?.weekGames, homeData?.playerTeamMap]);
+  // Every game on the slate, not just stake games: the live board shows each one's clock and score.
+  const weekGameIds = useMemo(
+    () => (homeData?.weekGames ?? []).map((game) => game.game_id),
+    [homeData?.weekGames],
+  );
 
   const onReconcileHome = useCallback(async () => {
     try {
@@ -331,7 +332,7 @@ export default function HomeScreen() {
     homeReady: !isLoading && homeData !== null && loadError === null,
     onFlagEvent,
     onGameState,
-    gameIds: stakeGameIds,
+    gameIds: weekGameIds,
     onReconcile: onReconcileHome,
   });
 
@@ -495,7 +496,7 @@ export default function HomeScreen() {
         : homeData.liveStakeGames.map((game) => game.game_id);
     return buildLiveBoard({
       weekGames: homeData.weekGames,
-      liveGames: homeData.liveStakeGames,
+      liveGames: homeData.liveGames,
       flaggedGameIds: homeData.otherFlags.map((flag) => flag.game_id),
       heroGameIds,
       stakeRefs,
@@ -633,9 +634,7 @@ export default function HomeScreen() {
       headerRight={headerRight}
       eyebrow={
         homeData && isLive && !isLoading && !loadError ? (
-          <LiveModeEyebrow
-            liveCount={countLiveGames(homeData.weekGames, homeData.liveStakeGames)}
-          />
+          <LiveModeEyebrow liveCount={countLiveGames(homeData.weekGames, homeData.liveGames)} />
         ) : undefined
       }
     >

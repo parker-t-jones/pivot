@@ -5,10 +5,17 @@
  * `loadHome` and the WebSocket already keep in `HomeData`.
  */
 import { buildBoardRows, type BoardRowData, type BoardWindowGroup, type StakeRef } from './board';
+import { compactScoreLabel, liveClockLabel } from './gameDisplay';
 import type { LiveGame, ScheduleGame } from './schedule';
 
+/** A LIVE row plus its clock and score. `score` is null until the game has a `game_state`. */
+export interface LiveBoardRow extends BoardRowData {
+  clock: string;
+  score: string | null;
+}
+
 export type LiveBoardSection =
-  | { kind: 'live'; rows: BoardRowData[] }
+  | { kind: 'live'; rows: LiveBoardRow[] }
   | { kind: 'up_next'; groups: BoardWindowGroup[] }
   | { kind: 'final'; rows: BoardRowData[] };
 
@@ -55,7 +62,8 @@ export function buildLiveBoard(input: {
   heroGameIds: readonly string[];
   stakeRefs: StakeRef[];
 }): LiveBoardSection[] {
-  const liveIds = new Set(input.liveGames.map((game) => game.game_id));
+  const liveById = new Map(input.liveGames.map((game) => [game.game_id, game]));
+  const liveIds = new Set(liveById.keys());
   const shown = new Set([...input.heroGameIds, ...input.flaggedGameIds]);
 
   const byPhase: Record<LivePhase, ScheduleGame[]> = { live: [], up_next: [], final: [] };
@@ -68,7 +76,15 @@ export function buildLiveBoard(input: {
 
   const liveRows = rowsFor(byPhase.live)
     .filter((row) => !shown.has(row.gameId))
-    .map((row) => ({ ...row, status: 'in_progress' }))
+    .map((row): LiveBoardRow => {
+      const live = liveById.get(row.gameId);
+      return {
+        ...row,
+        status: 'in_progress',
+        clock: live ? liveClockLabel(live.quarter, live.time_remaining_sec) : 'LIVE',
+        score: live ? compactScoreLabel(live.score) : null,
+      };
+    })
     .sort((a, b) => {
       const aStake = a.stakeCount > 0 ? 0 : 1;
       const bStake = b.stakeCount > 0 ? 0 : 1;

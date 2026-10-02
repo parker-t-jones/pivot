@@ -5,6 +5,7 @@
 import type { FlagEventPayload } from './flagEventPayload';
 import type { CurrentFlag, FlagsCurrentResponse, GameBroadcast } from './gameDisplay';
 import {
+  gameHasStake,
   nextStakeKickoff,
   resolveHomeBranch,
   stakeTeamAbbreviations,
@@ -29,6 +30,8 @@ export interface HomeFlagSlice {
   otherFlags: CurrentFlag[];
   broadcast: GameBroadcast | null;
   broadcasts: GameBroadcast[];
+  /** Every game in progress (`/games/live`), stake or not — the live board's clock and score. */
+  liveGames: LiveGame[];
   liveStakeGames: LiveGame[];
   weekGames: ScheduleGame[];
   lineupGroups: LineupGameGroup[];
@@ -208,18 +211,36 @@ export function applyFlagEventToHome(
 /**
  * Applies one `game_state` message and recomputes the branch.
  * An in-progress game replaces the matching row, or is added when a kickoff arrives before the
- * 30s reconcile. A final game is removed immediately, so the live list does not wait for that poll.
+ * 30s reconcile; it joins `liveStakeGames` only when the user has a stake in it. A final game is
+ * removed from both live lists and marked final on the week slate immediately, so neither waits
+ * for that poll.
  */
 export function applyGameStateToHome(
   slice: HomeFlagSlice,
   game: GameStateMessage,
   now: Date = new Date(),
 ): HomeFlagSlice {
-  const liveStakeGames =
-    game.status === 'final'
-      ? slice.liveStakeGames.filter((row) => row.game_id !== game.game_id)
-      : upsertLiveGame(slice.liveStakeGames, game);
-  const next: HomeFlagSlice = { ...slice, liveStakeGames };
+  if (game.status === 'final') {
+    const withoutGame = (rows: LiveGame[]) => rows.filter((row) => row.game_id !== game.game_id);
+    const next: HomeFlagSlice = {
+      ...slice,
+      liveGames: withoutGame(slice.liveGames),
+      liveStakeGames: withoutGame(slice.liveStakeGames),
+      weekGames: slice.weekGames.map((row) =>
+        row.game_id === game.game_id ? { ...row, status: 'final' } : row,
+      ),
+    };
+    return { ...next, branch: recomputeBranch(next, next.flag !== null, now) };
+  }
+
+  const isStakeGame =
+    gameHasStake(game.home_team, game.away_team, stakeTeamAbbreviations(slice.playerTeamMap)) ||
+    slice.liveStakeGames.some((row) => row.game_id === game.game_id);
+  const next: HomeFlagSlice = {
+    ...slice,
+    liveGames: upsertLiveGame(slice.liveGames, game),
+    liveStakeGames: isStakeGame ? upsertLiveGame(slice.liveStakeGames, game) : slice.liveStakeGames,
+  };
   return { ...next, branch: recomputeBranch(next, next.flag !== null, now) };
 }
 

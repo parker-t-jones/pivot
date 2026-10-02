@@ -33,6 +33,7 @@ function baseSlice(overrides: Partial<HomeFlagSlice> = {}): HomeFlagSlice {
     otherFlags: [],
     broadcast: null,
     broadcasts: [],
+    liveGames: [],
     liveStakeGames: [],
     weekGames: [],
     lineupGroups: [],
@@ -533,6 +534,67 @@ describe('applyGameStateToHome', () => {
 
     expect(next.liveStakeGames).toEqual([]);
     expect(next.branch).toEqual({ branch: 'state4' });
+  });
+
+  it('keeps a non-stake game on the live list without making it a stake game', () => {
+    const other = liveGame({ game_id: 'g2', home_team: 'SEA', away_team: 'LAR' });
+    const next = applyGameStateToHome(
+      baseSlice({
+        playerTeamMap: new Map([['p1', { teamId: 't1', abbreviation: 'GB', name: 'Packers' }]]),
+      }),
+      other,
+      new Date('2026-09-27T18:00:00Z'),
+    );
+
+    expect(next.liveGames).toEqual([other]);
+    expect(next.liveStakeGames).toEqual([]);
+    expect(next.branch).toEqual({ branch: 'state4' });
+  });
+
+  it('adds a stake game that kicks off to both live lists', () => {
+    const kickoff = liveGame();
+    const next = applyGameStateToHome(
+      baseSlice({
+        playerTeamMap: new Map([['p1', { teamId: 't1', abbreviation: 'GB', name: 'Packers' }]]),
+      }),
+      kickoff,
+      new Date('2026-09-27T18:00:00Z'),
+    );
+
+    expect(next.liveGames).toEqual([kickoff]);
+    expect(next.liveStakeGames).toEqual([kickoff]);
+    expect(next.branch).toEqual({ branch: 'state2' });
+  });
+
+  it('marks a final game final on the week slate right away', () => {
+    const existing = liveGame();
+    const other = liveGame({ game_id: 'g2', home_team: 'SEA', away_team: 'LAR' });
+    const slate = (gameId: string) => ({
+      game_id: gameId,
+      status: 'in_progress',
+      scheduled_start: existing.scheduled_start,
+      home_team: 'GB',
+      away_team: 'ATL',
+      home_team_name: 'Packers',
+      away_team_name: 'Falcons',
+      home_team_primary_color: '',
+      home_team_secondary_color: '',
+      away_team_primary_color: '',
+      away_team_secondary_color: '',
+      broadcasts: [],
+      airings: [],
+    });
+    const next = applyGameStateToHome(
+      baseSlice({ liveGames: [existing, other], weekGames: [slate('g1'), slate('g2')] }),
+      { ...existing, status: 'final' },
+      new Date('2026-09-28T18:00:00Z'),
+    );
+
+    expect(next.liveGames).toEqual([other]);
+    expect(next.weekGames.map((row) => [row.game_id, row.status])).toEqual([
+      ['g1', 'final'],
+      ['g2', 'in_progress'],
+    ]);
   });
 });
 

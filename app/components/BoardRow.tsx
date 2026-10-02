@@ -19,8 +19,10 @@ interface BoardRowProps {
   row: BoardRowData;
   /** Hairline above the row. The caller passes `false` for the first row in a window group. */
   showDivider?: boolean;
-  /** `live` is the board under the live hero: in-progress rows read LIVE, finals are muted. */
+  /** `live` is the board under the live hero: in-progress rows show the clock, finals are muted. */
   mode?: 'pregame' | 'live';
+  /** In-progress game clock and compact score, live mode only. Score null → none shown. */
+  live?: { clock: string; score: string | null };
 }
 
 function formatKickoffTime(kickoff: Date): string {
@@ -28,15 +30,18 @@ function formatKickoffTime(kickoff: Date): string {
   return kickoff.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function timeColumnLabel(row: BoardRowData, mode: 'pregame' | 'live'): string {
+function timeColumnLabel(
+  row: BoardRowData,
+  mode: 'pregame' | 'live',
+  clock: string | undefined,
+): string {
   switch (row.status) {
     case 'final':
       // Deliberately no score: the board would spoil a game the user recorded to watch later.
       return 'FINAL';
     case 'in_progress':
-      // U4.3: the live board's LIVE becomes the game clock in `flare` with the score on the right.
       // The pre-game board still reads a live row like a scheduled one.
-      return mode === 'live' ? 'LIVE' : formatKickoffTime(row.kickoff);
+      return mode === 'live' ? (clock ?? 'LIVE') : formatKickoffTime(row.kickoff);
     default:
       return formatKickoffTime(row.kickoff);
   }
@@ -53,12 +58,13 @@ function stakeCountPhrase(stakeCount: number): string {
  * watchlist. Rows with a stake get the team stripe, the `ember` tint and a dot per stake; rows
  * without one stay muted and untinted.
  */
-export function BoardRow({ row, showDivider = true, mode = 'pregame' }: BoardRowProps) {
+export function BoardRow({ row, showDivider = true, mode = 'pregame', live }: BoardRowProps) {
   const hasStake = row.stakeCount > 0;
   const stripeColor = row.stripeSide === 'home' ? row.homeTeamColor : row.awayTeamColor;
-  const time = timeColumnLabel(row, mode);
   const liveRow = mode === 'live' && row.status === 'in_progress';
   const mutedFinal = mode === 'live' && row.status === 'final';
+  const time = timeColumnLabel(row, mode, live?.clock);
+  const score = liveRow ? (live?.score ?? null) : null;
   const matchup = `${row.awayTeamId} @ ${row.homeTeamId}`;
 
   const dotCount = Math.min(row.stakeCount, MAX_STAKE_DOTS);
@@ -67,6 +73,7 @@ export function BoardRow({ row, showDivider = true, mode = 'pregame' }: BoardRow
   const accessibilityLabel = [
     time,
     `${row.awayTeamId} at ${row.homeTeamId}`,
+    score,
     row.network,
     stakeCountPhrase(row.stakeCount),
   ]
@@ -106,7 +113,12 @@ export function BoardRow({ row, showDivider = true, mode = 'pregame' }: BoardRow
       <Text numberOfLines={1} style={styles.network}>
         {row.network ?? ''}
       </Text>
-      <View style={styles.dots}>
+      {score !== null ? (
+        <Text numberOfLines={1} style={[styles.score, hasStake ? null : styles.mutedText]}>
+          {score}
+        </Text>
+      ) : null}
+      <View style={[styles.dots, score !== null ? styles.dotsAfterScore : null]}>
         {Array.from({ length: dotCount }, (_, index) => (
           <View key={index} style={styles.dot} />
         ))}
@@ -136,6 +148,9 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     paddingRight: theme.spacing.md,
   },
+  dotsAfterScore: {
+    marginLeft: theme.spacing.sm,
+  },
   matchup: {
     color: theme.colors.textPrimary,
     flexShrink: 1,
@@ -164,6 +179,13 @@ const styles = StyleSheet.create({
   },
   rowWithStake: {
     backgroundColor: theme.colors.ember,
+  },
+  score: {
+    color: theme.colors.textPrimary,
+    fontFamily: fonts.monoMedium,
+    fontSize: theme.type.ticker.size,
+    fontVariant: [...theme.type.ticker.fontVariant],
+    marginLeft: 'auto',
   },
   stripe: {
     alignSelf: 'stretch',

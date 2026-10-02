@@ -74,6 +74,16 @@ function LiveBoardSectionView({ section }: { section: LiveBoardSection }) {
               <Rows rows={group.rows} />
             </View>
           ))
+        ) : section.kind === 'live' ? (
+          section.rows.map((row, index) => (
+            <BoardRow
+              key={row.gameId}
+              row={row}
+              showDivider={index > 0}
+              mode="live"
+              live={{ clock: row.clock, score: row.score }}
+            />
+          ))
         ) : (
           <Rows rows={section.rows} />
         )}

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   alsoFlaggedSituationLines,
+  compactScoreLabel,
   formatClock,
+  liveClockLabel,
   pickPreferredBroadcast,
   quarterLabel,
   reasonLabel,
@@ -71,6 +73,40 @@ describe('quarterLabel', () => {
     expect(quarterLabel(1)).toBe('Q1');
     expect(quarterLabel(4)).toBe('Q4');
     expect(quarterLabel(5)).toBe('OT');
+  });
+});
+
+describe('liveClockLabel', () => {
+  it('shows the quarter and clock in regulation', () => {
+    expect(liveClockLabel(1, 900)).toBe('Q1 15:00');
+    expect(liveClockLabel(3, 156)).toBe('Q3 2:36');
+    expect(liveClockLabel(4, 0)).toBe('Q4 0:00');
+  });
+
+  it('reads the end of Q2 as HALF', () => {
+    expect(liveClockLabel(2, 0)).toBe('HALF');
+    expect(liveClockLabel(2, 1)).toBe('Q2 0:01');
+  });
+
+  it('labels overtime as OT', () => {
+    expect(liveClockLabel(5, 432)).toBe('OT 7:12');
+  });
+
+  it('falls back to the quarter alone when the clock is missing', () => {
+    expect(liveClockLabel(3, null)).toBe('Q3');
+    expect(liveClockLabel(5, Number.NaN)).toBe('OT');
+  });
+
+  it('falls back to LIVE before a quarter is known', () => {
+    expect(liveClockLabel(0, 900)).toBe('LIVE');
+    expect(liveClockLabel(Number.NaN, null)).toBe('LIVE');
+  });
+});
+
+describe('compactScoreLabel', () => {
+  it('puts the away score first, matching the matchup order', () => {
+    expect(compactScoreLabel({ away: 10, home: 21 })).toBe('10–21');
+    expect(compactScoreLabel({ away: 0, home: 0 })).toBe('0–0');
   });
 });
 

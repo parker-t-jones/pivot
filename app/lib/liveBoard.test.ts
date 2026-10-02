@@ -187,6 +187,18 @@ describe('buildLiveBoard', () => {
     expect(ids(sectionOf(after, 'final'))).toEqual(['g']);
   });
 
+  it('gives LIVE rows the clock and score from the live list', () => {
+    const withState = game('a', EARLY, 'in_progress');
+    const noState = game('b', LATE, 'in_progress');
+    const sections = board([withState, noState], { liveGames: [live(withState)] });
+    const liveSection = sectionOf(sections, 'live');
+    if (liveSection?.kind !== 'live') throw new Error('expected a LIVE section');
+    expect(liveSection.rows.map(({ gameId, clock, score }) => ({ gameId, clock, score }))).toEqual([
+      { gameId: 'a', clock: 'Q2 5:00', score: '3–7' },
+      { gameId: 'b', clock: 'LIVE', score: null },
+    ]);
+  });
+
   it('treats a game on the live list as LIVE before the slate catches up', () => {
     const kickedOff = game('g', EARLY, 'scheduled');
     const sections = board([kickedOff], { liveGames: [live(kickedOff)] });

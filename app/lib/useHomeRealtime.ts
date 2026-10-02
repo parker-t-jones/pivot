@@ -20,7 +20,7 @@ export interface UseHomeRealtimeOptions {
   homeReady: boolean;
   onFlagEvent: (payload: FlagEventPayload) => void;
   onGameState: (game: GameStateMessage) => void;
-  /** Stake games on the week slate. Home sends `subscribe_game` for each. */
+  /** Games on the week slate. Home sends `subscribe_game` for each. */
   gameIds: readonly string[];
   /** Refetch `/flags/current` after re-connect / foreground resume (not initial mount connect). */
   onReconcile: () => void | Promise<void>;
