@@ -279,7 +279,11 @@ describe('computeFlagState — edge cases', () => {
 
   it('never flags when status is scheduled', () => {
     const lineup = lineupOf([{ id: 'rb-a', team: HOME, unit: 'offense' }]);
-    const state = makeState({ possessionTeamId: HOME, unitOnField: 'offense', status: 'scheduled' });
+    const state = makeState({
+      possessionTeamId: HOME,
+      unitOnField: 'offense',
+      status: 'scheduled',
+    });
 
     expect(computeFlagState(lineup, state, clock)).toEqual(EMPTY_UNFLAGGED);
   });
@@ -325,5 +329,54 @@ describe('computeFlagState — edge cases', () => {
     const otherClock: Clock = () => 42;
 
     expect(computeFlagState(lineup, state, otherClock).computedAt).toBe(42);
+  });
+});
+
+/**
+ * TNF Oct 1 2026 (PIT @ CLE): the same user starts CLE's TE and CLE's D/ST.
+ * Possession flips CLE → PIT → CLE. `playerIdsOnTeam` does not filter by unit, so each
+ * reason lists every player on that team. The offense gate still fires on CLE possession.
+ */
+describe('computeFlagState — same team offense and D/ST', () => {
+  const CLE = 'cle';
+  const PIT = 'pit';
+  const lineup = lineupOf([
+    { id: 'fannin', team: CLE, unit: 'offense' },
+    { id: 'cle-dst', team: CLE, unit: 'defense' },
+  ]);
+
+  function snap(possessionTeamId: string): GameState {
+    return makeState({
+      homeTeamId: CLE,
+      awayTeamId: PIT,
+      possessionTeamId,
+      unitOnField: 'offense',
+    });
+  }
+
+  it('flags the tight end on CLE possession, the D/ST on PIT possession, then the tight end again', () => {
+    expect(computeFlagState(lineup, snap(CLE), clock)).toEqual({
+      gameId: 'game-1',
+      flagged: true,
+      priorityScore: 4,
+      reasons: [{ type: 'offense_active', triggeringPlayerIds: ['cle-dst', 'fannin'] }],
+      computedAt: FIXED_NOW,
+    });
+
+    expect(computeFlagState(lineup, snap(PIT), clock)).toEqual({
+      gameId: 'game-1',
+      flagged: true,
+      priorityScore: 2,
+      reasons: [{ type: 'defense_active', triggeringPlayerIds: ['cle-dst', 'fannin'] }],
+      computedAt: FIXED_NOW,
+    });
+
+    expect(computeFlagState(lineup, snap(CLE), clock)).toEqual({
+      gameId: 'game-1',
+      flagged: true,
+      priorityScore: 4,
+      reasons: [{ type: 'offense_active', triggeringPlayerIds: ['cle-dst', 'fannin'] }],
+      computedAt: FIXED_NOW,
+    });
   });
 });
