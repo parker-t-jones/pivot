@@ -46,10 +46,11 @@ export {
   type StoredAiringKey,
 } from './airings/ingestAirings.js';
 
-export type {
-  EspnDrive,
-  EspnPlay,
-  EspnPlayType,
-  EspnScoreboard,
-  EspnSummary,
+export {
+  espnSummarySchema,
+  type EspnDrive,
+  type EspnPlay,
+  type EspnPlayType,
+  type EspnScoreboard,
+  type EspnSummary,
 } from './espn/espnTypes.js';

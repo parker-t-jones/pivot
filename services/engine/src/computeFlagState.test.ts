@@ -39,14 +39,16 @@ function lineupOf(
   const teamPositions = new Map<string, Set<'offense' | 'defense'>>();
   const playerToTeam = new Map<string, string>();
   const starPlayerIds = new Set<string>();
+  const playerUnits = new Map<string, 'offense' | 'defense'>();
   for (const p of players) {
     playerToTeam.set(p.id, p.team);
+    playerUnits.set(p.id, p.unit);
     const units = teamPositions.get(p.team) ?? new Set<'offense' | 'defense'>();
     units.add(p.unit);
     teamPositions.set(p.team, units);
     if (p.star) starPlayerIds.add(p.id);
   }
-  return { userId: 'user-1', week: 8, teamPositions, playerToTeam, starPlayerIds };
+  return { userId: 'user-1', week: 8, teamPositions, playerToTeam, starPlayerIds, playerUnits };
 }
 
 const EMPTY_UNFLAGGED = {
@@ -334,8 +336,9 @@ describe('computeFlagState — edge cases', () => {
 
 /**
  * TNF Oct 1 2026 (PIT @ CLE): the same user starts CLE's TE and CLE's D/ST.
- * Possession flips CLE → PIT → CLE. `playerIdsOnTeam` does not filter by unit, so each
- * reason lists every player on that team. The offense gate still fires on CLE possession.
+ * Possession flips CLE → PIT → CLE. Offense lists only the TE; defense lists only the D/ST.
+ * Offense priority is 2 per offensive player, so the D/ST no longer adds 2 on CLE's ball.
+ * Defense priority stays a flat +2.
  */
 describe('computeFlagState — same team offense and D/ST', () => {
   const CLE = 'cle';
@@ -358,8 +361,8 @@ describe('computeFlagState — same team offense and D/ST', () => {
     expect(computeFlagState(lineup, snap(CLE), clock)).toEqual({
       gameId: 'game-1',
       flagged: true,
-      priorityScore: 4,
-      reasons: [{ type: 'offense_active', triggeringPlayerIds: ['cle-dst', 'fannin'] }],
+      priorityScore: 2,
+      reasons: [{ type: 'offense_active', triggeringPlayerIds: ['fannin'] }],
       computedAt: FIXED_NOW,
     });
 
@@ -367,16 +370,40 @@ describe('computeFlagState — same team offense and D/ST', () => {
       gameId: 'game-1',
       flagged: true,
       priorityScore: 2,
-      reasons: [{ type: 'defense_active', triggeringPlayerIds: ['cle-dst', 'fannin'] }],
+      reasons: [{ type: 'defense_active', triggeringPlayerIds: ['cle-dst'] }],
       computedAt: FIXED_NOW,
     });
 
     expect(computeFlagState(lineup, snap(CLE), clock)).toEqual({
       gameId: 'game-1',
       flagged: true,
-      priorityScore: 4,
-      reasons: [{ type: 'offense_active', triggeringPlayerIds: ['cle-dst', 'fannin'] }],
+      priorityScore: 2,
+      reasons: [{ type: 'offense_active', triggeringPlayerIds: ['fannin'] }],
       computedAt: FIXED_NOW,
     });
+  });
+
+  it('does not give a starred D/ST the offense star bonus', () => {
+    const starred = lineupOf([
+      { id: 'fannin', team: CLE, unit: 'offense' },
+      { id: 'cle-dst', team: CLE, unit: 'defense', star: true },
+    ]);
+    expect(computeFlagState(starred, snap(CLE), clock)).toEqual({
+      gameId: 'game-1',
+      flagged: true,
+      priorityScore: 2,
+      reasons: [{ type: 'offense_active', triggeringPlayerIds: ['fannin'] }],
+      computedAt: FIXED_NOW,
+    });
+    expect(computeFlagState(starred, snap(PIT), clock).priorityScore).toBe(7);
+  });
+
+  it('lists every teammate when the cache has no per-player unit (legacy Redis)', () => {
+    const legacy = { ...lineup };
+    delete legacy.playerUnits;
+    expect(computeFlagState(legacy, snap(CLE), clock).reasons).toEqual([
+      { type: 'offense_active', triggeringPlayerIds: ['cle-dst', 'fannin'] },
+    ]);
+    expect(computeFlagState(legacy, snap(CLE), clock).priorityScore).toBe(4);
   });
 });

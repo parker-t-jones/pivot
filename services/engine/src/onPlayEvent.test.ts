@@ -140,4 +140,57 @@ describe('onPlayEvent', () => {
     expect(dispatcher.events.map((e) => e.type)).toEqual(['flag_added', 'flag_removed']);
     expect((await gameState.getGameState('g1'))?.status).toBe('final');
   });
+
+  it('keeps the last evented reasons when possession flips inside the ±3 band', async () => {
+    // CLE D/ST is flagged (priority 2). CLE then has the ball and the TE flags at priority 2.
+    // Section 8 returns no event, and the stored flag state stays the defense row.
+    const cle = 'cle';
+    const pit = 'pit';
+    lineupCache.set({
+      userId: 'u1',
+      week: 8,
+      teamPositions: new Map([[cle, new Set<'offense' | 'defense'>(['offense', 'defense'])]]),
+      playerToTeam: new Map([
+        ['te', cle],
+        ['dst', cle],
+      ]),
+      playerUnits: new Map([
+        ['te', 'offense'],
+        ['dst', 'defense'],
+      ]),
+      starPlayerIds: new Set(),
+    });
+    gameState.addStake(cle, 'u1');
+
+    await onPlayEvent(
+      deps,
+      makePlay({
+        playId: 'pit-snap',
+        homeTeamId: cle,
+        awayTeamId: pit,
+        possessionTeamId: pit,
+        playType: 'run',
+      }),
+    );
+    await onPlayEvent(
+      deps,
+      makePlay({
+        playId: 'cle-snap',
+        homeTeamId: cle,
+        awayTeamId: pit,
+        possessionTeamId: cle,
+        playType: 'run',
+      }),
+    );
+
+    expect(dispatcher.events.map((event) => event.type)).toEqual(['flag_added']);
+    expect(dispatcher.events[0]?.newState.reasons).toEqual([
+      { type: 'defense_active', triggeringPlayerIds: ['dst'] },
+    ]);
+    const stored = await gameState.getUserFlagState('u1', 'g1');
+    expect(stored?.reasons).toEqual([
+      { type: 'defense_active', triggeringPlayerIds: ['dst'] },
+    ]);
+    expect((await gameState.getGameState('g1'))?.possessionTeamId).toBe(cle);
+  });
 });

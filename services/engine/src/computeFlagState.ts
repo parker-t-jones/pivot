@@ -2,24 +2,24 @@ import type { FlagReason, FlagState, GameState, UserLineupCache } from '@pivot/s
 import { defaultClock, type Clock } from './clock.js';
 
 /**
- * The user's player ids on a given team, sorted for determinism.
+ * The user's player ids on a given team and side of the ball, sorted for determinism.
  *
- * Section 8 calls `playerIdsOnTeamWithPosition(lineup, team, 'offense' | 'defense')`, implying a
- * per-player position filter. The Sprint 3 `UserLineupCache` only carries position categories at the
- * *team* level (`teamPositions`), not per player, so we can't filter a team's players by category
- * here. That distinction is instead enforced upstream: `teamPositions.get(team)?.has(category)` gates
- * whether the offense/defense rule fires at all. The one case this diverges from a strict reading is
- * a user owning both an offensive player AND that same team's DEF — not among Section 8's scenarios,
- * and rare in one-league v1 play. See sprint summary "harder to interpret" note.
- *
- * IDP support (v1.5+) would break this shortcut: with individual defensive players, a single team can
- * have both offensive and defensive players *at the player level* that must be distinguished. That
- * would require growing `UserLineupCache` to carry per-player position categories, and updating this
- * function to filter a team's players by the requested category rather than returning them all.
+ * Section 8's `playerIdsOnTeamWithPosition`. `teamPositions` still gates whether the rule fires.
+ * `playerUnits` (QB/RB/WR/TE/K → offense, DEF → defense) decides who is listed. A cache written
+ * before `playerUnits` existed has no map: every player on the team is listed, so flagged state
+ * and priority stay what they were until the next rebuild.
  */
-function playerIdsOnTeam(lineup: UserLineupCache, teamId: string): string[] {
+function playerIdsOnTeam(
+  lineup: UserLineupCache,
+  teamId: string,
+  unit: 'offense' | 'defense',
+): string[] {
   return [...lineup.playerToTeam.entries()]
-    .filter(([, team]) => team === teamId)
+    .filter(([playerId, team]) => {
+      if (team !== teamId) return false;
+      if (!lineup.playerUnits) return true;
+      return lineup.playerUnits.get(playerId) === unit;
+    })
     .map(([playerId]) => playerId)
     .sort();
 }
@@ -73,14 +73,14 @@ export function computeFlagState(
 
   // Offense rule
   if (state.unitOnField === 'offense' && lineup.teamPositions.get(offTeam)?.has('offense')) {
-    const triggers = playerIdsOnTeam(lineup, offTeam);
+    const triggers = playerIdsOnTeam(lineup, offTeam, 'offense');
     reasons.push({ type: 'offense_active', triggeringPlayerIds: triggers });
     priority += 2 * triggers.length;
   }
 
   // Defense rule
   if (state.unitOnField === 'offense' && lineup.teamPositions.get(defTeam)?.has('defense')) {
-    const triggers = playerIdsOnTeam(lineup, defTeam);
+    const triggers = playerIdsOnTeam(lineup, defTeam, 'defense');
     reasons.push({ type: 'defense_active', triggeringPlayerIds: triggers });
     priority += 2;
   }

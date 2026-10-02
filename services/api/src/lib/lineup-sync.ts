@@ -300,7 +300,18 @@ export async function rebuildUserLineupCache(
 
   const teamPositions = new Map<string, Set<'offense' | 'defense'>>();
   const playerToTeam = new Map<string, string>();
+  const playerUnits = new Map<string, 'offense' | 'defense'>();
   const starPlayerIds = new Set<string>();
+
+  const remember = (playerId: string, teamId: string, position: string, star: boolean) => {
+    playerToTeam.set(playerId, teamId);
+    const unit: 'offense' | 'defense' = (position as Position) === 'DEF' ? 'defense' : 'offense';
+    playerUnits.set(playerId, unit);
+    const categories = teamPositions.get(teamId) ?? new Set<'offense' | 'defense'>();
+    categories.add(unit);
+    teamPositions.set(teamId, categories);
+    if (star) starPlayerIds.add(playerId);
+  };
 
   for (const league of watchedLeagues) {
     if (league.lineup_source === 'roster_fallback') {
@@ -314,12 +325,7 @@ export async function rebuildUserLineupCache(
       for (const playerId of playerIds) {
         const player = byId.get(playerId);
         if (!player) continue;
-        playerToTeam.set(playerId, player.team_id);
-        const category: 'offense' | 'defense' =
-          (player.position as Position) === 'DEF' ? 'defense' : 'offense';
-        const categories = teamPositions.get(player.team_id) ?? new Set<'offense' | 'defense'>();
-        categories.add(category);
-        teamPositions.set(player.team_id, categories);
+        remember(playerId, player.team_id, player.position, false);
       }
       continue;
     }
@@ -335,13 +341,7 @@ export async function rebuildUserLineupCache(
     for (const slot of activeSlots ?? []) {
       const player = slot.players;
       if (!player) continue;
-      playerToTeam.set(slot.player_id, player.team_id);
-      const category: 'offense' | 'defense' =
-        (player.position as Position) === 'DEF' ? 'defense' : 'offense';
-      const categories = teamPositions.get(player.team_id) ?? new Set<'offense' | 'defense'>();
-      categories.add(category);
-      teamPositions.set(player.team_id, categories);
-      if (slot.is_star) starPlayerIds.add(slot.player_id);
+      remember(slot.player_id, player.team_id, player.position, slot.is_star);
     }
   }
 
@@ -361,6 +361,7 @@ export async function rebuildUserLineupCache(
     teamPositions,
     playerToTeam,
     starPlayerIds,
+    playerUnits,
   };
   await deps.lineupCache.setLineupCache(userId, week, cache);
 
