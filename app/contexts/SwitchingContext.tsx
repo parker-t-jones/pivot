@@ -1,4 +1,3 @@
-import * as Linking from 'expo-linking';
 import {
   createContext,
   useCallback,
@@ -8,7 +7,7 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import { ActivityIndicator, Animated, Modal, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Linking, Modal, StyleSheet, Text, View } from 'react-native';
 
 import { ListRow } from '../components/ListRow';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -19,6 +18,7 @@ import { watchOptionLabel } from '../lib/gameDisplay';
 import { userServiceAppStoreUrl } from '../lib/streamingServices';
 import { resolveSwitch } from '../lib/switching';
 import { theme } from '../lib/theme';
+import { selectWatchLink } from '../lib/watchLink';
 
 export interface SwitchInput {
   gameId: string;
@@ -69,10 +69,21 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Hands the watch URL to iOS via `Linking.openURL` so a universal link can open the installed
+ * app. No in-app browser. A custom scheme, when the caller has one, is checked with
+ * `Linking.canOpenURL` first and falls back to the https link (`selectWatchLink`).
+ * The server still sends https landings; no scheme is attached here until one is confirmed
+ * on a device (docs/DEEP-LINK-CANDIDATES.md). Declaring a scheme in `LSApplicationQueriesSchemes`
+ * requires a new native build.
+ */
 async function openDeepLink(url: string): Promise<boolean> {
-  if (!url) return false;
+  const chosen = await selectWatchLink({ httpsUrl: url }, (candidate) =>
+    Linking.canOpenURL(candidate),
+  );
+  if (!chosen) return false;
   try {
-    await Linking.openURL(url);
+    await Linking.openURL(chosen);
     return true;
   } catch {
     return false;
