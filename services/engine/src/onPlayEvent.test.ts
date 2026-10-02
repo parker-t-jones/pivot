@@ -117,15 +117,15 @@ describe('onPlayEvent', () => {
     expect(dispatcher.events[0]?.type).toBe('flag_added');
   });
 
-  it('emits flag_added when red zone adds a reason kind, not only a priority bump', async () => {
+  it('emits priority_increased when the same players enter the red zone', async () => {
     lineupCache.set(lineupWithRbOn('KC'));
     gameState.addActiveUser('u1');
     gameState.addStake('KC', 'u1');
 
     await onPlayEvent(deps, makePlay({ playId: 'p1', yardsToOpponentEndzone: 40 })); // priority 2
-    await onPlayEvent(deps, makePlay({ playId: 'p2', yardsToOpponentEndzone: 10 })); // + red_zone
+    await onPlayEvent(deps, makePlay({ playId: 'p2', yardsToOpponentEndzone: 10 })); // +3 red_zone
 
-    expect(dispatcher.events.map((e) => e.type)).toEqual(['flag_added', 'flag_added']);
+    expect(dispatcher.events.map((e) => e.type)).toEqual(['flag_added', 'priority_increased']);
     expect(dispatcher.events[1]?.newState.reasons.map((reason) => reason.type)).toEqual([
       'offense_active',
       'red_zone',

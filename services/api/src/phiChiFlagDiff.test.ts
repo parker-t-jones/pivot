@@ -128,6 +128,17 @@ async function emitLegacy(plays: PlayEvent[], cache: UserLineupCache): Promise<F
   return events;
 }
 
+/** `offense_active` / `defense_active` plus their player ids. Bonus reasons are ignored. */
+function sideOfBallReasons(
+  reasons: { type: string; triggeringPlayerIds: string[] }[] | undefined,
+): string {
+  return (reasons ?? [])
+    .filter((reason) => reason.type === 'offense_active' || reason.type === 'defense_active')
+    .map((reason) => `${reason.type}:${[...reason.triggeringPlayerIds].sort().join(',')}`)
+    .sort()
+    .join('|');
+}
+
 function countTypes(events: { type: string }[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const event of events) counts[event.type] = (counts[event.type] ?? 0) + 1;
@@ -262,8 +273,10 @@ describe('PHI @ CHI 2026-09-28 flag replay', () => {
     };
     const summaries: Record<string, unknown> = {};
     for (const [name, cache] of Object.entries(lineups)) {
-      const before = fingerprint(await emitLegacy(plays, cache));
-      const after = fingerprint(await emit(plays, cache));
+      const legacyEvents = await emitLegacy(plays, cache);
+      const currentEvents = await emit(plays, cache);
+      const before = fingerprint(legacyEvents);
+      const after = fingerprint(currentEvents);
       const aligned = diffByTimestamp(before, after);
       const added: Record<string, number> = {};
       const removed: Record<string, number> = {};
@@ -276,11 +289,16 @@ describe('PHI @ CHI 2026-09-28 flag replay', () => {
         removed[type] = (removed[type] ?? 0) + 1;
       }
       const retyped: Record<string, number> = {};
+      const currentByAt = new Map(currentEvents.map((event) => [event.newState.computedAt, event]));
       for (const row of aligned.typeOrFlagged) {
         const match = /^(\d+) (\w+)\/(true|false) -> (\w+)\/(true|false)$/.exec(row);
         expect(match?.[3]).toBe(match?.[5]);
         const label = `${match?.[2]} -> ${match?.[4]}`;
         retyped[label] = (retyped[label] ?? 0) + 1;
+        const event = currentByAt.get(Number(match?.[1]));
+        expect(sideOfBallReasons(event?.oldState?.reasons)).not.toBe(
+          sideOfBallReasons(event?.newState.reasons),
+        );
       }
       summaries[name] = {
         before: countTypes(before),
@@ -293,29 +311,29 @@ describe('PHI @ CHI 2026-09-28 flag replay', () => {
     expect(summaries).toEqual({
       phiOffense: {
         before: { flag_added: 9, flag_removed: 9, priority_increased: 2 },
-        after: { flag_added: 11, flag_removed: 9 },
+        after: { flag_added: 9, flag_removed: 9, priority_increased: 2 },
         added: {},
         removed: {},
-        retyped: { 'priority_increased -> flag_added': 2 },
+        retyped: {},
       },
       phiTeAndDst: {
         before: { flag_added: 14, priority_increased: 7, flag_removed: 14, priority_decreased: 1 },
-        after: { flag_added: 24, flag_removed: 14 },
+        after: { flag_added: 18, flag_removed: 14, priority_increased: 6 },
         added: { flag_added: 2 },
         removed: {},
         retyped: {
-          'priority_increased -> flag_added': 7,
           'priority_decreased -> flag_added': 1,
+          'priority_increased -> flag_added': 1,
         },
       },
       phiAndChi: {
         before: { flag_added: 14, priority_increased: 7, flag_removed: 14, priority_decreased: 1 },
-        after: { flag_added: 24, flag_removed: 14 },
+        after: { flag_added: 18, flag_removed: 14, priority_increased: 6 },
         added: { flag_added: 2 },
         removed: {},
         retyped: {
-          'priority_increased -> flag_added': 7,
           'priority_decreased -> flag_added': 1,
+          'priority_increased -> flag_added': 1,
         },
       },
     });

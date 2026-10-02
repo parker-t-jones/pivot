@@ -51,8 +51,9 @@ async function getUsersWithStakeIn(
  * - `currentWeek()` → `play.week` (week is play metadata, not game state — decision #5).
  *
  * User flag state is only persisted when a diff produces an event. A priority-only drift inside
- * ±3 is measured against the last *evented* state. A change of reason kinds or triggering players
- * is always an event, so that stored state does not keep the previous side of the ball.
+ * ±3, including bonus reasons, is measured against the last *evented* state. A change of side
+ * (`offense_active` / `defense_active`) or of the players on that side is always an event, so
+ * that stored state does not keep the previous side of the ball.
  */
 export async function onPlayEvent(deps: OnPlayEventDeps, play: PlayEvent): Promise<void> {
   const clock = deps.clock ?? defaultClock;

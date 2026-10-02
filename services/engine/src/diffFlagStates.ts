@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { FlagEvent, FlagState } from '@pivot/shared';
+import type { FlagEvent, FlagReasonType, FlagState } from '@pivot/shared';
 
 type FlagEventType = FlagEvent['type'];
 
@@ -39,13 +39,21 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-/** Reason kinds, or the players named on them, are a different flag even at the same priority. */
-function compositionChanged(oldState: FlagState, newState: FlagState): boolean {
-  const oldKinds = sortedUnique(oldState.reasons.map((reason) => reason.type));
-  const newKinds = sortedUnique(newState.reasons.map((reason) => reason.type));
+/**
+ * Base reasons that name who has the ball. The other `FlagReasonType` values — `red_zone`,
+ * `close_game`, `star_player_active` — are bonuses and stay on the ±3 band.
+ */
+const SIDE_OF_BALL_REASONS: ReadonlySet<FlagReasonType> = new Set(['offense_active', 'defense_active']);
+
+/** Side of the ball, or the players named on it, is a different flag even at the same priority. */
+function sideOrPlayersChanged(oldState: FlagState, newState: FlagState): boolean {
+  const oldSide = oldState.reasons.filter((reason) => SIDE_OF_BALL_REASONS.has(reason.type));
+  const newSide = newState.reasons.filter((reason) => SIDE_OF_BALL_REASONS.has(reason.type));
+  const oldKinds = sortedUnique(oldSide.map((reason) => reason.type));
+  const newKinds = sortedUnique(newSide.map((reason) => reason.type));
   if (!sameSet(oldKinds, newKinds)) return true;
-  const oldPlayers = sortedUnique(oldState.reasons.flatMap((reason) => reason.triggeringPlayerIds));
-  const newPlayers = sortedUnique(newState.reasons.flatMap((reason) => reason.triggeringPlayerIds));
+  const oldPlayers = sortedUnique(oldSide.flatMap((reason) => reason.triggeringPlayerIds));
+  const newPlayers = sortedUnique(newSide.flatMap((reason) => reason.triggeringPlayerIds));
   return !sameSet(oldPlayers, newPlayers);
 }
 
@@ -53,9 +61,9 @@ function compositionChanged(oldState: FlagState, newState: FlagState): boolean {
  * Pure diff of two flag states into a `FlagEvent`, or `null` when the change isn't worth an event
  * (PLAN.md Section 8 "Diff to event").
  *
- * A new flag, a cleared flag, or a change in reason kinds or triggering players is always an event.
- * Reason and player changes use `flag_added` so they push and replace what Home is showing, whatever
- * the priority delta is. The ±3 band applies only when both of those sets are unchanged.
+ * A new flag, a cleared flag, or a change of side (`offense_active` / `defense_active`) or of the
+ * players on that side is always `flag_added`, so it pushes and replaces what Home is showing.
+ * Bonus reasons go through the ±3 band: `priority_increased` / `priority_decreased`, or null.
  */
 export function diffFlagStates(
   userId: string,
@@ -69,7 +77,7 @@ export function diffFlagStates(
   if (!wasFlagged && isFlagged) return makeEvent(userId, oldState, newState, 'flag_added');
   if (wasFlagged && !isFlagged) return makeEvent(userId, oldState, newState, 'flag_removed');
 
-  if (oldState && compositionChanged(oldState, newState)) {
+  if (oldState && sideOrPlayersChanged(oldState, newState)) {
     return makeEvent(userId, oldState, newState, 'flag_added');
   }
 

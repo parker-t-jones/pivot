@@ -100,13 +100,53 @@ describe('diffFlagStates', () => {
     expect(event?.newState.reasons).toEqual(offense(['rb', 'wr']));
   });
 
-  it('returns flag_added when reasons change even if priority also crosses ±3', () => {
+  it('returns flag_added when the side changes even if priority also crosses ±3', () => {
     const event = diffFlagStates(
       'user-1',
       flag(true, 2, defense(['dst'])),
       flag(true, 7, offense(['te'])),
     );
     expect(event?.type).toBe('flag_added');
+  });
+
+  it('returns priority_increased when red zone is entered with the same side and players', () => {
+    const event = diffFlagStates(
+      'user-1',
+      flag(true, 2, offense(['te'])),
+      flag(true, 5, [...offense(['te']), { type: 'red_zone', triggeringPlayerIds: [] }]),
+    );
+    expect(event?.type).toBe('priority_increased');
+  });
+
+  it('returns null when close game is added and priority rises by 2', () => {
+    expect(
+      diffFlagStates(
+        'user-1',
+        flag(true, 2, offense(['te'])),
+        flag(true, 4, [...offense(['te']), { type: 'close_game', triggeringPlayerIds: [] }]),
+      ),
+    ).toBeNull();
+  });
+
+  it('returns priority_decreased when red zone is left and priority drops by 3', () => {
+    const event = diffFlagStates(
+      'user-1',
+      flag(true, 5, [...offense(['te']), { type: 'red_zone', triggeringPlayerIds: [] }]),
+      flag(true, 2, offense(['te'])),
+    );
+    expect(event?.type).toBe('priority_decreased');
+  });
+
+  it('returns priority_increased when a star bonus is added and the side and players stay', () => {
+    const event = diffFlagStates(
+      'user-1',
+      flag(true, 2, offense(['te'])),
+      flag(true, 7, [
+        ...offense(['te']),
+        { type: 'star_player_active', triggeringPlayerIds: ['te'] },
+      ]),
+    );
+    expect(event?.type).toBe('priority_increased');
   });
 
   it('returns null when priority changes by less than 3 (decrease)', () => {

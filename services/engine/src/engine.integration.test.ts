@@ -112,7 +112,7 @@ describe('engine integration — replay a real 2024 NFL game (KC @ LV, Week 8)',
     expect(events.length).toBeGreaterThan(0);
     expect(countOf('flag_added')).toBeGreaterThan(0);
 
-    // The game starts and ends unflagged. flag_added also fires when the reason or the players
+    // The game starts and ends unflagged. flag_added also fires when the side or the players
     // change while the flag stays up, so only the unflagged → flagged edges match flag_removed.
     const risingEdges = events.filter((event) => event.type === 'flag_added' && !event.oldState?.flagged)
       .length;
