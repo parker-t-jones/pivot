@@ -173,15 +173,14 @@ describe('ATL @ GB replay', () => {
     expect(stats.plays).toBe(playCount);
     expect(Array.isArray(drives) ? drives.length : 0).toBe(21);
     expect(stats.enqueued).toEqual({
-      flag_added: 9,
+      flag_added: 13,
       flag_removed: 10,
-      priority_increased: 4,
     });
     expect(stats.rows).toEqual(stats.enqueued);
-    expect(stats.pushes).toBe(9);
+    expect(stats.pushes).toBe(13);
     expect(stats.rateLimited).toBe(0);
     // TNF is Prime-only and the user has YouTube TV: every push still sends, with no option.
-    expect(stats.pushed).toHaveLength(9);
+    expect(stats.pushed).toHaveLength(13);
     for (const push of stats.pushed) {
       expect(push.action).toEqual(
         expect.objectContaining({ recommended_source: null, deep_link_url: null }),
@@ -192,8 +191,8 @@ describe('ATL @ GB replay', () => {
 
   it('the same plays on a Sunday FOX game carry a YouTube TV deep link', async () => {
     const stats = await replay({ roster: 'one', active: false, prefixes, airing: SUNDAY_ON_FOX });
-    expect(stats.pushes).toBe(9);
-    expect(stats.pushed).toHaveLength(9);
+    expect(stats.pushes).toBe(13);
+    expect(stats.pushed).toHaveLength(13);
     for (const push of stats.pushed) {
       expect(push.action).toEqual(
         expect.objectContaining({
@@ -209,18 +208,14 @@ describe('ATL @ GB replay', () => {
     const stats = await replay({ roster: 'both', active: true, prefixes, airing: TNF_ON_PRIME });
     expect(stats.plays).toBe(playCount);
     expect(stats.enqueued).toEqual({
-      flag_added: 16,
+      flag_added: 30,
       flag_removed: 17,
-      priority_increased: 9,
-      priority_decreased: 3,
     });
     expect(stats.rows).toEqual({
-      flag_added: 16,
+      flag_added: 30,
       flag_removed: 11,
-      priority_increased: 9,
-      priority_decreased: 3,
     });
-    expect(stats.pushes).toBe(16);
+    expect(stats.pushes).toBe(30);
     expect(stats.rateLimited).toBe(0);
   }, 120_000);
 });

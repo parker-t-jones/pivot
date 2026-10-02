@@ -21,22 +21,9 @@ import { ReplayPlaySource } from './replayPlaySource.js';
  * earlier pre-play mapping (total_home_score / total_away_score) lagged by one play on scoring plays,
  * which produced a one-play false-positive close_game bonus on the scoring play itself.
  *
- * Observed output for this game (deterministic given the recorded data):
- *   plays                = 172
- *   possessionChanges    = 16   (times the ball changed teams)
- *   flag_added           = 32
- *   flag_removed         = 32
- *   priority_increased   = 7
- *   priority_decreased   = 1
- *   reasonTypes          = offense_active, defense_active, red_zone, close_game
- *
- * These aggregate counts are unchanged from the pre-play mapping: close_game is a priority *bonus*
- * (+2), not a flag toggle, so correcting its timing by at most one play shifts *when* the bonus
- * applies on scoring plays but did not move any priority delta across the ±3 event threshold for this
- * game. The fix is validated at the mapping layer in replayPlaySource.test.ts.
- *
  * NOTE on flag_added vs possession changes: the sprint brief anticipated flag_added ≈ possession
- * changes (±1–2). In practice flag_added (32) is ~2× possessionChanges (16). This is CORRECT per the
+ * changes (±1–2). Rising edges (a flag_added whose previous state was unflagged) equal flag_removed,
+ * and that rising count is ~2× possessionChanges (16). This is CORRECT per the
  * faithful Section 8 rules + the sanctioned nflverse mapping: every special-teams play (punt, FG,
  * kickoff, XP) and every stoppage (timeout / end-of-quarter / no_play → unitOnField 'none') unflags
  * the game, so the flag re-adds on the next offensive snap. With both teams owned, the flag therefore
@@ -125,8 +112,11 @@ describe('engine integration — replay a real 2024 NFL game (KC @ LV, Week 8)',
     expect(events.length).toBeGreaterThan(0);
     expect(countOf('flag_added')).toBeGreaterThan(0);
 
-    // Invariant: the game starts unflagged and ends unflagged (final), so rising edges == falling edges.
-    expect(countOf('flag_added')).toBe(countOf('flag_removed'));
+    // The game starts and ends unflagged. flag_added also fires when the reason or the players
+    // change while the flag stays up, so only the unflagged → flagged edges match flag_removed.
+    const risingEdges = events.filter((event) => event.type === 'flag_added' && !event.oldState?.flagged)
+      .length;
+    expect(risingEdges).toBe(countOf('flag_removed'));
 
     // Flags toggle at least once per possession change (special teams/stoppages add extra toggles).
     expect(countOf('flag_added')).toBeGreaterThanOrEqual(possessionChanges);

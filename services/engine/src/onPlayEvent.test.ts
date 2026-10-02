@@ -117,15 +117,19 @@ describe('onPlayEvent', () => {
     expect(dispatcher.events[0]?.type).toBe('flag_added');
   });
 
-  it('emits priority_increased when the flag crosses the +3 threshold (red-zone entry)', async () => {
+  it('emits flag_added when red zone adds a reason kind, not only a priority bump', async () => {
     lineupCache.set(lineupWithRbOn('KC'));
     gameState.addActiveUser('u1');
     gameState.addStake('KC', 'u1');
 
     await onPlayEvent(deps, makePlay({ playId: 'p1', yardsToOpponentEndzone: 40 })); // priority 2
-    await onPlayEvent(deps, makePlay({ playId: 'p2', yardsToOpponentEndzone: 10 })); // priority 5
+    await onPlayEvent(deps, makePlay({ playId: 'p2', yardsToOpponentEndzone: 10 })); // + red_zone
 
-    expect(dispatcher.events.map((e) => e.type)).toEqual(['flag_added', 'priority_increased']);
+    expect(dispatcher.events.map((e) => e.type)).toEqual(['flag_added', 'flag_added']);
+    expect(dispatcher.events[1]?.newState.reasons.map((reason) => reason.type)).toEqual([
+      'offense_active',
+      'red_zone',
+    ]);
   });
 
   it('fires flag_removed for active flagged users when the game ends, and nothing after', async () => {
@@ -141,56 +145,91 @@ describe('onPlayEvent', () => {
     expect((await gameState.getGameState('g1'))?.status).toBe('final');
   });
 
-  it('keeps the last evented reasons when possession flips inside the ±3 band', async () => {
-    // CLE D/ST is flagged (priority 2). CLE then has the ball and the TE flags at priority 2.
-    // Section 8 returns no event, and the stored flag state stays the defense row.
+  it('emits flag_added for the tight end when CLE takes the ball from its own D/ST', async () => {
     const cle = 'cle';
     const pit = 'pit';
+    lineupCache.set(sameTeam(cle));
+    gameState.addStake(cle, 'u1');
+
+    await onPlayEvent(deps, snap('pit-snap', pit, cle));
+    await onPlayEvent(deps, snap('cle-snap', cle, pit));
+
+    expect(dispatcher.events.map((event) => event.type)).toEqual(['flag_added', 'flag_added']);
+    expect(dispatcher.events[1]?.newState.reasons).toEqual([
+      { type: 'offense_active', triggeringPlayerIds: ['te'] },
+    ]);
+    const stored = await gameState.getUserFlagState('u1', 'g1');
+    expect(stored?.reasons).toEqual([{ type: 'offense_active', triggeringPlayerIds: ['te'] }]);
+  });
+
+  it('emits flag_added when the same team flips from offense back to defense', async () => {
+    const cle = 'cle';
+    const pit = 'pit';
+    lineupCache.set(sameTeam(cle));
+    gameState.addStake(cle, 'u1');
+
+    await onPlayEvent(deps, snap('cle-snap', cle, pit));
+    await onPlayEvent(deps, snap('pit-snap', pit, cle));
+
+    expect(dispatcher.events.map((event) => event.type)).toEqual(['flag_added', 'flag_added']);
+    expect(dispatcher.events[1]?.newState.reasons).toEqual([
+      { type: 'defense_active', triggeringPlayerIds: ['dst'] },
+    ]);
+  });
+
+  it('emits flag_added when a second offensive player becomes active', async () => {
+    lineupCache.set(lineupWithRbOn('KC'));
+    gameState.addStake('KC', 'u1');
+
+    await onPlayEvent(deps, makePlay({ playId: 'one' }));
     lineupCache.set({
       userId: 'u1',
       week: 8,
-      teamPositions: new Map([[cle, new Set<'offense' | 'defense'>(['offense', 'defense'])]]),
+      teamPositions: new Map([['KC', new Set(['offense'])]]),
       playerToTeam: new Map([
-        ['te', cle],
-        ['dst', cle],
+        ['rb-1', 'KC'],
+        ['wr-1', 'KC'],
       ]),
       playerUnits: new Map([
-        ['te', 'offense'],
-        ['dst', 'defense'],
+        ['rb-1', 'offense'],
+        ['wr-1', 'offense'],
       ]),
       starPlayerIds: new Set(),
     });
-    gameState.addStake(cle, 'u1');
+    await onPlayEvent(deps, makePlay({ playId: 'two', scoreAway: 3 }));
 
-    await onPlayEvent(
-      deps,
-      makePlay({
-        playId: 'pit-snap',
-        homeTeamId: cle,
-        awayTeamId: pit,
-        possessionTeamId: pit,
-        playType: 'run',
-      }),
-    );
-    await onPlayEvent(
-      deps,
-      makePlay({
-        playId: 'cle-snap',
-        homeTeamId: cle,
-        awayTeamId: pit,
-        possessionTeamId: cle,
-        playType: 'run',
-      }),
-    );
-
-    expect(dispatcher.events.map((event) => event.type)).toEqual(['flag_added']);
-    expect(dispatcher.events[0]?.newState.reasons).toEqual([
-      { type: 'defense_active', triggeringPlayerIds: ['dst'] },
+    expect(dispatcher.events.map((event) => event.type)).toEqual(['flag_added', 'flag_added']);
+    expect(dispatcher.events[1]?.newState.priorityScore).toBe(4);
+    expect(dispatcher.events[1]?.newState.reasons).toEqual([
+      { type: 'offense_active', triggeringPlayerIds: ['rb-1', 'wr-1'] },
     ]);
-    const stored = await gameState.getUserFlagState('u1', 'g1');
-    expect(stored?.reasons).toEqual([
-      { type: 'defense_active', triggeringPlayerIds: ['dst'] },
-    ]);
-    expect((await gameState.getGameState('g1'))?.possessionTeamId).toBe(cle);
   });
 });
+
+function sameTeam(team: string): UserLineupCache {
+  return {
+    userId: 'u1',
+    week: 8,
+    teamPositions: new Map([[team, new Set<'offense' | 'defense'>(['offense', 'defense'])]]),
+    playerToTeam: new Map([
+      ['te', team],
+      ['dst', team],
+    ]),
+    playerUnits: new Map([
+      ['te', 'offense'],
+      ['dst', 'defense'],
+    ]),
+    starPlayerIds: new Set(),
+  };
+}
+
+function snap(playId: string, possessionTeamId: string, otherTeamId: string): PlayEvent {
+  const home = possessionTeamId === 'cle' || otherTeamId === 'cle' ? 'cle' : possessionTeamId;
+  return makePlay({
+    playId,
+    homeTeamId: home,
+    awayTeamId: home === possessionTeamId ? otherTeamId : possessionTeamId,
+    possessionTeamId,
+    playType: 'run',
+  });
+}

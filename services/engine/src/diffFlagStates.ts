@@ -31,9 +31,31 @@ function makeEvent(
   };
 }
 
+function sortedUnique(values: readonly string[]): string[] {
+  return [...new Set(values)].sort();
+}
+
+function sameSet(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/** Reason kinds, or the players named on them, are a different flag even at the same priority. */
+function compositionChanged(oldState: FlagState, newState: FlagState): boolean {
+  const oldKinds = sortedUnique(oldState.reasons.map((reason) => reason.type));
+  const newKinds = sortedUnique(newState.reasons.map((reason) => reason.type));
+  if (!sameSet(oldKinds, newKinds)) return true;
+  const oldPlayers = sortedUnique(oldState.reasons.flatMap((reason) => reason.triggeringPlayerIds));
+  const newPlayers = sortedUnique(newState.reasons.flatMap((reason) => reason.triggeringPlayerIds));
+  return !sameSet(oldPlayers, newPlayers);
+}
+
 /**
  * Pure diff of two flag states into a `FlagEvent`, or `null` when the change isn't worth an event
- * (PLAN.md Section 8 "Diff to event"). Priority-delta threshold is ±3, verbatim from Section 8.
+ * (PLAN.md Section 8 "Diff to event").
+ *
+ * A new flag, a cleared flag, or a change in reason kinds or triggering players is always an event.
+ * Reason and player changes use `flag_added` so they push and replace what Home is showing, whatever
+ * the priority delta is. The ±3 band applies only when both of those sets are unchanged.
  */
 export function diffFlagStates(
   userId: string,
@@ -46,6 +68,10 @@ export function diffFlagStates(
   if (!wasFlagged && !isFlagged) return null;
   if (!wasFlagged && isFlagged) return makeEvent(userId, oldState, newState, 'flag_added');
   if (wasFlagged && !isFlagged) return makeEvent(userId, oldState, newState, 'flag_removed');
+
+  if (oldState && compositionChanged(oldState, newState)) {
+    return makeEvent(userId, oldState, newState, 'flag_added');
+  }
 
   const delta = newState.priorityScore - (oldState?.priorityScore ?? 0);
   if (delta >= 3) return makeEvent(userId, oldState, newState, 'priority_increased');

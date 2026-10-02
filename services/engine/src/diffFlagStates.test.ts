@@ -4,9 +4,20 @@ import { diffFlagStates } from './diffFlagStates.js';
 
 const COMPUTED_AT = 1_700_000_000_000;
 
-function flag(flagged: boolean, priorityScore: number): FlagState {
-  return { gameId: 'game-1', flagged, priorityScore, reasons: [], computedAt: COMPUTED_AT };
+function flag(
+  flagged: boolean,
+  priorityScore: number,
+  reasons: FlagState['reasons'] = [],
+): FlagState {
+  return { gameId: 'game-1', flagged, priorityScore, reasons, computedAt: COMPUTED_AT };
 }
+
+const offense = (ids: string[]): FlagState['reasons'] => [
+  { type: 'offense_active', triggeringPlayerIds: ids },
+];
+const defense = (ids: string[]): FlagState['reasons'] => [
+  { type: 'defense_active', triggeringPlayerIds: ids },
+];
 
 describe('diffFlagStates', () => {
   it('returns null for unflagged → unflagged', () => {
@@ -52,8 +63,50 @@ describe('diffFlagStates', () => {
     expect(event?.type).toBe('priority_decreased');
   });
 
-  it('returns null when priority changes by less than 3 (increase)', () => {
+  it('returns null when priority changes by less than 3 and the reasons are unchanged', () => {
     expect(diffFlagStates('user-1', flag(true, 2), flag(true, 4))).toBeNull();
+    expect(
+      diffFlagStates('user-1', flag(true, 2, offense(['te'])), flag(true, 4, offense(['te']))),
+    ).toBeNull();
+  });
+
+  it('returns flag_added when defense flips to offense, even if priority does not move', () => {
+    const event = diffFlagStates(
+      'user-1',
+      flag(true, 2, defense(['dst'])),
+      flag(true, 2, offense(['te'])),
+    );
+    expect(event?.type).toBe('flag_added');
+    expect(event?.newState.reasons).toEqual(offense(['te']));
+  });
+
+  it('returns flag_added when offense flips to defense', () => {
+    const event = diffFlagStates(
+      'user-1',
+      flag(true, 2, offense(['te'])),
+      flag(true, 2, defense(['dst'])),
+    );
+    expect(event?.type).toBe('flag_added');
+    expect(event?.newState.reasons).toEqual(defense(['dst']));
+  });
+
+  it('returns flag_added when a second player joins an existing reason inside the ±3 band', () => {
+    const event = diffFlagStates(
+      'user-1',
+      flag(true, 2, offense(['rb'])),
+      flag(true, 4, offense(['rb', 'wr'])),
+    );
+    expect(event?.type).toBe('flag_added');
+    expect(event?.newState.reasons).toEqual(offense(['rb', 'wr']));
+  });
+
+  it('returns flag_added when reasons change even if priority also crosses ±3', () => {
+    const event = diffFlagStates(
+      'user-1',
+      flag(true, 2, defense(['dst'])),
+      flag(true, 7, offense(['te'])),
+    );
+    expect(event?.type).toBe('flag_added');
   });
 
   it('returns null when priority changes by less than 3 (decrease)', () => {
