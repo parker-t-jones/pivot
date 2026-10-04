@@ -173,6 +173,7 @@ function actionRecommendation(
     awayNickname: matchup.awayNickname,
     homeNickname: matchup.homeNickname,
     kickoff: likely.kickoff,
+    network: likely.source.network,
   });
   return {
     recommendedSource: likely.source.service,
