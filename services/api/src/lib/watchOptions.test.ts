@@ -11,7 +11,7 @@ const GAMES: SlateGameRow[] = [
   { id: 'mnf', scheduled_start: '2026-09-29T00:15:00Z', away_team_name: 'Eagles', home_team_name: 'Buccaneers' },
 ];
 
-const FOX1_SEARCH = 'https://tv.youtube.com/search/Bears%20vs%20Packers';
+const FOX1_SEARCH = 'https://tv.youtube.com/search/Bears%20vs%20Packers%20FOX';
 
 function row(gameId: string, network: string, market = 'national'): AiringRow {
   return { game_id: gameId, network, market, espn_media_name: network.toUpperCase(), espn_type: 'TV' };
@@ -111,7 +111,7 @@ describe('buildWeekWatch', () => {
     expect(solo?.broadcasts.some((o) => o.route_hint !== undefined)).toBe(false);
   });
 
-  it('sends a YouTube TV user to the matchup search for an NFL Network game', () => {
+  it('sends a YouTube TV user to the matchup plus NFL Network for an NFL Network game', () => {
     const watch = buildWeekWatch(
       [
         {
@@ -127,7 +127,7 @@ describe('buildWeekWatch', () => {
     expect(watch.get('london')?.broadcasts).toEqual([
       {
         service: 'youtube_tv',
-        deep_link_url: 'https://tv.youtube.com/search/Colts%20vs%20Commanders',
+        deep_link_url: 'https://tv.youtube.com/search/Colts%20vs%20Commanders%20NFL%20Network',
         requires_subscription: true,
         user_has_subscription: true,
         typical_lag_seconds: 30,

@@ -122,6 +122,7 @@ export function buildWeekWatch(
           awayNickname: names?.away ?? '',
           homeNickname: names?.home ?? '',
           kickoff: game.kickoff,
+          network: option.network,
         }),
         requires_subscription: true,
         user_has_subscription: true,

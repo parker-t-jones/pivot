@@ -5,15 +5,28 @@ const THURSDAY_ET = new Date('2026-10-02T00:15:00Z');
 const SUNDAY_ET = new Date('2026-09-27T17:00:00Z');
 
 describe('serviceWatchUrl', () => {
-  it('encodes a YouTube TV search for the away and home nicknames', () => {
+  it('encodes a YouTube TV search for the nicknames plus the network', () => {
     const url = serviceWatchUrl({
       service: 'youtube_tv',
       awayNickname: 'Lions',
       homeNickname: 'Panthers',
       kickoff: SUNDAY_ET,
+      network: 'fox',
     });
-    expect(url).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers');
+    expect(url).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers%20FOX');
     expect(url).not.toContain('/nflst/');
+  });
+
+  it('appends NFL Network so the live airing shows up in search', () => {
+    expect(
+      serviceWatchUrl({
+        service: 'youtube_tv',
+        awayNickname: 'Colts',
+        homeNickname: 'Commanders',
+        kickoff: SUNDAY_ET,
+        network: 'nfl_network',
+      }),
+    ).toBe('https://tv.youtube.com/search/Colts%20vs%20Commanders%20NFL%20Network');
   });
 
   it('uses the same search for Sunday Ticket', () => {
@@ -23,19 +36,21 @@ describe('serviceWatchUrl', () => {
         awayNickname: 'Lions',
         homeNickname: 'Panthers',
         kickoff: SUNDAY_ET,
+        network: 'fox',
       }),
-    ).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers');
+    ).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers%20FOX');
   });
 
   it('encodes spaces and punctuation in nicknames', () => {
-    const query = matchupSearchQuery('49ers', 'St. Louis');
-    expect(query).toBe('49ers vs St. Louis');
+    const query = matchupSearchQuery('49ers', 'St. Louis', 'fox');
+    expect(query).toBe('49ers vs St. Louis FOX');
     expect(
       serviceWatchUrl({
         service: 'youtube_tv',
         awayNickname: '49ers',
         homeNickname: 'St. Louis',
         kickoff: SUNDAY_ET,
+        network: 'fox',
       }),
     ).toBe(`https://tv.youtube.com/search/${encodeURIComponent(query)}`);
     expect(
@@ -44,8 +59,11 @@ describe('serviceWatchUrl', () => {
         awayNickname: '49ers',
         homeNickname: 'St. Louis',
         kickoff: SUNDAY_ET,
+        network: 'amazon_prime',
       }),
-    ).toBe(`https://app.primevideo.com/search?phrase=${encodeURIComponent(query)}`);
+    ).toBe(
+      `https://app.primevideo.com/search?phrase=${encodeURIComponent(matchupSearchQuery('49ers', 'St. Louis'))}`,
+    );
   });
 
   it('searches Thursday Night Football for a Thursday Prime game', () => {
@@ -56,6 +74,7 @@ describe('serviceWatchUrl', () => {
         awayNickname: 'Steelers',
         homeNickname: 'Browns',
         kickoff: THURSDAY_ET,
+        network: 'amazon_prime',
       }),
     ).toBe('https://app.primevideo.com/search?phrase=Thursday%20Night%20Football');
   });
@@ -68,6 +87,7 @@ describe('serviceWatchUrl', () => {
         awayNickname: 'Lions',
         homeNickname: 'Panthers',
         kickoff: SUNDAY_ET,
+        network: 'amazon_prime',
       }),
     ).toBe('https://app.primevideo.com/search?phrase=Lions%20vs%20Panthers');
   });
@@ -77,9 +97,12 @@ describe('serviceWatchUrl', () => {
       awayNickname: 'Lions',
       homeNickname: 'Panthers',
       kickoff: SUNDAY_ET,
+      network: 'fox' as const,
     };
     expect(serviceWatchUrl({ ...base, service: 'nfl_plus' })).toBe('https://www.nfl.com/scores');
-    expect(serviceWatchUrl({ ...base, service: 'espn_plus' })).toBe('https://www.espn.com/nfl/team');
+    expect(serviceWatchUrl({ ...base, service: 'espn_plus' })).toBe(
+      'https://www.espn.com/nfl/team',
+    );
     expect(serviceWatchUrl({ ...base, service: 'paramount_plus' })).toBe(
       'https://www.paramountplus.com/live-tv/',
     );
