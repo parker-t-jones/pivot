@@ -8,8 +8,8 @@ import type { UserService } from './types.js';
  * paths the shipping app does not — match on the production app ID only). Bare homepages usually
  * fail this; YouTube TV's AASA carries a literal `NOT /`.
  *
- * YouTube TV, Sunday Ticket, and Prime Video are per game (`serviceWatchUrl`). The values below
- * are what we emit when a matchup nickname or kickoff is missing, plus the static landings.
+ * YouTube TV, Sunday Ticket, Prime Video, and DirecTV are per game (`serviceWatchUrl`). The values
+ * below are what we emit when a matchup nickname or kickoff is missing, plus the static landings.
  */
 export const USER_SERVICE_LANDING_URLS: Record<UserService, string> = {
   // Fallback when nicknames are missing. A real game uses `serviceWatchUrl`'s /search/ link.
@@ -17,7 +17,8 @@ export const USER_SERVICE_LANDING_URLS: Record<UserService, string> = {
   sunday_ticket: 'https://tv.youtube.com/live',
   hulu_live: 'https://www.hulu.com/hub/sports', // unverified AASA
   fubo: 'https://www.fubo.tv/', // unverified AASA
-  directv: 'https://www.directv.com/', // unverified AASA
+  // Fallback when nicknames are missing. A real game uses stream.directv.com/search.
+  directv: 'https://www.directv.com/',
   sling: '', // no confirmed carriage, so never emitted
   // Fallback when nicknames or kickoff are missing. A real game uses the app.primevideo.com search.
   amazon_prime: 'https://www.primevideo.com/',

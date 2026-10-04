@@ -7,6 +7,9 @@ const YOUTUBE_TV_SEARCH = 'https://tv.youtube.com/search/';
 /** Device-tested Prime Video search. https only. */
 const PRIME_VIDEO_SEARCH = 'https://app.primevideo.com/search?phrase=';
 
+/** DirecTV Stream search. Query is "{Away} vs {Home}", without the "today" suffix. */
+const DIRECTV_SEARCH = 'https://stream.directv.com/search?q=';
+
 const THURSDAY_NIGHT_FOOTBALL = 'Thursday Night Football';
 
 export function isThursdayEt(kickoff: Date): boolean {
@@ -41,8 +44,8 @@ export interface ServiceWatchUrlInput {
  * Watch URL for one service and game.
  *
  * YouTube TV searches "{Away} vs {Home} today". Sunday Ticket searches
- * "{Away} vs {Home} NFL ST today". Prime searches
- * "Thursday Night Football" on a Thursday kickoff (Eastern) and the same matchup query otherwise.
+ * "{Away} vs {Home} NFL ST today". DirecTV searches "{Away} vs {Home}". Prime searches
+ * "Thursday Night Football" on a Thursday kickoff (Eastern) and the YouTube TV matchup otherwise.
  * NFL+, ESPN, Paramount+, and Peacock use `USER_SERVICE_LANDING_URLS`. The ESPN app scheme is
  * chosen on the device, not here.
  */
@@ -52,6 +55,10 @@ export function serviceWatchUrl(input: ServiceWatchUrlInput): string {
     return `${YOUTUBE_TV_SEARCH}${encodeURIComponent(
       sundayTicketSearchQuery(input.awayNickname, input.homeNickname),
     )}`;
+  }
+  if (input.service === 'directv' && namesReady) {
+    const query = encodeURIComponent(`${input.awayNickname} vs ${input.homeNickname}`);
+    return `${DIRECTV_SEARCH}${query}`;
   }
   if (input.service === 'youtube_tv' && namesReady) {
     const query = encodeURIComponent(

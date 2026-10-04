@@ -29,6 +29,30 @@ describe('serviceWatchUrl', () => {
     ).toBe('https://tv.youtube.com/search/Colts%20vs%20Commanders%20today');
   });
 
+  it('searches DirecTV for the matchup without a today suffix', () => {
+    expect(
+      serviceWatchUrl({
+        service: 'directv',
+        awayNickname: 'Bills',
+        homeNickname: 'Patriots',
+        kickoff: SUNDAY_ET,
+        network: 'cbs',
+      }),
+    ).toBe('https://stream.directv.com/search?q=Bills%20vs%20Patriots');
+  });
+
+  it('uses the DirecTV homepage when the matchup names are missing', () => {
+    expect(
+      serviceWatchUrl({
+        service: 'directv',
+        awayNickname: '',
+        homeNickname: 'Patriots',
+        kickoff: SUNDAY_ET,
+        network: 'cbs',
+      }),
+    ).toBe('https://www.directv.com/');
+  });
+
   it('searches NFL ST today for Sunday Ticket', () => {
     expect(
       serviceWatchUrl({
