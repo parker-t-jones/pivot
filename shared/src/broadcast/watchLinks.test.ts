@@ -17,7 +17,7 @@ describe('serviceWatchUrl', () => {
     expect(url).not.toContain('/nflst/');
   });
 
-  it('appends NFL Network so the live airing shows up in search', () => {
+  it('appends NFL Net for an NFL Network game', () => {
     expect(
       serviceWatchUrl({
         service: 'youtube_tv',
@@ -26,7 +26,7 @@ describe('serviceWatchUrl', () => {
         kickoff: SUNDAY_ET,
         network: 'nfl_network',
       }),
-    ).toBe('https://tv.youtube.com/search/Colts%20vs%20Commanders%20NFL%20Network');
+    ).toBe('https://tv.youtube.com/search/Colts%20vs%20Commanders%20NFL%20Net');
   });
 
   it('uses the same search for Sunday Ticket', () => {

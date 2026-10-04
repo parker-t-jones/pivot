@@ -111,7 +111,7 @@ describe('buildWeekWatch', () => {
     expect(solo?.broadcasts.some((o) => o.route_hint !== undefined)).toBe(false);
   });
 
-  it('sends a YouTube TV user to the matchup plus NFL Network for an NFL Network game', () => {
+  it('sends a YouTube TV user to the matchup plus NFL Net for an NFL Network game', () => {
     const watch = buildWeekWatch(
       [
         {
@@ -127,7 +127,7 @@ describe('buildWeekWatch', () => {
     expect(watch.get('london')?.broadcasts).toEqual([
       {
         service: 'youtube_tv',
-        deep_link_url: 'https://tv.youtube.com/search/Colts%20vs%20Commanders%20NFL%20Network',
+        deep_link_url: 'https://tv.youtube.com/search/Colts%20vs%20Commanders%20NFL%20Net',
         requires_subscription: true,
         user_has_subscription: true,
         typical_lag_seconds: 30,

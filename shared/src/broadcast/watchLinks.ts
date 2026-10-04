@@ -11,7 +11,8 @@ const THURSDAY_NIGHT_FOOTBALL = 'Thursday Night Football';
 
 /**
  * Words appended to a YouTube TV / Sunday Ticket matchup search. "Colts vs Commanders" opened a
- * populated result with no live airing; "Colts vs Commanders NFL Network" showed the live game.
+ * populated result with no live airing; appending the network showed the live game.
+ * NFL Network's search phrase is "NFL Net", the name YouTube TV uses.
  */
 const NETWORK_SEARCH_PHRASE: Record<AiringNetwork, string> = {
   cbs: 'CBS',
@@ -21,7 +22,7 @@ const NETWORK_SEARCH_PHRASE: Record<AiringNetwork, string> = {
   espn: 'ESPN',
   amazon_prime: 'Prime Video',
   peacock: 'Peacock',
-  nfl_network: 'NFL Network',
+  nfl_network: 'NFL Net',
   netflix: 'Netflix',
   espn_plus: 'ESPN+',
   nfl_plus: 'NFL+',
