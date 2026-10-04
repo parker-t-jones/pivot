@@ -363,7 +363,7 @@ describe('GET /games/:id/broadcasts', () => {
       broadcasts: [
         {
           service: 'sunday_ticket',
-          deep_link_url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs%20today',
+          deep_link_url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs%20NFL%20ST%20today',
           requires_subscription: true,
           user_has_subscription: true,
           typical_lag_seconds: 30,

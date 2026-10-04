@@ -22,6 +22,11 @@ export function matchupSearchQuery(awayNickname: string, homeNickname: string): 
   return `${awayNickname} vs ${homeNickname} today`;
 }
 
+/** Sunday Ticket inside YouTube TV: "{Away} vs {Home} NFL ST today". */
+export function sundayTicketSearchQuery(awayNickname: string, homeNickname: string): string {
+  return `${awayNickname} vs ${homeNickname} NFL ST today`;
+}
+
 export interface ServiceWatchUrlInput {
   service: UserService;
   awayNickname: string;
@@ -35,14 +40,20 @@ export interface ServiceWatchUrlInput {
 /**
  * Watch URL for one service and game.
  *
- * YouTube TV and Sunday Ticket search "{Away} vs {Home} today". Prime searches
+ * YouTube TV searches "{Away} vs {Home} today". Sunday Ticket searches
+ * "{Away} vs {Home} NFL ST today". Prime searches
  * "Thursday Night Football" on a Thursday kickoff (Eastern) and the same matchup query otherwise.
  * NFL+, ESPN, Paramount+, and Peacock use `USER_SERVICE_LANDING_URLS`. The ESPN app scheme is
  * chosen on the device, not here.
  */
 export function serviceWatchUrl(input: ServiceWatchUrlInput): string {
   const namesReady = input.awayNickname.length > 0 && input.homeNickname.length > 0;
-  if ((input.service === 'youtube_tv' || input.service === 'sunday_ticket') && namesReady) {
+  if (input.service === 'sunday_ticket' && namesReady) {
+    return `${YOUTUBE_TV_SEARCH}${encodeURIComponent(
+      sundayTicketSearchQuery(input.awayNickname, input.homeNickname),
+    )}`;
+  }
+  if (input.service === 'youtube_tv' && namesReady) {
     const query = encodeURIComponent(
       matchupSearchQuery(input.awayNickname, input.homeNickname),
     );

@@ -29,7 +29,7 @@ describe('serviceWatchUrl', () => {
     ).toBe('https://tv.youtube.com/search/Colts%20vs%20Commanders%20today');
   });
 
-  it('uses the same search for Sunday Ticket', () => {
+  it('searches NFL ST today for Sunday Ticket', () => {
     expect(
       serviceWatchUrl({
         service: 'sunday_ticket',
@@ -38,7 +38,7 @@ describe('serviceWatchUrl', () => {
         kickoff: SUNDAY_ET,
         network: 'fox',
       }),
-    ).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers%20today');
+    ).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers%20NFL%20ST%20today');
   });
 
   it('encodes spaces and punctuation in nicknames', () => {

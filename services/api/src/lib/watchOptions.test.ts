@@ -75,7 +75,7 @@ describe('buildWeekWatch', () => {
     expect(watch.get('fox1')?.broadcasts).toEqual([
       {
         service: 'sunday_ticket',
-        deep_link_url: FOX1_SEARCH,
+        deep_link_url: 'https://tv.youtube.com/search/Bears%20vs%20Packers%20NFL%20ST%20today',
         requires_subscription: true,
         user_has_subscription: true,
         typical_lag_seconds: 30,

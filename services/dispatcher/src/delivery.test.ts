@@ -211,7 +211,7 @@ describe('deliverFlagEvent', () => {
     const envelope = bus.published[0]?.message as FlagEventEnvelope;
     expect(envelope.payload.action.recommended_source).toBe('sunday_ticket');
     expect(envelope.payload.action.deep_link_url).toBe(
-      'https://tv.youtube.com/search/Falcons%20vs%20Packers%20today',
+      'https://tv.youtube.com/search/Falcons%20vs%20Packers%20NFL%20ST%20today',
     );
   });
 

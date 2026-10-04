@@ -27,6 +27,7 @@ export { USER_SERVICE_LANDING_URLS } from './serviceLandingUrls.js';
 export {
   isThursdayEt,
   matchupSearchQuery,
+  sundayTicketSearchQuery,
   serviceWatchUrl,
   type ServiceWatchUrlInput,
 } from './watchLinks.js';
