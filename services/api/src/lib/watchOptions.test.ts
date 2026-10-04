@@ -111,6 +111,33 @@ describe('buildWeekWatch', () => {
     expect(solo?.broadcasts.some((o) => o.route_hint !== undefined)).toBe(false);
   });
 
+  it('sends a YouTube TV user to the matchup search for an NFL Network game', () => {
+    const watch = buildWeekWatch(
+      [
+        {
+          id: 'london',
+          scheduled_start: '2026-10-04T13:30:00Z',
+          away_team_name: 'Colts',
+          home_team_name: 'Commanders',
+        },
+      ],
+      [row('london', 'nfl_network')],
+      new Set(['youtube_tv']),
+    );
+    expect(watch.get('london')?.broadcasts).toEqual([
+      {
+        service: 'youtube_tv',
+        deep_link_url: 'https://tv.youtube.com/search/Colts%20vs%20Commanders',
+        requires_subscription: true,
+        user_has_subscription: true,
+        typical_lag_seconds: 30,
+        preferred: true,
+        network: 'nfl_network',
+        market_confidence: 'national',
+      },
+    ]);
+  });
+
   it('ignores airing rows with a network outside the catalog', () => {
     const watch = buildWeekWatch([GAMES[0] as SlateGameRow], [row('tnf', 'dumont')], new Set(['youtube_tv']));
     expect(watch.get('tnf')).toEqual({ broadcasts: [], airings: [] });

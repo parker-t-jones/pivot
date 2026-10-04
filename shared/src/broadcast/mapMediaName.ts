@@ -11,6 +11,8 @@ const MEDIA_NAME_TO_NETWORK: ReadonlyMap<string, AiringNetwork> = new Map([
   ['ABC', 'abc'],
   ['ESPN', 'espn'],
   ['Prime Video', 'amazon_prime'],
+  // ESPN shortName on the 2026-10-04 London game. Not an alias for "NFL Network" or "NFLN".
+  ['NFL Net', 'nfl_network'],
 ]);
 
 export function mapMediaName(name: string): AiringNetwork | null {

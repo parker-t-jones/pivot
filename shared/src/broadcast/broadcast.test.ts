@@ -91,6 +91,9 @@ describe('mapMediaName', () => {
     expect(mapMediaName('ABC')).toBe('abc');
     expect(mapMediaName('ESPN')).toBe('espn');
     expect(mapMediaName('Prime Video')).toBe('amazon_prime');
+    expect(mapMediaName('NFL Net')).toBe('nfl_network');
+    expect(mapMediaName('NFL Network')).toBeNull();
+    expect(mapMediaName('NFLN')).toBeNull();
     expect(mapMediaName('Prime')).toBeNull();
     expect(mapMediaName('Amazon')).toBeNull();
     expect(mapMediaName('XYZ Sports')).toBeNull();
@@ -123,6 +126,32 @@ describe('parseEspnAirings', () => {
         .map((a) => a.network)
         .sort(),
     ).toEqual(['abc', 'espn']);
+  });
+
+  it('maps ESPN shortName NFL Net to nfl_network', () => {
+    const event: EspnBroadcastEvent = {
+      id: '401872965',
+      shortName: 'IND VS WSH',
+      competitions: [
+        {
+          geoBroadcasts: [
+            {
+              type: { shortName: 'TV' },
+              market: { type: 'National' },
+              media: { shortName: 'NFL Net' },
+            },
+          ],
+        },
+      ],
+    };
+    expect(parseEspnAirings(event, () => undefined)).toEqual([
+      {
+        network: 'nfl_network',
+        market: 'national',
+        espnMediaName: 'NFL Net',
+        espnType: 'TV',
+      },
+    ]);
   });
 
   it('logs an unmapped name and produces no row', () => {
