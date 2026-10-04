@@ -11,7 +11,7 @@ const GAMES: SlateGameRow[] = [
   { id: 'mnf', scheduled_start: '2026-09-29T00:15:00Z', away_team_name: 'Eagles', home_team_name: 'Buccaneers' },
 ];
 
-const FOX1_SEARCH = 'https://tv.youtube.com/search/Bears%20vs%20Packers%20FOX';
+const FOX1_SEARCH = 'https://tv.youtube.com/search/Bears%20vs%20Packers%20today';
 
 function row(gameId: string, network: string, market = 'national'): AiringRow {
   return { game_id: gameId, network, market, espn_media_name: network.toUpperCase(), espn_type: 'TV' };
@@ -127,7 +127,7 @@ describe('buildWeekWatch', () => {
     expect(watch.get('london')?.broadcasts).toEqual([
       {
         service: 'youtube_tv',
-        deep_link_url: 'https://tv.youtube.com/search/Colts%20vs%20Commanders%20NFL%20Net',
+        deep_link_url: 'https://tv.youtube.com/search/Colts%20vs%20Commanders%20today',
         requires_subscription: true,
         user_has_subscription: true,
         typical_lag_seconds: 30,

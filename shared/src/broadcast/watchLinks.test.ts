@@ -5,7 +5,7 @@ const THURSDAY_ET = new Date('2026-10-02T00:15:00Z');
 const SUNDAY_ET = new Date('2026-09-27T17:00:00Z');
 
 describe('serviceWatchUrl', () => {
-  it('encodes a YouTube TV search for the nicknames plus the network', () => {
+  it('encodes a YouTube TV search for the nicknames plus today', () => {
     const url = serviceWatchUrl({
       service: 'youtube_tv',
       awayNickname: 'Lions',
@@ -13,11 +13,11 @@ describe('serviceWatchUrl', () => {
       kickoff: SUNDAY_ET,
       network: 'fox',
     });
-    expect(url).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers%20FOX');
+    expect(url).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers%20today');
     expect(url).not.toContain('/nflst/');
   });
 
-  it('appends NFL Net for an NFL Network game', () => {
+  it('uses the same today phrase for an NFL Network game', () => {
     expect(
       serviceWatchUrl({
         service: 'youtube_tv',
@@ -26,7 +26,7 @@ describe('serviceWatchUrl', () => {
         kickoff: SUNDAY_ET,
         network: 'nfl_network',
       }),
-    ).toBe('https://tv.youtube.com/search/Colts%20vs%20Commanders%20NFL%20Net');
+    ).toBe('https://tv.youtube.com/search/Colts%20vs%20Commanders%20today');
   });
 
   it('uses the same search for Sunday Ticket', () => {
@@ -38,12 +38,12 @@ describe('serviceWatchUrl', () => {
         kickoff: SUNDAY_ET,
         network: 'fox',
       }),
-    ).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers%20FOX');
+    ).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers%20today');
   });
 
   it('encodes spaces and punctuation in nicknames', () => {
-    const query = matchupSearchQuery('49ers', 'St. Louis', 'fox');
-    expect(query).toBe('49ers vs St. Louis FOX');
+    const query = matchupSearchQuery('49ers', 'St. Louis');
+    expect(query).toBe('49ers vs St. Louis today');
     expect(
       serviceWatchUrl({
         service: 'youtube_tv',
@@ -89,7 +89,7 @@ describe('serviceWatchUrl', () => {
         kickoff: SUNDAY_ET,
         network: 'amazon_prime',
       }),
-    ).toBe('https://app.primevideo.com/search?phrase=Lions%20vs%20Panthers');
+    ).toBe('https://app.primevideo.com/search?phrase=Lions%20vs%20Panthers%20today');
   });
 
   it('keeps the device-tested static landings', () => {
