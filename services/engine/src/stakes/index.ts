@@ -11,3 +11,4 @@ export type {
   StakeEvaluator,
 } from './types.js';
 export { TRIGGER_KIND } from './types.js';
+export { evaluateRostered, priorityToLeverage } from './evaluators/rostered.js';
