@@ -346,6 +346,91 @@ export type Database = {
           },
         ]
       }
+      stake_trigger_log: {
+        Row: {
+          code: string
+          drive_key: string
+          fired_at: string
+          id: string
+          kind: string
+          stake_id: string
+        }
+        Insert: {
+          code: string
+          drive_key: string
+          fired_at: string
+          id?: string
+          kind: string
+          stake_id: string
+        }
+        Update: {
+          code?: string
+          drive_key?: string
+          fired_at?: string
+          id?: string
+          kind?: string
+          stake_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stake_trigger_log_stake_id_fkey"
+            columns: ["stake_id"]
+            isOneToOne: false
+            referencedRelation: "stakes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stakes: {
+        Row: {
+          condition: Json
+          created_at: string
+          game_id: string
+          id: string
+          season: number
+          source: string
+          source_ref: string | null
+          subject: Json
+          user_id: string
+          week: number
+          weight: number
+        }
+        Insert: {
+          condition: Json
+          created_at?: string
+          game_id: string
+          id?: string
+          season: number
+          source: string
+          source_ref?: string | null
+          subject: Json
+          user_id: string
+          week: number
+          weight?: number
+        }
+        Update: {
+          condition?: Json
+          created_at?: string
+          game_id?: string
+          id?: string
+          season?: number
+          source?: string
+          source_ref?: string | null
+          subject?: Json
+          user_id?: string
+          week?: number
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stakes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams: {
         Row: {
           abbreviation: string
