@@ -453,13 +453,13 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         if (insertError) throw insertError;
       }
 
+      await writeThroughLeagueStakes(fastify.supabase, league.id, week);
       await refreshLineupCache(
         { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
         league,
         week,
         { lineupSource: 'matchup' },
       );
-      await writeThroughLeagueStakes(fastify.supabase, league.id, week);
 
       const syncContext = await getLineupSyncContext({
         supabase: fastify.supabase,
@@ -510,12 +510,12 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         );
       }
 
+      await writeThroughLeagueStakes(fastify.supabase, league.id, week);
       await refreshLineupCache(
         { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
         league,
         week,
       );
-      await writeThroughLeagueStakes(fastify.supabase, league.id, week);
 
       return { week, player_id, is_star };
     },

@@ -1,16 +1,19 @@
-import type { Position, UserLineupCache } from '@pivot/shared';
 import { parsePreferences } from '@pivot/shared';
 import type { LineupCacheProvider } from '../cache/index.js';
 import { getFantasyProvider } from '../providers/index.js';
 import { ApiError } from './errors.js';
+import { assembleUserLineupCache, type CachePlayerRow } from './lineupCacheAssemble.js';
 import { getCurrentNflState } from './nfl-state.js';
-import {
-  deriveDisplayPhaseNow,
-  derivePhaseOpeners,
-  type NflPhase,
-} from './phase-openers.js';
+import { deriveDisplayPhaseNow, derivePhaseOpeners, type NflPhase } from './phase-openers.js';
+import type { Json } from './database.types.js';
 import type { SupabaseServiceClient } from './supabase.js';
-import { writeThroughLeagueStakes } from './stakesWriteThrough.js';
+import {
+  formatStakesReadFailure,
+  formatStakesReadGuard,
+  stakesReadEnabled,
+  stakesWriteEnabled,
+  writeThroughLeagueStakes,
+} from './stakesWriteThrough.js';
 import { resolveWatchedLeagueIds, updateWatchedLeagueIds } from './watched-leagues.js';
 
 export type LineupSource = 'matchup' | 'roster_fallback';
@@ -45,9 +48,7 @@ export interface SyncLeagueLineupResult {
 const IMPOSSIBLE_UUID = '00000000-0000-0000-0000-000000000000';
 
 /** Resolve week + schedule-derived `display_phase` for sync / worker cadence. */
-export async function getLineupSyncContext(
-  deps: SyncLeagueLineupDeps,
-): Promise<LineupSyncContext> {
+export async function getLineupSyncContext(deps: SyncLeagueLineupDeps): Promise<LineupSyncContext> {
   const nflState = await getCurrentNflState(deps.lineupCache);
   const openers = await derivePhaseOpeners(deps.supabase);
   const displayPhase = deriveDisplayPhaseNow(openers, nflState.seasonType);
@@ -90,8 +91,7 @@ export async function syncLeagueLineup(
     );
   }
 
-  const useRosterFallback =
-    context.displayPhase === 'off' || context.displayPhase === 'pre';
+  const useRosterFallback = context.displayPhase === 'off' || context.displayPhase === 'pre';
 
   if (useRosterFallback) {
     const externalIds = await provider.fetchRosterPlayers({
@@ -115,11 +115,11 @@ export async function syncLeagueLineup(
       .eq('id', league.id);
     if (updateError) throw updateError;
 
+    await writeThroughLeagueStakes(deps.supabase, league.id, context.week);
     await refreshLineupCache(deps, league, context.week, {
       lineupSource: 'roster_fallback',
       fallbackPlayerIds: playerIds,
     });
-    await writeThroughLeagueStakes(deps.supabase, league.id, context.week);
 
     return {
       slotCount: playerIds.length,
@@ -210,8 +210,8 @@ export async function syncLeagueLineup(
     .eq('id', league.id);
   if (updateError) throw updateError;
 
-  await refreshLineupCache(deps, league, context.week, { lineupSource: 'matchup' });
   await writeThroughLeagueStakes(deps.supabase, league.id, context.week);
+  await refreshLineupCache(deps, league, context.week, { lineupSource: 'matchup' });
 
   return {
     slotCount: rows.length,
@@ -288,9 +288,20 @@ export interface RefreshLineupCacheOptions {
   fallbackPlayerIds?: string[];
 }
 
+interface WatchedLeague {
+  id: string;
+  seasonYear: number;
+  lineupSource: string | null;
+  fallbackRoster: unknown;
+}
+
 /**
  * Rebuilds `user_lineup_cache:{user_id}:{week}` from **watched** leagues only
  * (union of starter/flex slots, or roster_fallback players).
+ *
+ * `STAKES_READ=1` (with `STAKES_WRITE=1`) takes the player ids from ROSTERED stakes
+ * and still joins `players` and `lineup_slots` for team, position, and stars.
+ * A bye-week player has no stake, so that path omits them.
  *
  * Replaces the old single-league overwrite so multi-league / Active Lineup works.
  */
@@ -298,17 +309,69 @@ export async function rebuildUserLineupCache(
   deps: SyncLeagueLineupDeps,
   userId: string,
   week: number,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
-  const { data: userRow, error: userError } = await deps.supabase
+  const loaded = await loadWatchedLeagues(deps.supabase, userId);
+  if (
+    JSON.stringify(loaded.prefs.watchedLeagueIds) !== JSON.stringify(loaded.watchedIds) &&
+    (loaded.watchedIds.length > 0 || loaded.prefs.watchedLeagueIds.length > 0)
+  ) {
+    await updateWatchedLeagueIds(deps.supabase, userId, loaded.watchedIds);
+  }
+  const { watchedLeagues } = loaded;
+
+  let rows: CachePlayerRow[];
+  if (!stakesReadEnabled(env)) {
+    rows = await loadSlotCachePlayers(deps.supabase, watchedLeagues, week);
+  } else if (!stakesWriteEnabled(env)) {
+    console.error(formatStakesReadGuard());
+    rows = await loadSlotCachePlayers(deps.supabase, watchedLeagues, week);
+  } else {
+    try {
+      rows = await loadStakeCachePlayers(deps.supabase, userId, watchedLeagues, week);
+    } catch (err) {
+      console.error(formatStakesReadFailure(userId, err));
+      rows = await loadSlotCachePlayers(deps.supabase, watchedLeagues, week);
+    }
+  }
+
+  const cache = assembleUserLineupCache(userId, week, rows);
+  const previous = await deps.lineupCache.getLineupCache(userId, week);
+  const nextTeamIds = new Set(cache.teamPositions.keys());
+  if (previous) {
+    for (const teamId of previous.teamPositions.keys()) {
+      if (!nextTeamIds.has(teamId)) {
+        await deps.lineupCache.removeUserStake(teamId, userId);
+      }
+    }
+  }
+
+  await deps.lineupCache.setLineupCache(userId, week, cache);
+
+  for (const teamId of cache.teamPositions.keys()) {
+    await deps.lineupCache.addUserStake(teamId, userId);
+  }
+}
+
+/** Watched leagues in `created_at` order. Does not write. */
+export async function loadWatchedLeagues(
+  supabase: SupabaseServiceClient,
+  userId: string,
+): Promise<{
+  watchedLeagues: WatchedLeague[];
+  prefs: ReturnType<typeof parsePreferences>;
+  watchedIds: string[];
+}> {
+  const { data: userRow, error: userError } = await supabase
     .from('users')
     .select('preferences, subscription_tier')
     .eq('id', userId)
     .single();
   if (userError) throw userError;
 
-  const { data: leagues, error: leaguesError } = await deps.supabase
+  const { data: leagues, error: leaguesError } = await supabase
     .from('leagues')
-    .select('id, lineup_source, fallback_roster')
+    .select('id, lineup_source, fallback_roster, season_year')
     .eq('user_id', userId)
     .order('created_at', { ascending: true });
   if (leaguesError) throw leaguesError;
@@ -321,36 +384,32 @@ export async function rebuildUserLineupCache(
     ownedLeagueIds: ownedIds,
   });
 
-  // Persist auto-filled watch list when we had to default.
-  if (
-    JSON.stringify(prefs.watchedLeagueIds) !== JSON.stringify(watchedIds) &&
-    (watchedIds.length > 0 || prefs.watchedLeagueIds.length > 0)
-  ) {
-    await updateWatchedLeagueIds(deps.supabase, userId, watchedIds);
-  }
-
   const watchedSet = new Set(watchedIds);
-  const watchedLeagues = (leagues ?? []).filter((l) => watchedSet.has(l.id));
+  const watchedLeagues = (leagues ?? []).flatMap((league) => {
+    if (!watchedSet.has(league.id)) return [];
+    return [
+      {
+        id: league.id,
+        seasonYear: league.season_year,
+        lineupSource: league.lineup_source,
+        fallbackRoster: league.fallback_roster,
+      },
+    ];
+  });
+  return { watchedLeagues, prefs, watchedIds };
+}
 
-  const teamPositions = new Map<string, Set<'offense' | 'defense'>>();
-  const playerToTeam = new Map<string, string>();
-  const playerUnits = new Map<string, 'offense' | 'defense'>();
-  const starPlayerIds = new Set<string>();
-
-  const remember = (playerId: string, teamId: string, position: string, star: boolean) => {
-    playerToTeam.set(playerId, teamId);
-    const unit: 'offense' | 'defense' = (position as Position) === 'DEF' ? 'defense' : 'offense';
-    playerUnits.set(playerId, unit);
-    const categories = teamPositions.get(teamId) ?? new Set<'offense' | 'defense'>();
-    categories.add(unit);
-    teamPositions.set(teamId, categories);
-    if (star) starPlayerIds.add(playerId);
-  };
-
+/** Player rows the slot path remembers. Exported for the read-only compare. */
+export async function loadSlotCachePlayers(
+  supabase: SupabaseServiceClient,
+  watchedLeagues: readonly WatchedLeague[],
+  week: number,
+): Promise<CachePlayerRow[]> {
+  const rows: CachePlayerRow[] = [];
   for (const league of watchedLeagues) {
-    if (league.lineup_source === 'roster_fallback') {
-      const playerIds = parseFallbackRoster(league.fallback_roster);
-      const { data: players, error } = await deps.supabase
+    if (league.lineupSource === 'roster_fallback') {
+      const playerIds = parseFallbackRoster(league.fallbackRoster);
+      const { data: players, error } = await supabase
         .from('players')
         .select('id, team_id, position')
         .in('id', playerIds.length > 0 ? playerIds : [IMPOSSIBLE_UUID]);
@@ -359,12 +418,18 @@ export async function rebuildUserLineupCache(
       for (const playerId of playerIds) {
         const player = byId.get(playerId);
         if (!player) continue;
-        remember(playerId, player.team_id, player.position, false);
+        rows.push({
+          playerId,
+          teamId: player.team_id,
+          position: player.position,
+          star: false,
+          leagueId: league.id,
+        });
       }
       continue;
     }
 
-    const { data: activeSlots, error } = await deps.supabase
+    const { data: activeSlots, error } = await supabase
       .from('lineup_slots')
       .select('player_id, is_star, players(team_id, position)')
       .eq('league_id', league.id)
@@ -375,33 +440,118 @@ export async function rebuildUserLineupCache(
     for (const slot of activeSlots ?? []) {
       const player = slot.players;
       if (!player) continue;
-      remember(slot.player_id, player.team_id, player.position, slot.is_star);
+      rows.push({
+        playerId: slot.player_id,
+        teamId: player.team_id,
+        position: player.position,
+        star: slot.is_star,
+        leagueId: league.id,
+      });
+    }
+  }
+  return rows;
+}
+
+/**
+ * Player ids from ROSTERED stakes for these leagues and week.
+ * Team, position, and stars come from `players` / `lineup_slots`, not the stake.
+ */
+export async function loadStakeCachePlayers(
+  supabase: SupabaseServiceClient,
+  userId: string,
+  watchedLeagues: readonly WatchedLeague[],
+  week: number,
+): Promise<CachePlayerRow[]> {
+  if (watchedLeagues.length === 0) return [];
+
+  const leagueById = new Map(watchedLeagues.map((league) => [league.id, league]));
+  const { data: stakeRows, error: stakesError } = await supabase
+    .from('stakes')
+    .select('source_ref, season, subject, condition')
+    .eq('user_id', userId)
+    .eq('week', week)
+    .in(
+      'source_ref',
+      watchedLeagues.map((league) => league.id),
+    );
+  if (stakesError) throw stakesError;
+
+  const picked: { leagueId: string; playerId: string }[] = [];
+  for (const row of stakeRows ?? []) {
+    if (!isRosteredCondition(row.condition) || row.source_ref === null) continue;
+    const league = leagueById.get(row.source_ref);
+    const playerId = readStakePlayerId(row.subject);
+    if (!league || !playerId || row.season !== league.seasonYear) continue;
+    picked.push({ leagueId: league.id, playerId });
+  }
+
+  const playerIds = [...new Set(picked.map((row) => row.playerId))];
+  const playersById = new Map<string, { id: string; team_id: string; position: string }>();
+  if (playerIds.length > 0) {
+    const { data: players, error } = await supabase
+      .from('players')
+      .select('id, team_id, position')
+      .in('id', playerIds);
+    if (error) throw error;
+    for (const player of players ?? []) playersById.set(player.id, player);
+  }
+
+  const matchupIds = watchedLeagues
+    .filter((league) => league.lineupSource !== 'roster_fallback')
+    .map((league) => league.id);
+  const starred = new Set<string>();
+  if (matchupIds.length > 0 && playerIds.length > 0) {
+    const { data: slots, error } = await supabase
+      .from('lineup_slots')
+      .select('league_id, player_id, is_star')
+      .in('league_id', matchupIds)
+      .eq('week', week)
+      .in('player_id', playerIds);
+    if (error) throw error;
+    for (const slot of slots ?? []) {
+      if (slot.is_star) starred.add(`${slot.league_id}:${slot.player_id}`);
     }
   }
 
-  const previous = await deps.lineupCache.getLineupCache(userId, week);
-  const nextTeamIds = new Set(teamPositions.keys());
-  if (previous) {
-    for (const teamId of previous.teamPositions.keys()) {
-      if (!nextTeamIds.has(teamId)) {
-        await deps.lineupCache.removeUserStake(teamId, userId);
-      }
+  const rows: CachePlayerRow[] = [];
+  for (const league of watchedLeagues) {
+    const seen = new Set<string>();
+    for (const item of picked) {
+      if (item.leagueId !== league.id || seen.has(item.playerId)) continue;
+      seen.add(item.playerId);
+      const player = playersById.get(item.playerId);
+      if (!player) continue;
+      rows.push({
+        playerId: player.id,
+        teamId: player.team_id,
+        position: player.position,
+        star:
+          league.lineupSource === 'roster_fallback'
+            ? false
+            : starred.has(`${league.id}:${player.id}`),
+        leagueId: league.id,
+      });
     }
   }
+  return rows;
+}
 
-  const cache: UserLineupCache = {
-    userId,
-    week,
-    teamPositions,
-    playerToTeam,
-    starPlayerIds,
-    playerUnits,
-  };
-  await deps.lineupCache.setLineupCache(userId, week, cache);
+function isRosteredCondition(value: Json): boolean {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    value['type'] === 'ROSTERED'
+  );
+}
 
-  for (const teamId of teamPositions.keys()) {
-    await deps.lineupCache.addUserStake(teamId, userId);
+function readStakePlayerId(value: Json): string | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const playerId = value['playerId'];
+  if (value['type'] !== 'PLAYER' || typeof playerId !== 'string' || playerId.length === 0) {
+    return null;
   }
+  return playerId;
 }
 
 /**

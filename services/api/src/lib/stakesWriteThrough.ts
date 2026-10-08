@@ -17,6 +17,20 @@ export function stakesWriteEnabled(env: NodeJS.ProcessEnv = process.env): boolea
   return env['STAKES_WRITE'] === '1';
 }
 
+/** Off unless the process is started with `STAKES_READ=1`. */
+export function stakesReadEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env['STAKES_READ'] === '1';
+}
+
+export function formatStakesReadGuard(): string {
+  return '[stakes] STAKES_READ requires STAKES_WRITE; using lineup_slots';
+}
+
+export function formatStakesReadFailure(userId: string, err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return `[stakes] read failed user=${userId.slice(0, 8)} err=${message}`;
+}
+
 export function formatStakesWriteFailure(userId: string, sourceRef: string, err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   return `[stakes] write-through failed user=${userId.slice(0, 8)} ref=${sourceRef} err=${message}`;
