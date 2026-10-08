@@ -217,7 +217,21 @@ export async function seedPlayers(): Promise<void> {
     if (error) throw error;
   }
 
+  const positionCounts: Record<Position, number> = {
+    QB: 0,
+    RB: 0,
+    WR: 0,
+    TE: 0,
+    K: 0,
+    DEF: 0,
+  };
+  for (const row of allRows) {
+    positionCounts[row.position] += 1;
+  }
   console.log('Done.');
+  console.log(
+    `[seed-players] QB=${positionCounts.QB} RB=${positionCounts.RB} WR=${positionCounts.WR} TE=${positionCounts.TE} K=${positionCounts.K} DEF=${positionCounts.DEF}`,
+  );
 }
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);

@@ -1,0 +1,44 @@
+# Daily player seed. Peak RSS of this script is ~187 MiB, above the worker's budget,
+# so it runs here instead of in the lineup worker.
+name: Seed players
+
+on:
+  schedule:
+    # 11:17 UTC ≈ 7:17 AM ET during daylight time.
+    - cron: '17 11 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: seed-players
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # packageManager in package.json is pnpm@9.15.0. No .nvmrc; Node 22 matches the Dockerfile.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Seed players
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        # Remote hosts are refused unless --allow-remote is set (scripts/remoteSafety.ts).
+        run: pnpm seed:players -- --allow-remote
