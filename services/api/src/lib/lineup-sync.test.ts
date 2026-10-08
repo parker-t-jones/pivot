@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseServiceClient } from './supabase.js';
 import {
   buildLineupResponse,
@@ -98,6 +98,10 @@ function usersAndLeaguesForRebuild(
 }
 
 describe('syncLeagueLineup', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('rejects platforms that do not support sync (manual)', async () => {
     getFantasyProvider.mockReturnValue({
       supportsSync: () => false,
@@ -344,6 +348,7 @@ describe('syncLeagueLineup', () => {
     const upserts: unknown[] = [];
     const lineupCache = rebuildAwareLineupCache();
     const rebuild = usersAndLeaguesForRebuild(TEST_LEAGUE_ID, 'matchup');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     const supabaseWithRefresh = {
       from: (table: string) => {
@@ -427,6 +432,100 @@ describe('syncLeagueLineup', () => {
         position_in_lineup: 'QB',
       },
     ]);
+    expect(log).not.toHaveBeenCalled();
+    log.mockRestore();
+  });
+
+  it('logs unresolved Sleeper ids on a partial drop and still syncs the rest', async () => {
+    const fetchLineup = vi.fn().mockResolvedValue([
+      { externalPlayerId: 'sl-qb', slotType: 'starter', positionInLineup: 'QB' },
+      { externalPlayerId: 'sl-idp', slotType: 'starter', positionInLineup: 'DB' },
+    ]);
+    getFantasyProvider.mockReturnValue({
+      supportsSync: () => true,
+      fetchLineup,
+      fetchRosterPlayers: vi.fn(),
+    });
+
+    const upserts: unknown[] = [];
+    const lineupCache = rebuildAwareLineupCache();
+    const rebuild = usersAndLeaguesForRebuild(TEST_LEAGUE_ID, 'matchup');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    const supabase = {
+      from: (table: string) => {
+        if (table === 'users') return rebuild.users;
+        if (table === 'players') {
+          return {
+            select: () => ({
+              in: () =>
+                Promise.resolve({
+                  data: [{ id: 'p-qb', sleeper_id: 'sl-qb', team_id: 't1', position: 'QB' }],
+                  error: null,
+                }),
+            }),
+          };
+        }
+        if (table === 'lineup_slots') {
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => {
+                  const existing = Promise.resolve({ data: [], error: null });
+                  return Object.assign(existing, {
+                    in: () =>
+                      Promise.resolve({
+                        data: [
+                          {
+                            player_id: 'p-qb',
+                            is_star: false,
+                            players: { team_id: 't1', position: 'QB' },
+                          },
+                        ],
+                        error: null,
+                      }),
+                  });
+                },
+              }),
+            }),
+            upsert: (rows: unknown) => {
+              upserts.push(rows);
+              return Promise.resolve({ error: null });
+            },
+          };
+        }
+        if (table === 'leagues') {
+          return {
+            ...rebuild.leaguesSelect,
+            update: () => ({
+              eq: () => Promise.resolve({ error: null }),
+            }),
+          };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    } as unknown as SupabaseServiceClient;
+
+    const result = await syncLeagueLineup(
+      { supabase, lineupCache: lineupCache as never },
+      makeLeague(),
+      { week: 1, displayPhase: 'regular' },
+    );
+
+    expect(result.slotCount).toBe(1);
+    expect(upserts[0]).toEqual([
+      {
+        league_id: TEST_LEAGUE_ID,
+        week: 1,
+        player_id: 'p-qb',
+        slot_type: 'starter',
+        position_in_lineup: 'QB',
+      },
+    ]);
+    expect(log).toHaveBeenCalledWith(
+      '[lineup-sync] unresolved players league=11111111 week=1 count=1 ids=sl-idp',
+    );
+    log.mockRestore();
   });
 });
 

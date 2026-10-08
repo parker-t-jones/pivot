@@ -98,7 +98,11 @@ export async function syncLeagueLineup(
       externalLeagueId: league.external_league_id,
       externalRosterId: league.external_roster_id,
     });
-    const playerIds = await resolveSleeperIdsToPlayerIds(deps.supabase, externalIds);
+    const { playerIds, unresolvedIds } = await resolveSleeperIdsToPlayerIds(
+      deps.supabase,
+      externalIds,
+    );
+    logUnresolvedPlayers(league.id, context.week, unresolvedIds, playerIds.length);
     assertPlayersResolved(externalIds.length, playerIds.length);
 
     const { error: updateError } = await deps.supabase
@@ -143,9 +147,10 @@ export async function syncLeagueLineup(
       .map((p) => [p.sleeper_id, p]),
   );
 
-  // Players that don't resolve to a seeded row (all IDP, or anyone not yet seeded) are
-  // dropped — see scripts/seed-players.ts. Fail loud when *every* id drops (usually means
-  // `pnpm seed:players` was never run); partial drops (e.g. IDP-only) still succeed.
+  // Players that don't resolve to a seeded row are dropped. Fail loud when *every* id
+  // drops (usually means `pnpm seed:players` was never run); partial drops still succeed
+  // and are logged.
+  const unresolvedIds = sleeperIds.filter((sleeperId) => !playerBySleeperId.has(sleeperId));
   const rows = normalizedSlots.flatMap((slot) => {
     const player = playerBySleeperId.get(slot.externalPlayerId);
     if (!player) return [];
@@ -159,6 +164,12 @@ export async function syncLeagueLineup(
       },
     ];
   });
+  logUnresolvedPlayers(
+    league.id,
+    context.week,
+    unresolvedIds,
+    sleeperIds.length - unresolvedIds.length,
+  );
   assertPlayersResolved(sleeperIds.length, rows.length);
 
   const { data: existingRows, error: existingError } = await deps.supabase
@@ -209,6 +220,20 @@ export async function syncLeagueLineup(
   };
 }
 
+/** Some Sleeper ids missed `players`, but at least one resolved. All-miss stays a 503. */
+function logUnresolvedPlayers(
+  leagueId: string,
+  week: number,
+  unresolvedIds: readonly string[],
+  resolvedCount: number,
+): void {
+  if (resolvedCount === 0 || unresolvedIds.length === 0) return;
+  const shown = unresolvedIds.slice(0, 10).join(',');
+  console.log(
+    `[lineup-sync] unresolved players league=${leagueId.slice(0, 8)} week=${week} count=${unresolvedIds.length} ids=${shown}`,
+  );
+}
+
 /**
  * External roster had players but none mapped to seeded `players` rows — almost always
  * means `pnpm seed:players` hasn't been run (or the DB was reset). A silent empty success
@@ -228,9 +253,9 @@ function assertPlayersResolved(externalCount: number, resolvedCount: number): vo
 async function resolveSleeperIdsToPlayerIds(
   supabase: SupabaseServiceClient,
   sleeperIds: string[],
-): Promise<string[]> {
+): Promise<{ playerIds: string[]; unresolvedIds: string[] }> {
   const unique = [...new Set(sleeperIds)];
-  if (unique.length === 0) return [];
+  if (unique.length === 0) return { playerIds: [], unresolvedIds: [] };
 
   const { data: players, error } = await supabase
     .from('players')
@@ -244,11 +269,17 @@ async function resolveSleeperIdsToPlayerIds(
       .map((p) => [p.sleeper_id, p.id]),
   );
 
-  // Preserve roster order; drop unseeded (e.g. IDP).
-  return unique.flatMap((sleeperId) => {
+  const unresolvedIds: string[] = [];
+  // Preserve roster order; drop unseeded ids.
+  const playerIds = unique.flatMap((sleeperId) => {
     const id = idBySleeper.get(sleeperId);
-    return id ? [id] : [];
+    if (!id) {
+      unresolvedIds.push(sleeperId);
+      return [];
+    }
+    return [id];
   });
+  return { playerIds, unresolvedIds };
 }
 
 export interface RefreshLineupCacheOptions {

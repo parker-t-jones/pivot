@@ -70,6 +70,52 @@ describe('isEligibleSleeperPlayer', () => {
     expect(isEligibleSleeperPlayer(makePlayer({ position: 'DEF', team: 'KC' }))).toBe(false);
   });
 
+  it("accepts Travis Hunter's record as WR", () => {
+    const hunter = makePlayer({
+      player_id: '12530',
+      first_name: 'Travis',
+      last_name: 'Hunter',
+      position: 'DB',
+      fantasy_positions: ['DB', 'WR'],
+      team: 'JAX',
+      active: true,
+      number: 12,
+    });
+    expect(isEligibleSleeperPlayer(hunter)).toBe(true);
+    expect(toPlayerRow(hunter, new Map([['JAX', 'team-jax-uuid']]))).toMatchObject({
+      sleeper_id: '12530',
+      first_name: 'Travis',
+      last_name: 'Hunter',
+      position: 'WR',
+      team_id: 'team-jax-uuid',
+    });
+  });
+
+  it('stores a fullback as RB when fantasy_positions includes RB', () => {
+    const fullback = makePlayer({
+      position: 'FB',
+      fantasy_positions: ['RB'],
+      team: 'SF',
+    });
+    expect(isEligibleSleeperPlayer(fullback)).toBe(true);
+    expect(toPlayerRow(fullback, new Map([['SF', 'team-sf-uuid']]))?.position).toBe('RB');
+  });
+
+  it('rejects a pure DB with no offensive fantasy position', () => {
+    expect(
+      isEligibleSleeperPlayer(makePlayer({ position: 'DB', fantasy_positions: ['DB'] })),
+    ).toBe(false);
+  });
+
+  it('falls back to the primary position when fantasy_positions is missing', () => {
+    const receiver = makePlayer({ position: 'WR', team: 'KC' });
+    expect(receiver.fantasy_positions).toBeUndefined();
+    expect(isEligibleSleeperPlayer(receiver)).toBe(true);
+    expect(toPlayerRow(receiver, new Map([['KC', 'team-kc-uuid']]))?.position).toBe('WR');
+
+    expect(isEligibleSleeperPlayer(makePlayer({ position: 'DB', team: 'JAX' }))).toBe(false);
+  });
+
   it('rejects players with a null position', () => {
     expect(isEligibleSleeperPlayer(makePlayer({ position: null }))).toBe(false);
   });

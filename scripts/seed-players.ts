@@ -5,8 +5,14 @@
  * Sportradar backfill (PLAN.md Section 11, Sprint 3 note). `sportradar_id` is left NULL
  * and will be populated when Sprint 2 lands.
  *
- * Idempotent: upserts on `sleeper_id`, safe to re-run (the lineup sync worker re-runs this
- * on every cycle so newly-signed free agents get picked up).
+ * Idempotent: upserts on `sleeper_id`, safe to re-run with `pnpm seed:players`.
+ * The lineup worker does not run this seed — refresh it on a schedule outside the worker.
+ *
+ * A player is eligible when `active` is true, `team` is non-empty, and `fantasy_positions`
+ * includes QB, RB, WR, TE, or K. A missing `fantasy_positions` falls back to primary
+ * `position`. The stored `position` is the first allowed fantasy position in the order
+ * QB, RB, WR, TE, K. Dump rows whose only fantasy position is DEF are skipped; team
+ * defenses are synthesized (`buildDefensePlayerRows`).
  *
  * Usage: `pnpm seed:players` from the repo root.
  */
@@ -17,8 +23,8 @@ import { bootstrapSeedScript, RemoteSafetyError } from './remoteSafety.js';
 
 const SLEEPER_PLAYERS_URL = 'https://api.sleeper.app/v1/players/nfl';
 
-/** Positions we carry into `players` (Section 7). IDP is out of scope for v1 (Section 4). */
-const ALLOWED_POSITIONS: readonly Position[] = ['QB', 'RB', 'WR', 'TE', 'K'];
+/** Fantasy positions stored on `players`. Order is the storage priority. */
+const FANTASY_POSITIONS: readonly Position[] = ['QB', 'RB', 'WR', 'TE', 'K'];
 
 /**
  * Known mismatches between Sleeper's `team` field on individual players and our
@@ -44,6 +50,8 @@ export interface SleeperPlayer {
   first_name: string | null;
   last_name: string | null;
   position: string | null;
+  /** Omitted or null → fall back to primary `position`. */
+  fantasy_positions?: string[] | null;
   team: string | null;
   active: boolean;
   number: number | null;
@@ -73,18 +81,35 @@ export function resolveTeamAbbreviation(sleeperTeam: string): string | null {
 }
 
 /**
+ * First QB/RB/WR/TE/K among `fantasy_positions`, scanning in that order.
+ * Missing `fantasy_positions` uses primary `position`.
+ */
+export function storedFantasyPosition(player: SleeperPlayer): Position | null {
+  const listed =
+    player.fantasy_positions == null
+      ? player.position == null
+        ? []
+        : [player.position]
+      : player.fantasy_positions;
+  for (const position of FANTASY_POSITIONS) {
+    if (listed.includes(position)) return position;
+  }
+  return null;
+}
+
+/**
  * True if a Sleeper player entry should be seeded as a `players` row.
- * Excludes free agents (no team), inactive players, and non-fantasy-relevant positions.
- * Team defenses are synthesized separately (`buildDefensePlayerRows`), not sourced from
- * this filter — Sleeper's dump position for them is also `'DEF'`, which is excluded here.
+ * Excludes free agents (no team), inactive players, and anyone without a
+ * QB/RB/WR/TE/K fantasy position. Team defenses are synthesized separately
+ * (`buildDefensePlayerRows`) — a dump row whose fantasy position is only DEF
+ * is excluded here.
  */
 export function isEligibleSleeperPlayer(player: SleeperPlayer): boolean {
   return (
     player.active === true &&
     player.team !== null &&
     player.team !== '' &&
-    player.position !== null &&
-    (ALLOWED_POSITIONS as readonly string[]).includes(player.position)
+    storedFantasyPosition(player) !== null
   );
 }
 
@@ -92,6 +117,8 @@ export function toPlayerRow(
   player: SleeperPlayer,
   teamIdByAbbreviation: ReadonlyMap<string, string>,
 ): PlayerRow | null {
+  const position = storedFantasyPosition(player);
+  if (!position) return null;
   if (!player.team) return null;
   const abbreviation = resolveTeamAbbreviation(player.team);
   if (!abbreviation) return null;
@@ -102,7 +129,7 @@ export function toPlayerRow(
     sleeper_id: player.player_id,
     first_name: player.first_name ?? '',
     last_name: player.last_name ?? '',
-    position: player.position as Position,
+    position,
     team_id: teamId,
     active: true,
     jersey_number: player.number ?? null,
