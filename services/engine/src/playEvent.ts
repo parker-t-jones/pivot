@@ -67,4 +67,8 @@ export interface PlayEvent {
   distance: number | null;
   /** True when this play ends the game (drives `status` → `'final'`). */
   isFinalPlay: boolean;
+  /** ESPN's real-time timestamp for this play, when the source provided one. */
+  wallclock?: string;
+  /** ISO time the runner received the poll that contained this play. */
+  seenAt?: string;
 }

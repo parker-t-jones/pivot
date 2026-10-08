@@ -118,5 +118,6 @@ export function mapEspnPlay(
     down: hasPossession ? (play.start?.down ?? null) : null,
     distance: hasPossession ? (play.start?.distance ?? null) : null,
     isFinalPlay,
+    ...(play.wallclock !== undefined && play.wallclock !== '' ? { wallclock: play.wallclock } : {}),
   };
 }

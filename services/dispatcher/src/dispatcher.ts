@@ -82,6 +82,12 @@ export async function runDispatcherTick(deps: DispatcherTickDeps): Promise<Dispa
           gameId: event.gameId,
           flagId: event.id,
           result: 'rate_limited',
+          timing: {
+            anchorPlayId: item.triggeringPlayId,
+            playWallclock: event.playWallclock,
+            seenAt: event.seenAt,
+            enqueuedAt: event.enqueuedAt,
+          },
         }),
       );
       await deps.queue.remove(item);

@@ -316,6 +316,12 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
           gameId: item.event.gameId,
           flagId: item.event.id,
           result: 'collapsed',
+          timing: {
+            anchorPlayId: item.triggeringPlayId,
+            playWallclock: item.event.playWallclock,
+            seenAt: item.event.seenAt,
+            enqueuedAt: item.event.enqueuedAt,
+          },
         }),
       );
     }
@@ -342,7 +348,15 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
     holdMs: number,
     resolution: ResumptionResolution | null,
   ): Promise<void> {
-    await this.deps.queue.enqueue({ ...event, scheduledFireAt: this.now() }, triggeringPlayId);
+    const now = this.now();
+    await this.deps.queue.enqueue(
+      {
+        ...event,
+        scheduledFireAt: now,
+        enqueuedAt: new Date(now).toISOString(),
+      },
+      triggeringPlayId,
+    );
     this.deps.onGated({ event, decision, holdMs, resolution });
   }
 }

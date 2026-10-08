@@ -167,6 +167,20 @@ describe('mapEspnPlay', () => {
   it('passes isFinalPlay through from the caller', () => {
     expect(mapEspnPlay(play(), detDrive, context, true).isFinalPlay).toBe(true);
   });
+
+  it('copies ESPN wallclock when the play has one', () => {
+    const mapped = mapEspnPlay(
+      play({ wallclock: '2026-08-29T17:08:19Z' }),
+      detDrive,
+      context,
+      false,
+    );
+    expect(mapped.wallclock).toBe('2026-08-29T17:08:19Z');
+  });
+
+  it('omits wallclock when ESPN did not send one', () => {
+    expect(mapEspnPlay(play(), detDrive, context, false)).not.toHaveProperty('wallclock');
+  });
 });
 
 /**
@@ -232,9 +246,10 @@ describe('espnSummarySchema + resolveGameContext', () => {
       id: '40187330839',
       type: { id: '53', text: 'Kickoff' },
       clock: { displayValue: '15:00' },
+      wallclock: '2026-08-29T17:08:19Z',
     });
     // Undeclared keys are stripped, not rejected.
-    expect(firstPlay).not.toHaveProperty('wallclock');
+    expect(firstPlay).not.toHaveProperty('sequenceNumber');
   });
 
   it('resolves game context from the header', () => {

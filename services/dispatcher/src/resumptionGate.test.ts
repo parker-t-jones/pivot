@@ -67,6 +67,7 @@ describe('ResumptionGatedDispatcher', () => {
     const due = await queue.due(now.value, 10);
     expect(due).toHaveLength(1);
     expect(due[0]?.event.scheduledFireAt).toBe(5_000);
+    expect(due[0]?.event.enqueuedAt).toBe(new Date(5_000).toISOString());
     expect(due[0]?.triggeringPlayId).toBe('play-9');
   });
 
@@ -212,7 +213,7 @@ describe('ResumptionGatedDispatcher', () => {
     expect(due.map((item) => item.event.id).sort()).toEqual(['clear', 'high']);
     expect(due.find((item) => item.event.id === 'clear')?.event.type).toBe('flag_removed');
     expect(logs.mock.calls.map((call) => call[0])).toEqual([
-      '[dispatcher] push decision user=u1 game=g1 flag=low result=collapsed',
+      '[dispatcher] push decision user=u1 game=g1 flag=low result=collapsed anchor_play=- play_wallclock=- seen_at=- enqueued_at=- sent_at=- post_lag_ms=- send_lag_ms=-',
     ]);
     logs.mockRestore();
   });

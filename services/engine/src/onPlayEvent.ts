@@ -1,4 +1,4 @@
-import type { GameState, UserLineupCache } from '@pivot/shared';
+import type { FlagEvent, GameState, UserLineupCache } from '@pivot/shared';
 import { defaultClock, type Clock } from './clock.js';
 import { applyPlayToState } from './applyPlayToState.js';
 import { computeFlagState } from './computeFlagState.js';
@@ -23,6 +23,16 @@ export interface OnPlayEventDeps {
   gameState: GameStateProvider;
   dispatcher: EventDispatcher;
   clock?: Clock;
+}
+
+/** Copies poll timing onto the event when the play has it. Absent fields stay absent. */
+function withPlayTiming(event: FlagEvent, play: PlayEvent): FlagEvent {
+  if (play.wallclock === undefined && play.seenAt === undefined) return event;
+  return {
+    ...event,
+    ...(play.wallclock !== undefined ? { playWallclock: play.wallclock } : {}),
+    ...(play.seenAt !== undefined ? { seenAt: play.seenAt } : {}),
+  };
 }
 
 /** Users whose lineup includes either team. Decision 8: a backgrounded user is still a candidate. */
@@ -82,7 +92,7 @@ export async function onPlayEvent(deps: OnPlayEventDeps, play: PlayEvent): Promi
       if (!event) return;
 
       await deps.gameState.setUserFlagState(userId, play.gameId, newFlagState);
-      await deps.dispatcher.dispatch(event, play.playId);
+      await deps.dispatcher.dispatch(withPlayTiming(event, play), play.playId);
     }),
   );
   await deps.dispatcher.endPlay?.(play.gameId);

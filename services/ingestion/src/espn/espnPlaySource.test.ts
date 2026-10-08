@@ -106,6 +106,8 @@ describe('EspnPlaySource', () => {
     const [first, second] = seen;
     expect(first?.isFinalPlay).toBe(false);
     expect(second?.isFinalPlay).toBe(true);
+    expect(first?.seenAt).toBe(second?.seenAt);
+    expect(first?.seenAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
   it('never re-emits a play id already seen in an earlier poll', async () => {

@@ -56,6 +56,12 @@ export interface FlagEvent {
   oldState: FlagState | null;
   newState: FlagState;
   scheduledFireAt: number;
+  /** ESPN wallclock of the play that produced this event, when known. */
+  playWallclock?: string;
+  /** When the runner received the poll that contained that play. */
+  seenAt?: string;
+  /** When `resumptionGate` enqueued this event. */
+  enqueuedAt?: string;
 }
 
 // `UserLineupCache` (Section 8 core types) is the Sprint 3 shape — re-exported so the engine has a

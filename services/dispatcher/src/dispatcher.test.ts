@@ -294,7 +294,7 @@ describe('runDispatcherTick', () => {
       } else {
         expect(result.droppedRateLimited).toBe(1);
         expect(logs.mock.calls.map((call) => call[0])).toContain(
-          `[dispatcher] push decision user=u1 game=g1 flag=evt-${i} result=rate_limited`,
+          `[dispatcher] push decision user=u1 game=g1 flag=evt-${i} result=rate_limited anchor_play=- play_wallclock=- seen_at=- enqueued_at=- sent_at=- post_lag_ms=- send_lag_ms=-`,
         );
       }
       logs.mockRestore();

@@ -647,7 +647,7 @@ describe('deliverFlagEvent', () => {
 
       expect(pushNotifier.calls).toHaveLength(0);
       expect(logs.mock.calls.map((call) => call[0])).toContain(
-        '[dispatcher] push decision user=u1 game=g1 flag=evt-1 result=skipped_primary_connected',
+        '[dispatcher] push decision user=u1 game=g1 flag=evt-1 result=skipped_primary_connected anchor_play=- play_wallclock=- seen_at=- enqueued_at=- sent_at=- post_lag_ms=- send_lag_ms=-',
       );
       logs.mockRestore();
     });
@@ -673,7 +673,7 @@ describe('deliverFlagEvent', () => {
       const envelope = bus.published[0]?.message as FlagEventEnvelope;
       expect(envelope.payload.action.type).toBe('prompt');
       expect(logs.mock.calls.map((call) => call[0])).toContain(
-        '[dispatcher] push decision user=u1 game=g1 flag=evt-1 result=sent',
+        '[dispatcher] push decision user=u1 game=g1 flag=evt-1 result=sent anchor_play=- play_wallclock=- seen_at=- enqueued_at=- sent_at=2023-11-14T22:14:21.500Z post_lag_ms=- send_lag_ms=-',
       );
       logs.mockRestore();
     });

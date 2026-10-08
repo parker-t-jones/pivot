@@ -204,6 +204,33 @@ describe('onPlayEvent', () => {
       { type: 'offense_active', triggeringPlayerIds: ['rb-1', 'wr-1'] },
     ]);
   });
+
+  it('copies wallclock and seenAt onto the dispatched event', async () => {
+    lineupCache.set(lineupWithRbOn('KC'));
+    gameState.addStake('KC', 'u1');
+
+    await onPlayEvent(
+      deps,
+      makePlay({
+        wallclock: '2026-10-11T17:00:00.000Z',
+        seenAt: '2026-10-11T17:00:02.500Z',
+      }),
+    );
+
+    expect(dispatcher.events[0]?.playWallclock).toBe('2026-10-11T17:00:00.000Z');
+    expect(dispatcher.events[0]?.seenAt).toBe('2026-10-11T17:00:02.500Z');
+  });
+
+  it('does not add timing fields when the play has none', async () => {
+    lineupCache.set(lineupWithRbOn('KC'));
+    gameState.addStake('KC', 'u1');
+
+    await onPlayEvent(deps, makePlay());
+
+    expect(dispatcher.events[0]).not.toHaveProperty('playWallclock');
+    expect(dispatcher.events[0]).not.toHaveProperty('seenAt');
+    expect(dispatcher.events[0]).not.toHaveProperty('enqueuedAt');
+  });
 });
 
 function sameTeam(team: string): UserLineupCache {

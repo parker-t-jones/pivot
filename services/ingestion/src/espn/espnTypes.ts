@@ -61,6 +61,10 @@ export const espnPlaySchema = z.object({
    */
   homeScore: z.number().optional(),
   awayScore: z.number().optional(),
+  /**
+   * ESPN's real-time timestamp for this play. A bad value is dropped so logging it cannot fail the poll.
+   */
+  wallclock: z.string().optional().catch(undefined),
 });
 
 export const espnDriveSchema = z.object({

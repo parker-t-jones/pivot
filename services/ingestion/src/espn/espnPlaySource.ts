@@ -144,6 +144,7 @@ export class EspnPlaySource implements PlaySource {
       const gameIsFinal = isFinal(summary);
       const flattened = flattenPlays(summary);
       const lastIndex = flattened.length - 1;
+      const seenAt = new Date().toISOString();
 
       for (const [i, { play, drive }] of flattened.entries()) {
         if (this.disconnected) return;
@@ -151,7 +152,7 @@ export class EspnPlaySource implements PlaySource {
         seenPlayIds.add(play.id);
 
         const isFinalPlay = gameIsFinal && i === lastIndex;
-        await handler(mapEspnPlay(play, drive, context, isFinalPlay));
+        await handler({ ...mapEspnPlay(play, drive, context, isFinalPlay), seenAt });
       }
 
       if (gameIsFinal) return;

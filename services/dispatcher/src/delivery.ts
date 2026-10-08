@@ -309,6 +309,12 @@ export async function deliverFlagEvent(
     gameId: event.gameId,
     hasToken: Boolean(user.expoPushToken),
   });
+  const timing = {
+    anchorPlayId: triggeringPlayId,
+    playWallclock: event.playWallclock,
+    seenAt: event.seenAt,
+    enqueuedAt: event.enqueuedAt,
+  };
   if (pushDecision !== 'sent') {
     console.log(
       formatPushDecisionLog({
@@ -316,6 +322,7 @@ export async function deliverFlagEvent(
         gameId: event.gameId,
         flagId: event.id,
         result: pushDecision,
+        timing,
       }),
     );
   } else if (user.expoPushToken) {
@@ -343,6 +350,7 @@ export async function deliverFlagEvent(
             gameId: event.gameId,
             flagId: event.id,
             result: 'sent',
+            timing: { ...timing, sentAt: new Date(clock()).toISOString() },
           }),
         );
         await deps.persistence.recordPushOutcome({ id: persisted.id, status: 'sent' });

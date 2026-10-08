@@ -36,4 +36,17 @@ describe('queued flag event codec', () => {
     expect(parsed.event).toEqual(flagEvent);
     expect(parsed.event).not.toHaveProperty('triggeringPlayId');
   });
+
+  it('round-trips optional timing fields on the event', () => {
+    const flagEvent = {
+      ...event(),
+      playWallclock: '2026-10-11T17:00:00.000Z',
+      seenAt: '2026-10-11T17:00:02.500Z',
+      enqueuedAt: '2026-10-11T17:00:04.000Z',
+    };
+    const parsed = parseQueuedFlagEvent(serializeQueuedFlagEvent(flagEvent, 'play-1'));
+    expect(parsed.triggeringPlayId).toBe('play-1');
+    expect(parsed.event).toEqual(flagEvent);
+    expect(parsed.event).not.toHaveProperty('triggeringPlayId');
+  });
 });
