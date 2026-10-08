@@ -39,6 +39,16 @@ const NO_POSSESSION_PLAY_TYPES: ReadonlySet<PlayType> = new Set<PlayType>([
   'end_game',
 ]);
 
+/**
+ * ESPN's wallclock, or nothing. A missing value, an empty string, or a string that is not a
+ * timestamp (`"garbage"`) is omitted so it never becomes a field on `PlayEvent`.
+ */
+function usableWallclock(value: string | undefined): string | undefined {
+  if (value === undefined || value === '') return undefined;
+  if (Number.isNaN(Date.parse(value))) return undefined;
+  return value;
+}
+
 /** ESPN's `M:SS` game clock → seconds. Unparseable or absent → 0, matching `mapNflverseRow`. */
 function parseClockToSeconds(displayValue: string | undefined): number {
   const match = /^(\d+):(\d{1,2})$/.exec((displayValue ?? '').trim());
@@ -100,6 +110,7 @@ export function mapEspnPlay(
   const playType = espnTypeIdToPlayType(play.type.id);
   const driveTeam = drive.team?.abbreviation;
   const hasPossession = !NO_POSSESSION_PLAY_TYPES.has(playType) && driveTeam !== undefined;
+  const wallclock = usableWallclock(play.wallclock);
 
   return {
     playId: play.id,
@@ -118,6 +129,6 @@ export function mapEspnPlay(
     down: hasPossession ? (play.start?.down ?? null) : null,
     distance: hasPossession ? (play.start?.distance ?? null) : null,
     isFinalPlay,
-    ...(play.wallclock !== undefined && play.wallclock !== '' ? { wallclock: play.wallclock } : {}),
+    ...(wallclock !== undefined ? { wallclock } : {}),
   };
 }

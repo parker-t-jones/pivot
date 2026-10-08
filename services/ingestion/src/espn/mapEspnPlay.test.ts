@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyPlayToState } from '@pivot/engine';
-import { espnSummarySchema, type EspnDrive, type EspnPlay } from './espnTypes.js';
+import { espnPlaySchema, espnSummarySchema, type EspnDrive, type EspnPlay } from './espnTypes.js';
 import { mapEspnPlay, resolveGameContext, type EspnGameContext } from './mapEspnPlay.js';
 
 const context: EspnGameContext = {
@@ -180,6 +180,26 @@ describe('mapEspnPlay', () => {
 
   it('omits wallclock when ESPN did not send one', () => {
     expect(mapEspnPlay(play(), detDrive, context, false)).not.toHaveProperty('wallclock');
+  });
+
+  it('parses a missing or garbage wallclock into the same play, with no timestamp', () => {
+    const before = mapEspnPlay(play(), detDrive, context, false);
+    const raw = {
+      id: '40187330839',
+      type: { id: '5', text: 'Rush' },
+      period: { number: 3 },
+      clock: { displayValue: '13:28' },
+      start: { team: { id: '11' }, yardsToEndzone: 33, down: 1, distance: 10 },
+      homeScore: 16,
+      awayScore: 19,
+    };
+
+    const missing = espnPlaySchema.parse(raw);
+    const garbage = espnPlaySchema.parse({ ...raw, wallclock: 'garbage' });
+
+    expect(mapEspnPlay(missing, detDrive, context, false)).toEqual(before);
+    expect(mapEspnPlay(garbage, detDrive, context, false)).toEqual(before);
+    expect(before).not.toHaveProperty('wallclock');
   });
 });
 
