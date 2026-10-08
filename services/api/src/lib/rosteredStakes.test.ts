@@ -249,7 +249,7 @@ describe('gameIdByTeam', () => {
   });
 
   it('logs and skips a team that still has two regular-season games', () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const resolved = gameIdByTeam([
       { id: 'game-a', homeTeamId: PHI, awayTeamId: CHI, seasonType: 'regular' },
       { id: 'game-b', homeTeamId: PHI, awayTeamId: 'team-other', seasonType: 'regular' },
