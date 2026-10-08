@@ -10,6 +10,7 @@ import {
   type NflPhase,
 } from './phase-openers.js';
 import type { SupabaseServiceClient } from './supabase.js';
+import { writeThroughLeagueStakes } from './stakesWriteThrough.js';
 import { resolveWatchedLeagueIds, updateWatchedLeagueIds } from './watched-leagues.js';
 
 export type LineupSource = 'matchup' | 'roster_fallback';
@@ -114,6 +115,7 @@ export async function syncLeagueLineup(
       lineupSource: 'roster_fallback',
       fallbackPlayerIds: playerIds,
     });
+    await writeThroughLeagueStakes(deps.supabase, league.id, context.week);
 
     return {
       slotCount: playerIds.length,
@@ -198,6 +200,7 @@ export async function syncLeagueLineup(
   if (updateError) throw updateError;
 
   await refreshLineupCache(deps, league, context.week, { lineupSource: 'matchup' });
+  await writeThroughLeagueStakes(deps.supabase, league.id, context.week);
 
   return {
     slotCount: rows.length,

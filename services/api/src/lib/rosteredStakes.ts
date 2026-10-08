@@ -40,7 +40,7 @@ export interface RosteredStakeInsert {
 /** Same slots `rebuildUserLineupCache` reads from `lineup_slots`. */
 const ACTIVE_SLOT_TYPES = new Set(['starter', 'flex']);
 
-function sourceForPlatform(platform: string): RosteredStakeSource | null {
+export function sourceForPlatform(platform: string): RosteredStakeSource | null {
   if (platform === 'sleeper') return 'SLEEPER_ROSTER';
   if (platform === 'manual') return 'MANUAL';
   return null;
@@ -78,4 +78,79 @@ export function rosteredStakesFor(
   }
 
   return rows;
+}
+
+export interface WeekGame {
+  id: string;
+  homeTeamId: string;
+  awayTeamId: string;
+}
+
+/**
+ * Team → `games.id` when that team is in exactly one game.
+ * Zero games is a bye. More than one game is left unresolved so a stake is not attached to a guess.
+ */
+export function gameIdByTeam(games: readonly WeekGame[]): Map<string, string> {
+  const gameIdsByTeam = new Map<string, Set<string>>();
+  for (const game of games) {
+    for (const teamId of [game.homeTeamId, game.awayTeamId]) {
+      const ids = gameIdsByTeam.get(teamId) ?? new Set<string>();
+      ids.add(game.id);
+      gameIdsByTeam.set(teamId, ids);
+    }
+  }
+
+  const resolved = new Map<string, string>();
+  for (const [teamId, ids] of gameIdsByTeam) {
+    if (ids.size !== 1) continue;
+    const gameId = [...ids][0];
+    if (gameId) resolved.set(teamId, gameId);
+  }
+  return resolved;
+}
+
+export interface StoredRosteredStake {
+  id: string;
+  playerId: string;
+  teamId: string;
+  gameId: string;
+}
+
+export interface RosteredSetDiff {
+  deleteIds: string[];
+  inserts: RosteredStakeInsert[];
+  updates: { id: string; gameId: string; subject: RosteredStakeInsert['subject'] }[];
+}
+
+/**
+ * Replace one `(user, season, week, source, source_ref)` set.
+ * A second call with the stored result is empty, so backfill and write-through are idempotent.
+ * Disconnect is the empty `next` set: every stored id is deleted.
+ */
+export function diffRosteredSet(
+  existing: readonly StoredRosteredStake[],
+  next: readonly RosteredStakeInsert[],
+): RosteredSetDiff {
+  const existingByPlayer = new Map(existing.map((row) => [row.playerId, row]));
+  const nextIds = new Set(next.map((row) => row.subject.playerId));
+  const deleteIds: string[] = [];
+  const inserts: RosteredStakeInsert[] = [];
+  const updates: RosteredSetDiff['updates'] = [];
+
+  for (const row of existing) {
+    if (!nextIds.has(row.playerId)) deleteIds.push(row.id);
+  }
+
+  for (const row of next) {
+    const current = existingByPlayer.get(row.subject.playerId);
+    if (!current) {
+      inserts.push(row);
+      continue;
+    }
+    if (current.gameId !== row.gameId || current.teamId !== row.subject.teamId) {
+      updates.push({ id: current.id, gameId: row.gameId, subject: row.subject });
+    }
+  }
+
+  return { deleteIds, inserts, updates };
 }

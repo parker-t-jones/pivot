@@ -12,6 +12,7 @@ import {
   refreshLineupCache,
   syncLeagueLineup,
 } from '../lib/lineup-sync.js';
+import { deleteLeagueStakes, writeThroughLeagueStakes } from '../lib/stakesWriteThrough.js';
 import { onLeagueConnected, onLeagueDisconnected } from '../lib/watched-leagues.js';
 import { sleeperProvider } from '../providers/index.js';
 
@@ -236,6 +237,7 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const { error } = await fastify.supabase.from('leagues').delete().eq('id', league.id);
       if (error) throw error;
 
+      await deleteLeagueStakes(fastify.supabase, userId, league.id);
       await onLeagueDisconnected(fastify.supabase, userId, league.id);
       try {
         const syncContext = await getLineupSyncContext({
@@ -457,6 +459,7 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         week,
         { lineupSource: 'matchup' },
       );
+      await writeThroughLeagueStakes(fastify.supabase, league.id, week);
 
       const syncContext = await getLineupSyncContext({
         supabase: fastify.supabase,
@@ -512,6 +515,7 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         league,
         week,
       );
+      await writeThroughLeagueStakes(fastify.supabase, league.id, week);
 
       return { week, player_id, is_star };
     },
