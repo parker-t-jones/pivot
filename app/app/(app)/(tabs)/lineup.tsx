@@ -576,13 +576,15 @@ function PlayerRow({
         accessible
         style={styles.playerMain}
       >
-        <Text
-          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-          numberOfLines={1}
-          style={styles.slotTag}
-        >
-          {slotLabel(slot.position_in_lineup)}
-        </Text>
+        <View style={styles.slotColumn}>
+          <Text
+            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+            numberOfLines={1}
+            style={styles.slotTag}
+          >
+            {slotLabel(slot.position_in_lineup)}
+          </Text>
+        </View>
         <View style={styles.playerInfo}>
           <Text numberOfLines={1} style={[styles.playerName, mutedName && styles.benchName]}>
             {name}
@@ -679,8 +681,11 @@ const styles = StyleSheet.create({
     fontSize: theme.type.eyebrow.size,
     letterSpacing: theme.type.eyebrow.letterSpacing,
   },
+  // Basis stays auto. `flex: 1` (basis 0) measures this column at width 0 once the
+  // slot width comes from its label, and the name then lays out as a tall line box.
   playerInfo: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
     paddingRight: theme.spacing.sm,
   },
   playerMain: {
@@ -715,9 +720,7 @@ const styles = StyleSheet.create({
   rosterHeader: {
     alignItems: 'center',
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: theme.spacing.xs,
   },
   rosterSection: {
     gap: theme.spacing.sm,
@@ -739,14 +742,19 @@ const styles = StyleSheet.create({
     fontSize: theme.type.heading.size,
     fontWeight: '400',
   },
+  // Floor is on the view, not the text. A min width on the text itself was
+  // measured as a wide column and stretched the row.
+  slotColumn: {
+    flexShrink: 0,
+    justifyContent: 'center',
+    marginLeft: theme.spacing.md,
+    minWidth: SLOT_COLUMN_MIN_WIDTH,
+  },
   slotTag: {
     color: theme.colors.brass,
     fontFamily: fonts.monoBold,
     fontSize: theme.type.eyebrow.size,
     letterSpacing: theme.type.eyebrow.letterSpacing,
-    flexShrink: 0,
-    marginLeft: theme.spacing.md,
-    minWidth: SLOT_COLUMN_MIN_WIDTH,
     textTransform: 'uppercase',
   },
   stripe: {

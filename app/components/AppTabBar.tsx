@@ -92,7 +92,10 @@ const styles = StyleSheet.create({
     color: theme.colors.textTertiary,
     fontFamily: fonts.monoBold,
     fontSize: 13,
+    // Same line box for every label. The dense cap otherwise gives the longer
+    // "Settings" string a taller box, and centering that box lifts its baseline.
     fontWeight: '400',
+    lineHeight: 18,
   },
   sideLabelActive: {
     color: theme.colors.accent,
