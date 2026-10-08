@@ -1,8 +1,10 @@
 /**
  * Pure ROSTERED stake rows from lineup slots.
  *
- * The active-slot filter matches `rebuildUserLineupCache`: `starter` and `flex`.
- * Bench and idp are omitted. A team with no game this week is a bye and gets no row.
+ * The stake player set for a league/week equals the set `rebuildUserLineupCache`
+ * would include for that league if it were watched: every player on a
+ * `roster_fallback` league, and `starter` + `flex` on a matchup league.
+ * A team with no regular-season game this week is a bye and gets no row.
  * Watched-league filtering stays out of this mapper; every connected league is stored.
  */
 
@@ -15,6 +17,8 @@ export interface RosteredStakeSlot {
   slotType: string;
   leagueId: string;
   platform: string;
+  /** `roster_fallback` keeps every player. Anything else keeps `starter` and `flex`. */
+  lineupSource?: string | null;
 }
 
 export interface RosteredStakesContext {
@@ -37,8 +41,13 @@ export interface RosteredStakeInsert {
   weight: number;
 }
 
-/** Same slots `rebuildUserLineupCache` reads from `lineup_slots`. */
+/** Same slots `rebuildUserLineupCache` reads from `lineup_slots` for a matchup league. */
 const ACTIVE_SLOT_TYPES = new Set(['starter', 'flex']);
+
+function includedLikeCache(slot: RosteredStakeSlot): boolean {
+  if (slot.lineupSource === 'roster_fallback') return true;
+  return ACTIVE_SLOT_TYPES.has(slot.slotType);
+}
 
 export function sourceForPlatform(platform: string): RosteredStakeSource | null {
   if (platform === 'sleeper') return 'SLEEPER_ROSTER';
@@ -54,7 +63,7 @@ export function rosteredStakesFor(
   const rows: RosteredStakeInsert[] = [];
 
   for (const slot of slots) {
-    if (!ACTIVE_SLOT_TYPES.has(slot.slotType)) continue;
+    if (!includedLikeCache(slot)) continue;
     const source = sourceForPlatform(slot.platform);
     if (!source) continue;
     const gameId = ctx.gameIdByTeamId.get(slot.teamId);
@@ -84,15 +93,18 @@ export interface WeekGame {
   id: string;
   homeTeamId: string;
   awayTeamId: string;
+  /** `games.season_type`: `pre`, `regular`, or `post`. Only `regular` is used. */
+  seasonType: string;
 }
 
 /**
- * Team → `games.id` when that team is in exactly one game.
- * Zero games is a bye. More than one game is left unresolved so a stake is not attached to a guess.
+ * Team → `games.id` for that team's regular-season game.
+ * Zero regular-season games is a bye. More than one is logged and skipped.
  */
 export function gameIdByTeam(games: readonly WeekGame[]): Map<string, string> {
   const gameIdsByTeam = new Map<string, Set<string>>();
   for (const game of games) {
+    if (game.seasonType !== 'regular') continue;
     for (const teamId of [game.homeTeamId, game.awayTeamId]) {
       const ids = gameIdsByTeam.get(teamId) ?? new Set<string>();
       ids.add(game.id);
@@ -102,9 +114,13 @@ export function gameIdByTeam(games: readonly WeekGame[]): Map<string, string> {
 
   const resolved = new Map<string, string>();
   for (const [teamId, ids] of gameIdsByTeam) {
-    if (ids.size !== 1) continue;
-    const gameId = [...ids][0];
-    if (gameId) resolved.set(teamId, gameId);
+    if (ids.size === 1) {
+      const gameId = [...ids][0];
+      if (gameId) resolved.set(teamId, gameId);
+      continue;
+    }
+    const gameIds = [...ids].sort().join(',');
+    console.error(`[stakes] ambiguous game team=${teamId} games=${gameIds}`);
   }
   return resolved;
 }

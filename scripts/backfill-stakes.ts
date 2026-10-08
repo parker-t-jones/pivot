@@ -7,7 +7,8 @@
  * Matchup leagues: one set per stored `lineup_slots` week (starter and flex).
  * `roster_fallback` leagues: those players as starters, for each week that league
  * already has slots. A fallback league with no stored week is skipped.
- * A team in zero games that week is a bye. A team in more than one game is skipped.
+ * A team in zero regular-season games that week is a bye.
+ * A team in more than one regular-season game is logged and skipped.
  *
  * Usage:
  *   pnpm backfill:stakes
@@ -100,6 +101,7 @@ interface GameRow {
   id: string;
   season_year: number;
   week: number;
+  season_type: string;
   home_team_id: string;
   away_team_id: string;
 }
@@ -179,6 +181,7 @@ function slotsForWeek(
           slotType: 'starter',
           leagueId: league.id,
           platform: league.platform,
+          lineupSource: league.lineup_source,
         },
       ];
     });
@@ -196,6 +199,7 @@ function slotsForWeek(
         slotType: slot.slot_type,
         leagueId: league.id,
         platform: league.platform,
+        lineupSource: league.lineup_source,
       },
     ];
   });
@@ -237,6 +241,7 @@ export function planBackfill(input: {
             id: game.id,
             homeTeamId: game.home_team_id,
             awayTeamId: game.away_team_id,
+            seasonType: game.season_type,
           })),
         ),
       });
@@ -349,7 +354,7 @@ async function main(): Promise<void> {
     supabase
       .from('lineup_slots')
       .select('league_id, week, player_id, slot_type, players(team_id, position)'),
-    supabase.from('games').select('id, season_year, week, home_team_id, away_team_id'),
+    supabase.from('games').select('id, season_year, week, season_type, home_team_id, away_team_id'),
     supabase
       .from('stakes')
       .select('id, user_id, season, week, game_id, source, source_ref, subject, condition'),

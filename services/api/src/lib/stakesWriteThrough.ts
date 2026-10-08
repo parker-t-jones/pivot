@@ -123,7 +123,7 @@ export async function writeThroughLeagueStakes(
     const slots = await loadSlots(supabase, league, week);
     const { data: games, error: gamesError } = await supabase
       .from('games')
-      .select('id, home_team_id, away_team_id')
+      .select('id, home_team_id, away_team_id, season_type')
       .eq('season_year', league.season_year)
       .eq('week', week);
     if (gamesError) throw gamesError;
@@ -137,6 +137,7 @@ export async function writeThroughLeagueStakes(
           id: game.id,
           homeTeamId: game.home_team_id,
           awayTeamId: game.away_team_id,
+          seasonType: game.season_type,
         })),
       ),
     });
@@ -199,6 +200,7 @@ async function loadSlots(
           slotType: 'starter',
           leagueId: league.id,
           platform: league.platform,
+          lineupSource: league.lineup_source,
         },
       ];
     });
@@ -223,6 +225,7 @@ async function loadSlots(
         slotType: slot.slot_type,
         leagueId: league.id,
         platform: league.platform,
+        lineupSource: league.lineup_source,
       },
     ];
   });
