@@ -36,7 +36,13 @@ export function SegmentedControl({ segments, value, onChange }: SegmentedControl
             }}
             style={[styles.segment, selected && styles.segmentSelected]}
           >
-            <Text style={[styles.label, selected && styles.labelSelected]}>{segment.label}</Text>
+            <Text
+              maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+              numberOfLines={1}
+              style={[styles.label, selected && styles.labelSelected]}
+            >
+              {segment.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -72,7 +78,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radii.md,
     borderWidth: theme.effects.panelBorderWidth,
     flexDirection: 'row',
-    height: TRACK_HEIGHT,
+    minHeight: TRACK_HEIGHT,
     padding: theme.spacing.xs,
   },
 });

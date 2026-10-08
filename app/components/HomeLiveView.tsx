@@ -15,7 +15,7 @@ import { MyCardList } from './MyCardList';
 /** `● LIVE · {n} GAMES` above the Home title in `state1` / `state2` (PIVOT-STAKES-PLAN.md §11.3). */
 export function LiveModeEyebrow({ liveCount }: { liveCount: number }) {
   return (
-    <Text style={styles.modeEyebrow}>
+    <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.modeEyebrow}>
       {`● LIVE · ${liveCount} ${liveCount === 1 ? 'GAME' : 'GAMES'}`}
     </Text>
   );
@@ -72,14 +72,19 @@ const SECTION_LABELS: Record<LiveBoardSection['kind'], string> = {
 function LiveBoardSectionView({ section }: { section: LiveBoardSection }) {
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionLabel, section.kind === 'live' && styles.sectionLabelLive]}>
+      <Text
+        maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+        style={[styles.sectionLabel, section.kind === 'live' && styles.sectionLabelLive]}
+      >
         {SECTION_LABELS[section.kind]}
       </Text>
       <View style={styles.board}>
         {section.kind === 'up_next' ? (
           section.groups.map((group) => (
             <View key={group.label} style={styles.boardGroup}>
-              <Text style={styles.windowLabel}>{group.label}</Text>
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.windowLabel}>
+                {group.label}
+              </Text>
               <Rows rows={group.rows} />
             </View>
           ))

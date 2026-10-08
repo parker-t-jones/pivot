@@ -8,8 +8,11 @@ import { theme } from '../lib/theme';
 const ROW_HEIGHT = 40;
 /** Team-color stripe on the left edge of a row the user has a stake in (§11.2). */
 const STRIPE_WIDTH = 3;
-/** Fixed so kickoff times and FINAL align down the column regardless of string width. */
-const TIME_COLUMN_WIDTH = 68;
+/**
+ * Holds "12:00 PM" at the default ticker size so kickoff times still share a column.
+ * The column grows with the text instead of clipping it.
+ */
+const TIME_COLUMN_MIN_WIDTH = 68;
 const NETWORK_COLUMN_WIDTH = 58;
 /** Past this many stakes the dots become "+n" rather than growing the row. */
 const MAX_STAKE_DOTS = 3;
@@ -95,6 +98,8 @@ export function BoardRow({ row, showDivider = true, mode = 'pregame', live }: Bo
         ]}
       />
       <Text
+        maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+        numberOfLines={1}
         style={[
           styles.time,
           hasStake ? styles.timeWithStake : null,
@@ -105,16 +110,25 @@ export function BoardRow({ row, showDivider = true, mode = 'pregame', live }: Bo
         {time}
       </Text>
       <Text
+        maxFontSizeMultiplier={theme.fontScaleCaps.dense}
         numberOfLines={1}
         style={[styles.matchup, hasStake && !mutedFinal ? null : styles.mutedText]}
       >
         {matchup}
       </Text>
-      <Text numberOfLines={1} style={styles.network}>
+      <Text
+        maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+        numberOfLines={1}
+        style={styles.network}
+      >
         {row.network ?? ''}
       </Text>
       {score !== null ? (
-        <Text numberOfLines={1} style={[styles.score, hasStake ? null : styles.mutedText]}>
+        <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          numberOfLines={1}
+          style={[styles.score, hasStake ? null : styles.mutedText]}
+        >
           {score}
         </Text>
       ) : null}
@@ -122,7 +136,15 @@ export function BoardRow({ row, showDivider = true, mode = 'pregame', live }: Bo
         {Array.from({ length: dotCount }, (_, index) => (
           <View key={index} style={styles.dot} />
         ))}
-        {overflowCount > 0 ? <Text style={styles.dotOverflow}>{`+${overflowCount}`}</Text> : null}
+        {overflowCount > 0 ? (
+          <Text
+            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+            numberOfLines={1}
+            style={styles.dotOverflow}
+          >
+            {`+${overflowCount}`}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -171,7 +193,7 @@ const styles = StyleSheet.create({
   row: {
     alignItems: 'center',
     flexDirection: 'row',
-    height: ROW_HEIGHT,
+    minHeight: ROW_HEIGHT,
   },
   rowDivider: {
     borderTopColor: theme.colors.rowDivider,
@@ -197,9 +219,13 @@ const styles = StyleSheet.create({
   time: {
     color: theme.colors.textSecondary,
     fontFamily: fonts.monoMedium,
+    flexShrink: 0,
     fontSize: theme.type.ticker.size,
     fontVariant: [...theme.type.ticker.fontVariant],
-    width: TIME_COLUMN_WIDTH,
+    // Padding stays inside the min width at the default size, and keeps a gutter
+    // once the scaled time fills that width.
+    minWidth: TIME_COLUMN_MIN_WIDTH,
+    paddingRight: theme.spacing.sm,
   },
   timeFinal: {
     color: theme.colors.textTertiary,

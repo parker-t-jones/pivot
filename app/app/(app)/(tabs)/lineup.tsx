@@ -42,7 +42,8 @@ const SWITCH_TRACK = { false: theme.colors.border, true: theme.colors.accent } a
 const SWITCH_THUMB = theme.colors.textPrimary;
 const STRIPE_WIDTH = 3;
 const ROW_MIN_HEIGHT = 52;
-const SLOT_COLUMN_WIDTH = 44;
+/** Holds "FLEX" at the default eyebrow size; the column grows with the label. */
+const SLOT_COLUMN_MIN_WIDTH = 44;
 
 function isBenchSlot(slot: LineupSlot): boolean {
   if (slot.slot_type === 'bench') return true;
@@ -114,10 +115,7 @@ export default function LineupScreen() {
     [leagues, selectedLeagueId],
   );
 
-  const watchedIds = useMemo(
-    () => new Set(me?.preferences.watchedLeagueIds ?? []),
-    [me],
-  );
+  const watchedIds = useMemo(() => new Set(me?.preferences.watchedLeagueIds ?? []), [me]);
 
   useEffect(() => {
     if (leagues.length === 0) {
@@ -218,10 +216,7 @@ export default function LineupScreen() {
   };
 
   // Load, pull-to-refresh, and Sync all write `lineup` through `loadLineup`.
-  const orderedSlots = useMemo(
-    () => orderLineupSlots(lineup?.slots ?? []),
-    [lineup],
-  );
+  const orderedSlots = useMemo(() => orderLineupSlots(lineup?.slots ?? []), [lineup]);
   const starterSlots = orderedSlots.filter((slot) => !isBenchSlot(slot));
   const benchSlots = orderedSlots.filter((slot) => isBenchSlot(slot));
   const now = new Date();
@@ -319,7 +314,9 @@ export default function LineupScreen() {
 
   if (leagues.length === 0) {
     return (
-      <View style={[styles.screen, styles.emptyScreen, { paddingTop: insets.top + theme.spacing.lg }]}>
+      <View
+        style={[styles.screen, styles.emptyScreen, { paddingTop: insets.top + theme.spacing.lg }]}
+      >
         <LineupHeader week={null} />
         <Text style={styles.emptyCopy}>Connect a fantasy team to manage your lineup.</Text>
         <SecondaryButton
@@ -335,7 +332,10 @@ export default function LineupScreen() {
       style={styles.screen}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + theme.spacing.lg, paddingBottom: insets.bottom + theme.spacing.huge },
+        {
+          paddingTop: insets.top + theme.spacing.lg,
+          paddingBottom: insets.bottom + theme.spacing.huge,
+        },
       ]}
       refreshControl={
         <RefreshControl
@@ -354,7 +354,10 @@ export default function LineupScreen() {
           onSelect={setSelectedLeagueId}
         />
         {selectedLeague ? (
-          <Text style={watchingSelected ? styles.watching : styles.notWatching}>
+          <Text
+            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+            style={watchingSelected ? styles.watching : styles.notWatching}
+          >
             {watchingSelected ? 'WATCHING' : 'NOT WATCHING'}
           </Text>
         ) : null}
@@ -362,7 +365,9 @@ export default function LineupScreen() {
 
       <View style={styles.rosterSection}>
         <View style={styles.rosterHeader}>
-          <Text style={styles.benchEyebrow}>STARTERS</Text>
+          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+            STARTERS
+          </Text>
           {selectedLeague ? (
             <TextButton
               disabled={manageBusy}
@@ -373,45 +378,24 @@ export default function LineupScreen() {
           ) : null}
         </View>
 
-      {loadError ? (
-        <ErrorState
-          message={loadError}
-          onRetry={() => {
-            void loadLineup(selectedLeague);
-          }}
-        />
-      ) : orderedSlots.length === 0 ? (
-        <Text style={styles.emptyCopy}>No players in this lineup yet.</Text>
-      ) : (
-        <>
-          {starterSlots.length > 0 ? (
-            <View style={styles.rosterWell}>
-              {starterSlots.map((slot, index) => (
-                <PlayerRow
-                  divided={index > 0}
-                  key={slot.slot_id}
-                  mutedName={false}
-                  now={now}
-                  onToggleStar={(value) => {
-                    void toggleStar(slot, value);
-                  }}
-                  saving={savingSlotId === slot.slot_id || !lineup}
-                  slot={slot}
-                  timeZone={timeZone}
-                  weekGames={weekGames}
-                />
-              ))}
-            </View>
-          ) : null}
-          {benchSlots.length > 0 ? (
-            <>
-              <Text style={styles.benchEyebrow}>BENCH</Text>
+        {loadError ? (
+          <ErrorState
+            message={loadError}
+            onRetry={() => {
+              void loadLineup(selectedLeague);
+            }}
+          />
+        ) : orderedSlots.length === 0 ? (
+          <Text style={styles.emptyCopy}>No players in this lineup yet.</Text>
+        ) : (
+          <>
+            {starterSlots.length > 0 ? (
               <View style={styles.rosterWell}>
-                {benchSlots.map((slot, index) => (
+                {starterSlots.map((slot, index) => (
                   <PlayerRow
                     divided={index > 0}
                     key={slot.slot_id}
-                    mutedName
+                    mutedName={false}
                     now={now}
                     onToggleStar={(value) => {
                       void toggleStar(slot, value);
@@ -423,10 +407,33 @@ export default function LineupScreen() {
                   />
                 ))}
               </View>
-            </>
-          ) : null}
-        </>
-      )}
+            ) : null}
+            {benchSlots.length > 0 ? (
+              <>
+                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+                  BENCH
+                </Text>
+                <View style={styles.rosterWell}>
+                  {benchSlots.map((slot, index) => (
+                    <PlayerRow
+                      divided={index > 0}
+                      key={slot.slot_id}
+                      mutedName
+                      now={now}
+                      onToggleStar={(value) => {
+                        void toggleStar(slot, value);
+                      }}
+                      saving={savingSlotId === slot.slot_id || !lineup}
+                      slot={slot}
+                      timeZone={timeZone}
+                      weekGames={weekGames}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : null}
+          </>
+        )}
       </View>
     </ScrollView>
   );
@@ -435,7 +442,9 @@ export default function LineupScreen() {
 function LineupHeader({ week }: { week: number | null }) {
   return (
     <View style={styles.headerBlock}>
-      <Text style={styles.eyebrow}>{weekEyebrow(week)}</Text>
+      <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.eyebrow}>
+        {weekEyebrow(week)}
+      </Text>
       <Text style={styles.screenTitle}>Lineup</Text>
     </View>
   );
@@ -495,6 +504,7 @@ function LeagueSwitcher({
       >
         <Text
           ellipsizeMode="tail"
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
           numberOfLines={1}
           style={[styles.switcherChipLabel, selected && styles.switcherChipLabelSelected]}
         >
@@ -566,7 +576,11 @@ function PlayerRow({
         accessible
         style={styles.playerMain}
       >
-        <Text numberOfLines={1} style={styles.slotTag}>
+        <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          numberOfLines={1}
+          style={styles.slotTag}
+        >
           {slotLabel(slot.position_in_lineup)}
         </Text>
         <View style={styles.playerInfo}>
@@ -578,7 +592,11 @@ function PlayerRow({
           </Text>
         </View>
         {gameLine ? (
-          <Text numberOfLines={1} style={[styles.gameLine, gameLineToneStyle(gameLine)]}>
+          <Text
+            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+            numberOfLines={1}
+            style={[styles.gameLine, gameLineToneStyle(gameLine)]}
+          >
             {gameLine}
           </Text>
         ) : null}
@@ -697,7 +715,9 @@ const styles = StyleSheet.create({
   rosterHeader: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    rowGap: theme.spacing.xs,
   },
   rosterSection: {
     gap: theme.spacing.sm,
@@ -724,9 +744,10 @@ const styles = StyleSheet.create({
     fontFamily: fonts.monoBold,
     fontSize: theme.type.eyebrow.size,
     letterSpacing: theme.type.eyebrow.letterSpacing,
+    flexShrink: 0,
     marginLeft: theme.spacing.md,
+    minWidth: SLOT_COLUMN_MIN_WIDTH,
     textTransform: 'uppercase',
-    width: SLOT_COLUMN_WIDTH,
   },
   stripe: {
     alignSelf: 'stretch',

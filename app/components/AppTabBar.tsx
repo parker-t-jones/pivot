@@ -10,11 +10,10 @@ import { theme } from '../lib/theme';
  * `expo-router`'s vendored `react-navigation` build — guarantees this always matches whatever
  * `BottomTabBarProps` shape `<Tabs tabBar={(props) => <AppTabBar {...props} />}>` actually passes.
  */
-type AppTabBarProps = NonNullable<ComponentProps<typeof Tabs>['tabBar']> extends (
-  props: infer P,
-) => unknown
-  ? P
-  : never;
+type AppTabBarProps =
+  NonNullable<ComponentProps<typeof Tabs>['tabBar']> extends (props: infer P) => unknown
+    ? P
+    : never;
 
 /**
  * Custom three-tab bar — Lineup · Home · Settings, all plain text. Docked full-width bar (not
@@ -65,7 +64,12 @@ function SideTab({
       onPress={onPress}
       style={styles.sideTab}
     >
-      <Text style={[styles.sideLabel, active && styles.sideLabelActive]}>{label}</Text>
+      <Text
+        maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+        style={[styles.sideLabel, active && styles.sideLabelActive]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }

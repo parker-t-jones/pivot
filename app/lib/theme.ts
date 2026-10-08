@@ -128,6 +128,14 @@ export const theme = {
       fontFamily: 'PlusJakartaSans_700Bold',
     },
   },
+  /**
+   * iOS Dynamic Type caps. Dense UI stops early so rows and labels stay on one line;
+   * the large team-name title may grow further. Body text is left uncapped.
+   */
+  fontScaleCaps: {
+    dense: 1.3,
+    title: 1.6,
+  },
 } as const;
 
 export type Theme = typeof theme;

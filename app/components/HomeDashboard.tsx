@@ -43,7 +43,9 @@ export function HomeDashboard({
     >
       {eyebrow}
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Home</Text>
+        <Text maxFontSizeMultiplier={theme.fontScaleCaps.title} style={styles.title}>
+          Home
+        </Text>
         {headerRight}
       </View>
       {children}
@@ -59,8 +61,10 @@ const styles = StyleSheet.create({
   headerRow: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginBottom: theme.spacing.sm,
+    rowGap: theme.spacing.xs,
   },
   screen: {
     backgroundColor: theme.colors.background,
@@ -68,6 +72,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: theme.colors.textPrimary,
+    flexShrink: 0,
     // Same JetBrains Mono bold as the Now Active eyebrow (type trial).
     fontFamily: fonts.monoBold,
     fontSize: theme.type.title.size,

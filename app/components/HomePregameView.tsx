@@ -49,11 +49,16 @@ export function HomePregameView({
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
-        <Text style={styles.modeEyebrow}>{`WEEK ${week} · PRE-GAME`}</Text>
+        <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.modeEyebrow}>
+          {`WEEK ${week} · PRE-GAME`}
+        </Text>
         {countdownMs === null ? null : (
           <View style={styles.headerMeta}>
-            <Text style={styles.metaLabel}>NEXT KICKOFF</Text>
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.metaLabel}>
+              NEXT KICKOFF
+            </Text>
             <Text
+              maxFontSizeMultiplier={theme.fontScaleCaps.dense}
               style={[styles.countdown, countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
             >
               {formatCountdown(countdownMs)}
@@ -78,7 +83,12 @@ export function HomePregameView({
             <View style={styles.board}>
               {groups.map((group) => (
                 <View key={group.label} style={styles.boardGroup}>
-                  <Text style={styles.windowLabel}>{group.label}</Text>
+                  <Text
+                    maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                    style={styles.windowLabel}
+                  >
+                    {group.label}
+                  </Text>
                   {group.rows.map((row, index) => (
                     <BoardRow key={row.gameId} row={row} showDivider={index > 0} />
                   ))}
@@ -120,7 +130,9 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'flex-start',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    rowGap: theme.spacing.xs,
   },
   headerMeta: {
     alignItems: 'flex-end',

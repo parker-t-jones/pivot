@@ -111,6 +111,10 @@ describe('theme', () => {
     });
   });
 
+  it('caps Dynamic Type on dense UI and the large title', () => {
+    expect(theme.fontScaleCaps).toEqual({ dense: 1.3, title: 1.6 });
+  });
+
   it('adds the amber-ladder tokens (PIVOT-STAKES-PLAN.md §11.1)', () => {
     expect(theme.colors.ember).toBe('rgba(245, 160, 24, 0.05)');
     expect(theme.colors.emberSolid).toBe('#17120F');

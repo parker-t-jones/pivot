@@ -16,7 +16,8 @@ import { ManageLineupLink } from './HomeSegmentRow';
 
 /** Same 3pt stake stripe BoardRow uses — kept local so MY CARD doesn't import BoardRow styles. */
 const STRIPE_WIDTH = 3;
-const TIME_COLUMN_WIDTH = 68;
+/** Holds "12:00 PM" at the default ticker size; the column grows with the text. */
+const TIME_COLUMN_MIN_WIDTH = 68;
 const NETWORK_COLUMN_WIDTH = 58;
 
 interface MyCardListProps {
@@ -47,7 +48,9 @@ export function MyCardList({ groups, lineupGroups, liveGames = [] }: MyCardListP
   return (
     <View style={styles.myCardList}>
       <View style={styles.stakesHeader}>
-        <Text style={styles.stakesEyebrow}>{`YOUR STAKES · ${stakeCount}`}</Text>
+        <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.stakesEyebrow}>
+          {`YOUR STAKES · ${stakeCount}`}
+        </Text>
         <ManageLineupLink />
       </View>
       {myCardGames.length === 0 ? (
@@ -93,6 +96,8 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
           ]}
         />
         <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          numberOfLines={1}
           style={[
             styles.cardTime,
             inProgress ? styles.cardTimeLive : null,
@@ -101,24 +106,52 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
         >
           {time}
         </Text>
-        <Text numberOfLines={1} style={styles.cardMatchup}>
+        <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          numberOfLines={1}
+          style={styles.cardMatchup}
+        >
           {matchup}
         </Text>
-        <Text numberOfLines={1} style={styles.cardNetwork}>
+        <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          numberOfLines={1}
+          style={styles.cardNetwork}
+        >
           {game.network ?? ''}
         </Text>
-        {score !== null ? <Text style={styles.cardScore}>{score}</Text> : null}
+        {score !== null ? (
+          <Text
+            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+            numberOfLines={1}
+            style={styles.cardScore}
+          >
+            {score}
+          </Text>
+        ) : null}
       </View>
       {game.stakes.map((stake, index) => (
         <View
           key={`${stake.label}-${stake.value}-${index}`}
           style={[styles.stakeLine, index === 0 ? styles.stakeLineFirst : null]}
         >
-          <Text style={styles.stakeTag}>{stake.tag}</Text>
+          <Text
+            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+            numberOfLines={1}
+            style={styles.stakeTag}
+          >
+            {stake.tag}
+          </Text>
           <Text numberOfLines={1} style={styles.stakeLabel}>
             {stake.label}
           </Text>
-          <Text style={styles.stakeValue}>{stake.value}</Text>
+          <Text
+            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+            numberOfLines={1}
+            style={styles.stakeValue}
+          >
+            {stake.value}
+          </Text>
         </View>
       ))}
     </View>
@@ -166,9 +199,11 @@ const styles = StyleSheet.create({
   cardTime: {
     color: theme.colors.brass,
     fontFamily: fonts.monoMedium,
+    flexShrink: 0,
     fontSize: theme.type.ticker.size,
     fontVariant: [...theme.type.ticker.fontVariant],
-    width: TIME_COLUMN_WIDTH,
+    minWidth: TIME_COLUMN_MIN_WIDTH,
+    paddingRight: theme.spacing.sm,
   },
   cardTimeFinal: {
     color: theme.colors.textTertiary,
@@ -201,7 +236,9 @@ const styles = StyleSheet.create({
   stakesHeader: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    rowGap: theme.spacing.xs,
   },
   stakeLine: {
     alignItems: 'center',

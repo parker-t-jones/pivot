@@ -45,28 +45,38 @@ export function FeaturedStakeCard({
 
       <View style={styles.body}>
         <View style={styles.headerRow}>
-          <Text style={styles.eyebrow}>{eyebrow}</Text>
-          <Text style={styles.meta}>{network === null ? when : `${when} · ${network}`}</Text>
+          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.eyebrow}>
+            {eyebrow}
+          </Text>
+          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.meta}>
+            {network === null ? when : `${when} · ${network}`}
+          </Text>
         </View>
 
-        <View style={styles.matchupRow}>
-          <Text numberOfLines={1} style={styles.nickname}>
-            {game.away_team_name.toUpperCase()}
+        <Text
+          adjustsFontSizeToFit
+          maxFontSizeMultiplier={theme.fontScaleCaps.title}
+          minimumFontScale={0.7}
+          numberOfLines={1}
+          style={styles.nickname}
+        >
+          {game.away_team_name.toUpperCase()}
+          <Text maxFontSizeMultiplier={theme.fontScaleCaps.title} style={styles.at}>
+            {' @ '}
           </Text>
-          <Text style={styles.at}>@</Text>
-          <Text numberOfLines={1} style={styles.nickname}>
-            {game.home_team_name.toUpperCase()}
-          </Text>
-        </View>
+          {game.home_team_name.toUpperCase()}
+        </Text>
 
         {players.length > 0 ? (
           <View style={styles.chips}>
             {players.map((player) => (
               <View key={player.player_id} style={styles.chip}>
-                <Text style={styles.chipName}>
+                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipName}>
                   {`${player.first_name} ${player.last_name}`.trim()}
                 </Text>
-                <Text style={styles.chipPosition}>{player.position}</Text>
+                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipPosition}>
+                  {player.position}
+                </Text>
               </View>
             ))}
           </View>
@@ -133,6 +143,7 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: theme.colors.accent,
+    flexShrink: 0,
     fontFamily: theme.type.eyebrow.fontFamily,
     fontSize: theme.type.eyebrow.size,
     fontWeight: theme.type.eyebrow.weight,
@@ -141,24 +152,22 @@ const styles = StyleSheet.create({
   headerRow: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-  },
-  matchupRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
+    rowGap: theme.spacing.xs,
   },
   meta: {
     color: theme.colors.textTertiary,
+    flexShrink: 0,
     fontFamily: fonts.monoMedium,
     fontSize: theme.type.eyebrow.size,
   },
   nickname: {
     color: theme.colors.textPrimary,
-    flexShrink: 1,
     fontFamily: theme.type.title.fontFamily,
     fontSize: theme.type.title.size,
     fontWeight: theme.type.title.weight,
     letterSpacing: theme.type.title.letterSpacing,
+    width: '100%',
   },
 });
