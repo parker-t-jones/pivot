@@ -8,6 +8,9 @@ export interface ScheduleGame {
   game_id: string;
   status: 'scheduled' | 'in_progress' | 'final' | 'postponed' | string;
   scheduled_start: string;
+  /** Present on `GET /games?week=`. Older fixtures may omit them. */
+  home_team_id?: string;
+  away_team_id?: string;
   home_team: string;
   away_team: string;
   home_team_name: string;

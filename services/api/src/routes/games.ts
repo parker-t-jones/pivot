@@ -118,6 +118,8 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
             game_id: game.id,
             status: game.status,
             scheduled_start: game.scheduled_start,
+            home_team_id: game.home_team_id,
+            away_team_id: game.away_team_id,
             ...teamFields(home, away),
             broadcasts: watch?.broadcasts ?? [],
             airings: watch?.airings ?? [],

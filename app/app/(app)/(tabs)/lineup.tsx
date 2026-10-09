@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
@@ -19,6 +19,7 @@ import { SecondaryButton } from '../../../components/SecondaryButton';
 import { TextButton } from '../../../components/TextButton';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
 import { ApiRequestError } from '../../../lib/apiClient';
+import { SHOW_BETS } from '../../../lib/featureFlags';
 import { SHOW_STAR_TOGGLES } from '../../../lib/flags';
 import { fonts } from '../../../lib/fonts';
 import {
@@ -38,6 +39,8 @@ import { fetchMe, patchPreferences, type MeResponse } from '../../../lib/me';
 import { opponentSectionState } from '../../../lib/opponentLineup';
 import { formatGameLine, gameForTeam } from '../../../lib/playerGame';
 import { fetchGamesWeek, type ScheduleGame } from '../../../lib/schedule';
+import { formatStakeLabel, stakeTeams, type ManualStake } from '../../../lib/stakes';
+import { deleteStake, fetchStakes } from '../../../lib/stakesClient';
 import { theme } from '../../../lib/theme';
 
 const SWITCH_TRACK = { false: theme.colors.border, true: theme.colors.accent } as const;
@@ -96,6 +99,20 @@ function isWatchingLeague(watchedIds: Set<string>, leagueId: string): boolean {
 function weekEyebrow(week: number | null): string {
   return week == null ? 'FANTASY' : `WEEK ${week} · FANTASY`;
 }
+
+function stakeMeta(stake: ManualStake): string {
+  if (!stake.game) return '';
+  const matchup = `${stake.game.away_team} @ ${stake.game.home_team}`;
+  const when = new Date(stake.game.scheduled_start);
+  const time = Number.isNaN(when.getTime())
+    ? ''
+    : new Intl.DateTimeFormat(undefined, {
+        weekday: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(when);
+  return [matchup, time].filter((part) => part.length > 0).join(' · ');
+}
 export default function LineupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -113,6 +130,7 @@ export default function LineupScreen() {
   const [me, setMe] = useState<MeResponse | null>(null);
   /** Optimistic `watchOpponent` while a preferences PATCH is in flight. */
   const [watchOpponentPending, setWatchOpponentPending] = useState<boolean | null>(null);
+  const [bets, setBets] = useState<ManualStake[]>([]);
   const watchOpponentSave = useRef(false);
 
   const selectedLeague = useMemo(
@@ -139,6 +157,7 @@ export default function LineupScreen() {
     if (!league) {
       setLineup(null);
       setWeekGames(null);
+      setBets([]);
       setLoadError(null);
       return;
     }
@@ -146,6 +165,14 @@ export default function LineupScreen() {
     try {
       const response = await fetchLineup(league.league_id);
       setLineup(response);
+      if (SHOW_BETS) {
+        try {
+          const stakes = await fetchStakes(response.week);
+          setBets(stakes.stakes);
+        } catch {
+          setBets([]);
+        }
+      }
       try {
         const slate = await fetchGamesWeek(response.week);
         setWeekGames(slate.games);
@@ -171,6 +198,36 @@ export default function LineupScreen() {
     setIsLoading(true);
     void loadLineup(selectedLeague).finally(() => setIsLoading(false));
   }, [loadLineup, selectedLeague, leaguesRevision]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!SHOW_BETS || lineup?.week == null) return;
+      void fetchStakes(lineup.week)
+        .then((response) => setBets(response.stakes))
+        .catch(() => setBets([]));
+    }, [lineup?.week]),
+  );
+
+  const confirmRemoveBet = (stake: ManualStake) => {
+    const label = formatStakeLabel(stake, stakeTeams(stake));
+    Alert.alert('Remove this bet?', label, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            try {
+              await deleteStake(stake.id);
+              setBets((current) => current.filter((row) => row.id !== stake.id));
+            } catch (error) {
+              Alert.alert('Could not remove', errorMessage(error));
+            }
+          })();
+        },
+      },
+    ]);
+  };
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -458,6 +515,47 @@ export default function LineupScreen() {
           </>
         )}
 
+        {SHOW_BETS ? (
+          <View style={styles.opponentSection}>
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+              BETS
+            </Text>
+            <TextButton
+              label="Add a stake"
+              onPress={() => {
+                router.push('/(app)/add-stake');
+              }}
+            />
+            {bets.length === 0 ? (
+              <Text style={styles.emptyCopy}>No bets this week.</Text>
+            ) : (
+              bets.map((stake) => (
+                <View key={stake.id} style={styles.betRow}>
+                  <View style={styles.playerInfo}>
+                    <Text
+                      maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                      style={styles.playerName}
+                    >
+                      {formatStakeLabel(stake, stakeTeams(stake))}
+                    </Text>
+                    <Text
+                      maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                      style={styles.playerMeta}
+                    >
+                      {stakeMeta(stake)}
+                    </Text>
+                  </View>
+                  <TextButton
+                    label="Remove"
+                    onPress={() => confirmRemoveBet(stake)}
+                    tone="danger"
+                  />
+                </View>
+              ))
+            )}
+          </View>
+        ) : null}
+
         {opponentView === 'hidden' || !lineup?.opponent ? null : (
           <View style={styles.opponentSection}>
             <View style={styles.opponentHeader}>
@@ -666,8 +764,7 @@ function PlayerRow({
   const gameLine = game == null ? null : formatGameLine(game, now, timeZone);
   const teamColor =
     game != null && game.kind !== 'bye' && game.teamColor != null ? game.teamColor : null;
-  const stripeColor =
-    showTeamStripe && teamColor != null ? teamColor : theme.colors.wellBorder;
+  const stripeColor = showTeamStripe && teamColor != null ? teamColor : theme.colors.wellBorder;
   return (
     <View style={[styles.playerRow, divided && styles.playerRowDivider]}>
       <View style={[styles.stripe, { backgroundColor: stripeColor }]} />
@@ -730,6 +827,12 @@ const styles = StyleSheet.create({
   content: {
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg2,
+  },
+  betRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    minHeight: ROW_MIN_HEIGHT,
   },
   benchEyebrow: {
     color: theme.colors.brass,
