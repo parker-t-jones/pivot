@@ -18,6 +18,7 @@ function slot(overrides: Partial<OpponentStakeSlot> = {}): OpponentStakeSlot {
     teamId: PHI,
     position: 'WR',
     slotType: 'starter',
+    positionInLineup: 'WR',
     ...overrides,
   };
 }
@@ -60,7 +61,9 @@ describe('opponentStakesFor', () => {
   });
 
   it('keeps a defense the same way as any other player', () => {
-    const rows = rowsFor([slot({ playerId: 'phi-def', teamId: PHI, position: 'DEF' })]);
+    const rows = rowsFor([
+      slot({ playerId: 'phi-def', teamId: PHI, position: 'DEF', positionInLineup: 'DEF' }),
+    ]);
     expect(rows).toEqual([
       {
         userId: USER,
@@ -72,6 +75,8 @@ describe('opponentStakesFor', () => {
         source: 'SLEEPER_OPPONENT',
         sourceRef: LEAGUE,
         weight: 0.5,
+        slotLabel: 'DEF',
+        slotIndex: 0,
       },
     ]);
   });
@@ -81,14 +86,22 @@ describe('resolveOpponentStakeSlots', () => {
   it('drops a starter missing from players and reports that id', () => {
     const resolved = resolveOpponentStakeSlots(
       [
-        { externalPlayerId: 'sl-wr', slotType: 'starter' },
-        { externalPlayerId: 'sl-missing', slotType: 'flex' },
-        { externalPlayerId: 'sl-bench', slotType: 'bench' },
+        { externalPlayerId: 'sl-wr', slotType: 'starter', positionInLineup: 'WR' },
+        { externalPlayerId: 'sl-missing', slotType: 'flex', positionInLineup: 'FLEX' },
+        { externalPlayerId: 'sl-bench', slotType: 'bench', positionInLineup: 'BN' },
       ],
       new Map([['sl-wr', { id: 'wr', team_id: PHI, position: 'WR' }]]),
     );
     expect(resolved.unresolvedIds).toEqual(['sl-missing']);
-    expect(resolved.slots.map((row) => row.playerId)).toEqual(['wr']);
+    expect(resolved.slots).toEqual([
+      {
+        playerId: 'wr',
+        teamId: PHI,
+        position: 'WR',
+        slotType: 'starter',
+        positionInLineup: 'WR',
+      },
+    ]);
   });
 });
 
@@ -112,6 +125,70 @@ describe('opponent set replace', () => {
         id: 'id-b',
         gameId: 'game-chi',
         subject: { type: 'PLAYER', playerId: 'b', teamId: CHI },
+        slotLabel: 'WR',
+        slotIndex: 0,
+      },
+    ]);
+  });
+
+  it('copies slot_label and the starter index from the opponent slots', () => {
+    const rows = rowsFor([
+      slot({ playerId: 'rb1', positionInLineup: 'RB1' }),
+      slot({ playerId: 'flex', position: 'WR', slotType: 'flex', positionInLineup: 'FLEX' }),
+    ]);
+    expect(
+      rows.map((row) => ({
+        playerId: row.subject.playerId,
+        slotLabel: row.slotLabel,
+        slotIndex: row.slotIndex,
+      })),
+    ).toEqual([
+      { playerId: 'rb1', slotLabel: 'RB1', slotIndex: 0 },
+      { playerId: 'flex', slotLabel: 'FLEX', slotIndex: 1 },
+    ]);
+  });
+
+  it('updates both rows when RB1 and RB2 swap slots', () => {
+    const stored: StoredRosteredStake[] = [
+      {
+        id: 'id-a',
+        playerId: 'a',
+        teamId: PHI,
+        gameId: 'game-phi',
+        slotLabel: 'RB1',
+        slotIndex: 0,
+      },
+      {
+        id: 'id-b',
+        playerId: 'b',
+        teamId: PHI,
+        gameId: 'game-phi',
+        slotLabel: 'RB2',
+        slotIndex: 1,
+      },
+    ];
+    const next = rowsFor([
+      slot({ playerId: 'b', positionInLineup: 'RB1' }),
+      slot({ playerId: 'a', positionInLineup: 'RB2' }),
+    ]);
+    const diff = diffRosteredSet(stored, next);
+
+    expect(diff.deleteIds).toEqual([]);
+    expect(diff.inserts).toEqual([]);
+    expect(diff.updates).toEqual([
+      {
+        id: 'id-b',
+        gameId: 'game-phi',
+        subject: { type: 'PLAYER', playerId: 'b', teamId: PHI },
+        slotLabel: 'RB1',
+        slotIndex: 0,
+      },
+      {
+        id: 'id-a',
+        gameId: 'game-phi',
+        subject: { type: 'PLAYER', playerId: 'a', teamId: PHI },
+        slotLabel: 'RB2',
+        slotIndex: 1,
       },
     ]);
   });

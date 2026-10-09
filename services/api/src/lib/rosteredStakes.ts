@@ -52,6 +52,10 @@ export interface StakeSetInsert {
   source: string;
   sourceRef: string;
   weight: number;
+  /** Opponent display slot (`positionInLineup`). Absent on ROSTERED rows. */
+  slotLabel?: string | null;
+  /** Index in the opponent starter list. Absent on ROSTERED rows. */
+  slotIndex?: number | null;
 }
 
 /** Same slots `rebuildUserLineupCache` reads from `lineup_slots` for a matchup league. */
@@ -143,6 +147,9 @@ export interface StoredRosteredStake {
   playerId: string;
   teamId: string;
   gameId: string;
+  /** Null when the row predates slot metadata, or when it is ROSTERED. */
+  slotLabel?: string | null;
+  slotIndex?: number | null;
 }
 
 export interface RosteredSetDiff {
@@ -162,13 +169,25 @@ export function diffRosteredSet<T extends StakeSetInsert = RosteredStakeInsert>(
 ): {
   deleteIds: string[];
   inserts: T[];
-  updates: { id: string; gameId: string; subject: T['subject'] }[];
+  updates: {
+    id: string;
+    gameId: string;
+    subject: T['subject'];
+    slotLabel?: string | null;
+    slotIndex?: number | null;
+  }[];
 } {
   const existingByPlayer = new Map(existing.map((row) => [row.playerId, row]));
   const nextIds = new Set(next.map((row) => row.subject.playerId));
   const deleteIds: string[] = [];
   const inserts: T[] = [];
-  const updates: { id: string; gameId: string; subject: T['subject'] }[] = [];
+  const updates: {
+    id: string;
+    gameId: string;
+    subject: T['subject'];
+    slotLabel?: string | null;
+    slotIndex?: number | null;
+  }[] = [];
 
   for (const row of existing) {
     if (!nextIds.has(row.playerId)) deleteIds.push(row.id);
@@ -180,8 +199,20 @@ export function diffRosteredSet<T extends StakeSetInsert = RosteredStakeInsert>(
       inserts.push(row);
       continue;
     }
-    if (current.gameId !== row.gameId || current.teamId !== row.subject.teamId) {
-      updates.push({ id: current.id, gameId: row.gameId, subject: row.subject });
+    const slotChanged =
+      (current.slotLabel ?? null) !== (row.slotLabel ?? null) ||
+      (current.slotIndex ?? null) !== (row.slotIndex ?? null);
+    if (current.gameId !== row.gameId || current.teamId !== row.subject.teamId || slotChanged) {
+      const update: (typeof updates)[number] = {
+        id: current.id,
+        gameId: row.gameId,
+        subject: row.subject,
+      };
+      if (row.slotLabel !== undefined || row.slotIndex !== undefined) {
+        update.slotLabel = row.slotLabel ?? null;
+        update.slotIndex = row.slotIndex ?? null;
+      }
+      updates.push(update);
     }
   }
 

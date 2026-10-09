@@ -388,6 +388,10 @@ export type Database = {
           game_id: string
           id: string
           season: number
+          /** Lineup slot string (`RB1`, `FLEX`). Display only; null on ROSTERED rows. */
+          slot_label: string | null
+          /** Index in that week's opponent starters. Display only; null on ROSTERED rows. */
+          slot_index: number | null
           source: string
           source_ref: string | null
           subject: Json
@@ -401,6 +405,8 @@ export type Database = {
           game_id: string
           id?: string
           season: number
+          slot_label?: string | null
+          slot_index?: number | null
           source: string
           source_ref?: string | null
           subject: Json
@@ -414,6 +420,8 @@ export type Database = {
           game_id?: string
           id?: string
           season?: number
+          slot_label?: string | null
+          slot_index?: number | null
           source?: string
           source_ref?: string | null
           subject?: Json

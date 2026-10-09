@@ -81,7 +81,13 @@ async function applyDiff(
   diff: {
     deleteIds: readonly string[];
     inserts: readonly StakeSetInsert[];
-    updates: readonly { id: string; gameId: string; subject: StakeSetInsert['subject'] }[];
+    updates: readonly {
+      id: string;
+      gameId: string;
+      subject: StakeSetInsert['subject'];
+      slotLabel?: string | null;
+      slotIndex?: number | null;
+    }[];
   },
 ): Promise<void> {
   if (diff.deleteIds.length > 0) {
@@ -92,7 +98,13 @@ async function applyDiff(
   for (const update of diff.updates) {
     const { error } = await supabase
       .from('stakes')
-      .update({ game_id: update.gameId, subject: update.subject })
+      .update({
+        game_id: update.gameId,
+        subject: update.subject,
+        ...(update.slotLabel !== undefined || update.slotIndex !== undefined
+          ? { slot_label: update.slotLabel ?? null, slot_index: update.slotIndex ?? null }
+          : {}),
+      })
       .eq('id', update.id);
     if (error) throw error;
   }
@@ -104,7 +116,7 @@ async function applyDiff(
 }
 
 function toDbInsert(row: StakeSetInsert) {
-  return {
+  const insert = {
     user_id: row.userId,
     season: row.season,
     week: row.week,
@@ -114,6 +126,12 @@ function toDbInsert(row: StakeSetInsert) {
     source: row.source,
     source_ref: row.sourceRef,
     weight: row.weight,
+  };
+  if (row.slotLabel === undefined && row.slotIndex === undefined) return insert;
+  return {
+    ...insert,
+    slot_label: row.slotLabel ?? null,
+    slot_index: row.slotIndex ?? null,
   };
 }
 
@@ -303,7 +321,7 @@ export async function writeThroughOpponentStakes(
 
     const { data: stored, error: storedError } = await supabase
       .from('stakes')
-      .select('id, game_id, subject, condition, source')
+      .select('id, game_id, subject, condition, source, slot_label, slot_index')
       .eq('user_id', league.user_id)
       .eq('season', league.season_year)
       .eq('week', week)
@@ -321,6 +339,8 @@ export async function writeThroughOpponentStakes(
         playerId: subject.playerId,
         teamId: subject.teamId,
         gameId: row.game_id,
+        slotLabel: row.slot_label,
+        slotIndex: row.slot_index,
       });
     }
 

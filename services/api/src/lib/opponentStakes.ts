@@ -7,6 +7,8 @@ export interface OpponentStakeSlot {
   teamId: string;
   position: string;
   slotType: string;
+  /** `positionInLineup` from the opponent's starter list (`RB1`, `FLEX`). */
+  positionInLineup: string;
 }
 
 export interface OpponentStakesContext {
@@ -34,7 +36,7 @@ export function opponentStakesFor(
   const seen = new Set<string>();
   const rows: OpponentStakeInsert[] = [];
 
-  for (const slot of slots) {
+  for (const [index, slot] of slots.entries()) {
     if (!ACTIVE_SLOT_TYPES.has(slot.slotType)) continue;
     const gameId = ctx.gameIdByTeamId.get(slot.teamId);
     if (!gameId) continue;
@@ -51,6 +53,8 @@ export function opponentStakesFor(
       source: 'SLEEPER_OPPONENT',
       sourceRef: ctx.leagueId,
       weight: 0.5,
+      slotLabel: slot.positionInLineup,
+      slotIndex: index,
     });
   }
 
@@ -62,7 +66,7 @@ export function opponentStakesFor(
  * and belong in the existing lineup-sync log; they are not a failed sync by themselves.
  */
 export function resolveOpponentStakeSlots(
-  lineup: readonly { externalPlayerId: string; slotType: string }[],
+  lineup: readonly { externalPlayerId: string; slotType: string; positionInLineup: string }[],
   playersBySleeperId: ReadonlyMap<string, { id: string; team_id: string; position: string }>,
 ): { slots: OpponentStakeSlot[]; unresolvedIds: string[] } {
   const unresolvedIds: string[] = [];
@@ -83,6 +87,7 @@ export function resolveOpponentStakeSlots(
       teamId: player.team_id,
       position: player.position,
       slotType: slot.slotType,
+      positionInLineup: slot.positionInLineup,
     });
   }
 

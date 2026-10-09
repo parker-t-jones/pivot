@@ -56,6 +56,9 @@ describe('rosteredStakesFor', () => {
     expect(rows.every((row) => row.source === 'SLEEPER_ROSTER' && row.sourceRef === LEAGUE_A)).toBe(
       true,
     );
+    expect(rows.every((row) => row.slotLabel === undefined && row.slotIndex === undefined)).toBe(
+      true,
+    );
   });
 
   it('skips a bye-week player who has no game', () => {
