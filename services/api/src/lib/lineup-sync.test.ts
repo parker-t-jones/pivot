@@ -677,6 +677,7 @@ describe('buildLineupResponse', () => {
         },
       ],
     });
+    expect(response.opponent).toBeNull();
   });
 
   it('reads lineup_slots when lineup_source is matchup', async () => {
@@ -729,5 +730,256 @@ describe('buildLineupResponse', () => {
     expect(response.slots[0]?.slot_id).toBe('slot-1');
     expect(response.slots[0]?.is_star).toBe(true);
     expect(response.regular_season_start).toBe('2026-09-09');
+    expect(response.opponent).toBeNull();
+  });
+
+  const ownMatchup = {
+    league_id: 'league-1',
+    week: 5,
+    last_synced_at: null,
+    lineup_source: 'matchup',
+    regular_season_start: '2026-09-09',
+    slots: [
+      {
+        slot_id: 'slot-1',
+        slot_type: 'starter',
+        position_in_lineup: 'QB',
+        is_star: true,
+        player: {
+          player_id: 'p-qb',
+          first_name: 'Pat',
+          last_name: 'Mahomes',
+          position: 'QB',
+          team: { team_id: 't-kc', abbreviation: 'KC', name: 'Chiefs' },
+        },
+      },
+    ],
+  };
+
+  function matchupClient(options: {
+    stakes?: unknown[];
+    players?: unknown[];
+    games?: unknown[];
+    onTable?: (table: string) => void;
+  }) {
+    return {
+      from: (table: string) => {
+        options.onTable?.(table);
+        const data =
+          table === 'lineup_slots'
+            ? [
+                {
+                  id: 'slot-1',
+                  slot_type: 'starter',
+                  position_in_lineup: 'QB',
+                  is_star: true,
+                  players: {
+                    id: 'p-qb',
+                    first_name: 'Pat',
+                    last_name: 'Mahomes',
+                    position: 'QB',
+                    teams: { id: 't-kc', abbreviation: 'KC', name: 'Chiefs' },
+                  },
+                },
+              ]
+            : table === 'stakes'
+              ? (options.stakes ?? [])
+              : table === 'players'
+                ? (options.players ?? [])
+                : table === 'games'
+                  ? (options.games ?? [])
+                  : null;
+        if (data === null) throw new Error(table);
+        const result = { data, error: null };
+        const query = {
+          select: () => query,
+          eq: () => query,
+          in: () => query,
+          order: () => query,
+          then: (
+            resolve: (value: typeof result) => unknown,
+            reject: (reason: unknown) => unknown,
+          ) => Promise.resolve(result).then(resolve, reject),
+        };
+        return query;
+      },
+    } as unknown as SupabaseServiceClient;
+  }
+
+  const sleeperLeague = {
+    id: 'league-1',
+    last_synced_at: null as string | null,
+    lineup_source: 'matchup',
+    fallback_roster: null,
+    platform: 'sleeper',
+    user_id: 'user-1',
+    season_year: 2026,
+  };
+
+  it('returns null opponent for a manual league without reading stakes', async () => {
+    const tables: string[] = [];
+    const response = await buildLineupResponse(
+      matchupClient({ onTable: (table) => tables.push(table) }),
+      { ...sleeperLeague, platform: 'manual' },
+      5,
+      '2026-09-09',
+    );
+
+    expect(tables).toEqual(['lineup_slots']);
+    expect(response.opponent).toBeNull();
+    const { opponent, ...own } = response;
+    expect(opponent).toBeNull();
+    expect(own).toEqual(ownMatchup);
+  });
+
+  it('returns null opponent when a Sleeper league has no opponent stakes', async () => {
+    const response = await buildLineupResponse(
+      matchupClient({
+        stakes: [
+          {
+            user_id: 'user-1',
+            week: 5,
+            season: 2026,
+            source_ref: 'league-1',
+            created_at: '2026-10-01T00:00:00Z',
+            condition: { type: 'ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-qb' },
+          },
+        ],
+      }),
+      sleeperLeague,
+      5,
+      '2026-09-09',
+    );
+
+    expect(response.opponent).toBeNull();
+    const { opponent, ...own } = response;
+    expect(opponent).toBeNull();
+    expect(own).toEqual(ownMatchup);
+  });
+
+  it('adds opponent starters from this week’s OPPONENT_ROSTERED stakes', async () => {
+    const response = await buildLineupResponse(
+      matchupClient({
+        stakes: [
+          {
+            user_id: 'user-1',
+            week: 4,
+            season: 2026,
+            source_ref: 'league-1',
+            created_at: '2026-09-01T00:00:00Z',
+            condition: { type: 'OPPONENT_ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-old' },
+          },
+          {
+            user_id: 'other-user',
+            week: 5,
+            season: 2026,
+            source_ref: 'league-1',
+            created_at: '2026-10-01T00:00:00Z',
+            condition: { type: 'OPPONENT_ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-other' },
+          },
+          {
+            user_id: 'user-1',
+            week: 5,
+            season: 2025,
+            source_ref: 'league-1',
+            created_at: '2026-10-01T00:00:00Z',
+            condition: { type: 'OPPONENT_ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-last-year' },
+          },
+          {
+            user_id: 'user-1',
+            week: 5,
+            season: 2026,
+            source_ref: 'league-1',
+            created_at: '2026-10-02T00:00:00Z',
+            condition: { type: 'ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-mine' },
+          },
+          {
+            user_id: 'user-1',
+            week: 5,
+            season: 2026,
+            source_ref: 'league-1',
+            created_at: '2026-10-02T00:00:00Z',
+            condition: { type: 'OPPONENT_ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-bye' },
+          },
+          {
+            user_id: 'user-1',
+            week: 5,
+            season: 2026,
+            source_ref: 'league-1',
+            created_at: '2026-10-01T00:00:00Z',
+            condition: { type: 'OPPONENT_ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-wr' },
+          },
+        ],
+        players: [
+          {
+            id: 'p-wr',
+            first_name: 'Christian',
+            last_name: 'Watson',
+            position: 'WR',
+            team_id: 't-gb',
+            teams: { id: 't-gb', abbreviation: 'GB', name: 'Packers' },
+          },
+          {
+            id: 'p-bye',
+            first_name: 'Josh',
+            last_name: 'Jacobs',
+            position: 'RB',
+            team_id: 't-bye',
+            teams: { id: 't-bye', abbreviation: 'GB', name: 'Packers' },
+          },
+        ],
+        games: [
+          {
+            id: 'pre-gb',
+            home_team_id: 't-bye',
+            away_team_id: 't-other',
+            scheduled_start: '2026-08-15T00:00:00Z',
+            season_type: 'pre',
+          },
+          {
+            id: 'reg-gb',
+            home_team_id: 't-gb',
+            away_team_id: 't-chi',
+            scheduled_start: '2026-10-12T20:25:00Z',
+            season_type: 'regular',
+          },
+        ],
+      }),
+      sleeperLeague,
+      5,
+      '2026-09-09',
+    );
+
+    const { opponent, ...own } = response;
+    expect(own).toEqual(ownMatchup);
+    expect(opponent).toEqual({
+      starters: [
+        {
+          player_id: 'p-wr',
+          first_name: 'Christian',
+          last_name: 'Watson',
+          position: 'WR',
+          team: { team_id: 't-gb', abbreviation: 'GB', name: 'Packers' },
+          kickoff: '2026-10-12T20:25:00Z',
+          bye: false,
+        },
+        {
+          player_id: 'p-bye',
+          first_name: 'Josh',
+          last_name: 'Jacobs',
+          position: 'RB',
+          team: { team_id: 't-bye', abbreviation: 'GB', name: 'Packers' },
+          kickoff: null,
+          bye: true,
+        },
+      ],
+    });
   });
 });

@@ -5,6 +5,7 @@ import { getFantasyProvider } from '../providers/index.js';
 import { ApiError } from './errors.js';
 import { assembleUserLineupCache, type CachePlayerRow } from './lineupCacheAssemble.js';
 import { resolveOpponentStakeSlots, type OpponentStakeSlot } from './opponentStakes.js';
+import { gameIdByTeam } from './rosteredStakes.js';
 import { getCurrentNflState } from './nfl-state.js';
 import { deriveDisplayPhaseNow, derivePhaseOpeners, type NflPhase } from './phase-openers.js';
 import type { Json } from './database.types.js';
@@ -645,6 +646,137 @@ export interface LineupResponseLeague {
   last_synced_at: string | null;
   lineup_source: string | null;
   fallback_roster: unknown;
+  /** Opponent starters load only when this is `sleeper`. */
+  platform?: string;
+  user_id?: string;
+  season_year?: number;
+}
+
+export interface LineupOpponentStarter {
+  player_id: string;
+  first_name: string;
+  last_name: string;
+  position: string;
+  team: {
+    team_id: string;
+    abbreviation: string;
+    name: string;
+  } | null;
+  /** `games.scheduled_start` for this week's regular-season game. Null on a bye. */
+  kickoff: string | null;
+  bye: boolean;
+}
+
+/** This week's opponent starters. Null for manual leagues and when no opponent stakes exist. */
+export interface LineupOpponent {
+  starters: LineupOpponentStarter[];
+}
+
+function isOpponentRosteredCondition(value: Json): boolean {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    value['type'] === 'OPPONENT_ROSTERED'
+  );
+}
+
+/**
+ * Opponent starters for the Lineup tab. Returned whether or not `watchOpponent`
+ * is on, so the switch can preview the group. Manual leagues and a week with
+ * no `OPPONENT_ROSTERED` stakes are null — the client hides the section.
+ */
+async function loadOpponentStarters(
+  supabase: SupabaseServiceClient,
+  league: LineupResponseLeague,
+  week: number,
+): Promise<LineupOpponent | null> {
+  if (league.platform !== 'sleeper' || league.user_id == null || league.season_year == null) {
+    return null;
+  }
+
+  const { data: stakeRows, error: stakesError } = await supabase
+    .from('stakes')
+    .select('subject, condition, season, week, user_id, source_ref, created_at')
+    .eq('user_id', league.user_id)
+    .eq('week', week)
+    .eq('source_ref', league.id);
+  if (stakesError) throw stakesError;
+
+  const picked: { playerId: string; createdAt: string }[] = [];
+  const seen = new Set<string>();
+  for (const row of stakeRows ?? []) {
+    if (row.user_id !== league.user_id || row.week !== week || row.source_ref !== league.id) {
+      continue;
+    }
+    if (!isOpponentRosteredCondition(row.condition) || row.season !== league.season_year) continue;
+    const playerId = readStakePlayerId(row.subject);
+    if (!playerId || seen.has(playerId)) continue;
+    seen.add(playerId);
+    picked.push({ playerId, createdAt: row.created_at });
+  }
+  if (picked.length === 0) return null;
+
+  picked.sort(
+    (a, b) => a.createdAt.localeCompare(b.createdAt) || a.playerId.localeCompare(b.playerId),
+  );
+
+  const { data: players, error: playersError } = await supabase
+    .from('players')
+    .select('id, first_name, last_name, position, team_id, teams(id, abbreviation, name)')
+    .in(
+      'id',
+      picked.map((row) => row.playerId),
+    );
+  if (playersError) throw playersError;
+  const playersById = new Map((players ?? []).map((player) => [player.id, player]));
+
+  const { data: gameRows, error: gamesError } = await supabase
+    .from('games')
+    .select('id, home_team_id, away_team_id, scheduled_start, season_type')
+    .eq('season_year', league.season_year)
+    .eq('week', week);
+  if (gamesError) throw gamesError;
+
+  const weekGames = (gameRows ?? []).map((game) => ({
+    id: game.id,
+    homeTeamId: game.home_team_id,
+    awayTeamId: game.away_team_id,
+    seasonType: game.season_type,
+    scheduledStart: game.scheduled_start,
+  }));
+  const gameIdForTeam = gameIdByTeam(weekGames);
+  const kickoffByGameId = new Map(
+    weekGames
+      .filter((game) => game.seasonType === 'regular')
+      .map((game) => [game.id, game.scheduledStart]),
+  );
+
+  const starters: LineupOpponentStarter[] = [];
+  for (const item of picked) {
+    const player = playersById.get(item.playerId);
+    if (!player) continue;
+    const gameId = gameIdForTeam.get(player.team_id);
+    const scheduled = gameId ? kickoffByGameId.get(gameId) : undefined;
+    const kickoff = scheduled != null && scheduled.length > 0 ? scheduled : null;
+    starters.push({
+      player_id: player.id,
+      first_name: player.first_name,
+      last_name: player.last_name,
+      position: player.position,
+      team: player.teams
+        ? {
+            team_id: player.teams.id,
+            abbreviation: player.teams.abbreviation,
+            name: player.teams.name,
+          }
+        : null,
+      kickoff,
+      bye: kickoff == null,
+    });
+  }
+  if (starters.length === 0) return null;
+  return { starters };
 }
 
 /** Shared enrichment behind `GET` / `PUT /leagues/:id/lineup` (Section 9). */
@@ -658,6 +790,7 @@ export async function buildLineupResponse(
     league.lineup_source === 'matchup' || league.lineup_source === 'roster_fallback'
       ? league.lineup_source
       : null;
+  const opponent = await loadOpponentStarters(supabase, league, week);
 
   if (lineupSource === 'roster_fallback') {
     const playerIds = parseFallbackRoster(league.fallback_roster);
@@ -702,6 +835,7 @@ export async function buildLineupResponse(
       lineup_source: lineupSource,
       regular_season_start: regularSeasonStart,
       slots,
+      opponent,
     };
   }
 
@@ -721,6 +855,7 @@ export async function buildLineupResponse(
     last_synced_at: league.last_synced_at,
     lineup_source: lineupSource,
     regular_season_start: regularSeasonStart,
+    opponent,
     slots: (data ?? []).flatMap((slot) => {
       const player = slot.players;
       if (!player) return [];
