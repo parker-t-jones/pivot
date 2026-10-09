@@ -515,7 +515,10 @@ function opponentStarterSlot(starter: OpponentStarter): LineupSlot {
   return {
     slot_id: starter.player_id,
     slot_type: 'starter',
-    position_in_lineup: starter.position,
+    position_in_lineup:
+      starter.slot_label != null && starter.slot_label.length > 0
+        ? starter.slot_label
+        : starter.position,
     is_star: false,
     player: {
       player_id: starter.player_id,

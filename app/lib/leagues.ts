@@ -43,6 +43,8 @@ export interface OpponentStarter {
   } | null;
   kickoff: string | null;
   bye: boolean;
+  /** Lineup slot (`RB1`, `FLEX`). Null on stakes written before slot metadata. */
+  slot_label: string | null;
 }
 
 /** `GET /leagues/:id/lineup` response (Section 9). */

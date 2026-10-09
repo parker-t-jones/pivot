@@ -1,4 +1,4 @@
-import { parsePreferences } from '@pivot/shared';
+import { orderLineupSlots, parsePreferences } from '@pivot/shared';
 import type { LineupCacheProvider } from '../cache/index.js';
 import type { FetchedLineup, NormalizedLineupSlot } from '../providers/fantasy-provider.js';
 import { getFantasyProvider } from '../providers/index.js';
@@ -665,6 +665,8 @@ export interface LineupOpponentStarter {
   /** `games.scheduled_start` for this week's regular-season game. Null on a bye. */
   kickoff: string | null;
   bye: boolean;
+  /** `positionInLineup` (`RB1`, `FLEX`). Null on rows written before slot metadata. */
+  slot_label: string | null;
 }
 
 /** This week's opponent starters. Null for manual leagues and when no opponent stakes exist. */
@@ -697,13 +699,13 @@ async function loadOpponentStarters(
 
   const { data: stakeRows, error: stakesError } = await supabase
     .from('stakes')
-    .select('subject, condition, season, week, user_id, source_ref, created_at')
+    .select('subject, condition, season, week, user_id, source_ref, slot_label, slot_index')
     .eq('user_id', league.user_id)
     .eq('week', week)
     .eq('source_ref', league.id);
   if (stakesError) throw stakesError;
 
-  const picked: { playerId: string; createdAt: string }[] = [];
+  const picked: { playerId: string; slotLabel: string | null; slotIndex: number | null }[] = [];
   const seen = new Set<string>();
   for (const row of stakeRows ?? []) {
     if (row.user_id !== league.user_id || row.week !== week || row.source_ref !== league.id) {
@@ -713,13 +715,13 @@ async function loadOpponentStarters(
     const playerId = readStakePlayerId(row.subject);
     if (!playerId || seen.has(playerId)) continue;
     seen.add(playerId);
-    picked.push({ playerId, createdAt: row.created_at });
+    picked.push({
+      playerId,
+      slotLabel: row.slot_label ?? null,
+      slotIndex: row.slot_index ?? null,
+    });
   }
   if (picked.length === 0) return null;
-
-  picked.sort(
-    (a, b) => a.createdAt.localeCompare(b.createdAt) || a.playerId.localeCompare(b.playerId),
-  );
 
   const { data: players, error: playersError } = await supabase
     .from('players')
@@ -752,7 +754,7 @@ async function loadOpponentStarters(
       .map((game) => [game.id, game.scheduledStart]),
   );
 
-  const starters: LineupOpponentStarter[] = [];
+  const starters: (LineupOpponentStarter & { slotIndex: number | null })[] = [];
   for (const item of picked) {
     const player = playersById.get(item.playerId);
     if (!player) continue;
@@ -773,10 +775,63 @@ async function loadOpponentStarters(
         : null,
       kickoff,
       bye: kickoff == null,
+      slot_label: item.slotLabel,
+      slotIndex: item.slotIndex,
     });
   }
   if (starters.length === 0) return null;
-  return { starters };
+  return { starters: orderOpponentStarters(starters) };
+}
+
+/** NFL position order used when a stake was written before slot metadata existed. */
+const OPPONENT_POSITION_RANK: Record<string, number> = {
+  QB: 0,
+  RB: 1,
+  WR: 2,
+  TE: 3,
+  K: 4,
+  DEF: 5,
+};
+
+const OPPONENT_POSITION_AFTER = 6;
+
+/**
+ * Same order as the user's starters. A null `slot_label` or `slot_index` on any
+ * row means the set predates slot metadata, so the whole list uses position order.
+ */
+function orderOpponentStarters(
+  starters: readonly (LineupOpponentStarter & { slotIndex: number | null })[],
+): LineupOpponentStarter[] {
+  const missingSlot = starters.some((row) => row.slot_label == null || row.slotIndex == null);
+  if (missingSlot) {
+    return [...starters]
+      .sort((a, b) => {
+        const rankA = OPPONENT_POSITION_RANK[a.position] ?? OPPONENT_POSITION_AFTER;
+        const rankB = OPPONENT_POSITION_RANK[b.position] ?? OPPONENT_POSITION_AFTER;
+        if (rankA !== rankB) return rankA - rankB;
+        const byName = a.last_name.localeCompare(b.last_name);
+        if (byName !== 0) return byName;
+        return a.player_id.localeCompare(b.player_id);
+      })
+      .map(({ slotIndex: _slotIndex, ...starter }) => starter);
+  }
+
+  return orderLineupSlots(
+    starters.map((starter) => ({
+      ...starter,
+      position_in_lineup: starter.slot_label ?? '',
+      slot_type: 'starter',
+      player: { player_id: starter.player_id },
+    })),
+  ).map(
+    ({
+      slotIndex: _slotIndex,
+      position_in_lineup: _position,
+      slot_type: _type,
+      player: _player,
+      ...starter
+    }) => starter,
+  );
 }
 
 /** Shared enrichment behind `GET` / `PUT /leagues/:id/lineup` (Section 9). */

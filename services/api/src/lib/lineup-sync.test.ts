@@ -1,3 +1,4 @@
+import { orderLineupSlots } from '@pivot/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseServiceClient } from './supabase.js';
 import { buildLineupResponse, syncLeagueLineup, type LeagueRow } from './lineup-sync.js';
@@ -906,6 +907,8 @@ describe('buildLineupResponse', () => {
             created_at: '2026-10-02T00:00:00Z',
             condition: { type: 'OPPONENT_ROSTERED' },
             subject: { type: 'PLAYER', playerId: 'p-bye' },
+            slot_label: 'FLEX',
+            slot_index: 1,
           },
           {
             user_id: 'user-1',
@@ -915,6 +918,8 @@ describe('buildLineupResponse', () => {
             created_at: '2026-10-01T00:00:00Z',
             condition: { type: 'OPPONENT_ROSTERED' },
             subject: { type: 'PLAYER', playerId: 'p-wr' },
+            slot_label: 'WR1',
+            slot_index: 0,
           },
         ],
         players: [
@@ -969,6 +974,7 @@ describe('buildLineupResponse', () => {
           team: { team_id: 't-gb', abbreviation: 'GB', name: 'Packers' },
           kickoff: '2026-10-12T20:25:00Z',
           bye: false,
+          slot_label: 'WR1',
         },
         {
           player_id: 'p-bye',
@@ -978,8 +984,170 @@ describe('buildLineupResponse', () => {
           team: { team_id: 't-bye', abbreviation: 'GB', name: 'Packers' },
           kickoff: null,
           bye: true,
+          slot_label: 'FLEX',
         },
       ],
     });
+  });
+
+  it('orders opponent starters with the same function as the lineup, including FLEX', async () => {
+    const labeled = [
+      { playerId: 'p-flex', slot: 'FLEX', last: 'Flex', position: 'RB' },
+      { playerId: 'p-rb', slot: 'RB2', last: 'Rb', position: 'RB' },
+      { playerId: 'p-qb2', slot: 'QB', last: 'Qb', position: 'QB' },
+      { playerId: 'p-wr2', slot: 'WR1', last: 'Wr', position: 'WR' },
+    ];
+    const response = await buildLineupResponse(
+      matchupClient({
+        stakes: labeled.map((row, index) => ({
+          user_id: 'user-1',
+          week: 5,
+          season: 2026,
+          source_ref: 'league-1',
+          condition: { type: 'OPPONENT_ROSTERED' },
+          subject: { type: 'PLAYER', playerId: row.playerId },
+          slot_label: row.slot,
+          slot_index: index,
+        })),
+        players: labeled.map((row) => ({
+          id: row.playerId,
+          first_name: 'A',
+          last_name: row.last,
+          position: row.position,
+          team_id: 't-gb',
+          teams: { id: 't-gb', abbreviation: 'GB', name: 'Packers' },
+        })),
+        games: [
+          {
+            id: 'reg-gb',
+            home_team_id: 't-gb',
+            away_team_id: 't-chi',
+            scheduled_start: '2026-10-12T20:25:00Z',
+            season_type: 'regular',
+          },
+        ],
+      }),
+      sleeperLeague,
+      5,
+      '2026-09-09',
+    );
+
+    const expected = orderLineupSlots(
+      labeled.map((row) => ({
+        position_in_lineup: row.slot,
+        slot_type: 'starter',
+        player: { player_id: row.playerId },
+      })),
+    ).map((row) => row.player.player_id);
+
+    expect(response.opponent?.starters.map((starter) => starter.player_id)).toEqual(expected);
+    expect(response.opponent?.starters.map((starter) => starter.slot_label)).toEqual([
+      'QB',
+      'RB2',
+      'WR1',
+      'FLEX',
+    ]);
+  });
+
+  it('falls back to position then last name when any slot field is null', async () => {
+    const response = await buildLineupResponse(
+      matchupClient({
+        stakes: [
+          {
+            user_id: 'user-1',
+            week: 5,
+            season: 2026,
+            source_ref: 'league-1',
+            condition: { type: 'OPPONENT_ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-brown' },
+            slot_label: null,
+            slot_index: null,
+          },
+          {
+            user_id: 'user-1',
+            week: 5,
+            season: 2026,
+            source_ref: 'league-1',
+            condition: { type: 'OPPONENT_ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-qb2' },
+            slot_label: null,
+            slot_index: null,
+          },
+          {
+            user_id: 'user-1',
+            week: 5,
+            season: 2026,
+            source_ref: 'league-1',
+            condition: { type: 'OPPONENT_ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-adams' },
+            slot_label: 'WR1',
+            slot_index: 0,
+          },
+          {
+            user_id: 'user-1',
+            week: 5,
+            season: 2026,
+            source_ref: 'league-1',
+            condition: { type: 'OPPONENT_ROSTERED' },
+            subject: { type: 'PLAYER', playerId: 'p-def' },
+            slot_label: null,
+            slot_index: null,
+          },
+        ],
+        players: [
+          {
+            id: 'p-brown',
+            first_name: 'A',
+            last_name: 'Brown',
+            position: 'WR',
+            team_id: 't-gb',
+            teams: { id: 't-gb', abbreviation: 'GB', name: 'Packers' },
+          },
+          {
+            id: 'p-qb2',
+            first_name: 'A',
+            last_name: 'Zebra',
+            position: 'QB',
+            team_id: 't-gb',
+            teams: { id: 't-gb', abbreviation: 'GB', name: 'Packers' },
+          },
+          {
+            id: 'p-adams',
+            first_name: 'A',
+            last_name: 'Adams',
+            position: 'WR',
+            team_id: 't-gb',
+            teams: { id: 't-gb', abbreviation: 'GB', name: 'Packers' },
+          },
+          {
+            id: 'p-def',
+            first_name: 'A',
+            last_name: 'Lions',
+            position: 'DEF',
+            team_id: 't-gb',
+            teams: { id: 't-gb', abbreviation: 'GB', name: 'Packers' },
+          },
+        ],
+        games: [
+          {
+            id: 'reg-gb',
+            home_team_id: 't-gb',
+            away_team_id: 't-chi',
+            scheduled_start: '2026-10-12T20:25:00Z',
+            season_type: 'regular',
+          },
+        ],
+      }),
+      sleeperLeague,
+      5,
+      '2026-09-09',
+    );
+
+    expect(response.opponent?.starters.map((starter) => starter.last_name)).toEqual([
+      'Zebra',
+      'Adams',
+      'Brown',
+      'Lions',
+    ]);
   });
 });
