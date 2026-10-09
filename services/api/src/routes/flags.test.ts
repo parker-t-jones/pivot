@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@pivot/dispatcher';
 import type { GameState, UserLineupCache } from '@pivot/shared';
 import Fastify from 'fastify';
@@ -48,6 +49,26 @@ interface PlayerRow {
   first_name: string;
   last_name: string;
   position: string;
+  team_id?: string;
+}
+
+interface LeagueRow {
+  id: string;
+  season_year: number;
+}
+
+interface StakeRow {
+  id: string;
+  user_id: string;
+  season: number;
+  week: number;
+  game_id: string;
+  subject: { type: 'PLAYER'; playerId: string; teamId: string };
+  condition: { type: string };
+  source: string;
+  source_ref: string | null;
+  weight: number;
+  created_at: string;
 }
 
 interface UsersFixture {
@@ -76,6 +97,9 @@ class FakeQuery<T> implements PromiseLike<{ data: T[] | null; error: null }> {
     return this;
   }
   or() {
+    return this;
+  }
+  order() {
     return this;
   }
   single(): Promise<{ data: T | null; error: null }> {
@@ -124,20 +148,34 @@ class FakeFlagEventsQuery {
   }
 }
 
-function makeSupabase(fixtures: {
-  games: GameRow[];
-  teams: TeamRow[];
-  user: UsersFixture;
-  flagEvents?: FlagEventRow[];
-  players?: PlayerRow[];
-}) {
+function makeSupabase(
+  fixtures: {
+    games: GameRow[];
+    teams: TeamRow[];
+    user: UsersFixture;
+    flagEvents?: FlagEventRow[];
+    players?: PlayerRow[];
+    leagues?: LeagueRow[];
+    stakes?: StakeRow[];
+  },
+  queried: string[],
+) {
   return {
     from: (table: string) => {
+      queried.push(table);
       if (table === 'games') return new FakeQuery(fixtures.games);
       if (table === 'teams') return new FakeQuery(fixtures.teams);
       if (table === 'users') return new FakeQuery([fixtures.user]);
       if (table === 'flag_events') return new FakeFlagEventsQuery(fixtures.flagEvents ?? []);
       if (table === 'players') return new FakeQuery(fixtures.players ?? []);
+      if (table === 'leagues') {
+        if (!fixtures.leagues) throw new Error(`Unexpected table in test fixture: ${table}`);
+        return new FakeQuery(fixtures.leagues);
+      }
+      if (table === 'stakes') {
+        if (!fixtures.stakes) throw new Error(`Unexpected table in test fixture: ${table}`);
+        return new FakeQuery(fixtures.stakes);
+      }
       throw new Error(`Unexpected table in test fixture: ${table}`);
     },
   } as unknown as SupabaseServiceClient;
@@ -164,10 +202,33 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
   };
 }
 
+function opponentStake(
+  id: string,
+  playerId: string,
+  teamId: string,
+  overrides: Partial<StakeRow> = {},
+): StakeRow {
+  return {
+    id,
+    user_id: 'user-1',
+    season: 2026,
+    week: WEEK,
+    game_id: 'stored-game',
+    subject: { type: 'PLAYER', playerId, teamId },
+    condition: { type: 'OPPONENT_ROSTERED' },
+    source: 'SLEEPER_OPPONENT',
+    source_ref: 'league-1',
+    weight: 0.5,
+    created_at: '2026-10-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 interface TestApp {
   fastify: ReturnType<typeof Fastify>;
   lineupCache: InMemoryLineupCache;
   gameStateStore: InMemoryGameStateStore;
+  queriedTables: string[];
 }
 
 async function buildTestApp(fixtures: {
@@ -176,7 +237,10 @@ async function buildTestApp(fixtures: {
   user: UsersFixture;
   flagEvents?: FlagEventRow[];
   players?: PlayerRow[];
+  leagues?: LeagueRow[];
+  stakes?: StakeRow[];
 }): Promise<TestApp> {
+  const queriedTables: string[] = [];
   const lineupCache = new InMemoryLineupCache();
   await lineupCache.setNflState(
     { season: '2026', week: WEEK, seasonType: 'regular', seasonStartDate: null },
@@ -211,14 +275,14 @@ async function buildTestApp(fixtures: {
     supabaseUrl: 'http://127.0.0.1:54321',
   });
   await fastify.register(servicesPlugin, {
-    supabase: makeSupabase(fixtures),
+    supabase: makeSupabase(fixtures, queriedTables),
     lineupCache,
     gameStateStore,
     realtimeSubscriber: new InMemoryRealtimeBus(),
   });
   await fastify.register(flagsRoutes);
 
-  return { fastify, lineupCache, gameStateStore };
+  return { fastify, lineupCache, gameStateStore, queriedTables };
 }
 
 async function setLineup(
@@ -500,6 +564,390 @@ describe('GET /flags/current', () => {
     expect(gameIds).toEqual(['game-a', 'game-b']);
   });
 
+  it("keeps today's body when watchOpponent is off and does not query opponent stakes", async () => {
+    app = await buildTestApp({
+      games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+      teams: [
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
+      ],
+      user: { subscription_tier: 'free', preferences: {} },
+      players: [{ id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' }],
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState('game-1', makeGameState());
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/flags/current',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    const body = response.json();
+    const { generated_at, ...rest } = body;
+    expect(typeof generated_at).toBe('string');
+    expect(rest).toEqual({
+      flags: [
+        {
+          game_id: 'game-1',
+          priority_score: 2,
+          reasons: ['offense_active'],
+          flagged_players: [
+            { player_id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' },
+          ],
+          game: {
+            home_team: 'KC',
+            away_team: 'LV',
+            home_team_name: 'Chiefs',
+            away_team_name: 'Raiders',
+            home_team_primary_color: '#E31837',
+            home_team_secondary_color: '#FFB81C',
+            away_team_primary_color: '#000000',
+            away_team_secondary_color: '#A5ACAF',
+            score: { home: 14, away: 7 },
+            quarter: 2,
+            time_remaining_sec: 500,
+            possession_team: 'KC',
+            yards_to_endzone: null,
+            down: null,
+            distance: null,
+            in_red_zone: false,
+          },
+          recommended_action: 'switch_primary',
+        },
+      ],
+    });
+    expect(app.queriedTables).not.toContain('stakes');
+    expect(app.queriedTables).not.toContain('leagues');
+  });
+
+  it('leaves flags unchanged when watchOpponent is on for the same fixture', async () => {
+    const games = [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }];
+    const teams = [
+      {
+        id: 'team-kc',
+        abbreviation: 'KC',
+        name: 'Chiefs',
+        primary_color: '#E31837',
+        secondary_color: '#FFB81C',
+      },
+      {
+        id: 'team-lv',
+        abbreviation: 'LV',
+        name: 'Raiders',
+        primary_color: '#000000',
+        secondary_color: '#A5ACAF',
+      },
+    ];
+    const players = [
+      { id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' },
+    ];
+    app = await buildTestApp({
+      games,
+      teams,
+      players,
+      user: { subscription_tier: 'free', preferences: {} },
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState('game-1', makeGameState());
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    const off = await app.fastify.inject({
+      method: 'GET',
+      url: '/flags/current',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.fastify.close();
+
+    app = await buildTestApp({
+      games,
+      teams,
+      players,
+      leagues: [],
+      user: { subscription_tier: 'free', preferences: { watchOpponent: true } },
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState('game-1', makeGameState());
+    const on = await app.fastify.inject({
+      method: 'GET',
+      url: '/flags/current',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(on.json().flags).toEqual(off.json().flags);
+    expect(on.json().opponent_flags).toEqual([]);
+    expect(on.json().opponent_game_ids).toEqual([]);
+  });
+
+  it('includes a red-zone opponent WR and omits a D/ST, another week, and rostered stakes', async () => {
+    app = await buildTestApp({
+      games: [
+        { id: 'game-2', home_team_id: 'team-buf', away_team_id: 'team-mia' },
+        { id: 'game-1', home_team_id: 'team-phi', away_team_id: 'team-dal' },
+        { id: 'game-old', home_team_id: 'team-old', away_team_id: 'team-bye' },
+      ],
+      teams: [
+        {
+          id: 'team-buf',
+          abbreviation: 'BUF',
+          name: 'Bills',
+          primary_color: '#00338D',
+          secondary_color: '#C60C30',
+        },
+        {
+          id: 'team-mia',
+          abbreviation: 'MIA',
+          name: 'Dolphins',
+          primary_color: '#008E97',
+          secondary_color: '#FC4C02',
+        },
+        {
+          id: 'team-phi',
+          abbreviation: 'PHI',
+          name: 'Eagles',
+          primary_color: '#004C54',
+          secondary_color: '#A5ACAF',
+        },
+        {
+          id: 'team-dal',
+          abbreviation: 'DAL',
+          name: 'Cowboys',
+          primary_color: '#003594',
+          secondary_color: '#869397',
+        },
+        {
+          id: 'team-old',
+          abbreviation: 'OLD',
+          name: 'Old',
+          primary_color: '#111111',
+          secondary_color: '#222222',
+        },
+        {
+          id: 'team-bye',
+          abbreviation: 'BYE',
+          name: 'Bye',
+          primary_color: '#333333',
+          secondary_color: '#444444',
+        },
+      ],
+      leagues: [{ id: 'league-1', season_year: 2026 }],
+      stakes: [
+        opponentStake('stake-wr', 'wr-1', 'team-buf'),
+        opponentStake('stake-wr-2', 'wr-2', 'team-phi'),
+        opponentStake('stake-dst', 'dst-1', 'team-mia'),
+        opponentStake('stake-old', 'old-1', 'team-old', { week: WEEK - 1 }),
+        {
+          ...opponentStake('stake-rostered', 'own-1', 'team-buf'),
+          condition: { type: 'ROSTERED' },
+          source: 'SLEEPER_ROSTER',
+        },
+      ],
+      players: [
+        {
+          id: 'wr-1',
+          first_name: 'Stefon',
+          last_name: 'Diggs',
+          position: 'WR',
+          team_id: 'team-buf',
+        },
+        { id: 'wr-2', first_name: 'A.J.', last_name: 'Brown', position: 'WR', team_id: 'team-phi' },
+        {
+          id: 'dst-1',
+          first_name: 'Miami',
+          last_name: 'Defense',
+          position: 'DEF',
+          team_id: 'team-mia',
+        },
+        {
+          id: 'old-1',
+          first_name: 'Old',
+          last_name: 'Player',
+          position: 'WR',
+          team_id: 'team-old',
+        },
+        { id: 'own-1', first_name: 'Own', last_name: 'Back', position: 'RB', team_id: 'team-buf' },
+      ],
+      user: { subscription_tier: 'free', preferences: { watchOpponent: true } },
+    });
+    await app.gameStateStore.setGameState(
+      'game-2',
+      makeGameState({
+        gameId: 'game-2',
+        homeTeamId: 'team-buf',
+        awayTeamId: 'team-mia',
+        possessionTeamId: 'team-buf',
+        inRedZone: true,
+        yardsToOpponentEndzone: 8,
+      }),
+    );
+    await app.gameStateStore.setGameState(
+      'game-1',
+      makeGameState({
+        gameId: 'game-1',
+        homeTeamId: 'team-phi',
+        awayTeamId: 'team-dal',
+        possessionTeamId: 'team-phi',
+        inRedZone: true,
+        yardsToOpponentEndzone: 4,
+      }),
+    );
+    await app.gameStateStore.setGameState(
+      'game-old',
+      makeGameState({
+        gameId: 'game-old',
+        homeTeamId: 'team-old',
+        awayTeamId: 'team-bye',
+        possessionTeamId: 'team-old',
+        inRedZone: true,
+      }),
+    );
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    const body = (
+      await app.fastify.inject({
+        method: 'GET',
+        url: '/flags/current',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    expect(body.flags).toEqual([]);
+    expect(body.opponent_flags.map((flag: { game_id: string }) => flag.game_id)).toEqual([
+      'game-1',
+      'game-2',
+    ]);
+    expect(body.opponent_flags[0]).toMatchObject({
+      game_id: 'game-1',
+      priority_score: 1,
+      player_ids: ['wr-2'],
+      reasons: ['red_zone'],
+    });
+    expect(body.opponent_flags[1].player_ids).toEqual(['wr-1']);
+    const surfaced = body.opponent_flags.flatMap(
+      (flag: { player_ids: string[] }) => flag.player_ids,
+    );
+    expect(surfaced).not.toContain('dst-1');
+    expect(surfaced).not.toContain('old-1');
+    expect(surfaced).not.toContain('own-1');
+    expect(body.opponent_game_ids).toEqual(['game-1', 'game-2']);
+    expect(app.queriedTables).not.toContain('lineup_slots');
+  });
+
+  it('omits an opponent flag for a game already in flags but still lists that game', async () => {
+    app = await buildTestApp({
+      games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+      teams: [
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
+      ],
+      leagues: [{ id: 'league-1', season_year: 2026 }],
+      stakes: [opponentStake('stake-wr', 'wr-1', 'team-kc')],
+      players: [
+        {
+          id: 'player-1',
+          first_name: 'Jonathan',
+          last_name: 'Taylor',
+          position: 'RB',
+          team_id: 'team-kc',
+        },
+        {
+          id: 'wr-1',
+          first_name: 'Stefon',
+          last_name: 'Diggs',
+          position: 'WR',
+          team_id: 'team-kc',
+        },
+      ],
+      user: { subscription_tier: 'free', preferences: { watchOpponent: true } },
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState(
+      'game-1',
+      makeGameState({ inRedZone: true, yardsToOpponentEndzone: 9 }),
+    );
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    const body = (
+      await app.fastify.inject({
+        method: 'GET',
+        url: '/flags/current',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    expect(body.flags.map((flag: { game_id: string }) => flag.game_id)).toEqual(['game-1']);
+    expect(body.opponent_flags).toEqual([]);
+    expect(body.opponent_game_ids).toEqual(['game-1']);
+  });
+
+  it('lists an opponent game with no live state and does not flag it', async () => {
+    app = await buildTestApp({
+      games: [{ id: 'game-quiet', home_team_id: 'team-buf', away_team_id: 'team-mia' }],
+      teams: [
+        {
+          id: 'team-buf',
+          abbreviation: 'BUF',
+          name: 'Bills',
+          primary_color: '#00338D',
+          secondary_color: '#C60C30',
+        },
+        {
+          id: 'team-mia',
+          abbreviation: 'MIA',
+          name: 'Dolphins',
+          primary_color: '#008E97',
+          secondary_color: '#FC4C02',
+        },
+      ],
+      leagues: [{ id: 'league-1', season_year: 2026 }],
+      stakes: [opponentStake('stake-wr', 'wr-1', 'team-buf')],
+      players: [
+        {
+          id: 'wr-1',
+          first_name: 'Stefon',
+          last_name: 'Diggs',
+          position: 'WR',
+          team_id: 'team-buf',
+        },
+      ],
+      user: { subscription_tier: 'free', preferences: { watchOpponent: true } },
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    const body = (
+      await app.fastify.inject({
+        method: 'GET',
+        url: '/flags/current',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    expect(body.flags).toEqual([]);
+    expect(body.opponent_flags).toEqual([]);
+    expect(body.opponent_game_ids).toEqual(['game-quiet']);
+  });
+
   it('rejects an unauthenticated request', async () => {
     app = await buildTestApp({
       games: [],
@@ -508,6 +956,26 @@ describe('GET /flags/current', () => {
     });
     const response = await app.fastify.inject({ method: 'GET', url: '/flags/current' });
     expect(response.statusCode).toBe(401);
+  });
+});
+
+describe('flags route source', () => {
+  it('does not import dispatch or reference sendPush', () => {
+    const flags = readFileSync(new URL('./flags.ts', import.meta.url), 'utf8');
+    const opponent = readFileSync(
+      new URL('../lib/opponentFlagsCurrent.ts', import.meta.url),
+      'utf8',
+    );
+    expect(flags.includes('sendPush')).toBe(false);
+    expect(opponent.includes('sendPush')).toBe(false);
+    expect(opponent.includes('@pivot/dispatcher')).toBe(false);
+    const imported = flags.match(/import\s*\{([^}]+)\}\s*from '@pivot\/dispatcher'/);
+    expect(imported).not.toBeNull();
+    const names = imported?.[1]
+      ?.split(',')
+      .map((part) => part.replace(/\btype\b/g, '').trim())
+      .filter((part) => part.length > 0);
+    expect(names).toEqual(['buildGameSummary', 'decideAction', 'Action', 'ViewingSessionSnapshot']);
   });
 });
 

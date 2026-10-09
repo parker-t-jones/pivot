@@ -17,7 +17,7 @@ export const preferencesSchema = z.object({
     })
     .default({ enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' }),
   autoSwitch: z.boolean().default(false),
-  /** Opponent red-zone nudges. Off until the client turns them on. Nothing reads this yet. */
+  /** Opponent red-zone nudges on Home. Off until the client turns them on. */
   watchOpponent: z.boolean().default(false),
   watchedLeagueIds: z.array(z.string().uuid()).default([]),
 });

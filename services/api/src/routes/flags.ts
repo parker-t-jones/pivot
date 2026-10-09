@@ -15,6 +15,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
+import { loadOpponentRedZone } from '../lib/opponentFlagsCurrent.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
 
@@ -75,9 +76,38 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     const generatedAt = new Date().toISOString();
 
     const nflState = await getCurrentNflState(fastify.lineupCache);
+    const { data: userRow, error: userError } = await fastify.supabase
+      .from('users')
+      .select('subscription_tier, preferences')
+      .eq('id', user.id)
+      .single();
+    if (userError) throw userError;
+    const preferences = parsePreferences(userRow.preferences);
+
+    const finish = async <T>(flags: T[], ownGameIds: readonly string[]) => {
+      if (!preferences.watchOpponent) {
+        return { flags, generated_at: generatedAt };
+      }
+      const opponent = await loadOpponentRedZone({
+        supabase: fastify.supabase,
+        getGameState: (gameId) => fastify.gameStateStore.getGameState(gameId),
+        userId: user.id,
+        week: nflState.week,
+        preferences,
+        subscriptionTier: userRow.subscription_tier,
+        excludeGameIds: new Set(ownGameIds),
+      });
+      return {
+        flags,
+        opponent_flags: opponent.opponent_flags,
+        opponent_game_ids: opponent.opponent_game_ids,
+        generated_at: generatedAt,
+      };
+    };
+
     const lineup = await fastify.lineupCache.getLineupCache(user.id, nflState.week);
     if (!lineup || lineup.teamPositions.size === 0) {
-      return { flags: [], generated_at: generatedAt };
+      return finish([], []);
     }
 
     const teamIds = [...lineup.teamPositions.keys()];
@@ -91,7 +121,7 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     // A user can have stake-teams that face each other this week — dedupe to one lookup per game.
     const games = [...new Map((gameRows ?? []).map((game) => [game.id, game])).values()];
     if (games.length === 0) {
-      return { flags: [], generated_at: generatedAt };
+      return finish([], []);
     }
 
     const relevantTeamIds = [
@@ -117,13 +147,6 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       (teamRows ?? []).map((team) => [team.id, team.secondary_color]),
     );
 
-    const { data: userRow, error: userError } = await fastify.supabase
-      .from('users')
-      .select('subscription_tier, preferences')
-      .eq('id', user.id)
-      .single();
-    if (userError) throw userError;
-    const preferences = parsePreferences(userRow.preferences);
     const decideActionUser = {
       subscriptionTier: userRow.subscription_tier === 'pro' ? ('pro' as const) : ('free' as const),
       autoSwitch: preferences.autoSwitch,
@@ -227,7 +250,10 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     // Deterministic order (sprint instruction): priority descending, game_id ascending on ties.
     flags.sort((a, b) => b.priority_score - a.priority_score || a.game_id.localeCompare(b.game_id));
 
-    return { flags, generated_at: generatedAt };
+    return finish(
+      flags,
+      flags.map((flag) => flag.game_id),
+    );
   });
 
   /**
