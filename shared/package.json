@@ -15,6 +15,11 @@
       "types": "./dist/broadcast/index.d.ts",
       "default": "./dist/broadcast/index.js"
     },
+    "./lineupOrder": {
+      "react-native": "./src/lineupOrder.ts",
+      "types": "./dist/lineupOrder.d.ts",
+      "default": "./dist/lineupOrder.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

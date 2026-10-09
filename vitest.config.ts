@@ -7,6 +7,7 @@ export default defineConfig({
       // Before `@pivot/shared`: a string alias also matches `@pivot/shared/<subpath>` as a prefix.
       '@pivot/shared/broadcast': new URL('./shared/src/broadcast/index.ts', import.meta.url)
         .pathname,
+      '@pivot/shared/lineupOrder': new URL('./shared/src/lineupOrder.ts', import.meta.url).pathname,
       '@pivot/shared': new URL('./shared/src/index.ts', import.meta.url).pathname,
       '@pivot/engine': new URL('./services/engine/src/index.ts', import.meta.url).pathname,
       '@pivot/dispatcher': new URL('./services/dispatcher/src/index.ts', import.meta.url).pathname,
