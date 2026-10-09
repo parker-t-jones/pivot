@@ -41,6 +41,19 @@ export interface RosteredStakeInsert {
   weight: number;
 }
 
+/** Shared shape for a player-stake set replace. Callers filter `existing` to one source. */
+export interface StakeSetInsert {
+  userId: string;
+  season: number;
+  week: number;
+  gameId: string;
+  subject: { type: 'PLAYER'; playerId: string; teamId: string };
+  condition: { type: 'ROSTERED' } | { type: 'OPPONENT_ROSTERED' };
+  source: string;
+  sourceRef: string;
+  weight: number;
+}
+
 /** Same slots `rebuildUserLineupCache` reads from `lineup_slots` for a matchup league. */
 const ACTIVE_SLOT_TYPES = new Set(['starter', 'flex']);
 
@@ -143,15 +156,19 @@ export interface RosteredSetDiff {
  * A second call with the stored result is empty, so backfill and write-through are idempotent.
  * Disconnect is the empty `next` set: every stored id is deleted.
  */
-export function diffRosteredSet(
+export function diffRosteredSet<T extends StakeSetInsert = RosteredStakeInsert>(
   existing: readonly StoredRosteredStake[],
-  next: readonly RosteredStakeInsert[],
-): RosteredSetDiff {
+  next: readonly T[],
+): {
+  deleteIds: string[];
+  inserts: T[];
+  updates: { id: string; gameId: string; subject: T['subject'] }[];
+} {
   const existingByPlayer = new Map(existing.map((row) => [row.playerId, row]));
   const nextIds = new Set(next.map((row) => row.subject.playerId));
   const deleteIds: string[] = [];
-  const inserts: RosteredStakeInsert[] = [];
-  const updates: RosteredSetDiff['updates'] = [];
+  const inserts: T[] = [];
+  const updates: { id: string; gameId: string; subject: T['subject'] }[] = [];
 
   for (const row of existing) {
     if (!nextIds.has(row.playerId)) deleteIds.push(row.id);

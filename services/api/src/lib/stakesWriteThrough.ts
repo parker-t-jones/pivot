@@ -1,11 +1,12 @@
 import type { Json } from './database.types.js';
+import { opponentStakesFor, type OpponentStakeSlot } from './opponentStakes.js';
 import {
   diffRosteredSet,
   gameIdByTeam,
   rosteredStakesFor,
   sourceForPlatform,
-  type RosteredStakeInsert,
   type RosteredStakeSlot,
+  type StakeSetInsert,
   type StoredRosteredStake,
 } from './rosteredStakes.js';
 import type { SupabaseServiceClient } from './supabase.js';
@@ -55,13 +56,17 @@ function readPlayerSubject(value: Json): { playerId: string; teamId: string } | 
   return { playerId, teamId };
 }
 
+function conditionType(value: Json): string | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  return typeof value['type'] === 'string' ? value['type'] : null;
+}
+
 function isRostered(value: Json): boolean {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    value['type'] === 'ROSTERED'
-  );
+  return conditionType(value) === 'ROSTERED';
+}
+
+function isOpponentRostered(value: Json): boolean {
+  return conditionType(value) === 'OPPONENT_ROSTERED';
 }
 
 function onePlayer(
@@ -73,7 +78,11 @@ function onePlayer(
 
 async function applyDiff(
   supabase: SupabaseServiceClient,
-  diff: ReturnType<typeof diffRosteredSet>,
+  diff: {
+    deleteIds: readonly string[];
+    inserts: readonly StakeSetInsert[];
+    updates: readonly { id: string; gameId: string; subject: StakeSetInsert['subject'] }[];
+  },
 ): Promise<void> {
   if (diff.deleteIds.length > 0) {
     const { error } = await supabase.from('stakes').delete().in('id', diff.deleteIds);
@@ -94,7 +103,7 @@ async function applyDiff(
   }
 }
 
-function toDbInsert(row: RosteredStakeInsert) {
+function toDbInsert(row: StakeSetInsert) {
   return {
     user_id: row.userId,
     season: row.season,
@@ -245,7 +254,83 @@ async function loadSlots(
   });
 }
 
-/** Drop every ROSTERED stake whose `source_ref` is this league, across weeks. */
+/**
+ * Replace this league's OPPONENT_ROSTERED stakes for one week. Sleeper only.
+ * An empty `slots` list deletes that set. No-ops when `STAKES_WRITE` is off.
+ * A failure is logged and swallowed so the roster sync still succeeds.
+ */
+export async function writeThroughOpponentStakes(
+  supabase: SupabaseServiceClient,
+  leagueId: string,
+  week: number,
+  slots: readonly OpponentStakeSlot[],
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  if (!stakesWriteEnabled(env)) return;
+
+  let userId = '';
+  try {
+    const { data: league, error: leagueError } = await supabase
+      .from('leagues')
+      .select('id, user_id, platform, season_year')
+      .eq('id', leagueId)
+      .maybeSingle();
+    if (leagueError) throw leagueError;
+    if (!league || league.platform !== 'sleeper') return;
+
+    userId = league.user_id;
+    const { data: games, error: gamesError } = await supabase
+      .from('games')
+      .select('id, home_team_id, away_team_id, season_type')
+      .eq('season_year', league.season_year)
+      .eq('week', week);
+    if (gamesError) throw gamesError;
+
+    const next = opponentStakesFor(slots, {
+      userId: league.user_id,
+      season: league.season_year,
+      week,
+      leagueId: league.id,
+      gameIdByTeamId: gameIdByTeam(
+        (games ?? []).map((game) => ({
+          id: game.id,
+          homeTeamId: game.home_team_id,
+          awayTeamId: game.away_team_id,
+          seasonType: game.season_type,
+        })),
+      ),
+    });
+
+    const { data: stored, error: storedError } = await supabase
+      .from('stakes')
+      .select('id, game_id, subject, condition, source')
+      .eq('user_id', league.user_id)
+      .eq('season', league.season_year)
+      .eq('week', week)
+      .eq('source', 'SLEEPER_OPPONENT')
+      .eq('source_ref', league.id);
+    if (storedError) throw storedError;
+
+    const existing: StoredRosteredStake[] = [];
+    for (const row of stored ?? []) {
+      if (!isOpponentRostered(row.condition) || row.source !== 'SLEEPER_OPPONENT') continue;
+      const subject = readPlayerSubject(row.subject);
+      if (!subject) continue;
+      existing.push({
+        id: row.id,
+        playerId: subject.playerId,
+        teamId: subject.teamId,
+        gameId: row.game_id,
+      });
+    }
+
+    await applyDiff(supabase, diffRosteredSet(existing, next));
+  } catch (err) {
+    logFailure(userId, leagueId, err);
+  }
+}
+
+/** Drop ROSTERED and OPPONENT_ROSTERED stakes whose `source_ref` is this league, across weeks. */
 export async function deleteLeagueStakes(
   supabase: SupabaseServiceClient,
   userId: string,
@@ -261,7 +346,9 @@ export async function deleteLeagueStakes(
       .eq('user_id', userId)
       .eq('source_ref', leagueId);
     if (error) throw error;
-    const ids = (data ?? []).filter((row) => isRostered(row.condition)).map((row) => row.id);
+    const ids = (data ?? [])
+      .filter((row) => isRostered(row.condition) || isOpponentRostered(row.condition))
+      .map((row) => row.id);
     if (ids.length === 0) return;
     const { error: deleteError } = await supabase.from('stakes').delete().in('id', ids);
     if (deleteError) throw deleteError;

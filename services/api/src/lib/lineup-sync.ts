@@ -4,6 +4,7 @@ import type { FetchedLineup, NormalizedLineupSlot } from '../providers/fantasy-p
 import { getFantasyProvider } from '../providers/index.js';
 import { ApiError } from './errors.js';
 import { assembleUserLineupCache, type CachePlayerRow } from './lineupCacheAssemble.js';
+import { resolveOpponentStakeSlots, type OpponentStakeSlot } from './opponentStakes.js';
 import { getCurrentNflState } from './nfl-state.js';
 import { deriveDisplayPhaseNow, derivePhaseOpeners, type NflPhase } from './phase-openers.js';
 import type { Json } from './database.types.js';
@@ -11,9 +12,11 @@ import type { SupabaseServiceClient } from './supabase.js';
 import {
   formatStakesReadFailure,
   formatStakesReadGuard,
+  formatStakesWriteFailure,
   stakesReadEnabled,
   stakesWriteEnabled,
   writeThroughLeagueStakes,
+  writeThroughOpponentStakes,
 } from './stakesWriteThrough.js';
 import { resolveWatchedLeagueIds, updateWatchedLeagueIds } from './watched-leagues.js';
 
@@ -116,6 +119,7 @@ export async function syncLeagueLineup(
       .eq('id', league.id);
     if (updateError) throw updateError;
 
+    await writeThroughOpponentStakes(deps.supabase, league.id, context.week, []);
     await writeThroughLeagueStakes(deps.supabase, league.id, context.week);
     await refreshLineupCache(deps, league, context.week, {
       lineupSource: 'roster_fallback',
@@ -129,13 +133,14 @@ export async function syncLeagueLineup(
     };
   }
 
-  const { slots: normalizedSlots } = readFetchedLineup(
+  const fetched = readFetchedLineup(
     await provider.fetchLineup({
       externalLeagueId: league.external_league_id,
       externalRosterId: league.external_roster_id,
       week: context.week,
     }),
   );
+  const normalizedSlots = fetched.slots;
 
   const sleeperIds = [...new Set(normalizedSlots.map((slot) => slot.externalPlayerId))];
   const { data: players, error: playersError } = await deps.supabase
@@ -154,6 +159,7 @@ export async function syncLeagueLineup(
   // drops (usually means `pnpm seed:players` was never run); partial drops still succeed
   // and are logged.
   const unresolvedIds = sleeperIds.filter((sleeperId) => !playerBySleeperId.has(sleeperId));
+  const opponentResolved = await readOpponentForWrite(deps.supabase, league, fetched.opponentSlots);
   const rows = normalizedSlots.flatMap((slot) => {
     const player = playerBySleeperId.get(slot.externalPlayerId);
     if (!player) return [];
@@ -170,7 +176,7 @@ export async function syncLeagueLineup(
   logUnresolvedPlayers(
     league.id,
     context.week,
-    unresolvedIds,
+    [...unresolvedIds, ...(opponentResolved?.unresolvedIds ?? [])],
     sleeperIds.length - unresolvedIds.length,
   );
   assertPlayersResolved(sleeperIds.length, rows.length);
@@ -213,6 +219,14 @@ export async function syncLeagueLineup(
     .eq('id', league.id);
   if (updateError) throw updateError;
 
+  if (opponentResolved) {
+    await writeThroughOpponentStakes(
+      deps.supabase,
+      league.id,
+      context.week,
+      opponentResolved.slots,
+    );
+  }
   await writeThroughLeagueStakes(deps.supabase, league.id, context.week);
   await refreshLineupCache(deps, league, context.week, { lineupSource: 'matchup' });
 
@@ -227,6 +241,45 @@ function isSlotList(
   value: FetchedLineup | readonly NormalizedLineupSlot[],
 ): value is readonly NormalizedLineupSlot[] {
   return Array.isArray(value);
+}
+
+/**
+ * Opponent ids missing from `players` join the lineup-sync unresolved log.
+ * A lookup failure skips the replace so a previous opponent set is left in place.
+ * `null` means the flag is off or the lookup failed.
+ */
+async function readOpponentForWrite(
+  supabase: SupabaseServiceClient,
+  league: LeagueRow,
+  lineup: readonly NormalizedLineupSlot[],
+): Promise<{ slots: OpponentStakeSlot[]; unresolvedIds: string[] } | null> {
+  if (!stakesWriteEnabled()) return null;
+  try {
+    const sleeperIds = [
+      ...new Set(
+        lineup
+          .filter((slot) => slot.slotType === 'starter' || slot.slotType === 'flex')
+          .map((slot) => slot.externalPlayerId),
+      ),
+    ];
+    if (sleeperIds.length === 0) return { slots: [], unresolvedIds: [] };
+    const { data, error } = await supabase
+      .from('players')
+      .select('id, sleeper_id, team_id, position')
+      .in('sleeper_id', sleeperIds);
+    if (error) throw error;
+    const playersBySleeperId = new Map(
+      (data ?? [])
+        .filter(
+          (player): player is typeof player & { sleeper_id: string } => player.sleeper_id !== null,
+        )
+        .map((player) => [player.sleeper_id, player]),
+    );
+    return resolveOpponentStakeSlots(lineup, playersBySleeperId);
+  } catch (err) {
+    console.error(formatStakesWriteFailure(league.user_id, league.id, err));
+    return null;
+  }
 }
 
 /** Test doubles still return a slot array. The Sleeper provider returns both lists. */

@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseServiceClient } from './supabase.js';
-import {
-  buildLineupResponse,
-  syncLeagueLineup,
-  type LeagueRow,
-} from './lineup-sync.js';
+import { buildLineupResponse, syncLeagueLineup, type LeagueRow } from './lineup-sync.js';
 
 const { getFantasyProvider } = vi.hoisted(() => ({
   getFantasyProvider: vi.fn(),
@@ -252,11 +248,10 @@ describe('syncLeagueLineup', () => {
     } as unknown as SupabaseServiceClient;
 
     await expect(
-      syncLeagueLineup(
-        { supabase, lineupCache: unusedLineupCache },
-        makeLeague(),
-        { week: 0, displayPhase: 'pre' },
-      ),
+      syncLeagueLineup({ supabase, lineupCache: unusedLineupCache }, makeLeague(), {
+        week: 0,
+        displayPhase: 'pre',
+      }),
     ).rejects.toMatchObject({
       statusCode: 503,
       code: 'players_not_seeded',
@@ -334,9 +329,11 @@ describe('syncLeagueLineup', () => {
   });
 
   it('regular uses fetchLineup and clears fallback_roster', async () => {
-    const fetchLineup = vi.fn().mockResolvedValue([
-      { externalPlayerId: 'sl-qb', slotType: 'starter', positionInLineup: 'QB' },
-    ]);
+    const fetchLineup = vi
+      .fn()
+      .mockResolvedValue([
+        { externalPlayerId: 'sl-qb', slotType: 'starter', positionInLineup: 'QB' },
+      ]);
     const fetchRosterPlayers = vi.fn();
     getFantasyProvider.mockReturnValue({
       supportsSync: () => true,
@@ -434,6 +431,100 @@ describe('syncLeagueLineup', () => {
     ]);
     expect(log).not.toHaveBeenCalled();
     log.mockRestore();
+  });
+
+  it('counts a missing opponent starter in the unresolved log', async () => {
+    process.env['STAKES_WRITE'] = '1';
+    const fetchLineup = vi.fn().mockResolvedValue({
+      slots: [{ externalPlayerId: 'sl-qb', slotType: 'starter', positionInLineup: 'QB' }],
+      opponentSlots: [
+        { externalPlayerId: 'sl-missing', slotType: 'starter', positionInLineup: 'WR' },
+      ],
+    });
+    getFantasyProvider.mockReturnValue({
+      supportsSync: () => true,
+      fetchLineup,
+      fetchRosterPlayers: vi.fn(),
+    });
+
+    const lineupCache = rebuildAwareLineupCache();
+    const rebuild = usersAndLeaguesForRebuild(TEST_LEAGUE_ID, 'matchup');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const supabase = {
+      from: (table: string) => {
+        if (table === 'users') return rebuild.users;
+        if (table === 'players') {
+          return {
+            select: () => ({
+              in: () =>
+                Promise.resolve({
+                  data: [{ id: 'p-qb', sleeper_id: 'sl-qb', team_id: 't1', position: 'QB' }],
+                  error: null,
+                }),
+            }),
+          };
+        }
+        if (table === 'lineup_slots') {
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => {
+                  const existing = Promise.resolve({ data: [], error: null });
+                  return Object.assign(existing, {
+                    in: () =>
+                      Promise.resolve({
+                        data: [
+                          {
+                            player_id: 'p-qb',
+                            is_star: false,
+                            players: { team_id: 't1', position: 'QB' },
+                          },
+                        ],
+                        error: null,
+                      }),
+                  });
+                },
+              }),
+            }),
+            upsert: () => Promise.resolve({ error: null }),
+            delete: () => ({
+              eq: () => ({
+                eq: () => ({
+                  in: () => Promise.resolve({ error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'leagues') {
+          return {
+            ...rebuild.leaguesSelect,
+            update: () => ({
+              eq: () => Promise.resolve({ error: null }),
+            }),
+          };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    } as unknown as SupabaseServiceClient;
+
+    try {
+      const result = await syncLeagueLineup(
+        { supabase, lineupCache: lineupCache as never },
+        makeLeague(),
+        { week: 1, displayPhase: 'regular' },
+      );
+      expect(result.lineupSource).toBe('matchup');
+      expect(log).toHaveBeenCalledWith(
+        `[lineup-sync] unresolved players league=${TEST_LEAGUE_ID.slice(0, 8)} week=1 count=1 ids=sl-missing`,
+      );
+    } finally {
+      delete process.env['STAKES_WRITE'];
+      log.mockRestore();
+      err.mockRestore();
+    }
   });
 
   it('logs unresolved Sleeper ids on a partial drop and still syncs the rest', async () => {
