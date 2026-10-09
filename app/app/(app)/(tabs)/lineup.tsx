@@ -30,10 +30,12 @@ import {
   type LeagueSummary,
   type LineupResponse,
   type LineupSlot,
+  type OpponentStarter,
 } from '../../../lib/leagues';
 import { leagueChipScrollOffset, leagueChipWidth } from '../../../lib/leagueChipScroll';
 import { orderLineupSlots, slotLabel } from '../../../lib/lineupOrder';
-import { fetchMe, type MeResponse } from '../../../lib/me';
+import { fetchMe, patchPreferences, type MeResponse } from '../../../lib/me';
+import { opponentSectionState } from '../../../lib/opponentLineup';
 import { formatGameLine, gameForTeam } from '../../../lib/playerGame';
 import { fetchGamesWeek, type ScheduleGame } from '../../../lib/schedule';
 import { theme } from '../../../lib/theme';
@@ -83,7 +85,7 @@ function rowAccessibilityLabel(slot: LineupSlot, gameLine: string | null): strin
  * This week's games load with it (no polling) so each row can show the game
  * and the player's team color. Star toggles stay behind
  * `SHOW_STAR_TOGGLES`. Pull-to-refresh syncs Sleeper.
- * Live points / opponent / detail sheet deferred.
+ * Live points / detail sheet deferred.
  */
 
 /** Empty `watchedLeagueIds` means nothing has been picked yet, which Home treats as watching every league. */
@@ -109,6 +111,9 @@ export default function LineupScreen() {
   const [busyLeagueId, setBusyLeagueId] = useState<string | null>(null);
   const [savingSlotId, setSavingSlotId] = useState<string | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
+  /** Optimistic `watchOpponent` while a preferences PATCH is in flight. */
+  const [watchOpponentPending, setWatchOpponentPending] = useState<boolean | null>(null);
+  const watchOpponentSave = useRef(false);
 
   const selectedLeague = useMemo(
     () => leagues.find((league) => league.league_id === selectedLeagueId) ?? leagues[0] ?? null,
@@ -232,6 +237,24 @@ export default function LineupScreen() {
       Alert.alert('Could not update star', errorMessage(error));
     } finally {
       setSavingSlotId(null);
+    }
+  };
+
+  const watchOpponent = watchOpponentPending ?? me?.preferences.watchOpponent ?? false;
+  const opponentView = opponentSectionState(lineup?.opponent, watchOpponent);
+
+  const onWatchOpponent = async (next: boolean) => {
+    if (watchOpponentSave.current || next === watchOpponent) return;
+    watchOpponentSave.current = true;
+    setWatchOpponentPending(next);
+    try {
+      const updated = await patchPreferences({ watchOpponent: next });
+      setMe(updated);
+    } catch (error) {
+      Alert.alert('Could not update', errorMessage(error));
+    } finally {
+      setWatchOpponentPending(null);
+      watchOpponentSave.current = false;
     }
   };
 
@@ -434,9 +457,80 @@ export default function LineupScreen() {
             ) : null}
           </>
         )}
+
+        {opponentView === 'hidden' || !lineup?.opponent ? null : (
+          <View style={styles.opponentSection}>
+            <View style={styles.opponentHeader}>
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+                OPPONENT
+              </Text>
+              <View style={styles.opponentToggle}>
+                <Text
+                  maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                  style={styles.opponentToggleLabel}
+                >
+                  Also watch my opponent
+                </Text>
+                <Switch
+                  accessibilityLabel="Also watch my opponent"
+                  onValueChange={(value) => {
+                    void onWatchOpponent(value);
+                  }}
+                  thumbColor={SWITCH_THUMB}
+                  trackColor={SWITCH_TRACK}
+                  value={watchOpponent}
+                />
+              </View>
+            </View>
+            {opponentView === 'off' ? (
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.opponentHint}>
+                See your opponent's red-zone trips on Home. No notifications.
+              </Text>
+            ) : (
+              <View style={styles.rosterWell}>
+                {lineup.opponent.starters.map((starter, index) => (
+                  <PlayerRow
+                    divided={index > 0}
+                    key={starter.player_id}
+                    mutedName
+                    now={now}
+                    onToggleStar={() => undefined}
+                    saving={false}
+                    showTeamStripe={false}
+                    slot={opponentStarterSlot(starter)}
+                    timeZone={timeZone}
+                    weekGames={weekGames}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
       </View>
     </ScrollView>
   );
+}
+
+function opponentStarterSlot(starter: OpponentStarter): LineupSlot {
+  return {
+    slot_id: starter.player_id,
+    slot_type: 'starter',
+    position_in_lineup: starter.position,
+    is_star: false,
+    player: {
+      player_id: starter.player_id,
+      first_name: starter.first_name,
+      last_name: starter.last_name,
+      position: starter.position,
+      team: starter.team
+        ? {
+            teamId: starter.team.team_id,
+            abbreviation: starter.team.abbreviation,
+            name: starter.team.name,
+          }
+        : null,
+    },
+  };
 }
 
 function LineupHeader({ week }: { week: number | null }) {
@@ -550,6 +644,7 @@ function PlayerRow({
   now,
   timeZone,
   onToggleStar,
+  showTeamStripe = true,
 }: {
   slot: LineupSlot;
   divided: boolean;
@@ -559,15 +654,17 @@ function PlayerRow({
   now: Date;
   timeZone: string;
   onToggleStar: (value: boolean) => void;
+  /** Opponent rows keep the column and skip the team-color stripe. */
+  showTeamStripe?: boolean;
 }) {
   const name = playerDisplayName(slot);
   const teamId = slot.player.team?.abbreviation ?? '';
   const game = weekGames == null ? null : gameForTeam(weekGames, teamId, now);
   const gameLine = game == null ? null : formatGameLine(game, now, timeZone);
+  const teamColor =
+    game != null && game.kind !== 'bye' && game.teamColor != null ? game.teamColor : null;
   const stripeColor =
-    game != null && game.kind !== 'bye' && game.teamColor != null
-      ? game.teamColor
-      : theme.colors.wellBorder;
+    showTeamStripe && teamColor != null ? teamColor : theme.colors.wellBorder;
   return (
     <View style={[styles.playerRow, divided && styles.playerRowDivider]}>
       <View style={[styles.stripe, { backgroundColor: stripeColor }]} />
@@ -674,6 +771,32 @@ const styles = StyleSheet.create({
   },
   headerBlock: {
     gap: theme.spacing.xs,
+  },
+  opponentHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+    justifyContent: 'space-between',
+  },
+  opponentHint: {
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.body.size,
+  },
+  opponentSection: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  opponentToggle: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 1,
+    gap: theme.spacing.sm,
+  },
+  opponentToggleLabel: {
+    color: theme.colors.textSecondary,
+    flexShrink: 1,
+    fontSize: theme.type.body.size,
   },
   notWatching: {
     color: theme.colors.textTertiary,

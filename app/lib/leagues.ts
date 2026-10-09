@@ -30,12 +30,29 @@ export interface LineupSlot {
   is_star: boolean;
 }
 
+/** Opponent starter on `GET /leagues/:id/lineup`. Present for Sleeper weeks that have opponent stakes. */
+export interface OpponentStarter {
+  player_id: string;
+  first_name: string;
+  last_name: string;
+  position: string;
+  team: {
+    team_id: string;
+    abbreviation: string;
+    name: string;
+  } | null;
+  kickoff: string | null;
+  bye: boolean;
+}
+
 /** `GET /leagues/:id/lineup` response (Section 9). */
 export interface LineupResponse {
   league_id: string;
   week: number;
   last_synced_at: string | null;
   slots: LineupSlot[];
+  /** Null for a manual league or a week with no opponent stakes. Absent on older responses. */
+  opponent?: { starters: OpponentStarter[] } | null;
 }
 
 export async function fetchLeagues(): Promise<LeagueSummary[]> {
