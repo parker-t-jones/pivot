@@ -89,6 +89,8 @@ export interface EvaluatorContext {
   gameId: string;
   game: GameState;
   lineup: UserLineupCache;
+  /** Opponent starters, same shape as `lineup`. Built in S2c. Absent until then. */
+  opponent?: UserLineupCache;
   playerStats?: unknown; // reserved for S4
 }
 
