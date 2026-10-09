@@ -17,3 +17,4 @@ export { evaluateOneScoreLate } from './evaluators/oneScoreLate.js';
 export { evaluatePickTrailing2h } from './evaluators/pickTrailing2h.js';
 export { evaluateSpreadSwing } from './evaluators/spreadSwing.js';
 export { evaluateTotalSwing } from './evaluators/totalSwing.js';
+export { evaluateStake } from './evaluateStake.js';
