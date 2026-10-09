@@ -1,5 +1,6 @@
 import { parsePreferences } from '@pivot/shared';
 import type { LineupCacheProvider } from '../cache/index.js';
+import type { FetchedLineup, NormalizedLineupSlot } from '../providers/fantasy-provider.js';
 import { getFantasyProvider } from '../providers/index.js';
 import { ApiError } from './errors.js';
 import { assembleUserLineupCache, type CachePlayerRow } from './lineupCacheAssemble.js';
@@ -128,11 +129,13 @@ export async function syncLeagueLineup(
     };
   }
 
-  const normalizedSlots = await provider.fetchLineup({
-    externalLeagueId: league.external_league_id,
-    externalRosterId: league.external_roster_id,
-    week: context.week,
-  });
+  const { slots: normalizedSlots } = readFetchedLineup(
+    await provider.fetchLineup({
+      externalLeagueId: league.external_league_id,
+      externalRosterId: league.external_roster_id,
+      week: context.week,
+    }),
+  );
 
   const sleeperIds = [...new Set(normalizedSlots.map((slot) => slot.externalPlayerId))];
   const { data: players, error: playersError } = await deps.supabase
@@ -218,6 +221,18 @@ export async function syncLeagueLineup(
     lineupSource: 'matchup',
     week: context.week,
   };
+}
+
+function isSlotList(
+  value: FetchedLineup | readonly NormalizedLineupSlot[],
+): value is readonly NormalizedLineupSlot[] {
+  return Array.isArray(value);
+}
+
+/** Test doubles still return a slot array. The Sleeper provider returns both lists. */
+function readFetchedLineup(value: FetchedLineup | readonly NormalizedLineupSlot[]): FetchedLineup {
+  if (isSlotList(value)) return { slots: [...value], opponentSlots: [] };
+  return value;
 }
 
 /** Some Sleeper ids missed `players`, but at least one resolved. All-miss stays a 503. */

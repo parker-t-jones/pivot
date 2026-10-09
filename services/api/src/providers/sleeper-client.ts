@@ -26,6 +26,11 @@ export interface SleeperRoster {
 export interface SleeperMatchup {
   roster_id: number;
   /**
+   * Shared by the two rosters in a head-to-head pairing. Null on a bye, and absent
+   * when an older fixture never stored it.
+   */
+  matchup_id?: number | null;
+  /**
    * Null until Sleeper snapshots the week's lineup (common early in the week, before
    * Thursday). An array — including an empty one — means the matchup is usable.
    */

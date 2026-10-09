@@ -2,12 +2,14 @@ import type { LeaguePlatform } from '@pivot/shared';
 import { ApiError } from '../lib/errors.js';
 import type {
   FantasyProvider,
+  FetchedLineup,
   FetchLineupInput,
   FetchRosterPlayersInput,
   NormalizedLineupSlot,
 } from './fantasy-provider.js';
+import { opponentSlotsFrom } from './opponentSlots.js';
 import { mapRosterToLineupSlots } from './roster-mapping.js';
-import { sleeperClient } from './sleeper-client.js';
+import { sleeperClient, type SleeperMatchup, type SleeperRoster } from './sleeper-client.js';
 
 export interface SleeperLeagueConnection {
   externalLeagueId: string;
@@ -74,25 +76,41 @@ export class SleeperProvider implements FantasyProvider {
    * are empty/missing — safety net if `display_phase` and Sleeper briefly disagree during the
    * active season. Off/pre sync must call `fetchRosterPlayers` instead (gated in lineup-sync).
    */
-  async fetchLineup(input: FetchLineupInput): Promise<NormalizedLineupSlot[]> {
+  async fetchLineup(input: FetchLineupInput): Promise<FetchedLineup> {
     const league = await sleeperClient.getLeague(input.externalLeagueId);
-
-    const matchupSlots = await tryLineupFromMatchups(
-      input.externalLeagueId,
+    const matchups = await loadMatchups(input.externalLeagueId, input.week);
+    const matchupSlots = slotsFromMatchup(
+      matchups,
       input.externalRosterId,
-      input.week,
       league.roster_positions,
     );
+
+    let rosters: SleeperRoster[] | undefined;
+    let slots: NormalizedLineupSlot[];
     if (matchupSlots) {
-      return matchupSlots;
+      slots = matchupSlots;
+    } else {
+      rosters = await sleeperClient.getLeagueRosters(input.externalLeagueId);
+      const roster = rosters.find((row) => String(row.roster_id) === input.externalRosterId);
+      if (!roster) {
+        throw new ApiError(
+          404,
+          'sleeper_roster_not_found',
+          `No roster found for roster ${input.externalRosterId} in league ${input.externalLeagueId}.`,
+        );
+      }
+      slots = mapRosterToLineupSlots(
+        league.roster_positions,
+        roster.starters ?? [],
+        roster.players ?? [],
+      );
     }
 
-    const roster = await getOwnedRoster(input.externalLeagueId, input.externalRosterId);
-    return mapRosterToLineupSlots(
-      league.roster_positions,
-      roster.starters ?? [],
-      roster.players ?? [],
-    );
+    const opponentSlots = opponentSlotsFrom(matchups, input.externalRosterId, {
+      rosterPositions: league.roster_positions,
+      ...(rosters ? { rosters } : {}),
+    });
+    return { slots, opponentSlots };
   }
 
   /** Static roster player IDs — no week / starter scoping (off/pre `display_phase`). */
@@ -117,35 +135,29 @@ async function getOwnedRoster(externalLeagueId: string, externalRosterId: string
   return roster;
 }
 
+/** One matchups request. A 404 is an empty week, the same as the old fallback trigger. */
+async function loadMatchups(externalLeagueId: string, week: number): Promise<SleeperMatchup[]> {
+  try {
+    const matchups = await sleeperClient.getLeagueMatchups(externalLeagueId, week);
+    return Array.isArray(matchups) ? matchups : [];
+  } catch (error) {
+    if (error instanceof ApiError && error.statusCode === 404) return [];
+    throw error;
+  }
+}
+
 /**
- * Returns mapped slots when a matching week matchup has a starters array; `null` when matchups
+ * Mapped slots when a matching week matchup has a starters array; `null` when matchups
  * are unavailable, don't include this roster, or `starters` is still null (Sleeper publishes the
  * matchup before it snapshots lineups). Caller falls back to `/rosters`.
  */
-async function tryLineupFromMatchups(
-  externalLeagueId: string,
+function slotsFromMatchup(
+  matchups: readonly SleeperMatchup[],
   externalRosterId: string,
-  week: number,
   rosterPositions: string[],
-): Promise<NormalizedLineupSlot[] | null> {
-  let matchups: Awaited<ReturnType<typeof sleeperClient.getLeagueMatchups>>;
-  try {
-    matchups = await sleeperClient.getLeagueMatchups(externalLeagueId, week);
-  } catch (error) {
-    if (error instanceof ApiError && error.statusCode === 404) {
-      return null;
-    }
-    throw error;
-  }
-
-  if (!Array.isArray(matchups) || matchups.length === 0) {
-    return null;
-  }
-
-  const matchup = matchups.find((m) => String(m.roster_id) === externalRosterId);
-  if (!matchup || !Array.isArray(matchup.starters)) {
-    return null;
-  }
-
+): NormalizedLineupSlot[] | null {
+  if (matchups.length === 0) return null;
+  const matchup = matchups.find((row) => String(row.roster_id) === externalRosterId);
+  if (!matchup || !Array.isArray(matchup.starters)) return null;
   return mapRosterToLineupSlots(rosterPositions, matchup.starters, matchup.players ?? []);
 }

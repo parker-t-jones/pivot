@@ -97,13 +97,18 @@ describe('SleeperProvider', () => {
 
     it('uses matchup starters/players when a matching matchup exists and does not call getLeagueRosters', async () => {
       vi.spyOn(sleeperClient, 'getLeague').mockResolvedValue(league);
-      vi.spyOn(sleeperClient, 'getLeagueMatchups').mockResolvedValue([
-        { roster_id: 1, starters: ['other-qb'], players: ['other-qb'] },
-        { roster_id: 2, starters: ['qb1'], players: ['qb1', 'bench1'] },
+      const getLeagueMatchups = vi.spyOn(sleeperClient, 'getLeagueMatchups').mockResolvedValue([
+        {
+          roster_id: 1,
+          matchup_id: 4,
+          starters: ['other-qb'],
+          players: ['other-qb', 'other-bench'],
+        },
+        { roster_id: 2, matchup_id: 4, starters: ['qb1'], players: ['qb1', 'bench1'] },
       ]);
       const getLeagueRosters = vi.spyOn(sleeperClient, 'getLeagueRosters');
 
-      const slots = await new SleeperProvider().fetchLineup({
+      const { slots, opponentSlots } = await new SleeperProvider().fetchLineup({
         externalLeagueId: 'league-1',
         externalRosterId: '2',
         week: 5,
@@ -113,6 +118,10 @@ describe('SleeperProvider', () => {
         { externalPlayerId: 'qb1', slotType: 'starter', positionInLineup: 'QB' },
         { externalPlayerId: 'bench1', slotType: 'bench', positionInLineup: 'BN' },
       ]);
+      expect(opponentSlots).toEqual([
+        { externalPlayerId: 'other-qb', slotType: 'starter', positionInLineup: 'QB' },
+      ]);
+      expect(getLeagueMatchups).toHaveBeenCalledTimes(1);
       expect(getLeagueRosters).not.toHaveBeenCalled();
     });
 
@@ -130,17 +139,52 @@ describe('SleeperProvider', () => {
         },
       ]);
 
-      const slots = await new SleeperProvider().fetchLineup({
+      const { slots, opponentSlots } = await new SleeperProvider().fetchLineup({
         externalLeagueId: 'league-1',
         externalRosterId: '2',
         week: 4,
       });
 
+      expect(opponentSlots).toEqual([]);
       expect(slots).toEqual([
         { externalPlayerId: 'qb1', slotType: 'starter', positionInLineup: 'QB' },
         { externalPlayerId: 'bench1', slotType: 'bench', positionInLineup: 'BN' },
       ]);
       expect(getLeagueRosters).toHaveBeenCalledWith('league-1');
+    });
+
+    it('uses the roster list already fetched when the opponent starters array is null', async () => {
+      vi.spyOn(sleeperClient, 'getLeague').mockResolvedValue(league);
+      const getLeagueMatchups = vi.spyOn(sleeperClient, 'getLeagueMatchups').mockResolvedValue([
+        { roster_id: 2, matchup_id: 4, starters: null, players: ['qb1', 'bench1'] },
+        { roster_id: 1, matchup_id: 4, starters: null, players: ['opp-qb', 'opp-bench'] },
+      ]);
+      const getLeagueRosters = vi.spyOn(sleeperClient, 'getLeagueRosters').mockResolvedValue([
+        {
+          roster_id: 2,
+          owner_id: 'user-abc',
+          starters: ['qb1'],
+          players: ['qb1', 'bench1'],
+        },
+        {
+          roster_id: 1,
+          owner_id: 'opponent',
+          starters: ['opp-qb'],
+          players: ['opp-qb', 'opp-bench'],
+        },
+      ]);
+
+      const { opponentSlots } = await new SleeperProvider().fetchLineup({
+        externalLeagueId: 'league-1',
+        externalRosterId: '2',
+        week: 4,
+      });
+
+      expect(opponentSlots).toEqual([
+        { externalPlayerId: 'opp-qb', slotType: 'starter', positionInLineup: 'QB' },
+      ]);
+      expect(getLeagueMatchups).toHaveBeenCalledTimes(1);
+      expect(getLeagueRosters).toHaveBeenCalledTimes(1);
     });
 
     it('falls back to getLeagueRosters when matchups are empty (offseason)', async () => {
@@ -155,7 +199,7 @@ describe('SleeperProvider', () => {
         },
       ]);
 
-      const slots = await new SleeperProvider().fetchLineup({
+      const { slots } = await new SleeperProvider().fetchLineup({
         externalLeagueId: 'league-1',
         externalRosterId: '2',
         week: 0,
@@ -182,7 +226,7 @@ describe('SleeperProvider', () => {
         },
       ]);
 
-      const slots = await new SleeperProvider().fetchLineup({
+      const { slots } = await new SleeperProvider().fetchLineup({
         externalLeagueId: 'league-1',
         externalRosterId: '2',
         week: 5,

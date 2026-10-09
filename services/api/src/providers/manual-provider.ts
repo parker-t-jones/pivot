@@ -2,9 +2,9 @@ import type { LeaguePlatform } from '@pivot/shared';
 import { ApiError } from '../lib/errors.js';
 import type {
   FantasyProvider,
+  FetchedLineup,
   FetchLineupInput,
   FetchRosterPlayersInput,
-  NormalizedLineupSlot,
 } from './fantasy-provider.js';
 
 /**
@@ -19,7 +19,7 @@ export class ManualProvider implements FantasyProvider {
     return false;
   }
 
-  async fetchLineup(_input: FetchLineupInput): Promise<NormalizedLineupSlot[]> {
+  async fetchLineup(_input: FetchLineupInput): Promise<FetchedLineup> {
     throw new ApiError(
       400,
       'sync_not_supported',

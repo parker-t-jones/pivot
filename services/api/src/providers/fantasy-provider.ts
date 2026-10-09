@@ -4,6 +4,12 @@ import type { RosterMappingSlot } from './roster-mapping.js';
 /** Normalized lineup slot, agnostic of which platform it came from. */
 export type NormalizedLineupSlot = RosterMappingSlot;
 
+/** User lineup plus opponent starters from the same platform response. */
+export interface FetchedLineup {
+  slots: NormalizedLineupSlot[];
+  opponentSlots: NormalizedLineupSlot[];
+}
+
 export interface FetchLineupInput {
   externalLeagueId: string;
   externalRosterId: string;
@@ -27,7 +33,7 @@ export interface FantasyProvider {
   supportsSync(): boolean;
 
   /** Fetches and normalizes a league roster's lineup for a given week (matchup-scoped). */
-  fetchLineup(input: FetchLineupInput): Promise<NormalizedLineupSlot[]>;
+  fetchLineup(input: FetchLineupInput): Promise<FetchedLineup>;
 
   /**
    * Static roster external player IDs (no week / starter scoping). Used when
