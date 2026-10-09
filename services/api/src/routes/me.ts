@@ -73,6 +73,7 @@ const preferencesPatchBody = z.object({
     })
     .optional(),
   autoSwitch: z.boolean().optional(),
+  watchOpponent: z.boolean().optional(),
   watchedLeagueIds: z.array(z.string().uuid()).optional(),
 });
 

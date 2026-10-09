@@ -384,6 +384,7 @@ describe('GET /me', () => {
         notificationMode: 'all',
         quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
         autoSwitch: false,
+        watchOpponent: false,
         watchedLeagueIds: [],
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
@@ -427,6 +428,7 @@ describe('PATCH /me/preferences', () => {
       notificationMode: 'high_leverage_only',
       quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
       autoSwitch: true, // untouched by this PATCH
+      watchOpponent: false,
       watchedLeagueIds: [],
     });
   });
@@ -466,6 +468,30 @@ describe('PATCH /me/preferences', () => {
       payload: { notificationMode: 'off' },
     });
     expect(response.statusCode).toBe(401);
+  });
+
+  it('accepts watchOpponent and returns it from GET /me', async () => {
+    app = await buildTestApp({}, { 'user-1': { preferences: {} } });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const patched = await app.fastify.inject({
+      method: 'PATCH',
+      url: '/me/preferences',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { watchOpponent: true, notAPreference: true },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().preferences.watchOpponent).toBe(true);
+    expect(Object.hasOwn(patched.json().preferences, 'notAPreference')).toBe(false);
+
+    const fetched = await app.fastify.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(fetched.statusCode).toBe(200);
+    expect(fetched.json().preferences.watchOpponent).toBe(true);
+    expect(Object.hasOwn(fetched.json().preferences, 'notAPreference')).toBe(false);
   });
 });
 

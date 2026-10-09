@@ -119,6 +119,7 @@ async function main(): Promise<void> {
       notificationMode: 'all',
       quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
       autoSwitch: false,
+      watchOpponent: false,
       watchedLeagueIds: [],
     },
     expoPushToken: 'ExponentPushToken[verify]',

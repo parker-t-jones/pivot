@@ -197,6 +197,7 @@ describe.skipIf(!localReady)('local flag_events insert', () => {
         notificationMode: 'all',
         quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
         autoSwitch: false,
+        watchOpponent: false,
         watchedLeagueIds: [],
       },
       expoPushToken: 'ExponentPushToken[p0-6-local]',

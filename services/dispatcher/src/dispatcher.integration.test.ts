@@ -60,6 +60,7 @@ const freeUser: DispatchUser = {
     notificationMode: 'all',
     quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
     autoSwitch: false,
+    watchOpponent: false,
     watchedLeagueIds: [],
   },
   expoPushToken: null, // push isn't this pipeline test's concern — see delivery.test.ts's "push" block

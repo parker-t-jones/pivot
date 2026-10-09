@@ -12,6 +12,8 @@ export interface Preferences {
   notificationMode: 'all' | 'high_leverage_only' | 'off';
   quietHours: QuietHours;
   autoSwitch: boolean;
+  /** Opponent red-zone nudges. Off until the client turns them on. */
+  watchOpponent: boolean;
   /** Leagues Home + the engine stake from. Free: at most one. */
   watchedLeagueIds: string[];
 }
@@ -38,6 +40,7 @@ export async function patchPreferences(patch: {
   notificationMode?: Preferences['notificationMode'];
   quietHours?: Partial<QuietHours>;
   autoSwitch?: boolean;
+  watchOpponent?: boolean;
   watchedLeagueIds?: string[];
 }): Promise<MeResponse> {
   return await apiClient.patch<MeResponse>('/me/preferences', patch);
