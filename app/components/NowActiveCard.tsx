@@ -50,18 +50,15 @@ export function NowActiveCard({
   const { game } = flag;
   const primaryReason = flag.reasons[0];
   const flaggedTeam = resolveFlaggedTeamDisplay(game, flag.flagged_players, playerTeamMap);
-  const chipParts =
-    primaryReason && flag.flagged_players.length > 0
+  const chipParts = flag.opponent_label
+    ? { players: flag.opponent_label, team: null as string | null }
+    : primaryReason && flag.flagged_players.length > 0
       ? reasonChipParts(primaryReason, flag.flagged_players, flaggedTeam)
       : primaryReason
         ? { players: reasonLabel(primaryReason), team: null as string | null }
         : null;
 
-  const opponentTeam = opponentAbbreviation(
-    game.possession_team,
-    game.home_team,
-    game.away_team,
-  );
+  const opponentTeam = opponentAbbreviation(game.possession_team, game.home_team, game.away_team);
   const matchup = fieldAlignedMatchup(game);
   const leftWash =
     hexWithAlpha(matchup.leftPrimaryColor, TEAM_NAME_WASH_ALPHA) ?? theme.colors.surface;

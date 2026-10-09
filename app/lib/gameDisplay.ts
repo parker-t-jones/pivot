@@ -17,11 +17,24 @@ export interface CurrentFlag {
   flagged_players: FlaggedPlayer[];
   game: GameSummary;
   recommended_action: 'switch_primary' | 'add_to_split' | 'notify_only';
+  /** Outcome-free chip for an opponent red-zone row. Absent on the user's own flags. */
+  opponent_label?: string;
+}
+
+/** Opponent red-zone row from `GET /flags/current`. Absent on the wire when `watchOpponent` is off. */
+export interface OpponentFlagWire {
+  game_id: string;
+  priority_score: number;
+  player_ids: string[];
+  reasons: string[];
+  players?: { player_id: string; first_name: string; last_name: string }[];
 }
 
 export interface FlagsCurrentResponse {
   flags: CurrentFlag[];
   generated_at: string;
+  opponent_flags?: OpponentFlagWire[];
+  opponent_game_ids?: string[];
 }
 
 /** One watch option from `GET /games/:id/broadcasts` / `GET /games?week=` (Section 9): a service

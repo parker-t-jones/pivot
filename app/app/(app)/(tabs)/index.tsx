@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -59,6 +59,17 @@ import {
 } from '../../../lib/leagues';
 import { buildLiveBoard, countLiveGames } from '../../../lib/liveBoard';
 import { fetchMe, type MeResponse } from '../../../lib/me';
+import {
+  adoptOpponentGames,
+  emptyOpponentRefresh,
+  noteOpponentGameState,
+  noteOpponentRefetchSettled,
+  noteOpponentRefetchStarted,
+  placeHomeFlags,
+  readOpponentFields,
+  seedOpponentRedZone,
+  type OpponentRefreshState,
+} from '../../../lib/opponentHome';
 import { fetchNflState, type NflStateResponse } from '../../../lib/nflState';
 import {
   fetchGamesLive,
@@ -153,6 +164,26 @@ export default function HomeScreen() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [pregameNowMs, setPregameNowMs] = useState(() => Date.now());
 
+  const opponentRefresh = useRef<OpponentRefreshState>(emptyOpponentRefresh());
+  const opponentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const opponentEpoch = useRef(0);
+
+  const clearOpponentTimer = useCallback(() => {
+    if (opponentTimer.current) {
+      clearTimeout(opponentTimer.current);
+      opponentTimer.current = null;
+    }
+  }, []);
+
+  const resetOpponentWatch = useCallback(
+    (gameIds: readonly string[], live: readonly { game_id: string; in_red_zone: boolean }[]) => {
+      clearOpponentTimer();
+      opponentEpoch.current += 1;
+      opponentRefresh.current = seedOpponentRedZone(gameIds, live);
+    },
+    [clearOpponentTimer],
+  );
+
   const applyBroadcasts = useCallback(async (gameId: string) => {
     try {
       const response = await apiClient.get<GameBroadcastsResponse>(`/games/${gameId}/broadcasts`);
@@ -181,6 +212,73 @@ export default function HomeScreen() {
     [applyBroadcasts],
   );
 
+  const refetchOpponentFlags = useRef<() => Promise<void>>(async () => undefined);
+
+  const armOpponentRefetch = useCallback(
+    (dueAtMs: number | null) => {
+      clearOpponentTimer();
+      if (dueAtMs === null) return;
+      const wait = Math.max(0, dueAtMs - Date.now());
+      opponentTimer.current = setTimeout(() => {
+        opponentTimer.current = null;
+        void refetchOpponentFlags.current();
+      }, wait);
+    },
+    [clearOpponentTimer],
+  );
+
+  useEffect(() => {
+    refetchOpponentFlags.current = async () => {
+      clearOpponentTimer();
+      if (opponentRefresh.current.inFlight) return;
+      const epoch = opponentEpoch.current;
+      opponentRefresh.current = noteOpponentRefetchStarted(opponentRefresh.current);
+      let primaryGameId: string | null = null;
+      let previousGameId: string | null = null;
+      try {
+        const response = await apiClient.get<FlagsCurrentResponse>('/flags/current');
+        if (epoch !== opponentEpoch.current) return;
+        const fields = readOpponentFields(response);
+        setHomeData((prev) => {
+          if (!prev || epoch !== opponentEpoch.current) return prev;
+          previousGameId = prev.flag?.game_id ?? null;
+          const placed = placeHomeFlags(response.flags, fields.opponentFlags, prev.liveGames);
+          primaryGameId = placed.flag?.game_id ?? null;
+          const branch = prev.nflState
+            ? resolveHomeBranch({
+                hasLeagues: prev.hasLeagues,
+                displayPhase: prev.nflState.display_phase,
+                hasFlags: placed.flag !== null,
+                hasLiveStakeGames: prev.liveStakeGames.length > 0,
+                nextStakeKickoff: nextStakeKickoff(
+                  prev.weekGames,
+                  stakeTeamAbbreviations(prev.playerTeamMap),
+                  new Date(),
+                ),
+                now: new Date(),
+              })
+            : prev.branch;
+          return { ...prev, flag: placed.flag, otherFlags: placed.otherFlags, branch };
+        });
+        opponentRefresh.current = adoptOpponentGames(
+          opponentRefresh.current,
+          fields.opponentGameIds,
+          [],
+        );
+        if (primaryGameId && primaryGameId !== previousGameId) {
+          void applyBroadcasts(primaryGameId);
+        }
+      } catch (error) {
+        console.warn('[home] opponent flags refetch failed', error);
+      }
+      if (epoch !== opponentEpoch.current) return;
+      opponentRefresh.current = noteOpponentRefetchSettled(opponentRefresh.current, Date.now());
+      armOpponentRefetch(opponentRefresh.current.dueAtMs);
+    };
+  }, [applyBroadcasts, armOpponentRefetch, clearOpponentTimer]);
+
+  useEffect(() => clearOpponentTimer, [clearOpponentTimer]);
+
   /**
    * Section 10 Home cold-start (Sprint 10 Phase 2). Order matters:
    * 1. leagues from LeaguesGateContext (single SoT) → State 5 short-circuit
@@ -190,125 +288,146 @@ export default function HomeScreen() {
    *
    * Re-runs when `leaguesRevision` changes (connect / disconnect) — does not re-fetch `/leagues`.
    */
-  const loadHome = useCallback(async (leagueRows: LeagueSummary[]) => {
-    setLoadError(null);
-    try {
-      if (leagueRows.length === 0) {
-        setMe(null);
-        setHomeData(
-          emptyHome({
-            hasLeagues: false,
-            branch: { branch: 'no_leagues' },
-          }),
-        );
-        return;
-      }
-
-      const meResponse = await fetchMe();
-      setMe(meResponse);
-
-      // FIRST calendar call — decides the display_phase branch before any games/flags fetch.
-      const nflState = await fetchNflState();
-      const idleBranch = resolveHomeBranch({
-        hasLeagues: true,
-        displayPhase: nflState.display_phase,
-        hasFlags: false,
-        hasLiveStakeGames: false,
-        nextStakeKickoff: null,
-        now: new Date(),
-      });
-
-      if (idleBranch.branch === 'season_idle') {
-        setHomeData(
-          emptyHome({
-            hasLeagues: true,
-            leagueCount: leagueRows.length,
-            nflState,
-            branch: idleBranch,
-          }),
-        );
-        return;
-      }
-
-      const [allLineups, flagsResponse, liveResponse, weekResponse] = await Promise.all([
-        fetchAllLineups(leagueRows),
-        apiClient.get<FlagsCurrentResponse>('/flags/current'),
-        fetchGamesLive(),
-        fetchGamesWeek(nflState.week),
-      ]);
-
-      const watchedIds = new Set(meResponse.preferences.watchedLeagueIds ?? []);
-      const lineups =
-        watchedIds.size > 0
-          ? allLineups.filter((row) => watchedIds.has(row.league_id))
-          : allLineups;
-
-      const playerTeamMap = buildPlayerTeamMap(lineups);
-      const stakeTeams = stakeTeamAbbreviations(playerTeamMap);
-      const topFlag = flagsResponse.flags[0] ?? null;
-      const otherFlags = flagsResponse.flags.slice(1);
-      const liveStakeGames = filterLiveStakeGames(liveResponse.games, stakeTeams);
-      const weekGames = weekResponse.games;
-      const now = new Date();
-      const kickoff = nextStakeKickoff(weekGames, stakeTeams, now);
-      const branch = resolveHomeBranch({
-        hasLeagues: true,
-        displayPhase: nflState.display_phase,
-        hasFlags: topFlag !== null,
-        hasLiveStakeGames: liveStakeGames.length > 0,
-        nextStakeKickoff: kickoff,
-        now,
-      });
-
-      let broadcast: GameBroadcast | null = null;
-      let broadcasts: GameBroadcast[] = [];
-      if (topFlag) {
-        try {
-          const response = await apiClient.get<GameBroadcastsResponse>(
-            `/games/${topFlag.game_id}/broadcasts`,
+  const loadHome = useCallback(
+    async (leagueRows: LeagueSummary[]) => {
+      setLoadError(null);
+      try {
+        if (leagueRows.length === 0) {
+          setMe(null);
+          resetOpponentWatch([], []);
+          setHomeData(
+            emptyHome({
+              hasLeagues: false,
+              branch: { branch: 'no_leagues' },
+            }),
           );
-          broadcasts = response.broadcasts;
-          broadcast = pickPreferredBroadcast(broadcasts);
-        } catch (error) {
-          console.warn('[home] failed to load broadcasts', error);
+          return;
         }
+
+        const meResponse = await fetchMe();
+        setMe(meResponse);
+
+        // FIRST calendar call — decides the display_phase branch before any games/flags fetch.
+        const nflState = await fetchNflState();
+        const idleBranch = resolveHomeBranch({
+          hasLeagues: true,
+          displayPhase: nflState.display_phase,
+          hasFlags: false,
+          hasLiveStakeGames: false,
+          nextStakeKickoff: null,
+          now: new Date(),
+        });
+
+        if (idleBranch.branch === 'season_idle') {
+          resetOpponentWatch([], []);
+          setHomeData(
+            emptyHome({
+              hasLeagues: true,
+              leagueCount: leagueRows.length,
+              nflState,
+              branch: idleBranch,
+            }),
+          );
+          return;
+        }
+
+        const [allLineups, flagsResponse, liveResponse, weekResponse] = await Promise.all([
+          fetchAllLineups(leagueRows),
+          apiClient.get<FlagsCurrentResponse>('/flags/current'),
+          fetchGamesLive(),
+          fetchGamesWeek(nflState.week),
+        ]);
+
+        const watchedIds = new Set(meResponse.preferences.watchedLeagueIds ?? []);
+        const lineups =
+          watchedIds.size > 0
+            ? allLineups.filter((row) => watchedIds.has(row.league_id))
+            : allLineups;
+
+        const playerTeamMap = buildPlayerTeamMap(lineups);
+        const stakeTeams = stakeTeamAbbreviations(playerTeamMap);
+        const opponentFields = readOpponentFields(flagsResponse);
+        const { flag: topFlag, otherFlags } = placeHomeFlags(
+          flagsResponse.flags,
+          opponentFields.opponentFlags,
+          liveResponse.games,
+        );
+        resetOpponentWatch(opponentFields.opponentGameIds, liveResponse.games);
+        const liveStakeGames = filterLiveStakeGames(liveResponse.games, stakeTeams);
+        const weekGames = weekResponse.games;
+        const now = new Date();
+        const kickoff = nextStakeKickoff(weekGames, stakeTeams, now);
+        const branch = resolveHomeBranch({
+          hasLeagues: true,
+          displayPhase: nflState.display_phase,
+          hasFlags: topFlag !== null,
+          hasLiveStakeGames: liveStakeGames.length > 0,
+          nextStakeKickoff: kickoff,
+          now,
+        });
+
+        let broadcast: GameBroadcast | null = null;
+        let broadcasts: GameBroadcast[] = [];
+        if (topFlag) {
+          try {
+            const response = await apiClient.get<GameBroadcastsResponse>(
+              `/games/${topFlag.game_id}/broadcasts`,
+            );
+            broadcasts = response.broadcasts;
+            broadcast = pickPreferredBroadcast(broadcasts);
+          } catch (error) {
+            console.warn('[home] failed to load broadcasts', error);
+          }
+        }
+
+        const upcomingGames = upcomingStakeGameGroups(weekGames, lineups, stakeTeams, now);
+        const lineupGroups = groupLineupByGame(weekGames, lineups, stakeTeams);
+        const countdownMs = kickoff ? Math.max(0, kickoff.getTime() - now.getTime()) : 0;
+
+        setHomeData({
+          hasLeagues: true,
+          leagueCount: leagueRows.length,
+          nflState,
+          branch,
+          playerTeamMap,
+          lineups,
+          flag: topFlag,
+          otherFlags,
+          broadcast,
+          broadcasts,
+          liveGames: liveResponse.games,
+          liveStakeGames,
+          weekGames,
+          lineupGroups,
+          upcomingGames,
+          countdownMs,
+        });
+      } catch (error) {
+        const message =
+          error instanceof ApiRequestError ? error.message : 'Could not load your games.';
+        setLoadError(message);
       }
+    },
+    [resetOpponentWatch],
+  );
 
-      const upcomingGames = upcomingStakeGameGroups(weekGames, lineups, stakeTeams, now);
-      const lineupGroups = groupLineupByGame(weekGames, lineups, stakeTeams);
-      const countdownMs = kickoff ? Math.max(0, kickoff.getTime() - now.getTime()) : 0;
-
-      setHomeData({
-        hasLeagues: true,
-        leagueCount: leagueRows.length,
-        nflState,
-        branch,
-        playerTeamMap,
-        lineups,
-        flag: topFlag,
-        otherFlags,
-        broadcast,
-        broadcasts,
-        liveGames: liveResponse.games,
-        liveStakeGames,
-        weekGames,
-        lineupGroups,
-        upcomingGames,
-        countdownMs,
+  const onGameState = useCallback(
+    (game: GameStateMessage) => {
+      setHomeData((prev) => {
+        if (!prev) return prev;
+        return { ...prev, ...applyGameStateToHome(toFlagSlice(prev), game) };
       });
-    } catch (error) {
-      const message =
-        error instanceof ApiRequestError ? error.message : 'Could not load your games.';
-      setLoadError(message);
-    }
-  }, []);
-
-  const onGameState = useCallback((game: GameStateMessage) => {
-    setHomeData((prev) => {
-      if (!prev) return prev;
-      return { ...prev, ...applyGameStateToHome(toFlagSlice(prev), game) };
-    });
-  }, []);
+      const next = noteOpponentGameState(opponentRefresh.current, {
+        gameId: game.game_id,
+        inRedZone: game.in_red_zone,
+        nowMs: Date.now(),
+      });
+      const dueChanged = next.dueAtMs !== opponentRefresh.current.dueAtMs;
+      opponentRefresh.current = next;
+      if (dueChanged) armOpponentRefetch(next.dueAtMs);
+    },
+    [armOpponentRefetch],
+  );
 
   // Every game on the slate, not just stake games: the live board shows each one's clock and score.
   const weekGameIds = useMemo(
