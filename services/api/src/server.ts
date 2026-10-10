@@ -14,6 +14,7 @@ import {
 import { createLineupCacheProvider, type LineupCacheProvider } from './cache/index.js';
 import type { Env } from './env.js';
 import { createTcpRedis, tcpGameState } from './runner/tcpRedis.js';
+import { registerWebCors } from './lib/cors.js';
 import { apiErrorHandler } from './lib/errors.js';
 import { createSupabaseServiceClient, type SupabaseServiceClient } from './lib/supabase.js';
 import authPlugin from './plugins/auth.js';
@@ -76,6 +77,8 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
   const fastify = Fastify({ logger: true }).withTypeProvider<ZodTypeProvider>();
   fastify.setValidatorCompiler(validatorCompiler);
   fastify.setSerializerCompiler(serializerCompiler);
+
+  await registerWebCors(fastify, env.WEB_DEV_ORIGIN);
 
   fastify.setErrorHandler(apiErrorHandler);
 

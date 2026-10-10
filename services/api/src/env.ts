@@ -26,6 +26,14 @@ const envSchema = z.object({
   /** Optional Expo access token. `expo` still constructs without it. */
   EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
   PORT: z.coerce.number().int().positive().default(3000),
+  /**
+   * Extra browser origin allowed to call this API, for local Expo web (`http://localhost:8081`).
+   * Production `https://app.pivot-sports.app` is always allowed. Empty means no extra origin.
+   */
+  WEB_DEV_ORIGIN: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().url().optional(),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;
