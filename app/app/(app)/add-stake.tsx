@@ -10,6 +10,7 @@ import { LoadingState } from '../../components/LoadingState';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextButton } from '../../components/TextButton';
 import { TextField } from '../../components/TextField';
+import { useUpgradeSheet } from '../../contexts/UpgradeSheetContext';
 import { fetchNflState } from '../../lib/nflState';
 import { fetchGamesWeek, type ScheduleGame } from '../../lib/schedule';
 import {
@@ -20,6 +21,7 @@ import {
 } from '../../lib/stakes';
 import { createStake, stakeRequestError } from '../../lib/stakesClient';
 import { theme } from '../../lib/theme';
+import { promptUpgradeForCapError } from '../../lib/upgradePrompt';
 
 type Kind = 'SPREAD' | 'TOTAL' | 'MONEYLINE' | 'SURVIVOR';
 type Step = 'type' | 'game' | 'team' | 'line' | 'confirm';
@@ -64,6 +66,7 @@ function gameSubtitle(game: ScheduleGame): string {
 export default function AddStakeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { openUpgrade } = useUpgradeSheet();
   const [step, setStep] = useState<Step>('type');
   const [kind, setKind] = useState<Kind | null>(null);
   const [totalSide, setTotalSide] = useState<'TOTAL_OVER' | 'TOTAL_UNDER'>('TOTAL_OVER');
@@ -206,7 +209,9 @@ export default function AddStakeScreen() {
       if (router.canGoBack()) router.back();
       else router.replace('/(app)/(tabs)/lineup');
     } catch (error) {
-      setFormError(stakeRequestError(error));
+      if (!promptUpgradeForCapError(error, openUpgrade)) {
+        setFormError(stakeRequestError(error));
+      }
     } finally {
       setSaving(false);
     }

@@ -1,16 +1,23 @@
 import { Alert } from 'react-native';
 
 import { ApiRequestError } from './apiClient';
+import { isUpgradeCapCode } from './upgradeCap';
+
+export { isUpgradeCapCode, upgradeContextLine } from './upgradeCap';
 
 /**
- * When free-tier connect / lineup caps fire (`league_limit_free`, `manual_lineup_limit_free`),
- * offer Upgrade — `openUpgrade` is `useUpgradeSheet().openUpgrade` from the caller. Returns true
- * if the error was handled as a cap prompt.
+ * When a free-tier cap fires, offer Upgrade — `openUpgrade` is `useUpgradeSheet().openUpgrade`
+ * from the caller. The bet cap opens the paywall directly. League and lineup caps still confirm
+ * with an alert. Returns true if the error was handled as a cap prompt.
  */
-export function promptUpgradeForCapError(error: unknown, openUpgrade: () => void): boolean {
-  if (!(error instanceof ApiRequestError)) return false;
-  if (error.code !== 'league_limit_free' && error.code !== 'manual_lineup_limit_free') {
-    return false;
+export function promptUpgradeForCapError(
+  error: unknown,
+  openUpgrade: (code?: string) => void,
+): boolean {
+  if (!(error instanceof ApiRequestError) || !isUpgradeCapCode(error.code)) return false;
+  if (error.code === 'stake_limit_free') {
+    openUpgrade(error.code);
+    return true;
   }
 
   const title =
@@ -18,7 +25,7 @@ export function promptUpgradeForCapError(error: unknown, openUpgrade: () => void
 
   Alert.alert(title, error.message, [
     { text: 'Not now', style: 'cancel' },
-    { text: 'Upgrade', onPress: openUpgrade },
+    { text: 'Upgrade', onPress: () => openUpgrade() },
   ]);
   return true;
 }

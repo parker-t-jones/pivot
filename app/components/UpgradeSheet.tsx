@@ -28,6 +28,7 @@ import {
   restorePurchases,
 } from '../lib/purchases';
 import { theme } from '../lib/theme';
+import { upgradeContextLine } from '../lib/upgradeCap';
 
 const MANAGE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
 
@@ -54,7 +55,8 @@ const PRO_PERKS = [
  * (`npx expo run:ios`).
  */
 export function UpgradeSheet() {
-  const { isOpen, closeUpgrade } = useUpgradeSheet();
+  const { isOpen, code, closeUpgrade } = useUpgradeSheet();
+  const contextLine = upgradeContextLine(code);
   const { user } = useSession();
   const insets = useSafeAreaInsets();
 
@@ -182,6 +184,7 @@ export function UpgradeSheet() {
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
           >
+            {contextLine ? <Text style={styles.contextLine}>{contextLine}</Text> : null}
             <Text style={styles.title}>Watch every league that matters</Text>
             <Text style={styles.subtitle}>
               Free covers three leagues and one Active Lineup. Pro removes the caps.
@@ -257,6 +260,11 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     paddingBottom: theme.spacing.md,
     paddingHorizontal: theme.spacing.lg2,
+  },
+  contextLine: {
+    color: theme.colors.accent,
+    fontSize: theme.type.small.size,
+    lineHeight: theme.type.small.size * 1.4,
   },
   dim: {
     bottom: 0,

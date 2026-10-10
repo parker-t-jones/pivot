@@ -9,7 +9,9 @@ import {
 
 interface UpgradeSheetContextValue {
   isOpen: boolean;
-  openUpgrade: () => void;
+  /** Cap code passed to `openUpgrade`, or null when the sheet was opened with no code. */
+  code: string | null;
+  openUpgrade: (code?: string) => void;
   closeUpgrade: () => void;
 }
 
@@ -23,13 +25,20 @@ const UpgradeSheetContext = createContext<UpgradeSheetContextValue | undefined>(
  */
 export function UpgradeSheetProvider({ children }: PropsWithChildren) {
   const [isOpen, setIsOpen] = useState(false);
+  const [code, setCode] = useState<string | null>(null);
 
-  const openUpgrade = useCallback(() => setIsOpen(true), []);
-  const closeUpgrade = useCallback(() => setIsOpen(false), []);
+  const openUpgrade = useCallback((nextCode?: string) => {
+    setCode(typeof nextCode === 'string' ? nextCode : null);
+    setIsOpen(true);
+  }, []);
+  const closeUpgrade = useCallback(() => {
+    setIsOpen(false);
+    setCode(null);
+  }, []);
 
   const value = useMemo(
-    () => ({ isOpen, openUpgrade, closeUpgrade }),
-    [isOpen, openUpgrade, closeUpgrade],
+    () => ({ isOpen, code, openUpgrade, closeUpgrade }),
+    [isOpen, code, openUpgrade, closeUpgrade],
   );
 
   return <UpgradeSheetContext.Provider value={value}>{children}</UpgradeSheetContext.Provider>;
