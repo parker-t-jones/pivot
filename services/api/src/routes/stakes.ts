@@ -13,6 +13,7 @@ type ManualStakeType = (typeof STAKE_TYPES)[number];
 const TEAM_TYPES = new Set<ManualStakeType>(['SPREAD', 'MONEYLINE', 'SURVIVOR']);
 const TOTAL_TYPES = new Set<ManualStakeType>(['TOTAL_OVER', 'TOTAL_UNDER']);
 const FANTASY_TYPES = new Set(['ROSTERED', 'OPPONENT_ROSTERED']);
+const FREE_BET_LIMIT = 3;
 
 const postBody = z.object({
   type: z.enum(STAKE_TYPES),
@@ -53,6 +54,11 @@ interface StakeRow {
   source: string;
   weight: number;
   created_at: string;
+}
+
+function countsTowardFreeCap(condition: Json): boolean {
+  const type = conditionType(condition);
+  return type === null || !FANTASY_TYPES.has(type);
 }
 
 function conditionType(condition: Json): string | null {
@@ -113,7 +119,7 @@ function stakeResponse(row: StakeRow) {
 const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate);
 
-  fastify.post('/stakes', { schema: { body: postBody } }, async (request) => {
+  fastify.post('/stakes', { schema: { body: postBody } }, async (request, reply) => {
     const user = requireUser(request);
     const { type, gameId, teamId, line } = request.body;
     const nfl = await getCurrentNflState(fastify.lineupCache);
@@ -182,6 +188,24 @@ const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       throw new ApiError(409, 'stake_duplicate', 'That stake already exists.');
     }
 
+    const { data: userRow, error: userError } = await fastify.supabase
+      .from('users')
+      .select('subscription_tier')
+      .eq('id', user.id)
+      .single();
+    if (userError) throw userError;
+    if (
+      userRow.subscription_tier !== 'pro' &&
+      owned.filter((stake) => countsTowardFreeCap(stake.condition)).length >= FREE_BET_LIMIT
+    ) {
+      throw new ApiError(
+        403,
+        'stake_limit_free',
+        `Free accounts can track up to ${FREE_BET_LIMIT} bets a week. Upgrade to Pro for unlimited bets.`,
+        { limit: FREE_BET_LIMIT },
+      );
+    }
+
     const { data: created, error: insertError } = await fastify.supabase
       .from('stakes')
       .insert({
@@ -199,7 +223,7 @@ const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
     if (insertError) throw insertError;
 
     await fastify.lineupCache.addUserBet(row.id, user.id, row.week);
-    return { stake: stakeResponse(created as StakeRow) };
+    return reply.status(201).send({ stake: stakeResponse(created as StakeRow) });
   });
 
   fastify.get('/stakes', { schema: { querystring: weekQuery } }, async (request) => {

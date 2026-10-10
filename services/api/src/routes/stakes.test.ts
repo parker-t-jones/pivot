@@ -30,10 +30,18 @@ class Mem {
   games: Row[] = [];
   teams: Row[] = [];
   stakes: Row[] = [];
+  users: Row[] = [];
   private next = 1;
 
-  from(table: 'games' | 'teams' | 'stakes'): Query {
-    const rows = table === 'games' ? this.games : table === 'teams' ? this.teams : this.stakes;
+  from(table: 'games' | 'teams' | 'stakes' | 'users'): Query {
+    const rows =
+      table === 'games'
+        ? this.games
+        : table === 'teams'
+          ? this.teams
+          : table === 'users'
+            ? this.users
+            : this.stakes;
     return new Query(rows, () => {
       const id = `00000000-0000-4000-8000-${String(this.next).padStart(12, '0')}`;
       this.next += 1;
@@ -183,6 +191,7 @@ describe('manual stakes', () => {
       { id: HOME, abbreviation: 'CHI', name: 'Bears' },
       { id: AWAY, abbreviation: 'PHI', name: 'Eagles' },
     ];
+    mem.users = [{ id: USER, subscription_tier: 'free' }];
     app = await buildApp(mem);
     token = await signToken(USER);
   }
@@ -261,8 +270,9 @@ describe('manual stakes', () => {
 
   it('builds a TEAM or GAME stake for each manual type', async () => {
     await setup();
+    mem.users[0]!['subscription_tier'] = 'pro';
     const spread = await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 });
-    expect(spread.statusCode).toBe(200);
+    expect(spread.statusCode).toBe(201);
     expect(spread.json().stake).toMatchObject({
       source: 'MANUAL',
       weight: 1,
@@ -301,7 +311,7 @@ describe('manual stakes', () => {
 
   it('returns 409 when a survivor pick already exists for the week', async () => {
     await setup();
-    expect((await post({ type: 'SURVIVOR', gameId: GAME, teamId: AWAY })).statusCode).toBe(200);
+    expect((await post({ type: 'SURVIVOR', gameId: GAME, teamId: AWAY })).statusCode).toBe(201);
     const again = await post({ type: 'SURVIVOR', gameId: GAME, teamId: HOME });
     expect(again.statusCode).toBe(409);
     expect(again.json().error.code).toBe('survivor_pick_exists');
@@ -310,13 +320,13 @@ describe('manual stakes', () => {
   it('returns 409 when the same stake already exists', async () => {
     await setup();
     const body = { type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 };
-    expect((await post(body)).statusCode).toBe(200);
+    expect((await post(body)).statusCode).toBe(201);
     const again = await post(body);
     expect(again.statusCode).toBe(409);
     expect(again.json().error.code).toBe('stake_duplicate');
 
     const otherLine = await post({ ...body, line: -7 });
-    expect(otherLine.statusCode).toBe(200);
+    expect(otherLine.statusCode).toBe(201);
   });
 
   it('lists manual stakes with the game and hides fantasy rows', async () => {
@@ -418,11 +428,11 @@ describe('manual stakes', () => {
   it('adds the game on create and removes it only when the last bet is gone', async () => {
     await setup([openGame(), openGame({ id: OTHER_GAME })]);
     const spread = await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 });
-    expect(spread.statusCode).toBe(200);
+    expect(spread.statusCode).toBe(201);
     expect(await app.lineupCache.getUsersWithBet(GAME)).toEqual([USER]);
 
     const over = await post({ type: 'TOTAL_OVER', gameId: GAME, line: 47.5 });
-    expect(over.statusCode).toBe(200);
+    expect(over.statusCode).toBe(201);
     const overId = (over.json() as { stake: { id: string } }).stake.id;
     expect(await app.lineupCache.getUsersWithBet(GAME)).toEqual([USER]);
 
@@ -442,5 +452,118 @@ describe('manual stakes', () => {
     });
     expect(last.statusCode).toBe(204);
     expect(await app.lineupCache.getUsersWithBet(GAME)).toEqual([]);
+  });
+
+  async function fillFreeCap() {
+    expect((await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 })).statusCode).toBe(
+      201,
+    );
+    expect((await post({ type: 'TOTAL_OVER', gameId: GAME, line: 47.5 })).statusCode).toBe(201);
+    const survivor = await post({ type: 'SURVIVOR', gameId: GAME, teamId: HOME });
+    expect(survivor.statusCode).toBe(201);
+    return survivor;
+  }
+
+  it('returns 403 when a free user already has 3 bets that week, and 201 for the third', async () => {
+    await setup();
+    await fillFreeCap();
+    const fourth = await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY });
+    expect(fourth.statusCode).toBe(403);
+    expect(fourth.json()).toEqual({
+      error: {
+        code: 'stake_limit_free',
+        message: 'Free accounts can track up to 3 bets a week. Upgrade to Pro for unlimited bets.',
+        details: { limit: 3 },
+      },
+    });
+  });
+
+  it('frees the slot when a counted stake is deleted', async () => {
+    await setup();
+    const survivor = await fillFreeCap();
+    const id = (survivor.json() as { stake: { id: string } }).stake.id;
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/stakes/${id}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(removed.statusCode).toBe(204);
+    const again = await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY });
+    expect(again.statusCode).toBe(201);
+  });
+
+  it("returns 201 for a pro user's fourth bet", async () => {
+    await setup();
+    mem.users[0]!['subscription_tier'] = 'pro';
+    await fillFreeCap();
+    const fourth = await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY });
+    expect(fourth.statusCode).toBe(201);
+  });
+
+  it('does not count opponent or rostered rows toward the free cap', async () => {
+    await setup();
+    for (let index = 0; index < 20; index += 1) {
+      mem.stakes.push({
+        id: `20000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+        user_id: USER,
+        season: 2026,
+        week: 5,
+        game_id: GAME,
+        subject: { type: 'PLAYER', playerId: `roster-${index}` },
+        condition: { type: 'ROSTERED' },
+        source: 'SLEEPER_ROSTER',
+        weight: 1,
+        created_at: '2026-10-09T15:00:00.000Z',
+      });
+    }
+    for (let index = 0; index < 14; index += 1) {
+      mem.stakes.push({
+        id: `30000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+        user_id: USER,
+        season: 2026,
+        week: 5,
+        game_id: GAME,
+        subject: { type: 'PLAYER', playerId: `opp-${index}` },
+        condition: { type: 'OPPONENT_ROSTERED' },
+        source: 'SLEEPER_OPPONENT',
+        weight: 1,
+        created_at: '2026-10-09T15:00:00.000Z',
+      });
+    }
+    await fillFreeCap();
+  });
+
+  it("does not count another week's bets", async () => {
+    await setup();
+    for (let index = 0; index < 4; index += 1) {
+      mem.stakes.push({
+        id: `40000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+        user_id: USER,
+        season: 2026,
+        week: 4,
+        game_id: OTHER_GAME,
+        subject: { type: 'TEAM', teamId: AWAY },
+        condition: { type: 'SPREAD', line: -3.5 - index },
+        source: 'MANUAL',
+        weight: 1,
+        created_at: '2026-10-02T15:00:00.000Z',
+      });
+    }
+    const weekFive = await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY });
+    expect(weekFive.statusCode).toBe(201);
+  });
+
+  it('reports a validation error before the cap when the fourth request has an invalid line', async () => {
+    await setup();
+    await fillFreeCap();
+    const fourth = await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: 0.25 });
+    expect(fourth.statusCode).toBe(400);
+    expect(fourth.json().error.code).toBe('stake_line_invalid');
+    expect(
+      mem.stakes.filter((stake) => {
+        const condition = stake['condition'] as { type?: string };
+        return condition.type !== 'ROSTERED' && condition.type !== 'OPPONENT_ROSTERED';
+      }),
+    ).toHaveLength(3);
   });
 });
