@@ -1,14 +1,9 @@
+import type { StakeTeam } from '@pivot/shared/stakeLabel';
+
+export type { StakeLabelSource, StakeTeam } from '@pivot/shared/stakeLabel';
+export { formatStakeLabel } from '@pivot/shared/stakeLabel';
+
 export type ManualStakeType = 'SPREAD' | 'TOTAL_OVER' | 'TOTAL_UNDER' | 'MONEYLINE' | 'SURVIVOR';
-
-export interface StakeLabelSource {
-  condition: { type: string; line?: number | null };
-  subject: { type: string; teamId?: string | null };
-}
-
-export interface StakeTeam {
-  teamId: string;
-  abbreviation: string;
-}
 
 export interface StakeRequest {
   type: ManualStakeType;
@@ -60,26 +55,6 @@ function formatMagnitude(line: number): string {
 /** Negative lines use a true minus sign. Non-negative lines use a plus. */
 export function formatSignedLine(line: number): string {
   return line < 0 ? `${MINUS}${formatMagnitude(line)}` : `+${formatMagnitude(line)}`;
-}
-
-export function formatStakeLabel(stake: StakeLabelSource, teams: readonly StakeTeam[]): string {
-  const type = stake.condition.type;
-  const teamId = stake.subject.teamId ?? '';
-  const abbreviation =
-    teams.find((team) => team.teamId === teamId)?.abbreviation ?? (teamId.length > 0 ? teamId : '');
-  const line = stake.condition.line;
-
-  if (type === 'SPREAD' && typeof line === 'number') {
-    return `${abbreviation} ${formatSignedLine(line)}`.trim();
-  }
-  if (type === 'TOTAL_OVER')
-    return `Over ${typeof line === 'number' ? formatMagnitude(line) : ''}`.trim();
-  if (type === 'TOTAL_UNDER') {
-    return `Under ${typeof line === 'number' ? formatMagnitude(line) : ''}`.trim();
-  }
-  if (type === 'MONEYLINE') return `${abbreviation} ML`.trim();
-  if (type === 'SURVIVOR') return `Survivor · ${abbreviation}`.trim();
-  return abbreviation;
 }
 
 export function validateLine(

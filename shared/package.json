@@ -20,6 +20,11 @@
       "types": "./dist/lineupOrder.d.ts",
       "default": "./dist/lineupOrder.js"
     },
+    "./stakeLabel": {
+      "react-native": "./src/stakeLabel.ts",
+      "types": "./dist/stakeLabel.d.ts",
+      "default": "./dist/stakeLabel.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

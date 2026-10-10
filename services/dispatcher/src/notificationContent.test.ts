@@ -298,3 +298,38 @@ describe('notificationBody', () => {
     });
   });
 });
+
+describe('bet_in_play copy', () => {
+  it('names the label and includes none of the score, margin, or clock', () => {
+    const event: FlagEvent = {
+      id: 'bet-1',
+      userId: 'u1',
+      gameId: 'g1',
+      type: 'bet_in_play',
+      stakeId: 'stake-1',
+      code: 'TOTAL_SWING',
+      label: 'Over 47.5',
+      oldState: null,
+      newState: makeFlagState({ flagged: false, priorityScore: 6, reasons: [] }),
+      scheduledFireAt: 1,
+    };
+    const game: NotificationGameContext & { scoreHome: number; scoreAway: number; margin: number } =
+      {
+        possessionTeamName: 'Eagles',
+        defenseTeamName: 'Bears',
+        quarter: 2,
+        timeRemainingSec: 489,
+        scoreHome: 18,
+        scoreAway: 6,
+        margin: 12,
+      };
+    const copy = `${notificationTitle(event, game, [])} ${notificationBody(event, game)}`;
+    expect(copy).toBe('Your Over 47.5 is in play Tap to switch.');
+    expect(copy).not.toContain('8:09');
+    expect(copy).not.toContain('Q2');
+    expect(copy).not.toContain(String(game.scoreHome));
+    expect(copy).not.toContain(String(game.scoreAway));
+    expect(copy).not.toContain(String(game.margin));
+    expect(copy.replace(/\D/g, '')).toBe('475');
+  });
+});

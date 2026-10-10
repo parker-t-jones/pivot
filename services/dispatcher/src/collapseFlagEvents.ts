@@ -1,10 +1,13 @@
 import type { FlagEvent } from '@pivot/shared';
 
 /**
- * The only event type that sends a push (Decision 7). Collapse and the rate limiter
- * count these and nothing else. The other three types are persisted and published.
+ * Push-eligible events. Collapse and the rate limiter count these and nothing else.
+ * `flag_removed` and the priority deltas are persisted and published.
  */
-const PUSH_ELIGIBLE_EVENT_TYPES: ReadonlySet<FlagEvent['type']> = new Set(['flag_added']);
+const PUSH_ELIGIBLE_EVENT_TYPES: ReadonlySet<FlagEvent['type']> = new Set([
+  'flag_added',
+  'bet_in_play',
+]);
 
 export function isPushEligibleEvent(type: FlagEvent['type']): boolean {
   return PUSH_ELIGIBLE_EVENT_TYPES.has(type);
@@ -17,6 +20,10 @@ export function isPushEligibleEvent(type: FlagEvent['type']): boolean {
 export function outranks(candidate: FlagEvent, incumbent: FlagEvent): boolean {
   if (candidate.newState.priorityScore !== incumbent.newState.priorityScore) {
     return candidate.newState.priorityScore > incumbent.newState.priorityScore;
+  }
+  if (candidate.type !== incumbent.type) {
+    if (candidate.type === 'flag_added' && incumbent.type === 'bet_in_play') return true;
+    if (candidate.type === 'bet_in_play' && incumbent.type === 'flag_added') return false;
   }
   if (candidate.newState.flagged !== incumbent.newState.flagged) {
     return candidate.newState.flagged;

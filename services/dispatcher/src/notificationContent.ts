@@ -100,6 +100,7 @@ export function notificationTitle(
   game: NotificationGameContext,
   players: PlayerInfo[],
 ): string {
+  if (event.type === 'bet_in_play') return `Your ${event.label ?? ''} is in play`;
   if (event.type === 'flag_removed') {
     return describeSubject(event.oldState?.reasons ?? [], players, game, 'past');
   }
@@ -137,6 +138,7 @@ export function notificationBody(
   game: NotificationGameContext,
   airingWithoutOption: string | null = null,
 ): string {
+  if (event.type === 'bet_in_play') return 'Tap to switch.';
   if (event.type === 'flag_removed') {
     const team = game.possessionTeamName;
     return team ? `Possession changed — ${team} has the ball now.` : 'Possession has changed.';

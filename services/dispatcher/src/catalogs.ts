@@ -128,7 +128,12 @@ export class InMemoryPlayerCatalog implements PlayerCatalog {
 export interface PersistedFlagEventInput {
   userId: string;
   gameId: string;
-  eventType: 'flag_added' | 'flag_removed' | 'priority_increased' | 'priority_decreased';
+  eventType:
+    | 'flag_added'
+    | 'flag_removed'
+    | 'priority_increased'
+    | 'priority_decreased'
+    | 'bet_in_play';
   /**
    * ESPN play id of the play that produced the event. `FlagEvent` does not carry it; the handler
    * passes it into dispatch. Null does not participate in the dedupe key — Postgres UNIQUE treats

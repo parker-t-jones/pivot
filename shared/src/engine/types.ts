@@ -52,7 +52,7 @@ export interface FlagEvent {
   id: string;
   userId: string;
   gameId: string;
-  type: 'flag_added' | 'flag_removed' | 'priority_increased' | 'priority_decreased';
+  type: 'flag_added' | 'flag_removed' | 'priority_increased' | 'priority_decreased' | 'bet_in_play';
   oldState: FlagState | null;
   newState: FlagState;
   scheduledFireAt: number;
@@ -62,6 +62,10 @@ export interface FlagEvent {
   seenAt?: string;
   /** When `resumptionGate` enqueued this event. */
   enqueuedAt?: string;
+  /** Set when `type` is `bet_in_play`. */
+  stakeId?: string;
+  code?: string;
+  label?: string;
 }
 
 // `UserLineupCache` (Section 8 core types) is the Sprint 3 shape — re-exported so the engine has a

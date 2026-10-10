@@ -8,6 +8,7 @@ function event(overrides: {
   priorityScore: number;
   flagged?: boolean;
   computedAt?: number;
+  type?: FlagEvent['type'];
 }): FlagEvent {
   const state: FlagState = {
     gameId: 'g1',
@@ -16,11 +17,26 @@ function event(overrides: {
     reasons: [{ type: 'offense_active', triggeringPlayerIds: ['p1'] }],
     computedAt: overrides.computedAt ?? 1,
   };
+  const type = overrides.type ?? 'flag_added';
+  if (type === 'bet_in_play') {
+    return {
+      id: overrides.id,
+      userId: overrides.userId ?? 'u1',
+      gameId: 'g1',
+      type,
+      stakeId: 'stake-1',
+      code: 'TOTAL_SWING',
+      label: 'Over 47.5',
+      oldState: null,
+      newState: state,
+      scheduledFireAt: 0,
+    };
+  }
   return {
     id: overrides.id,
     userId: overrides.userId ?? 'u1',
     gameId: 'g1',
-    type: 'flag_added',
+    type,
     oldState: null,
     newState: state,
     scheduledFireAt: 0,
@@ -28,8 +44,9 @@ function event(overrides: {
 }
 
 describe('isPushEligibleEvent', () => {
-  it('only flag_added is push-eligible', () => {
+  it('treats flag_added and bet_in_play as push-eligible', () => {
     expect(isPushEligibleEvent('flag_added')).toBe(true);
+    expect(isPushEligibleEvent('bet_in_play')).toBe(true);
     expect(isPushEligibleEvent('priority_increased')).toBe(false);
     expect(isPushEligibleEvent('priority_decreased')).toBe(false);
     expect(isPushEligibleEvent('flag_removed')).toBe(false);
@@ -59,6 +76,37 @@ describe('collapseByUser', () => {
     expect(
       collapseByUser([{ event: earlier }, { event: later }]).map((item) => item.event.id),
     ).toEqual(['late']);
+  });
+
+  it('keeps the higher score whether the bet or the flag leads', () => {
+    const bet = event({ id: 'bet', priorityScore: 9, type: 'bet_in_play' });
+    const flag = event({ id: 'flag', priorityScore: 2 });
+    expect(collapseByUser([{ event: flag }, { event: bet }]).map((item) => item.event.id)).toEqual([
+      'bet',
+    ]);
+    expect(collapseByUser([{ event: bet }, { event: flag }]).map((item) => item.event.id)).toEqual([
+      'bet',
+    ]);
+
+    const louder = event({ id: 'flag', priorityScore: 9 });
+    const quiet = event({ id: 'bet', priorityScore: 2, type: 'bet_in_play' });
+    expect(
+      collapseByUser([{ event: quiet }, { event: louder }]).map((item) => item.event.id),
+    ).toEqual(['flag']);
+    expect(
+      collapseByUser([{ event: louder }, { event: quiet }]).map((item) => item.event.id),
+    ).toEqual(['flag']);
+  });
+
+  it('prefers flag_added when priorityScore ties with bet_in_play', () => {
+    const bet = event({ id: 'bet', priorityScore: 5, type: 'bet_in_play', computedAt: 9 });
+    const flag = event({ id: 'flag', priorityScore: 5, computedAt: 1 });
+    expect(collapseByUser([{ event: bet }, { event: flag }]).map((item) => item.event.id)).toEqual([
+      'flag',
+    ]);
+    expect(collapseByUser([{ event: flag }, { event: bet }]).map((item) => item.event.id)).toEqual([
+      'flag',
+    ]);
   });
 
   it('does not merge a different user', () => {
