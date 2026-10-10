@@ -13,6 +13,7 @@ import {
 } from '../lib/gameDisplay';
 import { fonts } from '../lib/fonts';
 import { reasonChipParts, resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../lib/teamDisplay';
+import { betChipLabel } from '../lib/homeBets';
 import { theme } from '../lib/theme';
 import { FieldGauge } from './FieldGauge';
 import { PrimaryButton } from './PrimaryButton';
@@ -65,6 +66,7 @@ export function NowActiveCard({
   const rightWash =
     hexWithAlpha(matchup.rightPrimaryColor, TEAM_NAME_WASH_ALPHA) ?? theme.colors.surface;
   const localParts = localRoute ? watchOptionParts(localRoute) : null;
+  const betLabel = betChipLabel((flag.bets ?? []).map((bet) => bet.label));
 
   return (
     <View style={styles.card}>
@@ -116,6 +118,8 @@ export function NowActiveCard({
         </View>
       ) : null}
 
+      {betLabel ? <FlagChip label={betLabel} /> : null}
+
       {cta.kind === 'watch' ? (
         <View style={styles.cta}>
           <PrimaryButton
@@ -134,6 +138,18 @@ export function NowActiveCard({
       ) : cta.kind === 'airing' ? (
         <Text style={[styles.cta, styles.airing]}>{cta.text}</Text>
       ) : null}
+    </View>
+  );
+}
+
+export function FlagChip({ label }: { label: string }) {
+  return (
+    <View style={styles.reasonChip}>
+      <View style={styles.reasonChipPlayers}>
+        <Text style={styles.reasonChipText} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
     </View>
   );
 }

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { alsoFlaggedSituationLines, type CurrentFlag, type WatchCta } from '../lib/gameDisplay';
+import { betChipLabel } from '../lib/homeBets';
+import { FlagChip } from './NowActiveCard';
 import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
 
@@ -50,6 +52,7 @@ export function AlsoFlaggedRow({ flags, onSwitch, ctaFor }: AlsoFlaggedRowProps)
           const isSwitching = switchingGameId === flag.game_id;
           const situation = alsoFlaggedSituationLines(flag.game);
           const cta = ctaFor(flag);
+          const betLabel = betChipLabel((flag.bets ?? []).map((bet) => bet.label));
           return (
             <View key={flag.game_id} style={styles.card}>
               <View style={styles.teams}>
@@ -64,6 +67,7 @@ export function AlsoFlaggedRow({ flags, onSwitch, ctaFor }: AlsoFlaggedRowProps)
               </View>
               <View style={styles.cardDivider} />
               <View style={styles.situation}>
+                {betLabel ? <FlagChip label={betLabel} /> : null}
                 {flag.opponent_label ? (
                   <Text style={styles.situationLine} numberOfLines={1}>
                     {flag.opponent_label}

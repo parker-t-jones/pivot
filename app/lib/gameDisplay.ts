@@ -19,6 +19,8 @@ export interface CurrentFlag {
   recommended_action: 'switch_primary' | 'add_to_split' | 'notify_only';
   /** Outcome-free chip for an opponent red-zone row. Absent on the user's own flags. */
   opponent_label?: string;
+  /** True bets on this game. Absent when the user has no bet on it. */
+  bets?: { stake_id: string; label: string }[];
 }
 
 /** Opponent red-zone row from `GET /flags/current`. Absent on the wire when `watchOpponent` is off. */
@@ -35,6 +37,8 @@ export interface FlagsCurrentResponse {
   generated_at: string;
   opponent_flags?: OpponentFlagWire[];
   opponent_game_ids?: string[];
+  /** Every game with a bet stake this week. Absent when the user has none. */
+  bet_game_ids?: string[];
 }
 
 /** One watch option from `GET /games/:id/broadcasts` / `GET /games?week=` (Section 9): a service

@@ -144,6 +144,10 @@ export function applyFlagEventToHome(
   payload: FlagEventPayload,
   now: Date = new Date(),
 ): ApplyFlagEventResult {
+  if (payload.event_type === 'bet_in_play') {
+    return { slice, needsBroadcastFetch: false, broadcastGameId: null };
+  }
+
   if (payload.event_type === 'flag_removed') {
     return clearFlag(slice, payload.game_id, now);
   }

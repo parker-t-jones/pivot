@@ -84,9 +84,17 @@ export function placeHomeFlags(
   return { flag: flag ?? null, otherFlags };
 }
 
+export interface SeenBetScore {
+  home: number;
+  away: number;
+  quarter: number;
+}
+
 export interface OpponentRefreshState {
   opponentGameIds: readonly string[];
   seenRedZone: Readonly<Record<string, boolean>>;
+  betGameIds: readonly string[];
+  seenBet: Readonly<Record<string, SeenBetScore>>;
   inFlight: boolean;
   pending: boolean;
   dueAtMs: number | null;
@@ -96,6 +104,8 @@ export function emptyOpponentRefresh(gameIds: readonly string[] = []): OpponentR
   return {
     opponentGameIds: gameIds,
     seenRedZone: {},
+    betGameIds: [],
+    seenBet: {},
     inFlight: false,
     pending: false,
     dueAtMs: null,
@@ -105,7 +115,13 @@ export function emptyOpponentRefresh(gameIds: readonly string[] = []): OpponentR
 /** Remember the red-zone bit Home already loaded, so the first socket echo is not a flip. */
 export function seedOpponentRedZone(
   gameIds: readonly string[],
-  live: readonly { game_id: string; in_red_zone: boolean }[],
+  live: readonly {
+    game_id: string;
+    in_red_zone: boolean;
+    score?: { home: number; away: number };
+    quarter?: number;
+  }[],
+  betGameIds: readonly string[] = [],
 ): OpponentRefreshState {
   const byId = new Map(live.map((game) => [game.game_id, game.in_red_zone]));
   const seenRedZone: Record<string, boolean> = {};
@@ -116,6 +132,8 @@ export function seedOpponentRedZone(
   return {
     opponentGameIds: gameIds,
     seenRedZone,
+    betGameIds,
+    seenBet: seedBetScores(betGameIds, live),
     inFlight: false,
     pending: false,
     dueAtMs: null,
@@ -160,6 +178,56 @@ export function noteOpponentGameState(
   return { ...state, seenRedZone, dueAtMs: event.nowMs + debounceMs };
 }
 
+/**
+ * Schedule the same `/flags/current` refetch when a listed bet game's score or quarter changes.
+ * The first observation is recorded and does not refetch. Clock-only updates do not.
+ */
+export function noteBetGameState(
+  state: OpponentRefreshState,
+  event: { gameId: string; home: number; away: number; quarter: number; nowMs: number },
+  debounceMs = OPPONENT_REFETCH_DEBOUNCE_MS,
+): OpponentRefreshState {
+  if (!state.betGameIds.includes(event.gameId)) return state;
+  const nextScore: SeenBetScore = { home: event.home, away: event.away, quarter: event.quarter };
+  const previous = state.seenBet[event.gameId];
+  if (
+    previous !== undefined &&
+    previous.home === nextScore.home &&
+    previous.away === nextScore.away &&
+    previous.quarter === nextScore.quarter
+  ) {
+    return state;
+  }
+  const seenBet = { ...state.seenBet, [event.gameId]: nextScore };
+  if (previous === undefined) return { ...state, seenBet };
+  if (state.inFlight) return { ...state, seenBet, pending: true };
+  return { ...state, seenBet, dueAtMs: event.nowMs + debounceMs };
+}
+
+/** A `bet_in_play` alert refetches through the same single-flight debounce. It does not edit Home. */
+export function noteBetInPlay(
+  state: OpponentRefreshState,
+  nowMs: number,
+  debounceMs = OPPONENT_REFETCH_DEBOUNCE_MS,
+): OpponentRefreshState {
+  if (state.inFlight) return { ...state, pending: true };
+  return { ...state, dueAtMs: nowMs + debounceMs };
+}
+
+export function adoptBetWatch(
+  state: OpponentRefreshState,
+  gameIds: readonly string[],
+  scores: readonly { gameId: string; home: number; away: number; quarter: number }[],
+): OpponentRefreshState {
+  const listed = new Set(gameIds);
+  const seenBet = { ...state.seenBet };
+  for (const score of scores) {
+    if (!listed.has(score.gameId)) continue;
+    seenBet[score.gameId] = { home: score.home, away: score.away, quarter: score.quarter };
+  }
+  return { ...state, betGameIds: gameIds, seenBet };
+}
+
 export function noteOpponentRefetchStarted(state: OpponentRefreshState): OpponentRefreshState {
   return { ...state, inFlight: true, pending: false, dueAtMs: null };
 }
@@ -173,6 +241,20 @@ export function noteOpponentRefetchSettled(
     return { ...state, inFlight: false, pending: false, dueAtMs: nowMs + debounceMs };
   }
   return { ...state, inFlight: false, dueAtMs: null };
+}
+
+function seedBetScores(
+  gameIds: readonly string[],
+  live: readonly { game_id: string; score?: { home: number; away: number }; quarter?: number }[],
+): Record<string, SeenBetScore> {
+  const byId = new Map(live.map((game) => [game.game_id, game]));
+  const seenBet: Record<string, SeenBetScore> = {};
+  for (const gameId of gameIds) {
+    const game = byId.get(gameId);
+    if (!game?.score || game.quarter === undefined) continue;
+    seenBet[gameId] = { home: game.score.home, away: game.score.away, quarter: game.quarter };
+  }
+  return seenBet;
 }
 
 function opponentPlayerNames(row: OpponentFlagWire): string[] {

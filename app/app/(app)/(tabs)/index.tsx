@@ -59,9 +59,13 @@ import {
 } from '../../../lib/leagues';
 import { buildLiveBoard, countLiveGames } from '../../../lib/liveBoard';
 import { fetchMe, type MeResponse } from '../../../lib/me';
+import { betEventRequestsRefetch, readBetGameIds } from '../../../lib/homeBets';
 import {
+  adoptBetWatch,
   adoptOpponentGames,
   emptyOpponentRefresh,
+  noteBetGameState,
+  noteBetInPlay,
   noteOpponentGameState,
   noteOpponentRefetchSettled,
   noteOpponentRefetchStarted,
@@ -176,10 +180,19 @@ export default function HomeScreen() {
   }, []);
 
   const resetOpponentWatch = useCallback(
-    (gameIds: readonly string[], live: readonly { game_id: string; in_red_zone: boolean }[]) => {
+    (
+      gameIds: readonly string[],
+      live: readonly {
+        game_id: string;
+        in_red_zone: boolean;
+        score?: { home: number; away: number };
+        quarter?: number;
+      }[],
+      betGameIds: readonly string[] = [],
+    ) => {
       clearOpponentTimer();
       opponentEpoch.current += 1;
-      opponentRefresh.current = seedOpponentRedZone(gameIds, live);
+      opponentRefresh.current = seedOpponentRedZone(gameIds, live, betGameIds);
     },
     [clearOpponentTimer],
   );
@@ -198,20 +211,6 @@ export default function HomeScreen() {
     }
   }, []);
 
-  const onFlagEvent = useCallback(
-    (payload: FlagEventPayload) => {
-      setHomeData((prev) => {
-        if (!prev || !prev.nflState) return prev;
-        const result = applyFlagEventToHome(toFlagSlice(prev), payload);
-        if (result.needsBroadcastFetch && result.broadcastGameId) {
-          void applyBroadcasts(result.broadcastGameId);
-        }
-        return { ...prev, ...result.slice };
-      });
-    },
-    [applyBroadcasts],
-  );
-
   const refetchOpponentFlags = useRef<() => Promise<void>>(async () => undefined);
 
   const armOpponentRefetch = useCallback(
@@ -227,6 +226,27 @@ export default function HomeScreen() {
     [clearOpponentTimer],
   );
 
+  const onFlagEvent = useCallback(
+    (payload: FlagEventPayload) => {
+      if (betEventRequestsRefetch(payload.event_type)) {
+        const next = noteBetInPlay(opponentRefresh.current, Date.now());
+        const dueChanged = next.dueAtMs !== opponentRefresh.current.dueAtMs;
+        opponentRefresh.current = next;
+        if (dueChanged) armOpponentRefetch(next.dueAtMs);
+        return;
+      }
+      setHomeData((prev) => {
+        if (!prev || !prev.nflState) return prev;
+        const result = applyFlagEventToHome(toFlagSlice(prev), payload);
+        if (result.needsBroadcastFetch && result.broadcastGameId) {
+          void applyBroadcasts(result.broadcastGameId);
+        }
+        return { ...prev, ...result.slice };
+      });
+    },
+    [applyBroadcasts, armOpponentRefetch],
+  );
+
   useEffect(() => {
     refetchOpponentFlags.current = async () => {
       clearOpponentTimer();
@@ -239,6 +259,7 @@ export default function HomeScreen() {
         const response = await apiClient.get<FlagsCurrentResponse>('/flags/current');
         if (epoch !== opponentEpoch.current) return;
         const fields = readOpponentFields(response);
+        const betGameIds = readBetGameIds(response);
         setHomeData((prev) => {
           if (!prev || epoch !== opponentEpoch.current) return prev;
           previousGameId = prev.flag?.game_id ?? null;
@@ -260,10 +281,21 @@ export default function HomeScreen() {
             : prev.branch;
           return { ...prev, flag: placed.flag, otherFlags: placed.otherFlags, branch };
         });
-        opponentRefresh.current = adoptOpponentGames(
-          opponentRefresh.current,
-          fields.opponentGameIds,
-          [],
+        opponentRefresh.current = adoptBetWatch(
+          adoptOpponentGames(opponentRefresh.current, fields.opponentGameIds, []),
+          betGameIds,
+          response.flags.flatMap((flag) =>
+            betGameIds.includes(flag.game_id)
+              ? [
+                  {
+                    gameId: flag.game_id,
+                    home: flag.game.score.home,
+                    away: flag.game.score.away,
+                    quarter: flag.game.quarter,
+                  },
+                ]
+              : [],
+          ),
         );
         if (primaryGameId && primaryGameId !== previousGameId) {
           void applyBroadcasts(primaryGameId);
@@ -352,7 +384,11 @@ export default function HomeScreen() {
           opponentFields.opponentFlags,
           liveResponse.games,
         );
-        resetOpponentWatch(opponentFields.opponentGameIds, liveResponse.games);
+        resetOpponentWatch(
+          opponentFields.opponentGameIds,
+          liveResponse.games,
+          readBetGameIds(flagsResponse),
+        );
         const liveStakeGames = filterLiveStakeGames(liveResponse.games, stakeTeams);
         const weekGames = weekResponse.games;
         const now = new Date();
@@ -417,10 +453,18 @@ export default function HomeScreen() {
         if (!prev) return prev;
         return { ...prev, ...applyGameStateToHome(toFlagSlice(prev), game) };
       });
-      const next = noteOpponentGameState(opponentRefresh.current, {
+      const nowMs = Date.now();
+      const afterOpponent = noteOpponentGameState(opponentRefresh.current, {
         gameId: game.game_id,
         inRedZone: game.in_red_zone,
-        nowMs: Date.now(),
+        nowMs,
+      });
+      const next = noteBetGameState(afterOpponent, {
+        gameId: game.game_id,
+        home: game.score.home,
+        away: game.score.away,
+        quarter: game.quarter,
+        nowMs,
       });
       const dueChanged = next.dueAtMs !== opponentRefresh.current.dueAtMs;
       opponentRefresh.current = next;

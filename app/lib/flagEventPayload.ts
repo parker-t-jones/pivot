@@ -76,7 +76,12 @@ export interface FlagEventPayload {
   event_id: string;
   user_id: string;
   game_id: string;
-  event_type: 'flag_added' | 'flag_removed' | 'priority_increased' | 'priority_decreased';
+  event_type:
+    | 'flag_added'
+    | 'flag_removed'
+    | 'priority_increased'
+    | 'priority_decreased'
+    | 'bet_in_play';
   /**
    * Sprint 9 Phase 1 addition — the abbreviation of whichever team currently has the ball, or
    * `null` with no possession (special teams / between plays / kickoff). `old_state.possession_team`
