@@ -196,6 +196,12 @@ describe('manual stakes', () => {
     token = await signToken(USER);
   }
 
+  function asPro() {
+    const user = mem.users[0];
+    if (user === undefined) throw new Error('missing test user');
+    user['subscription_tier'] = 'pro';
+  }
+
   async function post(body: Record<string, unknown>, bearer = token) {
     return await app.inject({
       method: 'POST',
@@ -270,7 +276,7 @@ describe('manual stakes', () => {
 
   it('builds a TEAM or GAME stake for each manual type', async () => {
     await setup();
-    mem.users[0]!['subscription_tier'] = 'pro';
+    asPro();
     const spread = await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 });
     expect(spread.statusCode).toBe(201);
     expect(spread.json().stake).toMatchObject({
@@ -494,7 +500,7 @@ describe('manual stakes', () => {
 
   it("returns 201 for a pro user's fourth bet", async () => {
     await setup();
-    mem.users[0]!['subscription_tier'] = 'pro';
+    asPro();
     await fillFreeCap();
     const fourth = await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY });
     expect(fourth.statusCode).toBe(201);
