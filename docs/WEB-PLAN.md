@@ -168,7 +168,7 @@ Event union: `flag_added | flag_removed | priority_increased | priority_decrease
 
 When Web Push and the in-tab banner are built, they fire on the same events, at the same time, as the iOS push and the iOS foreground banner. No new hold.
 
-Presence, when it is built: per device (`userId` + `deviceId` / platform), not one `active_users` member per user. **TOUCHES iOS — on-device verification required, never deploy Fri–Mon.** A laptop socket must not suppress or clear the phone's push. Not in the first batch. Until that lands, a public web client must not open `/v1/realtime`.
+Presence is per connection, grouped by device. The design and the call-site list are in "W5 — presence per connection" below. **TOUCHES iOS — on-device verification required. Deploy Tue–Thu only, never Fri–Mon, and in a separate deploy from the grant-lock migrations.** A current TestFlight build sends no device info and keeps today's behavior. The web client opens `/v1/realtime` once that deploy is live.
 
 ## 5. Switch and deep links
 
@@ -313,13 +313,42 @@ Config only. `app/public/_redirects` is the SPA fallback, and Expo copies it int
 
 ### Later — in-tab alerts and Web Push
 
-Not started. Same event types and the same timing as the table above. No dispatcher delay. Web Push is a second sender beside Expo and must not write `users.expo_push_token`. Do not open `/v1/realtime` from a public web client until presence is per device.
+Not started. Same event types and the same timing as the table above. No dispatcher delay. Web Push is a second sender beside Expo and must not write `users.expo_push_token`. A hidden web tab stays connected and does not count as active, so a later Web Push can reach it.
 
-### Later — presence per device
+### W5 — presence per connection
 
-**TOUCHES iOS — on-device verification required, never deploy Fri–Mon.**
+**TOUCHES iOS — on-device verification required. Deploy Tue–Thu only, never Fri–Mon, and separately from the grant-lock migrations.**
 
-Key `active_users` by `userId` + `deviceId` / platform. Closing the web socket must leave the phone's membership in place. One phone, no web client, must still skip the push when that phone is connected and the game is primary, and must still receive it when the phone is backgrounded. Verify on a device. Do not deploy this between Friday and Monday.
+What the code did before this slice: `active_users` held one sorted-set member per user id. The score is an expiry timestamp, `Date.now() + ttlMs` (`ACTIVE_USER_TTL_MS` is 5 minutes). A member is live while `score >= now`. `sweepExpiredActiveUsers` runs `zremrangebyscore active_users 0 <now-1>` and has no production caller. `GET /v1/realtime` called `markUserActive(user.id)` on connect and on ping, and `removeActiveUser(user.id)` on every socket close. `decidePushDelivery` skipped the push for the whole user when that member was live and the flag's game was the stored primary. The primary is one row per user, `viewing_sessions.primary_game_id`.
+
+Push tokens: one column, `users.expo_push_token`. A user has one iOS token. `POST /me/push-token` overwrites it. `DELETE /me/push-token` nulls it. The dispatcher reads it in `SupabaseUserDirectory.getUser` and sends it when `decidePushDelivery` returns `sent`.
+
+Sockets: the iOS app connects only while `AppState` is `active`. `background` calls `client.stop()`, which closes the socket and removes the member immediately. `inactive` (Control Center) does not. A hidden web tab used to take the same path, because react-native-web reports a hidden document as `background`.
+
+Device identity: the client generates a random UUID once (iOS: SecureStore key `pivot.device-id`; web: `localStorage`, try/catch) and sends `deviceId` and `platform` (`ios` or `web`) on the realtime URL. The id is stored under the authenticated user, so it cannot name another user's presence. The server accepts only a UUID. `legacy-ios` is reserved and is not a valid client id.
+
+Legacy: a connection with no `deviceId`, and with `platform` omitted or `ios`, is the current TestFlight client. It still calls `markUserActive(user.id)` and `removeActiveUser(user.id)`. The Redis member stays the bare user id, scored the same way. That member is device `legacy-ios`. A push token posted without `deviceId` is stored with `expo_push_device_id` null, which means `legacy-ios`. A web connection with no `deviceId` is rejected with HTTP 400 before the upgrade.
+
+New connections: one sorted-set member per connection, `c|{userId}|{deviceId}|{connectionId}|{platform}|{visibility}`, scored by the same expiry. Ping refreshes only that member. Close removes only that member. A device is active when any of its connections counts. A user is active when the legacy member is live or any device counts. A hidden web connection stays in the set and does not count. iOS has no hidden state: background still closes the socket.
+
+`POST /me/push-token` takes an optional `deviceId` and writes `users.expo_push_device_id`. The column is on `public.users`, which already has no privileges for `anon` or `authenticated`. The migration grants nothing new. `service_role` still writes the row. `publicGrants` must keep passing.
+
+`decidePushDelivery` is unchanged for a given `connected` flag. Delivery now passes that flag from the token's device only: suppress the device when that device is active and the flag's game is the user's primary. One legacy iOS connection therefore produces the same result as today. Primary stays per user.
+
+Call sites:
+
+| Call site | Decision | Why |
+| --- | --- | --- |
+| `realtime.ts` connect, ping, close | Per connection. No `deviceId` keeps `markUserActive` / `removeActiveUser`. | Old clients keep the bare user-id member. A new socket must not delete another connection. |
+| `session.ts` `POST /session/heartbeat` | User-level legacy member. | The app does not call it. The route has no device id, and it still means "this user is present," which counts as `legacy-ios` for the push decision. |
+| `delivery.ts` `isUserActive` → `decideAction` | User-level: any counting device, including the legacy member. Hidden web does not count. | One `flag_events` row and one socket envelope per user. Push suppression is a separate, per-device decision. |
+| `delivery.ts` `decidePushDelivery` | Per device, using `expo_push_device_id` or `legacy-ios`. | A laptop must not suppress the phone's token. |
+| `getActiveUsers` | User-level unique ids. | No production engine caller. A user with two live connections is returned once. Hidden-only web users are omitted. |
+| `sweepExpiredActiveUsers` | Same score rule for every member. | No production caller. A stale connection expires by score as it does today. |
+| `experiments/diagnose-live-flags.ts`, `experiments/live-sunday-harness.ts` | Still `markUserActive(userId)`. | Those scripts are the legacy slot. |
+| `isStillRelevant` | Does not read `active_users`. | An open socket was never a gate on whether the event is delivered. |
+
+The public web client sends `deviceId`, `platform=web`, and `visible` / `hidden` on `visibilitychange`. That client is safe to ship once this slice is deployed. Until the deploy, a build that opens the socket against the old server would still use the old user-level key, so this ships with the server, not before it.
 
 ### Later — Settings and the upgrade sheet
 
