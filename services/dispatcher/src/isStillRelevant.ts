@@ -20,5 +20,7 @@ export function isEventStateFresh(event: FlagEvent, currentState: FlagState | nu
 }
 
 export function isStillRelevant(event: FlagEvent, currentState: FlagState | null): boolean {
+  // A bet alert does not write user_flag_state, so the fantasy snapshot can never match it.
+  if (event.type === 'bet_in_play') return true;
   return isEventStateFresh(event, currentState);
 }

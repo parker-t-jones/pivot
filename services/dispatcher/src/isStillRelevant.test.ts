@@ -68,4 +68,16 @@ describe('isStillRelevant — freshness only', () => {
   it('drops when there is no stored state', () => {
     expect(isStillRelevant(makeEvent(), null)).toBe(false);
   });
+
+  it('keeps a bet alert even when the fantasy snapshot does not match', () => {
+    const bet = makeEvent({
+      type: 'bet_in_play',
+      stakeId: 'stake-1',
+      code: 'TOTAL_SWING',
+      label: 'Over 30.5',
+      newState: makeFlagState({ flagged: false, priorityScore: 3, reasons: [], computedAt: 5 }),
+    });
+    expect(isStillRelevant(bet, makeFlagState())).toBe(true);
+    expect(isStillRelevant(bet, null)).toBe(true);
+  });
 });
