@@ -1,6 +1,6 @@
 export { computeFlagState } from './computeFlagState.js';
-export { evaluateOpponentRostered } from './stakes/index.js';
-export type { EvaluatorContext, Stake } from './stakes/index.js';
+export { evaluateOpponentRostered, evaluateStake, TRIGGER_KIND } from './stakes/index.js';
+export type { EvaluatorContext, Stake, Trigger, TriggerCode } from './stakes/index.js';
 export { diffFlagStates } from './diffFlagStates.js';
 export { isInterestingStateChange } from './isInterestingStateChange.js';
 export { applyPlayToState } from './applyPlayToState.js';
