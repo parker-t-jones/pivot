@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { WebPhoneColumn } from '../components/WebPhoneColumn';
 import { SessionProvider, useSession } from '../contexts/SessionContext';
 import { displayFontMap } from '../lib/fonts';
 import { theme } from '../lib/theme';
@@ -63,7 +64,9 @@ export default function RootLayout() {
   if (!fontsLoaded) {
     return (
       <SafeAreaProvider>
-        <LoadingState message="Loading..." />
+        <WebPhoneColumn>
+          <LoadingState message="Loading..." />
+        </WebPhoneColumn>
       </SafeAreaProvider>
     );
   }
@@ -73,10 +76,13 @@ export default function RootLayout() {
     // bar/notch. `expo-router`'s bundled `react-navigation` already wraps screens in a
     // `SafeAreaProvider` internally, but `NotificationBannerHost` renders as an overlay sibling to
     // (not nested inside) the navigator, so it needs its own provider higher up the tree.
+    // `WebPhoneColumn` is a no-op view on native.
     <SafeAreaProvider>
-      <SessionProvider>
-        <RootNavigator />
-      </SessionProvider>
+      <WebPhoneColumn>
+        <SessionProvider>
+          <RootNavigator />
+        </SessionProvider>
+      </WebPhoneColumn>
     </SafeAreaProvider>
   );
 }

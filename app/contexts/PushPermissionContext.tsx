@@ -8,6 +8,7 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
+import { Platform } from 'react-native';
 
 import { registerForPushNotificationsAsync } from '../lib/pushNotifications';
 import { useSession } from './SessionContext';
@@ -50,6 +51,12 @@ export function PushPermissionProvider({ children }: PropsWithChildren) {
   }, [user]);
 
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      // Browsers have no Expo push permission. `undetermined` would trap Home on the iOS prompt.
+      setStatus(Notifications.PermissionStatus.DENIED);
+      return;
+    }
+
     let isMounted = true;
 
     Notifications.getPermissionsAsync()
@@ -71,6 +78,11 @@ export function PushPermissionProvider({ children }: PropsWithChildren) {
   }, [registerInBackground]);
 
   const requestAndRegister = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      setStatus(Notifications.PermissionStatus.DENIED);
+      return;
+    }
+
     const { status: osStatus } = await Notifications.requestPermissionsAsync();
     setStatus(osStatus);
     if (osStatus === 'granted') {

@@ -1,6 +1,6 @@
 import { Stack, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { ErrorState } from '../../components/ErrorState';
 import { NotificationBannerHost } from '../../components/NotificationBannerHost';
@@ -119,7 +119,7 @@ export default function AppGroupLayout() {
           <UpgradeSheetProvider>
             <AppNavigator />
             <NotificationBannerHost />
-            <NotificationResponseHandler />
+            {Platform.OS === 'web' ? null : <NotificationResponseHandler />}
             <UpgradeSheet />
           </UpgradeSheetProvider>
         </SwitchingProvider>

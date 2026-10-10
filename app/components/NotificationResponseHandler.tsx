@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 
 import { useSwitching } from '../contexts/SwitchingContext';
 import { recordNotificationAction } from '../lib/notificationActions';
@@ -25,6 +26,12 @@ import { applyNotificationResponse } from '../lib/notificationResponse';
  * handling we clear the slot so a remount cannot re-fire the same tap.
  */
 export function NotificationResponseHandler() {
+  // `useLastNotificationResponse` calls `getLastNotificationResponse`, which throws on web.
+  if (Platform.OS === 'web') return null;
+  return <NativeNotificationResponseHandler />;
+}
+
+function NativeNotificationResponseHandler() {
   const { switchToGame } = useSwitching();
   const lastResponse = Notifications.useLastNotificationResponse();
   /** Guards React Strict Mode's double-effect and any remount before clear settles. */
