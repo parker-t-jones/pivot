@@ -511,6 +511,7 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          expo_push_device_id: string | null
           expo_push_token: string | null
           id: string
           preferences: Json
@@ -520,6 +521,7 @@ export type Database = {
         Insert: {
           created_at?: string
           email: string
+          expo_push_device_id?: string | null
           expo_push_token?: string | null
           id: string
           preferences?: Json
@@ -529,6 +531,7 @@ export type Database = {
         Update: {
           created_at?: string
           email?: string
+          expo_push_device_id?: string | null
           expo_push_token?: string | null
           id?: string
           preferences?: Json

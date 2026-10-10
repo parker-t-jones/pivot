@@ -100,4 +100,87 @@ describe('InMemoryGameStateStore', () => {
     expect(await store.isUserActive('short')).toBe(false);
     expect(await store.isUserActive('long')).toBe(true);
   });
+
+  it('keeps a device active when one of two connections closes', async () => {
+    const store = new InMemoryGameStateStore();
+    const deviceId = '11111111-1111-4111-8111-111111111111';
+    const connection = {
+      userId: 'u1',
+      deviceId,
+      platform: 'ios' as const,
+      visibility: 'visible' as const,
+    };
+    await store.markConnectionActive({ ...connection, connectionId: 'c1' }, 60_000);
+    await store.markConnectionActive({ ...connection, connectionId: 'c2' }, 60_000);
+    await store.removeConnection('c1');
+
+    expect(await store.isDeviceActive('u1', deviceId)).toBe(true);
+    expect(await store.isUserActive('u1')).toBe(true);
+    expect(await store.getActiveUsers()).toEqual(['u1']);
+
+    await store.removeConnection('c2');
+    expect(await store.isDeviceActive('u1', deviceId)).toBe(false);
+    expect(await store.isUserActive('u1')).toBe(false);
+  });
+
+  it('does not count a hidden web connection, and leaves an iOS device alone', async () => {
+    const store = new InMemoryGameStateStore();
+    const webDevice = '22222222-2222-4222-8222-222222222222';
+    const iosDevice = '33333333-3333-4333-8333-333333333333';
+    await store.markConnectionActive(
+      {
+        userId: 'u1',
+        deviceId: webDevice,
+        connectionId: 'web',
+        platform: 'web',
+        visibility: 'visible',
+      },
+      60_000,
+    );
+    expect(await store.isDeviceActive('u1', webDevice)).toBe(true);
+    expect(await store.isDeviceActive('u1', iosDevice)).toBe(false);
+    expect(await store.isUserActive('u1')).toBe(true);
+
+    await store.markConnectionActive(
+      {
+        userId: 'u1',
+        deviceId: webDevice,
+        connectionId: 'web',
+        platform: 'web',
+        visibility: 'hidden',
+      },
+      60_000,
+    );
+    expect(await store.isDeviceActive('u1', webDevice)).toBe(false);
+    expect(await store.isUserActive('u1')).toBe(false);
+
+    await store.markUserActive('u1', 60_000);
+    expect(await store.isDeviceActive('u1', 'legacy-ios')).toBe(true);
+    expect(await store.isDeviceActive('u1', webDevice)).toBe(false);
+    expect(await store.isUserActive('u1')).toBe(true);
+  });
+
+  it('expires a connection by score the same way as a legacy member', async () => {
+    const store = new InMemoryGameStateStore();
+    const deviceId = '44444444-4444-4444-8444-444444444444';
+    await store.markConnectionActive(
+      {
+        userId: 'u1',
+        deviceId,
+        connectionId: 'c1',
+        platform: 'ios',
+        visibility: 'visible',
+      },
+      1000,
+    );
+
+    vi.advanceTimersByTime(1000);
+    expect(await store.isDeviceActive('u1', deviceId)).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(await store.isDeviceActive('u1', deviceId)).toBe(false);
+    expect(await store.isUserActive('u1')).toBe(false);
+
+    await store.sweepExpiredActiveUsers();
+    expect(await store.getActiveUsers()).toEqual([]);
+  });
 });

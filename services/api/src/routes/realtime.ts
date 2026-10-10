@@ -1,4 +1,4 @@
-import { ACTIVE_USER_TTL_MS } from '@pivot/dispatcher';
+import { ACTIVE_USER_TTL_MS, type PresenceVisibility } from '@pivot/dispatcher';
 import type { FastifyPluginAsync } from 'fastify';
 import { ApiError, toErrorBody } from '../lib/errors.js';
 import { requireUser } from '../plugins/auth.js';
@@ -6,6 +6,11 @@ import '../plugins/services.js';
 import { RealtimeConnection } from '../websocket/connection.js';
 import { buildEnvelope, parseClientMessage } from '../websocket/messages.js';
 import { ConnectionRegistry } from '../websocket/registry.js';
+import { resolveRealtimeIdentity } from './realtimeIdentity.js';
+
+type TrackedPresence =
+  | { kind: 'legacy' }
+  | { kind: 'device'; deviceId: string; platform: 'ios' | 'web'; visibility: PresenceVisibility };
 
 /** Section 9: "Client ping every 25s; client reconnects if no pong within 10s" on the client side —
  *  the server-side mirror is "closes connections that haven't sent ping in 40s". */
@@ -91,17 +96,57 @@ const realtimeRoutes: FastifyPluginAsync<RealtimeRoutesOptions> = async (fastify
       } catch {
         const error = new ApiError(401, 'unauthorized', 'Invalid or expired token.');
         await reply.status(error.statusCode).send(toErrorBody(error));
+        return;
+      }
+      const identity = resolveRealtimeIdentity(request.query);
+      if (identity.kind === 'reject') {
+        const error = new ApiError(400, 'invalid_device', identity.message);
+        await reply.status(error.statusCode).send(toErrorBody(error));
       }
     });
 
     scoped.get('/v1/realtime', { websocket: true }, (socket, request) => {
       const user = requireUser(request);
+      const identity = resolveRealtimeIdentity(request.query);
+      if (identity.kind === 'reject') {
+        socket.close(1008, 'invalid device');
+        return;
+      }
       const connection = new RealtimeConnection(socket, user.id, Date.now());
       registry.add(connection);
+      const tracked: TrackedPresence =
+        identity.kind === 'legacy'
+          ? { kind: 'legacy' }
+          : { kind: 'device', deviceId: identity.deviceId, platform: identity.platform, visibility: 'visible' };
 
-      fastify.gameStateStore
-        .markUserActive(user.id, ACTIVE_USER_TTL_MS)
-        .catch((error: unknown) => request.log.error(error, 'markUserActive failed on connect'));
+      let disposed = false;
+      let presenceChain = Promise.resolve();
+      const enqueuePresence = (kind: 'refresh' | 'remove', operation: () => Promise<void>): void => {
+        presenceChain = presenceChain
+          .then(async () => {
+            if (kind === 'refresh' && disposed) return;
+            if (kind === 'remove') disposed = true;
+            await operation();
+          })
+          .catch((error: unknown) => request.log.error(error, 'presence update failed'));
+      };
+      const refreshPresence = (): Promise<void> => {
+        if (tracked.kind === 'legacy') {
+          return fastify.gameStateStore.markUserActive(user.id, ACTIVE_USER_TTL_MS);
+        }
+        return fastify.gameStateStore.markConnectionActive(
+          {
+            userId: user.id,
+            deviceId: tracked.deviceId,
+            connectionId: connection.id,
+            platform: tracked.platform,
+            visibility: tracked.visibility,
+          },
+          ACTIVE_USER_TTL_MS,
+        );
+      };
+
+      enqueuePresence('refresh', refreshPresence);
 
       socket.on('message', (raw: Buffer | ArrayBuffer | Buffer[]) => {
         const intent = parseClientMessage(rawMessageToText(raw));
@@ -109,9 +154,7 @@ const realtimeRoutes: FastifyPluginAsync<RealtimeRoutesOptions> = async (fastify
           case 'pong': {
             const now = Date.now();
             connection.touchPing(now);
-            fastify.gameStateStore
-              .markUserActive(user.id, ACTIVE_USER_TTL_MS)
-              .catch((error: unknown) => request.log.error(error, 'markUserActive failed on ping'));
+            enqueuePresence('refresh', refreshPresence);
             connection.send(buildEnvelope('pong', {}, now));
             break;
           }
@@ -121,6 +164,12 @@ const realtimeRoutes: FastifyPluginAsync<RealtimeRoutesOptions> = async (fastify
           case 'unsubscribe_game':
             connection.subscribedGameIds.delete(intent.gameId);
             break;
+          case 'visibility':
+            if (tracked.kind === 'device' && tracked.platform === 'web') {
+              tracked.visibility = intent.state;
+              enqueuePresence('refresh', refreshPresence);
+            }
+            break;
           case 'error':
             connection.send(buildEnvelope('error', { code: intent.code, message: intent.message }));
             break;
@@ -128,13 +177,15 @@ const realtimeRoutes: FastifyPluginAsync<RealtimeRoutesOptions> = async (fastify
       });
 
       // Fires for both graceful (`close()`) and abrupt (network drop, terminated process) client
-      // disconnects — the underlying TCP socket teardown always emits `close` (sprint instruction:
-      // "the disconnect handler must still run to remove from active_users").
+      // disconnects. A legacy socket removes only the bare user-id member. A device socket
+      // removes only this connection.
       socket.on('close', () => {
         registry.remove(connection.id);
-        fastify.gameStateStore
-          .removeActiveUser(user.id)
-          .catch((error: unknown) => request.log.error(error, 'removeActiveUser failed on disconnect'));
+        enqueuePresence('remove', () =>
+          tracked.kind === 'legacy'
+            ? fastify.gameStateStore.removeActiveUser(user.id)
+            : fastify.gameStateStore.removeConnection(connection.id),
+        );
       });
     });
   });

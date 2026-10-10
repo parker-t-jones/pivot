@@ -1,5 +1,14 @@
 import type { Redis } from '@upstash/redis';
 import type { FlagState, GameState } from '@pivot/shared';
+import {
+  LEGACY_IOS_DEVICE_ID,
+  activeUserIdsFromMembers,
+  deviceHasCountingConnection,
+  encodePresenceMember,
+  membersForConnection,
+  userHasCountingConnection,
+  type PresenceConnection,
+} from '../presence.js';
 import type { GameStateStore } from './gameStateStore.js';
 import {
   deserializeFlagState,
@@ -65,15 +74,7 @@ export class RedisGameStateProvider implements GameStateStore {
   }
 
   async getActiveUsers(): Promise<string[]> {
-    const members = await this.redis.zrange<(string | number)[]>(
-      ACTIVE_USERS_KEY,
-      Date.now(),
-      '+inf',
-      {
-        byScore: true,
-      },
-    );
-    return members.map((m) => String(m));
+    return activeUserIdsFromMembers(await this.listUnexpiredMembers());
   }
 
   async getUsersWithStakeIn(teamId: string): Promise<string[]> {
@@ -88,13 +89,49 @@ export class RedisGameStateProvider implements GameStateStore {
     await this.redis.zrem(ACTIVE_USERS_KEY, userId);
   }
 
+  async removeConnection(connectionId: string): Promise<void> {
+    const members = await this.listAllMembers();
+    for (const member of membersForConnection(members, connectionId)) {
+      await this.redis.zrem(ACTIVE_USERS_KEY, member);
+    }
+  }
+
+  async markConnectionActive(connection: PresenceConnection, ttlMs: number): Promise<void> {
+    await this.removeConnection(connection.connectionId);
+    await this.redis.zadd(ACTIVE_USERS_KEY, {
+      score: Date.now() + ttlMs,
+      member: encodePresenceMember(connection),
+    });
+  }
+
   async isUserActive(userId: string): Promise<boolean> {
     const score = await this.redis.zscore(ACTIVE_USERS_KEY, userId);
-    return score !== null && score >= Date.now();
+    if (score !== null && score >= Date.now()) return true;
+    return userHasCountingConnection(await this.listUnexpiredMembers(), userId);
+  }
+
+  async isDeviceActive(userId: string, deviceId: string): Promise<boolean> {
+    if (deviceId === LEGACY_IOS_DEVICE_ID) {
+      const score = await this.redis.zscore(ACTIVE_USERS_KEY, userId);
+      if (score !== null && score >= Date.now()) return true;
+    }
+    return deviceHasCountingConnection(await this.listUnexpiredMembers(), userId, deviceId);
   }
 
   async sweepExpiredActiveUsers(): Promise<void> {
     // Remove members whose expiry is strictly in the past (score < now); score === now is still live.
     await this.redis.zremrangebyscore(ACTIVE_USERS_KEY, 0, Date.now() - 1);
+  }
+
+  private async listUnexpiredMembers(): Promise<string[]> {
+    const members = await this.redis.zrange<(string | number)[]>(ACTIVE_USERS_KEY, Date.now(), '+inf', {
+      byScore: true,
+    });
+    return members.map((member) => String(member));
+  }
+
+  private async listAllMembers(): Promise<string[]> {
+    const members = await this.redis.zrange<(string | number)[]>(ACTIVE_USERS_KEY, 0, -1);
+    return members.map((member) => String(member));
   }
 }

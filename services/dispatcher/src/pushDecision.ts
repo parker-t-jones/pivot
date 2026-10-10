@@ -1,10 +1,11 @@
 /**
  * Whether a `flag_added` becomes a push.
  *
- * "Connected" here is `active_users` membership, not an open socket. Sockets live in the API
- * process's in-memory registry and are never written to Redis, so this process cannot see them.
- * The API adds the user on socket connect/ping and deletes them on socket close. The 5-minute
- * score is only a ceiling when `close` never arrives.
+ * `connected` is that device's presence, not "any device of this user." Delivery passes
+ * `isDeviceActive` for the token's device. A token with no device id uses `legacy-ios`,
+ * which is the bare `active_users` member a current TestFlight socket writes. For that
+ * one connection the result matches the old user-level check. Sockets themselves stay in
+ * the API process. The 5-minute score is only a ceiling when `close` never arrives.
  */
 export type PushDecisionResult =
   | 'sent'

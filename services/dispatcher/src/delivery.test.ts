@@ -653,6 +653,84 @@ describe('deliverFlagEvent', () => {
       logs.mockRestore();
     });
 
+    it('sends the iOS push when the phone is backgrounded and a web tab is visible', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const userDirectory = new InMemoryUserDirectory();
+      const gameStateStore = new InMemoryGameStateStore();
+      const webDevice = '22222222-2222-4222-8222-222222222222';
+      userDirectory.setViewingSession('u1', { primaryGameId: 'g1', primaryPriorityScore: 5 });
+      await gameStateStore.markConnectionActive(
+        {
+          userId: 'u1',
+          deviceId: webDevice,
+          connectionId: 'web',
+          platform: 'web',
+          visibility: 'visible',
+        },
+        60_000,
+      );
+      const deps = buildDeps({ pushNotifier, userDirectory, gameStateStore });
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+
+      expect(pushNotifier.calls).toHaveLength(1);
+      expect(await gameStateStore.isDeviceActive('u1', 'legacy-ios')).toBe(false);
+      expect(await gameStateStore.isDeviceActive('u1', webDevice)).toBe(true);
+    });
+
+    it('suppresses the iOS token when that phone is active and leaves the web device active', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const userDirectory = new InMemoryUserDirectory();
+      const gameStateStore = new InMemoryGameStateStore();
+      const iosDevice = '33333333-3333-4333-8333-333333333333';
+      const webDevice = '22222222-2222-4222-8222-222222222222';
+      userDirectory.setViewingSession('u1', { primaryGameId: 'g1', primaryPriorityScore: 5 });
+      await gameStateStore.markConnectionActive(
+        {
+          userId: 'u1',
+          deviceId: iosDevice,
+          connectionId: 'phone',
+          platform: 'ios',
+          visibility: 'visible',
+        },
+        60_000,
+      );
+      await gameStateStore.markConnectionActive(
+        {
+          userId: 'u1',
+          deviceId: webDevice,
+          connectionId: 'web',
+          platform: 'web',
+          visibility: 'visible',
+        },
+        60_000,
+      );
+      const deps = buildDeps({ pushNotifier, userDirectory, gameStateStore });
+
+      await deliverFlagEvent(deps, makeEvent(), { ...pushUser, expoPushDeviceId: iosDevice });
+
+      expect(pushNotifier.calls).toHaveLength(0);
+      expect(await gameStateStore.isDeviceActive('u1', webDevice)).toBe(true);
+    });
+
+    it('does not count a hidden web tab as active', async () => {
+      const gameStateStore = new InMemoryGameStateStore();
+      const webDevice = '22222222-2222-4222-8222-222222222222';
+      await gameStateStore.markConnectionActive(
+        {
+          userId: 'u1',
+          deviceId: webDevice,
+          connectionId: 'web',
+          platform: 'web',
+          visibility: 'hidden',
+        },
+        60_000,
+      );
+
+      expect(await gameStateStore.isDeviceActive('u1', webDevice)).toBe(false);
+      expect(await gameStateStore.isUserActive('u1')).toBe(false);
+    });
+
     it('sends a push when the phone is off even if this game is still the stored primary', async () => {
       const pushNotifier = new CapturingPushNotifier();
       const userDirectory = new InMemoryUserDirectory();

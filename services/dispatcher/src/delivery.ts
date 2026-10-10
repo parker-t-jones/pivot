@@ -28,6 +28,7 @@ import {
   notificationTitle,
   type NotificationGameContext,
 } from './notificationContent.js';
+import { LEGACY_IOS_DEVICE_ID } from './presence.js';
 import type { GameStateStore } from './providers/gameStateStore.js';
 import type { PushNotifier, PushPayload } from './pushNotifier.js';
 import { decidePushDelivery, formatPushDecisionLog } from './pushDecision.js';
@@ -37,7 +38,7 @@ import { realtimeUserChannel, type RealtimeBus } from './realtimeBus.js';
 import { buildGameSummary, type GameSummary } from './gameSummary.js';
 
 export interface DeliveryDeps {
-  gameStateStore: Pick<GameStateStore, 'getGameState' | 'isUserActive'>;
+  gameStateStore: Pick<GameStateStore, 'getGameState' | 'isUserActive' | 'isDeviceActive'>;
   gameCatalog: GameCatalog;
   playerCatalog: PlayerCatalog;
   broadcastCatalog: BroadcastCatalog;
@@ -207,17 +208,18 @@ export async function deliverFlagEvent(
   const clock = deps.clock ?? defaultClock;
   const deliveredAt = clock();
 
-  const [session, present, gameState, gameSummaryInfo, likelyBroadcast] = await Promise.all([
+  const pushDeviceId = user.expoPushDeviceId || LEGACY_IOS_DEVICE_ID;
+  const [session, present, deviceActive, gameState, gameSummaryInfo, likelyBroadcast] = await Promise.all([
     deps.userDirectory.getViewingSession(event.userId),
     deps.gameStateStore.isUserActive(event.userId),
+    deps.gameStateStore.isDeviceActive(event.userId, pushDeviceId),
     deps.gameStateStore.getGameState(event.gameId),
     deps.gameCatalog.getGameSummary(event.gameId),
     resolveLikelyBroadcastSource(event.gameId, event.userId, deps.broadcastCatalog),
   ]);
 
-  // Open sockets live in the API process and are not in Redis, so this cannot see one.
-  // `isUserActive` is the presence entry the API sets on connect/ping and deletes on close.
-  // A stored primary only counts as on-screen while that entry is set.
+  // `present` is any counting device, including the legacy member. Hidden web does not count.
+  // The push decision below uses `deviceActive` for the token's device only.
   const action = decideAction(
     { subscriptionTier: user.subscriptionTier, autoSwitch: user.preferences.autoSwitch },
     present
@@ -300,11 +302,11 @@ export async function deliverFlagEvent(
 
   await deps.rateLimitStore.recordNotification(event.userId, event.id, deliveredAt);
 
-  // Sprint 6 Phase 3: push, strictly after persistence/publish/rate-limit bookkeeping, and strictly
-  // best-effort. Skipped when there is no token, or when the user is present and this game is
-  // already their primary (`in_app_indicator`).
+  // Push is per device. `present` above stays user-level for the one action on the event.
+  // Suppress this token only when ITS device is active and the game is the user's primary.
+  // A token with no device id is `legacy-ios`, which is the bare `active_users` member.
   const pushDecision = decidePushDelivery({
-    connected: present,
+    connected: deviceActive,
     primaryGameId: session?.primaryGameId ?? null,
     gameId: event.gameId,
     hasToken: Boolean(user.expoPushToken),

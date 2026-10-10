@@ -1,4 +1,9 @@
 import type { FlagState, GameState } from '@pivot/shared';
+import {
+  LEGACY_IOS_DEVICE_ID,
+  connectionCountsAsActive,
+  type PresenceConnection,
+} from '../presence.js';
 import type { GameStateStore } from './gameStateStore.js';
 
 function flagKey(userId: string, gameId: string): string {
@@ -18,8 +23,10 @@ function flagKey(userId: string, gameId: string): string {
 export class InMemoryGameStateStore implements GameStateStore {
   private readonly gameStates = new Map<string, GameState>();
   private readonly flagStates = new Map<string, FlagState>();
-  /** userId -> expiry (unix ms). Active iff expiry >= now. */
+  /** Legacy slot: userId -> expiry (unix ms). Active iff expiry >= now. Device `legacy-ios`. */
   private readonly activeUsers = new Map<string, number>();
+  /** One entry per connection. Hidden web stays here and does not count. */
+  private readonly connections = new Map<string, { connection: PresenceConnection; expiresAt: number }>();
   private readonly stakes = new Map<string, Set<string>>();
 
   async getGameState(gameId: string): Promise<GameState | null> {
@@ -40,9 +47,16 @@ export class InMemoryGameStateStore implements GameStateStore {
 
   async getActiveUsers(): Promise<string[]> {
     const now = Date.now();
-    return [...this.activeUsers.entries()]
-      .filter(([, expiry]) => expiry >= now)
-      .map(([userId]) => userId);
+    const ids = new Set<string>();
+    for (const [userId, expiry] of this.activeUsers) {
+      if (expiry >= now) ids.add(userId);
+    }
+    for (const entry of this.connections.values()) {
+      if (entry.expiresAt >= now && connectionCountsAsActive(entry.connection)) {
+        ids.add(entry.connection.userId);
+      }
+    }
+    return [...ids];
   }
 
   async getUsersWithStakeIn(teamId: string): Promise<string[]> {
@@ -57,15 +71,60 @@ export class InMemoryGameStateStore implements GameStateStore {
     this.activeUsers.delete(userId);
   }
 
+  async markConnectionActive(connection: PresenceConnection, ttlMs: number): Promise<void> {
+    this.connections.set(connection.connectionId, {
+      connection,
+      expiresAt: Date.now() + ttlMs,
+    });
+  }
+
+  async removeConnection(connectionId: string): Promise<void> {
+    this.connections.delete(connectionId);
+  }
+
   async isUserActive(userId: string): Promise<boolean> {
+    const now = Date.now();
     const expiry = this.activeUsers.get(userId);
-    return expiry !== undefined && expiry >= Date.now();
+    if (expiry !== undefined && expiry >= now) return true;
+    for (const entry of this.connections.values()) {
+      if (
+        entry.expiresAt >= now &&
+        entry.connection.userId === userId &&
+        connectionCountsAsActive(entry.connection)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async isDeviceActive(userId: string, deviceId: string): Promise<boolean> {
+    const now = Date.now();
+    if (deviceId === LEGACY_IOS_DEVICE_ID) {
+      const expiry = this.activeUsers.get(userId);
+      if (expiry !== undefined && expiry >= now) return true;
+    }
+    for (const entry of this.connections.values()) {
+      if (entry.expiresAt < now) continue;
+      const connection = entry.connection;
+      if (
+        connection.userId === userId &&
+        connection.deviceId === deviceId &&
+        connectionCountsAsActive(connection)
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async sweepExpiredActiveUsers(): Promise<void> {
     const now = Date.now();
     for (const [userId, expiry] of this.activeUsers) {
       if (expiry < now) this.activeUsers.delete(userId);
+    }
+    for (const [connectionId, entry] of this.connections) {
+      if (entry.expiresAt < now) this.connections.delete(connectionId);
     }
   }
 

@@ -359,6 +359,12 @@ async function main(): Promise<void> {
     markUserActive: (userId: string, ttlMs: number) => store.markUserActive(userId, ttlMs),
     removeActiveUser: (userId: string) => store.removeActiveUser(userId),
     isUserActive: (userId: string) => store.isUserActive(userId),
+    isDeviceActive: (userId: string, deviceId: string) => store.isDeviceActive(userId, deviceId),
+    markConnectionActive: (
+      connection: Parameters<InMemoryGameStateStore['markConnectionActive']>[0],
+      ttlMs: number,
+    ) => store.markConnectionActive(connection, ttlMs),
+    removeConnection: (connectionId: string) => store.removeConnection(connectionId),
     sweepExpiredActiveUsers: () => store.sweepExpiredActiveUsers(),
   };
 

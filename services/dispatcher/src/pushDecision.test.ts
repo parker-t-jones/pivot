@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { InMemoryGameStateStore } from './providers/inMemoryGameStateStore.js';
 import { decidePushDelivery, formatPushDecisionLog } from './pushDecision.js';
+import { LEGACY_IOS_DEVICE_ID } from './presence.js';
 
 const GAME = '275b0f97-ccf1-44cd-8cd7-fede32e56763';
 const OTHER = '11111111-1111-4111-8111-111111111111';
@@ -70,6 +72,72 @@ describe('decidePushDelivery', () => {
         hasToken: false,
       }),
     ).toBe('no_token');
+  });
+
+  it.each([
+    {
+      name: 'connected and this game is primary',
+      connected: true,
+      primaryGameId: GAME,
+      hasToken: true,
+      expected: 'skipped_primary_connected' as const,
+    },
+    {
+      name: 'connected, this game is primary, and there is no token',
+      connected: true,
+      primaryGameId: GAME,
+      hasToken: false,
+      expected: 'skipped_primary_connected' as const,
+    },
+    {
+      name: 'not connected and this game is primary',
+      connected: false,
+      primaryGameId: GAME,
+      hasToken: true,
+      expected: 'sent' as const,
+    },
+    {
+      name: 'connected with no primary',
+      connected: true,
+      primaryGameId: null,
+      hasToken: true,
+      expected: 'sent' as const,
+    },
+    {
+      name: 'connected on a different primary',
+      connected: true,
+      primaryGameId: OTHER,
+      hasToken: true,
+      expected: 'sent' as const,
+    },
+    {
+      name: 'not connected and no token',
+      connected: false,
+      primaryGameId: null,
+      hasToken: false,
+      expected: 'no_token' as const,
+    },
+    {
+      name: 'connected on a different primary with no token',
+      connected: true,
+      primaryGameId: OTHER,
+      hasToken: false,
+      expected: 'no_token' as const,
+    },
+  ])('one legacy iOS connection: $name', async ({ connected, primaryGameId, hasToken, expected }) => {
+    const store = new InMemoryGameStateStore();
+    if (connected) await store.markUserActive('u1', 60_000);
+    const deviceActive = await store.isDeviceActive('u1', LEGACY_IOS_DEVICE_ID);
+    expect(deviceActive).toBe(connected);
+    expect(await store.isUserActive('u1')).toBe(connected);
+    expect(
+      decidePushDelivery({
+        connected: deviceActive,
+        primaryGameId,
+        gameId: GAME,
+        hasToken,
+      }),
+    ).toBe(expected);
   });
 });
 

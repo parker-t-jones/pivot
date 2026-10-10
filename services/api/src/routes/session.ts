@@ -169,6 +169,8 @@ const sessionRoutes: FastifyPluginAsyncZod = async (fastify) => {
    */
   fastify.post('/session/heartbeat', async (request) => {
     const user = requireUser(request);
+    // No device id on this route. The bare member is device legacy-ios, same as a TestFlight socket.
+    // The app does not call heartbeat; the socket is what marks a phone present.
     await fastify.gameStateStore.markUserActive(user.id, ACTIVE_USER_TTL_MS);
     return { active_until: Date.now() + ACTIVE_USER_TTL_MS };
   });

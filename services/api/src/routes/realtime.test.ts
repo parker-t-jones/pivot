@@ -1,4 +1,4 @@
-import { InMemoryGameStateStore } from '@pivot/dispatcher';
+import { InMemoryGameStateStore, LEGACY_IOS_DEVICE_ID } from '@pivot/dispatcher';
 import Fastify from 'fastify';
 import {
   serializerCompiler,
@@ -75,6 +75,7 @@ function onceMessage(socket: WebSocket): Promise<Record<string, unknown>> {
 }
 
 function onceOpen(socket: WebSocket): Promise<void> {
+  if (socket.readyState === WebSocket.OPEN) return Promise.resolve();
   return new Promise((resolve, reject) => {
     socket.once('open', () => resolve());
     socket.once('error', reject);
@@ -82,6 +83,7 @@ function onceOpen(socket: WebSocket): Promise<void> {
 }
 
 function onceClose(socket: WebSocket): Promise<number> {
+  if (socket.readyState === WebSocket.CLOSED) return Promise.resolve(socket.readyState);
   return new Promise((resolve) => {
     socket.once('close', (code: number) => resolve(code));
   });
@@ -276,5 +278,71 @@ describe('GET /v1/realtime', () => {
     expect(closeCode).toBe(1000);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(await app.gameStateStore.isUserActive('user-6')).toBe(false);
+  });
+
+  it('rejects a web connection that does not send deviceId', async () => {
+    const token = await signToken({ sub: 'user-web', email: 'a@b.com' });
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: `/v1/realtime?token=${token}&platform=web`,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: { code: 'invalid_device', message: 'A web connection must send deviceId.' },
+    });
+  });
+
+  it('keeps the device active after one of two connections closes', async () => {
+    const token = await signToken({ sub: 'user-device', email: 'a@b.com' });
+    const deviceId = '11111111-1111-4111-8111-111111111111';
+    const url = `${app.url}?token=${token}&deviceId=${deviceId}&platform=ios`;
+    const first = new WebSocket(url);
+    const second = new WebSocket(url);
+    await onceOpen(first);
+    await onceOpen(second);
+    expect(await app.gameStateStore.isDeviceActive('user-device', deviceId)).toBe(true);
+
+    first.close();
+    await onceClose(first);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await app.gameStateStore.isDeviceActive('user-device', deviceId)).toBe(true);
+    expect(await app.gameStateStore.isUserActive('user-device')).toBe(true);
+    expect(await app.gameStateStore.isDeviceActive('user-device', LEGACY_IOS_DEVICE_ID)).toBe(false);
+
+    second.close();
+    await onceClose(second);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await app.gameStateStore.isDeviceActive('user-device', deviceId)).toBe(false);
+    expect(await app.gameStateStore.isUserActive('user-device')).toBe(false);
+  });
+
+  it('stops counting a web connection when the tab is hidden and leaves a legacy phone in place', async () => {
+    const token = await signToken({ sub: 'user-both', email: 'a@b.com' });
+    const webDevice = '22222222-2222-4222-8222-222222222222';
+    const phone = new WebSocket(`${app.url}?token=${token}`);
+    const web = new WebSocket(`${app.url}?token=${token}&deviceId=${webDevice}&platform=web`);
+    await onceOpen(phone);
+    await onceOpen(web);
+    expect(await app.gameStateStore.isDeviceActive('user-both', LEGACY_IOS_DEVICE_ID)).toBe(true);
+    expect(await app.gameStateStore.isDeviceActive('user-both', webDevice)).toBe(true);
+
+    web.send(
+      JSON.stringify({
+        id: 'vis',
+        type: 'visibility',
+        timestamp: Date.now(),
+        payload: { state: 'hidden' },
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(web.readyState).toBe(WebSocket.OPEN);
+    expect(await app.gameStateStore.isDeviceActive('user-both', webDevice)).toBe(false);
+    expect(await app.gameStateStore.isDeviceActive('user-both', LEGACY_IOS_DEVICE_ID)).toBe(true);
+    expect(await app.gameStateStore.isUserActive('user-both')).toBe(true);
+
+    phone.close();
+    web.close();
+    await onceClose(phone);
+    await onceClose(web);
   });
 });

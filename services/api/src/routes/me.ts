@@ -24,6 +24,8 @@ const PLATFORMS = ['ios', 'android'] as const;
 const registerPushTokenBody = z.object({
   token: z.string().min(1),
   platform: z.enum(PLATFORMS),
+  /** Omitted by the current TestFlight build. Stored null, which means device `legacy-ios`. */
+  deviceId: z.string().uuid().optional(),
 });
 
 interface PushTokenRow {
@@ -268,7 +270,7 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
    */
   fastify.post('/me/push-token', { schema: { body: registerPushTokenBody } }, async (request) => {
     const user = requireUser(request);
-    const { token, platform } = request.body;
+    const { token, platform, deviceId } = request.body;
 
     if (platform !== 'ios') {
       throw new ApiError(
@@ -288,7 +290,7 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
     const { data, error } = await fastify.supabase
       .from('users')
-      .update({ expo_push_token: token })
+      .update({ expo_push_token: token, expo_push_device_id: deviceId ?? null })
       .eq('id', user.id)
       .select('expo_push_token')
       .single();
@@ -304,7 +306,7 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
     const { data, error } = await fastify.supabase
       .from('users')
-      .update({ expo_push_token: null })
+      .update({ expo_push_token: null, expo_push_device_id: null })
       .eq('id', user.id)
       .select('expo_push_token')
       .single();

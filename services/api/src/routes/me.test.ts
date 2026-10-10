@@ -31,6 +31,7 @@ interface UserRow {
   subscription_tier?: string;
   preferences?: unknown;
   expo_push_token: string | null;
+  expo_push_device_id?: string | null;
 }
 
 interface AppPresenceRow {
@@ -204,6 +205,31 @@ describe('POST /me/push-token', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ expo_push_token: VALID_TOKEN });
     expect(app.supabase.users.get('user-1')?.expo_push_token).toBe(VALID_TOKEN);
+    expect(app.supabase.users.get('user-1')?.expo_push_device_id ?? null).toBeNull();
+  });
+
+  it('stores a deviceId beside the token and treats an omitted one as legacy', async () => {
+    app = await buildTestApp();
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    const deviceId = '11111111-1111-4111-8111-111111111111';
+
+    const withDevice = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/push-token',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { token: VALID_TOKEN, platform: 'ios', deviceId },
+    });
+    expect(withDevice.statusCode).toBe(200);
+    expect(app.supabase.users.get('user-1')?.expo_push_device_id).toBe(deviceId);
+
+    const legacy = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/push-token',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { token: VALID_TOKEN, platform: 'ios' },
+    });
+    expect(legacy.statusCode).toBe(200);
+    expect(app.supabase.users.get('user-1')?.expo_push_device_id ?? null).toBeNull();
   });
 
   it('also accepts the legacy ExpoPushToken[...] format', async () => {

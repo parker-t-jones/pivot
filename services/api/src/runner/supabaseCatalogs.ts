@@ -152,7 +152,7 @@ export class SupabaseUserDirectory implements UserDirectory {
   async getUser(userId: string): Promise<DispatchUser | null> {
     const { data, error } = await this.client
       .from('users')
-      .select('id, subscription_tier, preferences, expo_push_token')
+      .select('id, subscription_tier, preferences, expo_push_token, expo_push_device_id')
       .eq('id', userId)
       .maybeSingle();
     if (error) throw new Error(`user lookup failed: ${error.message}`);
@@ -162,6 +162,7 @@ export class SupabaseUserDirectory implements UserDirectory {
       subscriptionTier: data.subscription_tier === 'pro' ? 'pro' : 'free',
       preferences: parsePreferences(data.preferences) satisfies Preferences,
       expoPushToken: data.expo_push_token,
+      expoPushDeviceId: data.expo_push_device_id,
     };
   }
 

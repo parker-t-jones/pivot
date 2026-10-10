@@ -27,6 +27,8 @@ export interface DispatchUser {
   /** `users.expo_push_token` (Section 7) — `null` when unset. Sprint 6 Phase 3: `deliverFlagEvent`
    *  skips the push send entirely when this is `null`, same as Section 8's pseudocode gate. */
   expoPushToken: string | null;
+  /** `users.expo_push_device_id`. Missing or null is the legacy iOS device. */
+  expoPushDeviceId?: string | null;
 }
 
 export interface ViewingSessionSnapshot {

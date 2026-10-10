@@ -127,6 +127,22 @@ export {
 export { ACTIVE_USER_TTL_MS } from './constants.js';
 
 export {
+  LEGACY_IOS_DEVICE_ID,
+  activeUserIdsFromMembers,
+  connectionCountsAsActive,
+  decodePresenceMember,
+  deviceHasCountingConnection,
+  encodePresenceMember,
+  isDeviceId,
+  membersForConnection,
+  userHasCountingConnection,
+  type DecodedPresenceMember,
+  type PresenceConnection,
+  type PresencePlatform,
+  type PresenceVisibility,
+} from './presence.js';
+
+export {
   runDispatcherTick,
   startDispatcherLoop,
   type DispatcherLoopOptions,

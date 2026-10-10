@@ -28,10 +28,13 @@ const gamePayloadSchema = z.object({ game_id: z.string().min(1) });
  * WebSocket route's I/O (Redis, `GameStateStore`, the socket itself), so the routing logic here is
  * unit-testable without a live connection.
  */
+const visibilityPayloadSchema = z.object({ state: z.enum(['visible', 'hidden']) });
+
 export type ClientIntent =
   | { kind: 'pong' }
   | { kind: 'subscribe_game'; gameId: string }
   | { kind: 'unsubscribe_game'; gameId: string }
+  | { kind: 'visibility'; state: 'visible' | 'hidden' }
   | { kind: 'error'; code: string; message: string };
 
 export function parseClientMessage(raw: string): ClientIntent {
@@ -71,6 +74,17 @@ export function parseClientMessage(raw: string): ClientIntent {
         };
       }
       return { kind: 'unsubscribe_game', gameId: payload.data.game_id };
+    }
+    case 'visibility': {
+      const payload = visibilityPayloadSchema.safeParse(envelope.data.payload);
+      if (!payload.success) {
+        return {
+          kind: 'error',
+          code: 'invalid_payload',
+          message: 'visibility requires state "visible" or "hidden".',
+        };
+      }
+      return { kind: 'visibility', state: payload.data.state };
     }
     default:
       return {
