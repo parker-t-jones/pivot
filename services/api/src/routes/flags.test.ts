@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@pivot/dispatcher';
+import * as engine from '@pivot/engine';
 import type { GameState, UserLineupCache } from '@pivot/shared';
+import { formatStakeLabel } from '@pivot/shared/stakeLabel';
 import Fastify from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,
@@ -9,7 +11,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { SignJWT } from 'jose';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import { ApiError, toErrorBody } from '../lib/errors.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
@@ -63,8 +65,8 @@ interface StakeRow {
   season: number;
   week: number;
   game_id: string;
-  subject: { type: 'PLAYER'; playerId: string; teamId: string };
-  condition: { type: string };
+  subject: { type: string; playerId?: string; teamId?: string; gameId?: string };
+  condition: { type: string; line?: number };
   source: string;
   source_ref: string | null;
   weight: number;
@@ -222,6 +224,51 @@ function opponentStake(
     created_at: '2026-10-01T00:00:00.000Z',
     ...overrides,
   };
+}
+
+function manualTotal(id: string, gameId: string, line: number): StakeRow {
+  return {
+    id,
+    user_id: 'user-1',
+    season: 2026,
+    week: WEEK,
+    game_id: gameId,
+    subject: { type: 'GAME', gameId },
+    condition: { type: 'TOTAL_OVER', line },
+    source: 'MANUAL',
+    source_ref: null,
+    weight: 1,
+    created_at: '2026-10-01T00:00:00.000Z',
+  };
+}
+
+function betScore(state: GameState, line: number): number {
+  const triggers = engine.evaluateStake(
+    {
+      id: 'score',
+      userId: 'user-1',
+      season: 2026,
+      week: WEEK,
+      gameId: state.gameId,
+      subject: { type: 'GAME', gameId: state.gameId },
+      condition: { type: 'TOTAL_OVER', line },
+      source: 'MANUAL',
+      weight: 1,
+      createdAt: '2026-10-01T00:00:00.000Z',
+    },
+    {
+      gameId: state.gameId,
+      game: state,
+      lineup: {
+        userId: '',
+        week: 0,
+        teamPositions: new Map(),
+        playerToTeam: new Map(),
+        starPlayerIds: new Set(),
+      },
+    },
+  );
+  return Math.max(1, Math.round(Math.max(...triggers.map((trigger) => trigger.leverage)) * 12));
 }
 
 interface TestApp {
@@ -946,6 +993,273 @@ describe('GET /flags/current', () => {
     expect(body.flags).toEqual([]);
     expect(body.opponent_flags).toEqual([]);
     expect(body.opponent_game_ids).toEqual(['game-quiet']);
+  });
+
+  it('matches today when the user has no bet games and does not evaluate bets', async () => {
+    const spy = vi.spyOn(engine, 'evaluateStake');
+    app = await buildTestApp({
+      games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+      teams: [
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+      ],
+      user: { subscription_tier: 'free', preferences: {} },
+      players: [
+        { id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' },
+      ],
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState('game-1', makeGameState());
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const body = (
+      await app.fastify.inject({
+        method: 'GET',
+        url: '/flags/current',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(app.queriedTables).not.toContain('stakes');
+    expect(body).toEqual({
+      generated_at: body.generated_at,
+      flags: [
+        {
+          game_id: 'game-1',
+          priority_score: 2,
+          reasons: ['offense_active'],
+          flagged_players: [
+            { player_id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' },
+          ],
+          game: {
+            home_team: 'KC',
+            away_team: 'LV',
+            home_team_name: 'Chiefs',
+            away_team_name: 'Raiders',
+            home_team_primary_color: '#E31837',
+            home_team_secondary_color: '#FFB81C',
+            away_team_primary_color: '#000000',
+            away_team_secondary_color: '#A5ACAF',
+            score: { home: 14, away: 7 },
+            quarter: 2,
+            time_remaining_sec: 500,
+            possession_team: 'KC',
+            yards_to_endzone: null,
+            down: null,
+            distance: null,
+            in_red_zone: false,
+          },
+          recommended_action: 'switch_primary',
+        },
+      ],
+    });
+    spy.mockRestore();
+  });
+
+  it('sorts a bet-only game into flags by score', async () => {
+    const betState = makeGameState({
+      gameId: 'game-bet',
+      homeTeamId: 'team-chi',
+      awayTeamId: 'team-phi',
+      possessionTeamId: 'team-phi',
+      scoreHome: 20,
+      scoreAway: 7,
+      quarter: 4,
+      timeRemainingSec: 300,
+    });
+    app = await buildTestApp({
+      games: [
+        { id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' },
+        { id: 'game-bet', home_team_id: 'team-chi', away_team_id: 'team-phi' },
+      ],
+      teams: [
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        { id: 'team-chi', abbreviation: 'CHI', name: 'Bears', primary_color: '#0B162A', secondary_color: '#C83803' },
+        { id: 'team-phi', abbreviation: 'PHI', name: 'Eagles', primary_color: '#004C54', secondary_color: '#A5ACAF' },
+      ],
+      user: { subscription_tier: 'free', preferences: {} },
+      players: [{ id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' }],
+      stakes: [manualTotal('stake-bet', 'game-bet', 30.5)],
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.lineupCache.addUserBet('game-bet', 'user-1', WEEK);
+    await app.gameStateStore.setGameState('game-1', makeGameState());
+    await app.gameStateStore.setGameState('game-bet', betState);
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const body = (
+      await app.fastify.inject({
+        method: 'GET',
+        url: '/flags/current',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    expect(body.flags.map((flag: { game_id: string }) => flag.game_id)).toEqual([
+      'game-bet',
+      'game-1',
+    ]);
+    expect(body.flags[0].priority_score).toBe(betScore(betState, 30.5));
+    expect(body.flags[0].priority_score).toBeGreaterThan(body.flags[1].priority_score);
+    expect(body.flags[0].reasons).toEqual([]);
+    expect(body.flags[0].bets).toEqual([{ stake_id: 'stake-bet', label: 'Over 30.5' }]);
+    expect(body.bet_game_ids).toEqual(['game-bet']);
+  });
+
+  it('keeps one row when a fantasy flag and a true bet share a game', async () => {
+    const state = makeGameState({ quarter: 4, timeRemainingSec: 300, scoreHome: 20, scoreAway: 7 });
+    app = await buildTestApp({
+      games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+      teams: [
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+      ],
+      user: { subscription_tier: 'free', preferences: {} },
+      players: [{ id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' }],
+      stakes: [manualTotal('stake-bet', 'game-1', 30.5)],
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState('game-1', state);
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    const before = (
+      await app.fastify.inject({
+        method: 'GET',
+        url: '/flags/current',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+    await app.lineupCache.addUserBet('game-1', 'user-1', WEEK);
+    const body = (
+      await app.fastify.inject({
+        method: 'GET',
+        url: '/flags/current',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    expect(body.flags).toHaveLength(1);
+    expect(body.flags[0].reasons).toEqual(before.flags[0].reasons);
+    expect(body.flags[0].priority_score).toBe(
+      Math.max(before.flags[0].priority_score, betScore(state, 30.5)),
+    );
+    expect(body.flags[0].bets).toEqual([
+      {
+        stake_id: 'stake-bet',
+        label: formatStakeLabel(
+          { condition: { type: 'TOTAL_OVER', line: 30.5 }, subject: { type: 'GAME', teamId: null } },
+          [],
+        ),
+      },
+    ]);
+  });
+
+  it('lists a false bet in bet_game_ids without a row', async () => {
+    app = await buildTestApp({
+      games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+      teams: [
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+      ],
+      user: { subscription_tier: 'free', preferences: {} },
+      stakes: [manualTotal('stake-bet', 'game-1', 30.5)],
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['defense']]]);
+    await app.lineupCache.addUserBet('game-1', 'user-1', WEEK);
+    await app.gameStateStore.setGameState('game-1', makeGameState({ quarter: 2 }));
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const body = (
+      await app.fastify.inject({
+        method: 'GET',
+        url: '/flags/current',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    expect(body.flags).toEqual([]);
+    expect(body.bet_game_ids).toEqual(['game-1']);
+  });
+
+  it('omits a bet row when the game is final and still lists the game', async () => {
+    app = await buildTestApp({
+      games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+      teams: [
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+      ],
+      user: { subscription_tier: 'free', preferences: {} },
+      stakes: [manualTotal('stake-bet', 'game-1', 30.5)],
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['defense']]]);
+    await app.lineupCache.addUserBet('game-1', 'user-1', WEEK);
+    await app.gameStateStore.setGameState(
+      'game-1',
+      makeGameState({
+        status: 'final',
+        quarter: 4,
+        timeRemainingSec: 0,
+        scoreHome: 20,
+        scoreAway: 7,
+      }),
+    );
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const body = (
+      await app.fastify.inject({
+        method: 'GET',
+        url: '/flags/current',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    expect(body.flags).toEqual([]);
+    expect(body.bet_game_ids).toEqual(['game-1']);
+  });
+
+  it('drops an opponent row for a game that has a bet row', async () => {
+    const state = makeGameState({
+      quarter: 4,
+      timeRemainingSec: 300,
+      scoreHome: 20,
+      scoreAway: 7,
+      inRedZone: true,
+      yardsToOpponentEndzone: 8,
+    });
+    app = await buildTestApp({
+      games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+      teams: [
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+      ],
+      leagues: [{ id: 'league-1', season_year: 2026 }],
+      stakes: [
+        opponentStake('stake-wr', 'wr-1', 'team-kc', { game_id: 'game-1' }),
+        manualTotal('stake-bet', 'game-1', 30.5),
+      ],
+      players: [
+        { id: 'wr-1', first_name: 'Stefon', last_name: 'Diggs', position: 'WR', team_id: 'team-kc' },
+      ],
+      user: { subscription_tier: 'free', preferences: { watchOpponent: true } },
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['defense']]]);
+    await app.lineupCache.addUserBet('game-1', 'user-1', WEEK);
+    await app.gameStateStore.setGameState('game-1', state);
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const body = (
+      await app.fastify.inject({
+        method: 'GET',
+        url: '/flags/current',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    expect(body.flags.map((flag: { game_id: string }) => flag.game_id)).toEqual(['game-1']);
+    expect(body.flags[0].bets).toEqual([{ stake_id: 'stake-bet', label: 'Over 30.5' }]);
+    expect(body.opponent_flags).toEqual([]);
+    expect(body.opponent_game_ids).toEqual(['game-1']);
   });
 
   it('rejects an unauthenticated request', async () => {

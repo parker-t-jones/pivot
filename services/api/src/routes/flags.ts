@@ -13,6 +13,7 @@ import {
 } from '@pivot/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { loadWeekBets, mergeBetRows, type BetChip, type WeekBets } from '../lib/betFlagsCurrent.js';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { loadOpponentRedZone } from '../lib/opponentFlagsCurrent.js';
@@ -83,6 +84,22 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .single();
     if (userError) throw userError;
     const preferences = parsePreferences(userRow.preferences);
+    const indexedBetGames = await fastify.lineupCache.getUserBetGames(user.id, nflState.week);
+    const weekBets =
+      indexedBetGames.length === 0
+        ? null
+        : await loadWeekBets({
+            supabase: fastify.supabase,
+            getGameState: (gameId) => fastify.gameStateStore.getGameState(gameId),
+            userId: user.id,
+            week: nflState.week,
+            gameIds: indexedBetGames,
+          });
+    const decideActionUser = {
+      subscriptionTier: userRow.subscription_tier === 'pro' ? ('pro' as const) : ('free' as const),
+      autoSwitch: preferences.autoSwitch,
+    };
+    const session: ViewingSessionSnapshot = { primaryGameId: null, primaryPriorityScore: null };
 
     const finish = async <T>(flags: T[], ownGameIds: readonly string[]) => {
       if (!preferences.watchOpponent) {
@@ -105,9 +122,56 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       };
     };
 
+    const emit = async <T extends { game_id: string; priority_score: number }>(flags: T[]) => {
+      const merged = weekBets
+        ? mergeBetRows(flags, weekBets, (gameId, score, bets) =>
+            betOnlyRow(gameId, score, bets, weekBets),
+          )
+        : [...flags];
+      merged.sort(
+        (a, b) => b.priority_score - a.priority_score || a.game_id.localeCompare(b.game_id),
+      );
+      const body = await finish(
+        merged,
+        merged.map((flag) => flag.game_id),
+      );
+      if (!weekBets || weekBets.gameIds.length === 0) return body;
+      return { ...body, bet_game_ids: weekBets.gameIds };
+    };
+
+    const betOnlyRow = (gameId: string, score: number, bets: BetChip[], betsThisWeek: WeekBets) => {
+      const view = betsThisWeek.games.get(gameId);
+      if (!view) return null;
+      const action = decideAction(
+        decideActionUser,
+        session,
+        toSyntheticFlagEvent(user.id, gameId, {
+          gameId,
+          flagged: true,
+          priorityScore: score,
+          reasons: [],
+          computedAt: 0,
+        }),
+      );
+      return {
+        game_id: gameId,
+        priority_score: score,
+        reasons: [] as string[],
+        flagged_players: [] as {
+          player_id: string;
+          first_name: string;
+          last_name: string;
+          position: string;
+        }[],
+        game: buildGameSummary(view.gameState, view.info),
+        recommended_action: toRecommendedAction(action),
+        bets,
+      };
+    };
+
     const lineup = await fastify.lineupCache.getLineupCache(user.id, nflState.week);
     if (!lineup || lineup.teamPositions.size === 0) {
-      return finish([], []);
+      return emit([]);
     }
 
     const teamIds = [...lineup.teamPositions.keys()];
@@ -121,7 +185,7 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     // A user can have stake-teams that face each other this week — dedupe to one lookup per game.
     const games = [...new Map((gameRows ?? []).map((game) => [game.id, game])).values()];
     if (games.length === 0) {
-      return finish([], []);
+      return emit([]);
     }
 
     const relevantTeamIds = [
@@ -147,16 +211,11 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       (teamRows ?? []).map((team) => [team.id, team.secondary_color]),
     );
 
-    const decideActionUser = {
-      subscriptionTier: userRow.subscription_tier === 'pro' ? ('pro' as const) : ('free' as const),
-      autoSwitch: preferences.autoSwitch,
-    };
     // Phase 6 (`viewing_sessions`) hasn't landed yet — no real session source to read `primaryGameId`/
     // `primaryPriorityScore` from. `catalogs.ts`'s `UserDirectory.getViewingSession` docstring already
     // flags this dependency as Phase 6 work; until then, "no known primary game" is the honest default,
     // which resolves to `switch_primary`/`auto_switch` for any currently-flagged game (see
     // `decideAction`) — a reasonable cold-start recommendation when nothing is playing yet.
-    const session: ViewingSessionSnapshot = { primaryGameId: null, primaryPriorityScore: null };
 
     // First pass: compute the flagged games' state/action, but defer resolving player names until
     // after this loop so every flag's player ids can be looked up in a single batched query (same
@@ -247,13 +306,7 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       recommended_action: entry.recommendedAction,
     }));
 
-    // Deterministic order (sprint instruction): priority descending, game_id ascending on ties.
-    flags.sort((a, b) => b.priority_score - a.priority_score || a.game_id.localeCompare(b.game_id));
-
-    return finish(
-      flags,
-      flags.map((flag) => flag.game_id),
-    );
+    return emit(flags);
   });
 
   /**
