@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ESPN_WATCH_SCHEME_URL,
+  httpsWatchUrl,
   schemeUrlForWatchHttps,
   selectWatchLink,
   watchLinkAttemptOrder,
@@ -63,6 +64,21 @@ describe('selectWatchLink', () => {
   it('returns null when the only candidate is a scheme that cannot be opened', async () => {
     const canOpen = vi.fn(async () => false);
     await expect(selectWatchLink({ httpsUrl: '', schemeUrl: SCHEME }, canOpen)).resolves.toBeNull();
+  });
+});
+
+describe('httpsWatchUrl', () => {
+  it('keeps YouTube TV and ESPN https links and drops native schemes', () => {
+    expect(httpsWatchUrl('https://tv.youtube.com/search/DEN%20vs%20IND%20today')).toBe(
+      'https://tv.youtube.com/search/DEN%20vs%20IND%20today',
+    );
+    expect(httpsWatchUrl('  https://www.espn.com/watch/player  ')).toBe(
+      'https://www.espn.com/watch/player',
+    );
+    expect(httpsWatchUrl('sportscenter://watch')).toBeNull();
+    expect(httpsWatchUrl('http://tv.youtube.com/search/x')).toBeNull();
+    expect(httpsWatchUrl('')).toBeNull();
+    expect(httpsWatchUrl(null)).toBeNull();
   });
 });
 

@@ -41,6 +41,16 @@ export function isCustomSchemeUrl(url: string): boolean {
   return !HTTP_URL.test(url);
 }
 
+/**
+ * https URL safe to open in a browser tab. Custom schemes (`sportscenter://watch`) and http are
+ * dropped. Web uses this and does not call `selectWatchLink`.
+ */
+export function httpsWatchUrl(url: string | null | undefined): string | null {
+  const trimmed = url?.trim() ?? '';
+  if (!trimmed.startsWith('https://')) return null;
+  return trimmed;
+}
+
 export interface WatchLinkInput {
   /** https universal link already resolved for this user and game. */
   httpsUrl: string;

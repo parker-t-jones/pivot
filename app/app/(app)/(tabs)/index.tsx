@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ActiveLineupPicker } from '../../../components/ActiveLineupPicker';
@@ -567,6 +567,30 @@ export default function HomeScreen() {
    */
   const onSwitchOther = useCallback(
     async (flag: CurrentFlag) => {
+      // The week slate often already has the https URL. Open it in this click, before the fetch.
+      if (Platform.OS === 'web') {
+        const game = homeData?.weekGames.find((row) => row.game_id === flag.game_id);
+        const cta = game ? watchCta(game.broadcasts, game.airings) : null;
+        if (cta?.kind === 'watch') {
+          const flaggedTeam = resolveFlaggedTeamDisplay(
+            flag.game,
+            flag.flagged_players,
+            homeData?.playerTeamMap ?? EMPTY_TEAM_MAP,
+          );
+          switchToGame({
+            gameId: flag.game_id,
+            deepLinkUrl: cta.broadcast.deep_link_url,
+            label: `${flag.game.away_team} @ ${flag.game.home_team}`,
+            teamName: flaggedTeam?.name,
+            teamColors: flaggedTeam
+              ? { primary: flaggedTeam.primaryColor, secondary: flaggedTeam.secondaryColor }
+              : null,
+            broadcasts: game?.broadcasts,
+          });
+          return;
+        }
+      }
+
       let broadcasts: GameBroadcast[] = [];
       try {
         const response = await apiClient.get<GameBroadcastsResponse>(

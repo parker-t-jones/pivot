@@ -7,7 +7,16 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import { ActivityIndicator, Animated, Linking, Modal, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  Linking,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { ListRow } from '../components/ListRow';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -18,7 +27,7 @@ import { watchOptionLabel } from '../lib/gameDisplay';
 import { userServiceAppStoreUrl } from '../lib/streamingServices';
 import { resolveSwitch } from '../lib/switching';
 import { theme } from '../lib/theme';
-import { selectWatchLink, watchLinkInputFor } from '../lib/watchLink';
+import { httpsWatchUrl, selectWatchLink, watchLinkInputFor } from '../lib/watchLink';
 
 export interface SwitchInput {
   gameId: string;
@@ -166,6 +175,45 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
   const switchToGame = useCallback(
     (input: SwitchInput) => {
       if (inFlight.current) return; // ignore double-taps mid-transition
+
+      // Browsers block window.open after the overlay delay. Open the https URL in this turn and
+      // skip Linking.canOpenURL, which is always true on web and would pick sportscenter://.
+      if (Platform.OS === 'web') {
+        const httpsUrl = httpsWatchUrl(input.deepLinkUrl);
+        if (httpsUrl) {
+          globalThis.open(httpsUrl, '_blank', 'noopener');
+        }
+        inFlight.current = true;
+        setPhase({
+          status: 'switching',
+          label: input.teamName ?? input.label,
+          teamColors: input.teamColors ?? null,
+        });
+        void (async () => {
+          try {
+            if (!httpsUrl) {
+              enterErrorPhase(
+                input.gameId,
+                "We couldn't find a way to open this game yet. Try another broadcast.",
+                null,
+                input.broadcasts,
+              );
+              return;
+            }
+            void apiClient
+              .put('/session/primary', { game_id: input.gameId, source: 'deeplink' })
+              .catch((error: unknown) =>
+                console.warn('[switch] failed to set primary game', error),
+              );
+            await delay(MIN_OVERLAY_MS);
+            setPhase({ status: 'idle' });
+          } finally {
+            inFlight.current = false;
+          }
+        })();
+        return;
+      }
+
       inFlight.current = true;
       setPhase({
         status: 'switching',
@@ -221,6 +269,15 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
   const dismissError = useCallback(() => setPhase({ status: 'idle' }), []);
 
   const onSelectAlternate = useCallback((broadcast: GameBroadcast) => {
+    if (Platform.OS === 'web') {
+      const httpsUrl = httpsWatchUrl(broadcast.deep_link_url);
+      if (httpsUrl) {
+        globalThis.open(httpsUrl, '_blank', 'noopener');
+        setPhase({ status: 'idle' });
+      }
+      return;
+    }
+
     void (async () => {
       const opened = await openDeepLink(broadcast.deep_link_url);
       if (opened) {
