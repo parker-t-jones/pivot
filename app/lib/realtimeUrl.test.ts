@@ -24,4 +24,15 @@ describe('buildRealtimeWsUrl', () => {
   it('rejects non-http(s) bases', () => {
     expect(() => buildRealtimeWsUrl('ftp://x', 't')).toThrow(/http\(s\)/);
   });
+
+  it('adds deviceId and platform when the client has them', () => {
+    expect(
+      buildRealtimeWsUrl('http://127.0.0.1:3000', 'tok', {
+        deviceId: '11111111-1111-4111-8111-111111111111',
+        platform: 'web',
+      }),
+    ).toBe(
+      'ws://127.0.0.1:3000/v1/realtime?token=tok&deviceId=11111111-1111-4111-8111-111111111111&platform=web',
+    );
+  });
 });

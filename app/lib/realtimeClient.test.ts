@@ -145,6 +145,22 @@ describe('RealtimeClient', () => {
     return socket;
   }
 
+  it('sends device identity on the URL and a visibility message after open', async () => {
+    const client = createClient({
+      identity: { deviceId: '11111111-1111-4111-8111-111111111111', platform: 'web' },
+    });
+    client.setVisibility('hidden');
+    client.start();
+    const socket = await flushConnect();
+    expect(socket.url).toContain('deviceId=11111111-1111-4111-8111-111111111111');
+    expect(socket.url).toContain('platform=web');
+    socket.open();
+    const visibility = socket.sent.map((raw) => JSON.parse(raw) as { type: string; payload: { state: string } });
+    expect(visibility.some((message) => message.type === 'visibility' && message.payload.state === 'hidden')).toBe(
+      true,
+    );
+  });
+
   it('connects with JWT in the query string at /v1/realtime', async () => {
     const client = createClient();
     client.start();

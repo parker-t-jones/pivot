@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 
 import { apiClient } from './apiClient';
+import { getOrCreateDeviceId } from './deviceId';
 
 interface PushTokenResponse {
   expo_push_token: string | null;
@@ -54,15 +55,17 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
 
   const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
 
+  const deviceId = await getOrCreateDeviceId();
   const cacheKey = pushTokenCacheKey(userId);
+  const cacheValue = `${token}\n${deviceId}`;
   const cachedToken = await SecureStore.getItemAsync(cacheKey);
-  if (cachedToken === token) {
+  if (cachedToken === cacheValue) {
     return; // Unchanged since our last successful registration — skip the round trip.
   }
 
   console.log(`[push] registering token via POST /me/push-token for user ${userId}`);
-  await apiClient.post<PushTokenResponse>('/me/push-token', { token, platform: 'ios' });
-  await SecureStore.setItemAsync(cacheKey, token);
+  await apiClient.post<PushTokenResponse>('/me/push-token', { token, platform: 'ios', deviceId });
+  await SecureStore.setItemAsync(cacheKey, cacheValue);
 }
 
 /**

@@ -55,6 +55,8 @@ export interface RealtimeClientOptions {
   clearTimeoutFn?: typeof clearTimeout;
   /** Deterministic ids for tests. */
   createId?: () => string;
+  /** Omitted by a current TestFlight build. Web must send both or the server rejects the upgrade. */
+  identity?: { deviceId: string; platform: 'ios' | 'web' };
 }
 
 export class RealtimeClient {
@@ -72,6 +74,8 @@ export class RealtimeClient {
   private readonly setTimeoutFn: typeof setTimeout;
   private readonly clearTimeoutFn: typeof clearTimeout;
   private readonly createId: () => string;
+  private readonly identity: { deviceId: string; platform: 'ios' | 'web' } | undefined;
+  private pendingVisibility: 'visible' | 'hidden' | null = null;
 
   private socket: WebSocketLike | null = null;
   private started = false;
@@ -103,6 +107,13 @@ export class RealtimeClient {
         typeof globalThis.crypto?.randomUUID === 'function'
           ? globalThis.crypto.randomUUID()
           : `ping-${Date.now()}-${Math.random()}`);
+    this.identity = options.identity;
+  }
+
+  /** Web only. A hidden tab stays connected and the server stops counting it as active. */
+  setVisibility(state: 'visible' | 'hidden'): void {
+    this.pendingVisibility = state;
+    this.sendVisibilityIfOpen();
   }
 
   /** Whether the client is supposed to stay connected (between start/stop). */
@@ -165,7 +176,7 @@ export class RealtimeClient {
 
     let url: string;
     try {
-      url = buildRealtimeWsUrl(this.apiBaseUrl, token);
+      url = buildRealtimeWsUrl(this.apiBaseUrl, token, this.identity);
     } catch {
       this.scheduleReconnect();
       return;
@@ -186,6 +197,7 @@ export class RealtimeClient {
       this.reconnectAttempt = 0;
       this.startPingLoop();
       this.sendGameSubscriptions();
+      this.sendVisibilityIfOpen();
       if (isReconnect) {
         this.onReconnected();
       }
@@ -256,6 +268,21 @@ export class RealtimeClient {
         this.forceReconnect();
         return;
       }
+    }
+  }
+
+  private sendVisibilityIfOpen(): void {
+    if (this.pendingVisibility === null || !this.isOpen() || !this.socket) return;
+    const envelope: RealtimeEnvelope = {
+      id: this.createId(),
+      type: 'visibility',
+      timestamp: Date.now(),
+      payload: { state: this.pendingVisibility },
+    };
+    try {
+      this.socket.send(JSON.stringify(envelope));
+    } catch {
+      this.forceReconnect();
     }
   }
 
