@@ -26,6 +26,15 @@ export interface LineupCacheProvider {
   removeUserStake(teamId: string, userId: string): Promise<void>;
   getUsersWithStake(teamId: string): Promise<string[]>;
 
+  /**
+   * `users_with_bet:{game_id}` — users with a manual bet on that game.
+   * `user_bet_games:{user_id}:{week}` remembers which games were indexed so a rebuild can drop stale ones.
+   */
+  addUserBet(gameId: string, userId: string, week: number): Promise<void>;
+  removeUserBet(gameId: string, userId: string, week: number): Promise<void>;
+  getUsersWithBet(gameId: string): Promise<string[]>;
+  getUserBetGames(userId: string, week: number): Promise<string[]>;
+
   /** `current_nfl_state`, short-TTL cache of Sleeper's `/v1/state/nfl` (Sprint 3). */
   getNflState(): Promise<NflState | null>;
   setNflState(state: NflState, ttlSec: number): Promise<void>;

@@ -1,4 +1,5 @@
 import type { LineupCacheProvider } from '../cache/index.js';
+import { syncUserBetGames } from '../lib/betIndex.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { rebuildUserLineupCache } from '../lib/lineup-sync.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
@@ -42,8 +43,21 @@ export async function rebuildStakeCache(deps: {
     }
     users += 1;
     const cache = await deps.lineupCache.getLineupCache(row.id, state.week);
-    if (cache === null) continue;
-    for (const teamId of cache.teamPositions.keys()) teams.add(teamId);
+    if (cache !== null) {
+      for (const teamId of cache.teamPositions.keys()) teams.add(teamId);
+    }
+    try {
+      await syncUserBetGames(
+        { supabase: deps.supabase, lineupCache: deps.lineupCache },
+        row.id,
+        Number(state.season),
+        state.week,
+      );
+    } catch (failure) {
+      console.error(
+        `[runner] bet index rebuild failed for ${row.id}: ${failure instanceof Error ? failure.message : String(failure)}`,
+      );
+    }
   }
 
   const line = `[runner] stake cache: ${users} users, ${teams.size} teams`;

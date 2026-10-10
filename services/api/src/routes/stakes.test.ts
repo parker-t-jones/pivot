@@ -412,5 +412,35 @@ describe('manual stakes', () => {
     expect(rostered.statusCode).toBe(403);
     expect(rostered.json().error.code).toBe('stake_managed_by_sync');
     expect(mem.stakes.map((row) => row['id'])).toEqual([FOREIGN_ID, ROSTERED_ID]);
+    expect(await app.lineupCache.getUsersWithBet(GAME)).toEqual([]);
+  });
+
+  it('adds the game on create and removes it only when the last bet is gone', async () => {
+    await setup([openGame(), openGame({ id: OTHER_GAME })]);
+    const spread = await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 });
+    expect(spread.statusCode).toBe(200);
+    expect(await app.lineupCache.getUsersWithBet(GAME)).toEqual([USER]);
+
+    const over = await post({ type: 'TOTAL_OVER', gameId: GAME, line: 47.5 });
+    expect(over.statusCode).toBe(200);
+    const overId = (over.json() as { stake: { id: string } }).stake.id;
+    expect(await app.lineupCache.getUsersWithBet(GAME)).toEqual([USER]);
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/stakes/${overId}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(removed.statusCode).toBe(204);
+    expect(await app.lineupCache.getUsersWithBet(GAME)).toEqual([USER]);
+
+    const spreadId = (spread.json() as { stake: { id: string } }).stake.id;
+    const last = await app.inject({
+      method: 'DELETE',
+      url: `/stakes/${spreadId}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(last.statusCode).toBe(204);
+    expect(await app.lineupCache.getUsersWithBet(GAME)).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
 import type { Json } from '../lib/database.types.js';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { isBetCondition } from '../lib/betIndex.js';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { requireUser } from '../plugins/auth.js';
@@ -197,6 +198,7 @@ const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .single();
     if (insertError) throw insertError;
 
+    await fastify.lineupCache.addUserBet(row.id, user.id, row.week);
     return { stake: stakeResponse(created as StakeRow) };
   });
 
@@ -300,6 +302,21 @@ const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         .eq('id', stake.id)
         .eq('user_id', user.id);
       if (deleteError) throw deleteError;
+
+      const { data: rest, error: restError } = await fastify.supabase
+        .from('stakes')
+        .select('condition')
+        .eq('user_id', user.id)
+        .eq('game_id', stake.game_id)
+        .eq('season', stake.season)
+        .eq('week', stake.week);
+      if (restError) throw restError;
+      const stillBet = ((rest ?? []) as { condition: Json }[]).some((other) =>
+        isBetCondition(other.condition),
+      );
+      if (!stillBet) {
+        await fastify.lineupCache.removeUserBet(stake.game_id, user.id, stake.week);
+      }
       return reply.status(204).send();
     },
   );

@@ -7,7 +7,15 @@ const LEAGUE = '11111111-1111-4111-8111-111111111111';
 const USER_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
-function supabaseForWatchedStarters(): SupabaseServiceClient {
+interface StakeRow {
+  user_id: string;
+  season: number;
+  week: number;
+  game_id: string;
+  condition: { type: string };
+}
+
+function supabaseForWatchedStarters(stakes: StakeRow[] = []): SupabaseServiceClient {
   return {
     from(table: string) {
       if (table === 'users') {
@@ -91,9 +99,46 @@ function supabaseForWatchedStarters(): SupabaseServiceClient {
           },
         };
       }
+      if (table === 'stakes') {
+        return {
+          select() {
+            const filters: ((row: StakeRow) => boolean)[] = [];
+            const query = {
+              eq(column: keyof StakeRow, value: unknown) {
+                filters.push((row) => row[column] === value);
+                return query;
+              },
+              then<TResult1 = { data: StakeRow[]; error: null }, TResult2 = never>(
+                onfulfilled?:
+                  | ((value: { data: StakeRow[]; error: null }) => TResult1 | PromiseLike<TResult1>)
+                  | null,
+                onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+              ): PromiseLike<TResult1 | TResult2> {
+                const data = stakes.filter((row) => filters.every((keep) => keep(row)));
+                return Promise.resolve({ data, error: null }).then(onfulfilled, onrejected);
+              },
+            };
+            return query;
+          },
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     },
   } as unknown as SupabaseServiceClient;
+}
+
+class CountingBetCache extends InMemoryLineupCache {
+  betWrites = 0;
+
+  override async addUserBet(gameId: string, userId: string, week: number): Promise<void> {
+    this.betWrites += 1;
+    await super.addUserBet(gameId, userId, week);
+  }
+
+  override async removeUserBet(gameId: string, userId: string, week: number): Promise<void> {
+    this.betWrites += 1;
+    await super.removeUserBet(gameId, userId, week);
+  }
 }
 
 describe('rebuildStakeCache', () => {
@@ -115,6 +160,84 @@ describe('rebuildStakeCache', () => {
     expect((await lineupCache.getLineupCache(USER_A, 3))?.playerToTeam.get('p-rb')).toBe(
       'team-buf',
     );
+  });
+
+  it('indexes bet games from the table and drops a stale game', async () => {
+    const lineupCache = new InMemoryLineupCache();
+    await lineupCache.setNflState(
+      { season: '2026', week: 3, seasonType: 'regular', seasonStartDate: null },
+      300,
+    );
+    const live = 'game-live';
+    const stale = 'game-stale';
+    const rostered = 'game-rostered';
+    const opponent = 'game-opponent';
+    await lineupCache.addUserBet(live, USER_A, 3);
+    await lineupCache.addUserBet(stale, USER_A, 3);
+
+    await rebuildStakeCache({
+      supabase: supabaseForWatchedStarters([
+        { user_id: USER_A, season: 2026, week: 3, game_id: live, condition: { type: 'SPREAD' } },
+        {
+          user_id: USER_A,
+          season: 2026,
+          week: 3,
+          game_id: rostered,
+          condition: { type: 'ROSTERED' },
+        },
+        {
+          user_id: USER_A,
+          season: 2026,
+          week: 3,
+          game_id: opponent,
+          condition: { type: 'OPPONENT_ROSTERED' },
+        },
+        {
+          user_id: USER_A,
+          season: 2025,
+          week: 3,
+          game_id: 'game-old-season',
+          condition: { type: 'MONEYLINE' },
+        },
+      ]),
+      lineupCache,
+    });
+
+    expect(await lineupCache.getUsersWithBet(live)).toEqual([USER_A]);
+    expect(await lineupCache.getUsersWithBet(stale)).toEqual([]);
+    expect(await lineupCache.getUsersWithBet(rostered)).toEqual([]);
+    expect(await lineupCache.getUsersWithBet(opponent)).toEqual([]);
+    expect(await lineupCache.getUserBetGames(USER_A, 3)).toEqual([live]);
+  });
+
+  it('writes no bet index for a user who only has fantasy rows', async () => {
+    const lineupCache = new CountingBetCache();
+    await lineupCache.setNflState(
+      { season: '2026', week: 3, seasonType: 'regular', seasonStartDate: null },
+      300,
+    );
+    await rebuildStakeCache({
+      supabase: supabaseForWatchedStarters([
+        {
+          user_id: USER_A,
+          season: 2026,
+          week: 3,
+          game_id: 'game-rostered',
+          condition: { type: 'ROSTERED' },
+        },
+        {
+          user_id: USER_A,
+          season: 2026,
+          week: 3,
+          game_id: 'game-opponent',
+          condition: { type: 'OPPONENT_ROSTERED' },
+        },
+      ]),
+      lineupCache,
+    });
+    expect(lineupCache.betWrites).toBe(0);
+    expect(await lineupCache.getUsersWithBet('game-rostered')).toEqual([]);
+    expect(await lineupCache.getUsersWithBet('game-opponent')).toEqual([]);
   });
 });
 

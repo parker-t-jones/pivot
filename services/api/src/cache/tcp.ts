@@ -17,6 +17,14 @@ function stakeKey(teamId: string): string {
   return `users_with_stake:${teamId}`;
 }
 
+function betKey(gameId: string): string {
+  return `users_with_bet:${gameId}`;
+}
+
+function betGamesKey(userId: string, week: number): string {
+  return `user_bet_games:${userId}:${week}`;
+}
+
 function isNflState(value: unknown): value is NflState {
   if (typeof value !== 'object' || value === null) return false;
   const state = value as Record<string, unknown>;
@@ -64,6 +72,24 @@ export class TcpLineupCache implements LineupCacheProvider {
 
   async getUsersWithStake(teamId: string): Promise<string[]> {
     return this.redis.smembers(stakeKey(teamId));
+  }
+
+  async addUserBet(gameId: string, userId: string, week: number): Promise<void> {
+    await this.redis.sadd(betKey(gameId), userId);
+    await this.redis.sadd(betGamesKey(userId, week), gameId);
+  }
+
+  async removeUserBet(gameId: string, userId: string, week: number): Promise<void> {
+    await this.redis.srem(betKey(gameId), userId);
+    await this.redis.srem(betGamesKey(userId, week), gameId);
+  }
+
+  async getUsersWithBet(gameId: string): Promise<string[]> {
+    return this.redis.smembers(betKey(gameId));
+  }
+
+  async getUserBetGames(userId: string, week: number): Promise<string[]> {
+    return this.redis.smembers(betGamesKey(userId, week));
   }
 
   async getNflState(): Promise<NflState | null> {
