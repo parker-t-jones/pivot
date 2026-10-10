@@ -337,6 +337,7 @@ async function main(): Promise<void> {
   };
   const tcp = (await import(mod('runner/tcpRedis.js'))) as {
     createTcpRedis: (url: string, label?: string) => RedisClient;
+    tcpFiredClaims: (redis: RedisClient) => unknown;
     tcpFlagEventQueue: (redis: RedisClient) => unknown;
     tcpGameState: (redis: RedisClient) => unknown;
     tcpLeaderLock: (redis: RedisClient) => unknown;
@@ -530,6 +531,7 @@ async function main(): Promise<void> {
     realtime,
     lineupCache,
     stakeCache: { supabase, lineupCache },
+    firedClaims: tcp.tcpFiredClaims(redis),
     games,
     users: new catalogs.SupabaseUserDirectory(supabase),
     gameCatalog: new catalogs.SupabaseGameCatalog(supabase),

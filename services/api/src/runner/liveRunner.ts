@@ -30,6 +30,7 @@ import {
 } from '@pivot/dispatcher';
 import type { PushNotifier } from '@pivot/dispatcher';
 import type { LineupCacheProvider } from '../cache/index.js';
+import type { FireClaimRedis } from '../lib/fireClaim.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { deriveDisplayPhaseNow, derivePhaseOpeners, type NflPhase } from '../lib/phase-openers.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
@@ -44,6 +45,7 @@ import {
 import { followGame } from './followGame.js';
 import { LEADER_KEY, leaderOwner, type LeaderLockRedis } from './leaderLock.js';
 import { startLeaderLoop, type LeaderLoopHandle } from './leaderLoop.js';
+import { createBetStakeCache, runBetPass } from './betPass.js';
 import { createPlaySession } from './playSession.js';
 import { publishLiveGame } from './publishLiveGame.js';
 import { reconcileStaleGames } from './reconcile.js';
@@ -79,6 +81,8 @@ export interface LiveRunnerDeps {
     supabase: SupabaseServiceClient;
     lineupCache: LineupCacheProvider;
   };
+  /** `stake_fired:{stakeId}:{code}` cache in front of `stake_trigger_log`. */
+  firedClaims: FireClaimRedis;
 }
 
 export function startLiveRunner(deps: LiveRunnerDeps): LeaderLoopHandle {
@@ -130,6 +134,7 @@ async function runLeader(
     queue: deps.queue,
     onGated: () => undefined,
   });
+  const betCache = createBetStakeCache();
   const ceiling = new ResumptionCeiling({
     store: deps.ceilingStore,
     onFire: (gameId) => {
@@ -179,6 +184,14 @@ async function runLeader(
         gameState: deps.gameState,
         dispatcher: gate,
       },
+      runBetPass: (play, gameState) =>
+        runBetPass(play, gameState, {
+          lineupCache: deps.stakeCache.lineupCache,
+          supabase: deps.stakeCache.supabase,
+          redis: deps.firedClaims,
+          dispatcher: gate,
+          cache: betCache,
+        }),
     });
     trackers.set(game.id, session.tracker);
     try {

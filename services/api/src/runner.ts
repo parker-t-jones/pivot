@@ -18,6 +18,7 @@ import {
 } from './runner/supabaseCatalogs.js';
 import {
   createTcpRedis,
+  tcpFiredClaims,
   tcpFlagEventQueue,
   tcpGameState,
   tcpLeaderLock,
@@ -59,6 +60,7 @@ const handle = startLiveRunner({
   realtime: tcpRealtimeBus(redis),
   lineupCache,
   stakeCache: { supabase, lineupCache },
+  firedClaims: tcpFiredClaims(redis),
   games: new SupabaseGameDirectory(supabase),
   users: new SupabaseUserDirectory(supabase),
   gameCatalog: new SupabaseGameCatalog(supabase),

@@ -6,6 +6,7 @@ import {
   type PlayEvent,
 } from '@pivot/engine';
 import type { ResumptionCeiling, ResumptionGatedDispatcher } from '@pivot/dispatcher';
+import type { GameState } from '@pivot/shared';
 import { observeResolution } from './observeResolution.js';
 
 function failureReason(error: unknown): string {
@@ -19,6 +20,8 @@ export interface PlaySessionDeps {
   onPlay: OnPlayEventDeps;
   clock?: () => number;
   log?: (line: string) => void;
+  /** Runs after `onPlayEvent` and before this play's reveal window collapses. */
+  runBetPass?: (play: PlayEvent, gameState: GameState) => Promise<void>;
 }
 
 /**
@@ -56,6 +59,8 @@ export function createPlaySession(deps: PlaySessionDeps): {
       }
       tracker.observe(play, clock());
       await onPlayEvent(deps.onPlay, play);
+      const gameState = await deps.onPlay.gameState.getGameState(play.gameId);
+      if (deps.runBetPass && gameState) await deps.runBetPass(play, gameState);
       await deps.gate.endPlay(play.gameId);
       // The play that ends the game has no following snap. Release anything still parked so the
       // final flag (usually a clear) is published instead of waiting out the silence ceiling.

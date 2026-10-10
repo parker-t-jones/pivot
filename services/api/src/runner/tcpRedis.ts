@@ -90,6 +90,20 @@ export function tcpSeenPlays(redis: Redis): SeenPlaySet {
   };
 }
 
+export function tcpFiredClaims(redis: Redis): {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ttlSec: number): Promise<void>;
+} {
+  return {
+    async get(key: string): Promise<string | null> {
+      return redis.get(key);
+    },
+    async set(key: string, value: string, ttlSec: number): Promise<void> {
+      await redis.set(key, value, 'EX', ttlSec);
+    },
+  };
+}
+
 export function tcpFlagEventQueue(redis: Redis): FlagEventQueue {
   return {
     async enqueue(event: FlagEvent, triggeringPlayId: string | null = null): Promise<void> {
