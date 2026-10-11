@@ -1046,11 +1046,16 @@ describe('web push beside Expo', () => {
       gameStateStore,
       webPush: { sender: web, subscriptions },
     });
+    const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     await deliverFlagEvent(deps, makeEvent(), namedUser);
 
     expect(pushNotifier.calls).toHaveLength(1);
     expect(web.calls).toHaveLength(0);
+    const lines = logs.mock.calls.map((call) => String(call[0]));
+    expect(lines).toContain(`[push] ios device=${IOS_DEVICE} result=sent`);
+    expect(lines).toContain(`[web-push] device=${WEB_DEVICE} result=skipped_visible_primary`);
+    logs.mockRestore();
   });
 
   it('sends the web push when that tab is hidden, and still pushes to a backgrounded phone', async () => {

@@ -104,7 +104,10 @@ export async function deliverWebPushes(input: {
   const collapseKey = webPushCollapseKey(input.userId);
   for (const sub of subs) {
     const visible = await input.isDeviceActive(input.userId, sub.deviceId);
-    if (visible && input.primaryGameId === input.gameId) continue;
+    if (visible && input.primaryGameId === input.gameId) {
+      console.log(`[web-push] device=${sub.deviceId} result=skipped_visible_primary`);
+      continue;
+    }
     let result: WebPushResult;
     try {
       result = await input.sender.send({
@@ -122,14 +125,19 @@ export async function deliverWebPushes(input: {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error('[web-push] send threw', { endpoint: sub.endpoint, error: message });
+      console.log(`[web-push] device=${sub.deviceId} result=failed`);
       continue;
     }
     if (result.statusCode === 404 || result.statusCode === 410) {
       await input.subscriptions.deleteEndpoint(sub.endpoint);
+      console.log(`[web-push] device=${sub.deviceId} result=gone`);
       continue;
     }
     if (result.ok) {
       await input.subscriptions.recordSuccess(sub.endpoint, input.nowMs);
+      console.log(`[web-push] device=${sub.deviceId} result=sent`);
+      continue;
     }
+    console.log(`[web-push] device=${sub.deviceId} result=failed`);
   }
 }

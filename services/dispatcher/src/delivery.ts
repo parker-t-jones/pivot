@@ -348,6 +348,7 @@ export async function deliverFlagEvent(
   // Start both sends together. A hang or rejection on one must not block or alter the other.
   // Gating above (rate limit, mode, quiet hours, per-device decision) is unchanged.
   const expoDelivery = (async (): Promise<void> => {
+    const iosDeviceId = user.expoPushDeviceId ?? 'legacy-ios';
     if (pushDecision !== 'sent') {
       console.log(
         formatPushDecisionLog({
@@ -358,6 +359,7 @@ export async function deliverFlagEvent(
           timing,
         }),
       );
+      console.log(`[push] ios device=${iosDeviceId} result=${pushDecision}`);
       return;
     }
     if (!user.expoPushToken || !pushCopy) return;
@@ -383,6 +385,7 @@ export async function deliverFlagEvent(
           }),
         );
         await deps.persistence.recordPushOutcome({ id: persisted.id, status: 'sent' });
+        console.log(`[push] ios device=${iosDeviceId} result=sent`);
       } else {
         console.error('[push] delivery failed', {
           userId: event.userId,
@@ -399,6 +402,7 @@ export async function deliverFlagEvent(
           nextAttemptAt: deliveredAt + PUSH_RETRY_BACKOFF_MS,
           payload,
         });
+        console.log(`[push] ios device=${iosDeviceId} result=failed`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -422,6 +426,7 @@ export async function deliverFlagEvent(
           data: envelope.payload,
         },
       });
+      console.log(`[push] ios device=${iosDeviceId} result=threw`);
     }
   })();
 
