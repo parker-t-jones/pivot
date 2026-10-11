@@ -2,8 +2,10 @@ import { Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { SHOW_BETS } from '../lib/featureFlags';
 import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
+import { lineupScreenMode } from '../lib/watchlistFilter';
 
 /**
  * Derived from `<Tabs>`'s own `tabBar` prop type rather than hand-declared or deep-imported from
@@ -40,7 +42,11 @@ export function AppTabBar({ state, navigation, insets }: AppTabBarProps) {
 
   return (
     <View style={[styles.bar, { paddingBottom: insets.bottom || theme.spacing.sm }]}>
-      <SideTab active={isFocused('lineup')} label="Lineup" onPress={() => go('lineup')} />
+      <SideTab
+        active={isFocused('lineup')}
+        label={lineupScreenMode(SHOW_BETS) === 'watchlist' ? 'Watchlist' : 'Lineup'}
+        onPress={() => go('lineup')}
+      />
       <SideTab active={isFocused('index')} label="Home" onPress={() => go('index')} />
       <SideTab active={isFocused('settings')} label="Settings" onPress={() => go('settings')} />
     </View>

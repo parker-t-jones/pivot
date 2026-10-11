@@ -1,6 +1,8 @@
 import { Tabs } from 'expo-router';
 
 import { AppTabBar } from '../../../components/AppTabBar';
+import { SHOW_BETS } from '../../../lib/featureFlags';
+import { lineupScreenMode } from '../../../lib/watchlistFilter';
 
 /**
  * PLAN.md §10 three-tab shell: Home · Lineup · Settings.
@@ -12,7 +14,10 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <AppTabBar {...props} />}>
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="lineup" options={{ title: 'Lineup' }} />
+      <Tabs.Screen
+        name="lineup"
+        options={{ title: lineupScreenMode(SHOW_BETS) === 'watchlist' ? 'Watchlist' : 'Lineup' }}
+      />
       <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
     </Tabs>
   );

@@ -17,6 +17,8 @@ import { ErrorState } from '../../../components/ErrorState';
 import { LoadingState } from '../../../components/LoadingState';
 import { SecondaryButton } from '../../../components/SecondaryButton';
 import { TextButton } from '../../../components/TextButton';
+import { WatchlistFilters } from '../../../components/WatchlistFilters';
+import { WeekCard } from '../../../components/WeekCard';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
 import { ApiRequestError } from '../../../lib/apiClient';
 import { SHOW_BETS } from '../../../lib/featureFlags';
@@ -24,6 +26,7 @@ import { SHOW_STAR_TOGGLES } from '../../../lib/flags';
 import { fonts } from '../../../lib/fonts';
 import {
   disconnectLeague,
+  fetchAllLineups,
   fetchLineup,
   renameManualLeague,
   setStarPlayer,
@@ -36,12 +39,20 @@ import {
 import { leagueChipScrollOffset, leagueChipWidth } from '../../../lib/leagueChipScroll';
 import { orderLineupSlots, slotLabel } from '../../../lib/lineupOrder';
 import { fetchMe, patchPreferences, type MeResponse } from '../../../lib/me';
+import { fetchNflState } from '../../../lib/nflState';
 import { opponentSectionState } from '../../../lib/opponentLineup';
 import { formatGameLine, gameForTeam } from '../../../lib/playerGame';
 import { fetchGamesWeek, type ScheduleGame } from '../../../lib/schedule';
 import { formatStakeLabel, stakeTeams, type ManualStake } from '../../../lib/stakes';
 import { deleteStake, fetchStakes } from '../../../lib/stakesClient';
 import { theme } from '../../../lib/theme';
+import { isBenchSlot, watchedStarterCount, weekCardModel } from '../../../lib/weekCardModel';
+import {
+  lineupScreenMode,
+  splitBets,
+  useWatchlistFilter,
+  watchlistSections,
+} from '../../../lib/watchlistFilter';
 
 const SWITCH_TRACK = { false: theme.colors.border, true: theme.colors.accent } as const;
 const SWITCH_THUMB = theme.colors.textPrimary;
@@ -49,12 +60,6 @@ const STRIPE_WIDTH = 3;
 const ROW_MIN_HEIGHT = 52;
 /** Holds "FLEX" at the default eyebrow size; the column grows with the label. */
 const SLOT_COLUMN_MIN_WIDTH = 44;
-
-function isBenchSlot(slot: LineupSlot): boolean {
-  if (slot.slot_type === 'bench') return true;
-  const raw = slot.position_in_lineup.trim().toUpperCase();
-  return raw === 'BN' || raw === 'BENCH' || raw === 'IR' || raw === 'TAXI';
-}
 
 function rosterMeta(slot: LineupSlot): string {
   const team = slot.player.team?.abbreviation ?? '';
@@ -131,7 +136,11 @@ export default function LineupScreen() {
   /** Optimistic `watchOpponent` while a preferences PATCH is in flight. */
   const [watchOpponentPending, setWatchOpponentPending] = useState<boolean | null>(null);
   const [bets, setBets] = useState<ManualStake[]>([]);
+  const [nflWeek, setNflWeek] = useState<number | null>(null);
+  const [watchedStarterTotal, setWatchedStarterTotal] = useState(0);
+  const [filter, selectFilter] = useWatchlistFilter();
   const watchOpponentSave = useRef(false);
+  const watchlist = lineupScreenMode(SHOW_BETS) === 'watchlist';
 
   const selectedLeague = useMemo(
     () => leagues.find((league) => league.league_id === selectedLeagueId) ?? leagues[0] ?? null,
@@ -157,7 +166,7 @@ export default function LineupScreen() {
     if (!league) {
       setLineup(null);
       setWeekGames(null);
-      setBets([]);
+      if (!SHOW_BETS) setBets([]);
       setLoadError(null);
       return;
     }
@@ -199,13 +208,56 @@ export default function LineupScreen() {
     void loadLineup(selectedLeague).finally(() => setIsLoading(false));
   }, [loadLineup, selectedLeague, leaguesRevision]);
 
+  useEffect(() => {
+    if (!SHOW_BETS) return;
+    let cancelled = false;
+    void fetchNflState()
+      .then((state) => {
+        if (!cancelled) setNflWeek(state.week);
+      })
+      .catch(() => {
+        if (!cancelled) setNflWeek(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!SHOW_BETS || me == null) return;
+    let cancelled = false;
+    const watched = me.preferences.watchedLeagueIds;
+    const targets =
+      watched.length === 0
+        ? leagues
+        : leagues.filter((league) => watched.includes(league.league_id));
+    void fetchAllLineups(targets)
+      .then((rows) => {
+        if (cancelled) return;
+        setWatchedStarterTotal(
+          watchedStarterCount(
+            rows.map((row) => ({ leagueId: row.league_id, slots: row.slots })),
+            watched,
+          ),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setWatchedStarterTotal(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leagues, me]);
+
   useFocusEffect(
     useCallback(() => {
-      if (!SHOW_BETS || lineup?.week == null) return;
-      void fetchStakes(lineup.week)
+      if (!SHOW_BETS) return;
+      const week = lineup?.week ?? nflWeek;
+      if (week == null) return;
+      void fetchStakes(week)
         .then((response) => setBets(response.stakes))
         .catch(() => setBets([]));
-    }, [lineup?.week]),
+    }, [lineup?.week, nflWeek]),
   );
 
   const confirmRemoveBet = (stake: ManualStake) => {
@@ -299,6 +351,22 @@ export default function LineupScreen() {
 
   const watchOpponent = watchOpponentPending ?? me?.preferences.watchOpponent ?? false;
   const opponentView = opponentSectionState(lineup?.opponent, watchOpponent);
+  const { bets: propBets, pools: poolBets } = splitBets(bets);
+  const sections = watchlistSections(filter);
+  const showLeagueChips = !watchlist || sections.includes('leagueChips');
+  const showRoster = !watchlist || sections.includes('starters');
+  const showOpponent = !watchlist || sections.includes('opponent');
+  const showActions = watchlist && sections.includes('leagueActions');
+  const showPropBets = watchlist && sections.includes('bets');
+  const showPools = watchlist && sections.includes('pools');
+  const weekCard = weekCardModel({
+    starterCount: watchedStarterTotal,
+    watchOpponent,
+    betCount: propBets.length,
+    survivorCount: poolBets.length,
+    isPro: me?.subscription_tier === 'pro',
+  });
+  const headerWeek = watchlist ? (lineup?.week ?? nflWeek) : (lineup?.week ?? null);
 
   const onWatchOpponent = async (next: boolean) => {
     if (watchOpponentSave.current || next === watchOpponent) return;
@@ -319,6 +387,57 @@ export default function LineupScreen() {
     selectedLeague != null && isWatchingLeague(watchedIds, selectedLeague.league_id);
   const manageBusy = busyLeagueId != null && busyLeagueId === selectedLeague?.league_id;
 
+  const runLeagueAction = (choice: string | undefined) => {
+    if (!selectedLeague || manageBusy) return;
+    if (choice === 'Sync') {
+      void (async () => {
+        setBusyLeagueId(selectedLeague.league_id);
+        try {
+          await syncLeague(selectedLeague.league_id);
+          const rows = await refreshLeagues();
+          const next = rows.find((league) => league.league_id === selectedLeague.league_id) ?? null;
+          await loadLineup(next);
+        } catch (error) {
+          Alert.alert('Sync failed', errorMessage(error));
+        } finally {
+          setBusyLeagueId(null);
+        }
+      })();
+    } else if (choice === 'Edit lineup') {
+      router.push(
+        `/(app)/edit-manual-lineup?leagueId=${encodeURIComponent(selectedLeague.league_id)}`,
+      );
+    } else if (choice === 'Rename') {
+      promptRename(selectedLeague);
+    } else if (choice === 'Connect another team') {
+      router.push('/(app)/connect-team');
+    } else if (choice === 'Disconnect') {
+      Alert.alert('Disconnect league?', `Remove "${selectedLeague.name}" from Pivot?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setBusyLeagueId(selectedLeague.league_id);
+              try {
+                await disconnectLeague(selectedLeague.league_id);
+                const rows = await refreshLeagues();
+                if (rows.length === 0) {
+                  deferConnect();
+                }
+              } catch (error) {
+                Alert.alert('Could not disconnect', errorMessage(error));
+              } finally {
+                setBusyLeagueId(null);
+              }
+            })();
+          },
+        },
+      ]);
+    }
+  };
+
   const openManage = () => {
     if (!selectedLeague || manageBusy) return;
     const sleeper = selectedLeague.platform === 'sleeper';
@@ -331,54 +450,11 @@ export default function LineupScreen() {
       { options, cancelButtonIndex, destructiveButtonIndex },
       (buttonIndex) => {
         const choice = options[buttonIndex];
-        if (choice === 'Sync') {
-          void (async () => {
-            setBusyLeagueId(selectedLeague.league_id);
-            try {
-              await syncLeague(selectedLeague.league_id);
-              const rows = await refreshLeagues();
-              const next =
-                rows.find((league) => league.league_id === selectedLeague.league_id) ?? null;
-              await loadLineup(next);
-            } catch (error) {
-              Alert.alert('Sync failed', errorMessage(error));
-            } finally {
-              setBusyLeagueId(null);
-            }
-          })();
-        } else if (choice === 'Edit lineup') {
-          router.push(
-            `/(app)/edit-manual-lineup?leagueId=${encodeURIComponent(selectedLeague.league_id)}`,
-          );
-        } else if (choice === 'Rename') {
-          promptRename(selectedLeague);
-        } else if (choice === 'Connect another team') {
+        if (choice === 'Connect another team') {
           router.push('/(app)/connect-team');
-        } else if (choice === 'Disconnect') {
-          Alert.alert('Disconnect league?', `Remove "${selectedLeague.name}" from Pivot?`, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Disconnect',
-              style: 'destructive',
-              onPress: () => {
-                void (async () => {
-                  setBusyLeagueId(selectedLeague.league_id);
-                  try {
-                    await disconnectLeague(selectedLeague.league_id);
-                    const rows = await refreshLeagues();
-                    if (rows.length === 0) {
-                      deferConnect();
-                    }
-                  } catch (error) {
-                    Alert.alert('Could not disconnect', errorMessage(error));
-                  } finally {
-                    setBusyLeagueId(null);
-                  }
-                })();
-              },
-            },
-          ]);
+          return;
         }
+        runLeagueAction(choice);
       },
     );
   };
@@ -386,13 +462,13 @@ export default function LineupScreen() {
   if (isLoading && !lineup) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top + theme.spacing.lg }]}>
-        <LineupHeader week={null} />
+        {watchlist ? <WatchlistHeader week={nflWeek} /> : <LineupHeader week={null} />}
         <LoadingState message="Loading lineup…" />
       </View>
     );
   }
 
-  if (leagues.length === 0) {
+  if (leagues.length === 0 && !watchlist) {
     return (
       <View
         style={[styles.screen, styles.emptyScreen, { paddingTop: insets.top + theme.spacing.lg }]}
@@ -425,97 +501,185 @@ export default function LineupScreen() {
         />
       }
     >
-      <LineupHeader week={lineup?.week ?? null} />
+      {watchlist ? <WatchlistHeader week={headerWeek} /> : <LineupHeader week={headerWeek} />}
 
-      <View style={styles.switcherBlock}>
-        <LeagueSwitcher
-          leagues={leagues}
-          selectedLeagueId={selectedLeague?.league_id ?? null}
-          onSelect={setSelectedLeagueId}
-        />
-        {selectedLeague ? (
-          <Text
-            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-            style={watchingSelected ? styles.watching : styles.notWatching}
-          >
-            {watchingSelected ? 'WATCHING' : 'NOT WATCHING'}
-          </Text>
-        ) : null}
-      </View>
-
-      <View style={styles.rosterSection}>
-        <View style={styles.rosterHeader}>
-          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
-            STARTERS
-          </Text>
-          {selectedLeague ? (
-            <TextButton
-              disabled={manageBusy}
-              label="Manage"
-              onPress={openManage}
-              size="smallStrong"
-            />
-          ) : null}
-        </View>
-
-        {loadError ? (
-          <ErrorState
-            message={loadError}
-            onRetry={() => {
-              void loadLineup(selectedLeague);
+      {watchlist ? (
+        <>
+          <WeekCard
+            model={weekCard}
+            onAddStake={() => {
+              router.push('/(app)/add-stake');
             }}
           />
-        ) : orderedSlots.length === 0 ? (
-          <Text style={styles.emptyCopy}>No players in this lineup yet.</Text>
-        ) : (
-          <>
-            {starterSlots.length > 0 ? (
-              <View style={styles.rosterWell}>
-                {starterSlots.map((slot, index) => (
-                  <PlayerRow
-                    divided={index > 0}
-                    key={slot.slot_id}
-                    mutedName={false}
-                    now={now}
-                    onToggleStar={(value) => {
-                      void toggleStar(slot, value);
-                    }}
-                    saving={savingSlotId === slot.slot_id || !lineup}
-                    slot={slot}
-                    timeZone={timeZone}
-                    weekGames={weekGames}
-                  />
-                ))}
-              </View>
-            ) : null}
-            {benchSlots.length > 0 ? (
-              <>
-                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
-                  BENCH
-                </Text>
-                <View style={styles.rosterWell}>
-                  {benchSlots.map((slot, index) => (
-                    <PlayerRow
-                      divided={index > 0}
-                      key={slot.slot_id}
-                      mutedName
-                      now={now}
-                      onToggleStar={(value) => {
-                        void toggleStar(slot, value);
-                      }}
-                      saving={savingSlotId === slot.slot_id || !lineup}
-                      slot={slot}
-                      timeZone={timeZone}
-                      weekGames={weekGames}
-                    />
-                  ))}
-                </View>
-              </>
-            ) : null}
-          </>
-        )}
+          <WatchlistFilters onChange={selectFilter} value={filter} />
+        </>
+      ) : null}
 
-        {SHOW_BETS ? (
+      {showActions ? (
+        <View style={styles.leagueActions}>
+          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+            LEAGUE
+          </Text>
+          <View style={styles.leagueActionRow}>
+            <TextButton
+              label="Connect"
+              onPress={() => {
+                router.push('/(app)/connect-team');
+              }}
+              size="smallStrong"
+            />
+            {selectedLeague?.platform === 'sleeper' ? (
+              <TextButton
+                disabled={manageBusy}
+                label="Sync"
+                onPress={() => runLeagueAction('Sync')}
+                size="smallStrong"
+              />
+            ) : null}
+            {selectedLeague && selectedLeague.platform !== 'sleeper' ? (
+              <TextButton
+                disabled={manageBusy}
+                label="Edit lineup"
+                onPress={() => runLeagueAction('Edit lineup')}
+                size="smallStrong"
+              />
+            ) : null}
+            {selectedLeague && selectedLeague.platform !== 'sleeper' ? (
+              <TextButton
+                disabled={manageBusy}
+                label="Rename"
+                onPress={() => runLeagueAction('Rename')}
+                size="smallStrong"
+              />
+            ) : null}
+            {selectedLeague ? (
+              <TextButton
+                disabled={manageBusy}
+                label="Disconnect"
+                onPress={() => runLeagueAction('Disconnect')}
+                size="smallStrong"
+                tone="danger"
+              />
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
+      {showLeagueChips ? (
+        <View style={styles.switcherBlock}>
+          <LeagueSwitcher
+            leagues={leagues}
+            selectedLeagueId={selectedLeague?.league_id ?? null}
+            onSelect={setSelectedLeagueId}
+          />
+          {selectedLeague ? (
+            <Text
+              maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+              style={watchingSelected ? styles.watching : styles.notWatching}
+            >
+              {watchingSelected ? 'WATCHING' : 'NOT WATCHING'}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      <View style={styles.rosterSection}>
+        {showRoster ? (
+          <>
+            <View style={styles.rosterHeader}>
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+                STARTERS
+              </Text>
+              {selectedLeague && !watchlist ? (
+                <TextButton
+                  disabled={manageBusy}
+                  label="Manage"
+                  onPress={openManage}
+                  size="smallStrong"
+                />
+              ) : null}
+            </View>
+
+            {loadError ? (
+              <ErrorState
+                message={loadError}
+                onRetry={() => {
+                  void loadLineup(selectedLeague);
+                }}
+              />
+            ) : orderedSlots.length === 0 ? (
+              <Text style={styles.emptyCopy}>No players in this lineup yet.</Text>
+            ) : (
+              <>
+                {starterSlots.length > 0 ? (
+                  <View style={styles.rosterWell}>
+                    {starterSlots.map((slot, index) => (
+                      <PlayerRow
+                        divided={index > 0}
+                        key={slot.slot_id}
+                        mutedName={false}
+                        now={now}
+                        onToggleStar={(value) => {
+                          void toggleStar(slot, value);
+                        }}
+                        saving={savingSlotId === slot.slot_id || !lineup}
+                        slot={slot}
+                        timeZone={timeZone}
+                        weekGames={weekGames}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+                {benchSlots.length > 0 ? (
+                  <>
+                    <Text
+                      maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                      style={styles.benchEyebrow}
+                    >
+                      BENCH
+                    </Text>
+                    <View style={styles.rosterWell}>
+                      {benchSlots.map((slot, index) => (
+                        <PlayerRow
+                          divided={index > 0}
+                          key={slot.slot_id}
+                          mutedName
+                          now={now}
+                          onToggleStar={(value) => {
+                            void toggleStar(slot, value);
+                          }}
+                          saving={savingSlotId === slot.slot_id || !lineup}
+                          slot={slot}
+                          timeZone={timeZone}
+                          weekGames={weekGames}
+                        />
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+              </>
+            )}
+          </>
+        ) : null}
+
+        {showPropBets ? (
+          <BetGroup
+            empty="No bets this week."
+            onRemove={confirmRemoveBet}
+            stakes={propBets}
+            title="BETS"
+          />
+        ) : null}
+        {showPools ? (
+          <BetGroup
+            empty="No pools this week."
+            onRemove={confirmRemoveBet}
+            stakes={poolBets}
+            title="POOLS"
+          />
+        ) : null}
+
+        {!watchlist && SHOW_BETS ? (
           <View style={styles.opponentSection}>
             <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
               BETS
@@ -556,7 +720,7 @@ export default function LineupScreen() {
           </View>
         ) : null}
 
-        {opponentView === 'hidden' || !lineup?.opponent ? null : (
+        {showOpponent && opponentView !== 'hidden' && lineup?.opponent ? (
           <View style={styles.opponentSection}>
             <View style={styles.opponentHeader}>
               <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
@@ -603,7 +767,7 @@ export default function LineupScreen() {
               </View>
             )}
           </View>
-        )}
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -632,6 +796,56 @@ function opponentStarterSlot(starter: OpponentStarter): LineupSlot {
         : null,
     },
   };
+}
+
+function WatchlistHeader({ week }: { week: number | null }) {
+  return (
+    <View style={styles.headerBlock}>
+      <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.eyebrow}>
+        {week == null ? 'WEEK' : `WEEK ${week}`}
+      </Text>
+      <Text maxFontSizeMultiplier={theme.fontScaleCaps.title} style={styles.screenTitle}>
+        Watchlist
+      </Text>
+    </View>
+  );
+}
+
+function BetGroup({
+  title,
+  empty,
+  stakes,
+  onRemove,
+}: {
+  title: string;
+  empty: string;
+  stakes: ManualStake[];
+  onRemove: (stake: ManualStake) => void;
+}) {
+  return (
+    <View style={styles.opponentSection}>
+      <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+        {title}
+      </Text>
+      {stakes.length === 0 ? (
+        <Text style={styles.emptyCopy}>{empty}</Text>
+      ) : (
+        stakes.map((stake) => (
+          <View key={stake.id} style={styles.betRow}>
+            <View style={styles.playerInfo}>
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.playerName}>
+                {formatStakeLabel(stake, stakeTeams(stake))}
+              </Text>
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.playerMeta}>
+                {stakeMeta(stake)}
+              </Text>
+            </View>
+            <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
+          </View>
+        ))
+      )}
+    </View>
+  );
 }
 
 function LineupHeader({ week }: { week: number | null }) {
@@ -877,6 +1091,14 @@ const styles = StyleSheet.create({
   },
   headerBlock: {
     gap: theme.spacing.xs,
+  },
+  leagueActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.md,
+  },
+  leagueActions: {
+    gap: theme.spacing.sm,
   },
   opponentHeader: {
     alignItems: 'center',
