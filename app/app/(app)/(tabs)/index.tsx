@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ActiveLineupPicker } from '../../../components/ActiveLineupPicker';
@@ -57,6 +57,7 @@ import {
   type LeagueSummary,
   type LineupResponse,
 } from '../../../lib/leagues';
+import { flaggedCardsOpacity, liveFeedBanner } from '../../../lib/liveFeed';
 import { buildLiveBoard, countLiveGames } from '../../../lib/liveBoard';
 import { fetchMe, type MeResponse } from '../../../lib/me';
 import { betEventRequestsRefetch, readBetGameIds } from '../../../lib/homeBets';
@@ -104,6 +105,8 @@ interface HomeData {
   lineupGroups: LineupGameGroup[];
   upcomingGames: LineupGameGroup[];
   countdownMs: number;
+  /** Latest `/flags/current` `live_feed_ok`. Absent until a flags response, and when nothing is live. */
+  liveFeedOk: boolean | undefined;
 }
 
 const EMPTY_TEAM_MAP: PlayerTeamMap = new Map();
@@ -151,6 +154,7 @@ function emptyHome(partial: Partial<HomeData> & Pick<HomeData, 'hasLeagues' | 'b
     lineupGroups: [],
     upcomingGames: [],
     countdownMs: 0,
+    liveFeedOk: undefined,
     ...partial,
   };
 }
@@ -279,7 +283,13 @@ export default function HomeScreen() {
                 now: new Date(),
               })
             : prev.branch;
-          return { ...prev, flag: placed.flag, otherFlags: placed.otherFlags, branch };
+          return {
+            ...prev,
+            flag: placed.flag,
+            otherFlags: placed.otherFlags,
+            branch,
+            liveFeedOk: response.live_feed_ok,
+          };
         });
         opponentRefresh.current = adoptBetWatch(
           adoptOpponentGames(opponentRefresh.current, fields.opponentGameIds, []),
@@ -437,6 +447,7 @@ export default function HomeScreen() {
           lineupGroups,
           upcomingGames,
           countdownMs,
+          liveFeedOk: flagsResponse.live_feed_ok,
         });
       } catch (error) {
         const message =
@@ -754,7 +765,7 @@ export default function HomeScreen() {
             hero={
               homeData.branch.branch === 'state1' ? (
                 homeData.flag ? (
-                  <View style={styles.state1}>
+                  <View style={[styles.state1, { opacity: flaggedCardsOpacity(homeData.liveFeedOk) }]}>
                     <View style={styles.flareHero}>
                       <NowActiveCard
                         flag={homeData.flag}
@@ -814,6 +825,8 @@ export default function HomeScreen() {
       <ActiveLineupPicker leagues={leagues} me={me} onMeUpdated={handleMeUpdated} />
     ) : undefined;
 
+  const pausedBanner = !isLoading && !loadError ? liveFeedBanner(homeData?.liveFeedOk) : null;
+
   return (
     <HomeDashboard
       contentTopInset={insets.top + theme.spacing.lg}
@@ -831,7 +844,14 @@ export default function HomeScreen() {
       ) : loadError ? (
         <ErrorState message={loadError} onRetry={onRefresh} />
       ) : (
-        renderBody()
+        <View style={styles.state1}>
+          {pausedBanner ? (
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.liveFeedBanner}>
+              {pausedBanner}
+            </Text>
+          ) : null}
+          {renderBody()}
+        </View>
       )}
     </HomeDashboard>
   );
@@ -841,6 +861,11 @@ const styles = StyleSheet.create({
   flareHero: {
     borderRadius: theme.radii.hero,
     ...theme.effects.flareGlow,
+  },
+  liveFeedBanner: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.caption.size,
+    lineHeight: theme.type.caption.lineHeight,
   },
   state1: {
     gap: theme.spacing.lg,

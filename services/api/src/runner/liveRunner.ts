@@ -43,6 +43,11 @@ import {
   type SeededGame,
 } from './discovery.js';
 import { followGame } from './followGame.js';
+import {
+  RUNNER_HEARTBEAT_INTERVAL_MS,
+  publishRunnerHeartbeat,
+  type RunnerHeartbeatRedis,
+} from './heartbeat.js';
 import { LEADER_KEY, leaderOwner, type LeaderLockRedis } from './leaderLock.js';
 import { startLeaderLoop, type LeaderLoopHandle } from './leaderLoop.js';
 import { createBetStakeCache, runBetPass } from './betPass.js';
@@ -58,6 +63,8 @@ const DISPATCHER_TICK_MS = 500;
 
 export interface LiveRunnerDeps {
   lock: LeaderLockRedis;
+  /** `runner_heartbeat` writes. Only the leader, and only while a game is in progress. */
+  heartbeat: RunnerHeartbeatRedis;
   seen: SeenPlaySet;
   queue: FlagEventQueue;
   ceilingStore: ResumptionOpenStore;
@@ -283,8 +290,26 @@ async function runLeader(
     () => nextAiringsDelayMs(airingsCycle),
   );
 
+  const heartbeats = pollWhileLeader(
+    signal,
+    gamesAbort,
+    held,
+    async () => {
+      try {
+        await publishRunnerHeartbeat(deps.heartbeat, {
+          isLeader: true,
+          inProgressFollows: running.size,
+          now: new Date(),
+        });
+      } catch (error) {
+        console.error(`[runner] heartbeat failed: ${failureReason(error)}`);
+      }
+    },
+    RUNNER_HEARTBEAT_INTERVAL_MS,
+  );
+
   try {
-    await Promise.all([discovery, ticks, airings]);
+    await Promise.all([discovery, ticks, airings, heartbeats]);
   } finally {
     gamesAbort.abort();
     ceiling.stop();

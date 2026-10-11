@@ -278,15 +278,18 @@ interface TestApp {
   queriedTables: string[];
 }
 
-async function buildTestApp(fixtures: {
-  games: GameRow[];
-  teams: TeamRow[];
-  user: UsersFixture;
-  flagEvents?: FlagEventRow[];
-  players?: PlayerRow[];
-  leagues?: LeagueRow[];
-  stakes?: StakeRow[];
-}): Promise<TestApp> {
+async function buildTestApp(
+  fixtures: {
+    games: GameRow[];
+    teams: TeamRow[];
+    user: UsersFixture;
+    flagEvents?: FlagEventRow[];
+    players?: PlayerRow[];
+    leagues?: LeagueRow[];
+    stakes?: StakeRow[];
+  },
+  options?: { readRunnerHeartbeat?: () => Promise<string | null> },
+): Promise<TestApp> {
   const queriedTables: string[] = [];
   const lineupCache = new InMemoryLineupCache();
   await lineupCache.setNflState(
@@ -326,6 +329,9 @@ async function buildTestApp(fixtures: {
     lineupCache,
     gameStateStore,
     realtimeSubscriber: new InMemoryRealtimeBus(),
+    ...(options?.readRunnerHeartbeat
+      ? { readRunnerHeartbeat: options.readRunnerHeartbeat }
+      : {}),
   });
   await fastify.register(flagsRoutes);
 
@@ -373,6 +379,7 @@ describe('GET /flags/current', () => {
     expect(body.flags).toEqual([]);
     expect(typeof body.generated_at).toBe('string');
     expect(new Date(body.generated_at).toString()).not.toBe('Invalid Date');
+    expect(body).not.toHaveProperty('live_feed_ok');
   });
 
   it('returns an empty list when no game this week involves a stake team', async () => {
@@ -412,6 +419,7 @@ describe('GET /flags/current', () => {
     });
 
     expect(response.json().flags).toEqual([]);
+    expect(response.json()).not.toHaveProperty('live_feed_ok');
   });
 
   it('excludes games that are live but not flagged for this user', async () => {
@@ -434,6 +442,107 @@ describe('GET /flags/current', () => {
     });
 
     expect(response.json().flags).toEqual([]);
+    expect(response.json()).not.toHaveProperty('live_feed_ok');
+  });
+
+  it('omits live_feed_ok when the only game state is final', async () => {
+    app = await buildTestApp({
+      games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+      teams: [
+        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+      ],
+      user: { subscription_tier: 'free', preferences: {} },
+    });
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState('game-1', makeGameState({ status: 'final' }));
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/flags/current',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.json().flags).toEqual([]);
+    expect(response.json()).not.toHaveProperty('live_feed_ok');
+  });
+
+  it('reports live_feed_ok false when a live game is in the response and the heartbeat is missing', async () => {
+    app = await buildTestApp(
+      {
+        games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+        teams: [
+          { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+          { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        ],
+        user: { subscription_tier: 'free', preferences: {} },
+      },
+      { readRunnerHeartbeat: async () => null },
+    );
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState('game-1', makeGameState());
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/flags/current',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.json().flags).toHaveLength(1);
+    expect(response.json().live_feed_ok).toBe(false);
+  });
+
+  it('reports live_feed_ok false when the heartbeat is older than 45s', async () => {
+    const stale = new Date(Date.now() - 46_000).toISOString();
+    app = await buildTestApp(
+      {
+        games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+        teams: [
+          { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+          { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        ],
+        user: { subscription_tier: 'free', preferences: {} },
+      },
+      { readRunnerHeartbeat: async () => stale },
+    );
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState('game-1', makeGameState());
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/flags/current',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.json().live_feed_ok).toBe(false);
+  });
+
+  it('reports live_feed_ok true when the heartbeat is inside 45s', async () => {
+    app = await buildTestApp(
+      {
+        games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
+        teams: [
+          { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
+          { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        ],
+        user: { subscription_tier: 'free', preferences: {} },
+      },
+      { readRunnerHeartbeat: async () => new Date().toISOString() },
+    );
+    await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
+    await app.gameStateStore.setGameState('game-1', makeGameState());
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/flags/current',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.json().live_feed_ok).toBe(true);
   });
 
   it('recomputes fresh and returns the Section 9 shape for a flagged game', async () => {
@@ -676,6 +785,7 @@ describe('GET /flags/current', () => {
           recommended_action: 'switch_primary',
         },
       ],
+      live_feed_ok: false,
     });
     expect(app.queriedTables).not.toContain('stakes');
     expect(app.queriedTables).not.toContain('leagues');
@@ -1053,6 +1163,7 @@ describe('GET /flags/current', () => {
           recommended_action: 'switch_primary',
         },
       ],
+      live_feed_ok: false,
     });
     spy.mockRestore();
   });

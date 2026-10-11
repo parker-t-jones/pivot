@@ -27,6 +27,7 @@ import {
   type ResumptionOpenStore,
 } from '@pivot/dispatcher';
 import type { FlagEvent } from '@pivot/shared';
+import type { RunnerHeartbeatRedis } from './heartbeat.js';
 import type { LeaderLockRedis } from './leaderLock.js';
 import { espnSeenPlaysKey, type SeenPlaySet } from './seenPlays.js';
 
@@ -55,6 +56,14 @@ export function tcpRedisUrl(env: {
   UPSTASH_REDIS_TCP_URL?: string | undefined;
 }): string | undefined {
   return env.REDIS_URL ?? env.UPSTASH_REDIS_TCP_URL;
+}
+
+export function tcpRunnerHeartbeat(redis: Redis): RunnerHeartbeatRedis {
+  return {
+    async setEx(key: string, value: string, ttlSeconds: number): Promise<void> {
+      await redis.set(key, value, 'EX', ttlSeconds);
+    },
+  };
 }
 
 export function tcpLeaderLock(redis: Redis): LeaderLockRedis {

@@ -35,6 +35,11 @@ export interface OpponentFlagWire {
 export interface FlagsCurrentResponse {
   flags: CurrentFlag[];
   generated_at: string;
+  /**
+   * Present only when at least one game in the body is in progress.
+   * `false` means the runner heartbeat is missing or older than 45s.
+   */
+  live_feed_ok?: boolean;
   opponent_flags?: OpponentFlagWire[];
   opponent_game_ids?: string[];
   /** Every game with a bet stake this week. Absent when the user has none. */

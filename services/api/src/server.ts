@@ -4,6 +4,7 @@ import {
   type GameStateStore,
   type RealtimeSubscriber,
 } from '@pivot/dispatcher';
+import { Redis as UpstashRedis } from '@upstash/redis';
 import websocketPlugin from '@fastify/websocket';
 import Fastify from 'fastify';
 import {
@@ -13,6 +14,7 @@ import {
 } from 'fastify-type-provider-zod';
 import { createLineupCacheProvider, type LineupCacheProvider } from './cache/index.js';
 import type { Env } from './env.js';
+import { RUNNER_HEARTBEAT_KEY } from './runner/heartbeat.js';
 import { createTcpRedis, tcpGameState } from './runner/tcpRedis.js';
 import { registerWebCors } from './lib/cors.js';
 import { apiErrorHandler } from './lib/errors.js';
@@ -37,6 +39,27 @@ export interface BuildServerDeps {
   lineupCache?: LineupCacheProvider;
   gameStateStore?: GameStateStore;
   realtimeSubscriber?: RealtimeSubscriber;
+}
+
+/** Same Redis the runner writes. TCP when this process already has that client; otherwise Upstash REST. */
+function runnerHeartbeatReader(
+  env: Env,
+  commandRedis: { get(key: string): Promise<string | null> } | undefined,
+): () => Promise<string | null> {
+  if (commandRedis) {
+    return async () => commandRedis.get(RUNNER_HEARTBEAT_KEY);
+  }
+  if (env.CACHE_DRIVER === 'redis' && env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
+    const redis = new UpstashRedis({
+      url: env.UPSTASH_REDIS_REST_URL,
+      token: env.UPSTASH_REDIS_REST_TOKEN,
+    });
+    return async () => {
+      const value = await redis.get<string>(RUNNER_HEARTBEAT_KEY);
+      return typeof value === 'string' ? value : null;
+    };
+  }
+  return async () => null;
 }
 
 function redisConfig(env: Env) {
@@ -91,6 +114,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
     lineupCache,
     gameStateStore,
     realtimeSubscriber,
+    readRunnerHeartbeat: runnerHeartbeatReader(env, commandRedis),
   });
   await fastify.register(websocketPlugin);
 

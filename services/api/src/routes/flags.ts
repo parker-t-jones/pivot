@@ -14,6 +14,7 @@ import {
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { loadWeekBets, mergeBetRows, type BetChip, type WeekBets } from '../lib/betFlagsCurrent.js';
+import { runnerHeartbeatFresh } from '../runner/heartbeat.js';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { loadOpponentRedZone } from '../lib/opponentFlagsCurrent.js';
@@ -75,6 +76,12 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.get('/flags/current', async (request) => {
     const user = requireUser(request);
     const generatedAt = new Date().toISOString();
+    const seenStatus = new Map<string, GameState['status']>();
+    const rememberGame = async (gameId: string): Promise<GameState | null> => {
+      const state = await fastify.gameStateStore.getGameState(gameId);
+      if (state) seenStatus.set(gameId, state.status);
+      return state;
+    };
 
     const nflState = await getCurrentNflState(fastify.lineupCache);
     const { data: userRow, error: userError } = await fastify.supabase
@@ -90,7 +97,7 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         ? null
         : await loadWeekBets({
             supabase: fastify.supabase,
-            getGameState: (gameId) => fastify.gameStateStore.getGameState(gameId),
+            getGameState: rememberGame,
             userId: user.id,
             week: nflState.week,
             gameIds: indexedBetGames,
@@ -107,7 +114,7 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       }
       const opponent = await loadOpponentRedZone({
         supabase: fastify.supabase,
-        getGameState: (gameId) => fastify.gameStateStore.getGameState(gameId),
+        getGameState: rememberGame,
         userId: user.id,
         week: nflState.week,
         preferences,
@@ -135,8 +142,32 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         merged,
         merged.map((flag) => flag.game_id),
       );
-      if (!weekBets || weekBets.gameIds.length === 0) return body;
-      return { ...body, bet_game_ids: weekBets.gameIds };
+      const full =
+        !weekBets || weekBets.gameIds.length === 0
+          ? body
+          : { ...body, bet_game_ids: weekBets.gameIds };
+      return withLiveFeed(full);
+    };
+
+    const withLiveFeed = async <
+      T extends {
+        flags: { game_id: string }[];
+        opponent_flags?: { game_id: string }[];
+        opponent_game_ids?: string[];
+        bet_game_ids?: string[];
+      },
+    >(
+      body: T,
+    ): Promise<T | (T & { live_feed_ok: boolean })> => {
+      const ids = [
+        ...body.flags.map((flag) => flag.game_id),
+        ...(body.opponent_flags ?? []).map((flag) => flag.game_id),
+        ...(body.opponent_game_ids ?? []),
+        ...(body.bet_game_ids ?? []),
+      ];
+      if (!ids.some((id) => seenStatus.get(id) === 'in_progress')) return body;
+      const raw = await fastify.readRunnerHeartbeat();
+      return { ...body, live_feed_ok: runnerHeartbeatFresh(raw, Date.now()) };
     };
 
     const betOnlyRow = (gameId: string, score: number, bets: BetChip[], betsThisWeek: WeekBets) => {
@@ -230,7 +261,7 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     }[] = [];
 
     for (const game of games) {
-      const gameState = await fastify.gameStateStore.getGameState(game.id);
+      const gameState = await rememberGame(game.id);
       if (!gameState) continue;
 
       const flagState = computeFlagState(lineup, gameState);

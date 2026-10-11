@@ -22,6 +22,7 @@ import {
   tcpFlagEventQueue,
   tcpGameState,
   tcpLeaderLock,
+  tcpRunnerHeartbeat,
   tcpRateLimit,
   tcpRealtimeBus,
   tcpRedisUrl,
@@ -52,6 +53,7 @@ const supabase = createSupabaseServiceClient(env);
 const lineupCache = new TcpLineupCache(redis);
 const handle = startLiveRunner({
   lock: tcpLeaderLock(redis),
+  heartbeat: tcpRunnerHeartbeat(redis),
   seen: tcpSeenPlays(redis),
   queue: tcpFlagEventQueue(redis),
   ceilingStore: tcpResumptionOpenStore(redis),

@@ -341,6 +341,7 @@ async function main(): Promise<void> {
     tcpFlagEventQueue: (redis: RedisClient) => unknown;
     tcpGameState: (redis: RedisClient) => unknown;
     tcpLeaderLock: (redis: RedisClient) => unknown;
+    tcpRunnerHeartbeat: (redis: RedisClient) => unknown;
     tcpRateLimit: (redis: RedisClient) => RateLimitStore;
     tcpRealtimeBus: (redis: RedisClient) => RealtimeBus;
     tcpResumptionOpenStore: (redis: RedisClient) => unknown;
@@ -523,6 +524,7 @@ async function main(): Promise<void> {
 
   const handle = startLiveRunner({
     lock: tcp.tcpLeaderLock(redis),
+    heartbeat: tcp.tcpRunnerHeartbeat(redis),
     seen: tcp.tcpSeenPlays(redis),
     queue: tcp.tcpFlagEventQueue(redis),
     ceilingStore: tcp.tcpResumptionOpenStore(redis),
