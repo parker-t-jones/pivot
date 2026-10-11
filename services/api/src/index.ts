@@ -1,9 +1,11 @@
 import { env } from './env.js';
 import { loadFeatureBets } from './lib/features.js';
+import { warnIfWebPushDisabled } from './lib/vapidConfig.js';
 import { memoryCacheRefusal, productionRedisRefusal } from './runner/redisGuard.js';
 import { buildServer } from './server.js';
 
 loadFeatureBets(env.FEATURE_BETS);
+warnIfWebPushDisabled(env);
 
 const memoryBlocked = memoryCacheRefusal({
   cacheDriver: env.CACHE_DRIVER,

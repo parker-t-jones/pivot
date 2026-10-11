@@ -3,6 +3,7 @@ import { createPushNotifier, createWebPushSender } from '@pivot/dispatcher';
 import { espnClient } from '@pivot/ingestion';
 import { TcpLineupCache } from './cache/tcp.js';
 import { env } from './env.js';
+import { warnIfWebPushDisabled } from './lib/vapidConfig.js';
 import { createSupabaseServiceClient } from './lib/supabase.js';
 import { leaderOwner } from './runner/leaderLock.js';
 import { startLiveRunner } from './runner/liveRunner.js';
@@ -30,6 +31,8 @@ import {
   tcpResumptionOpenStore,
   tcpSeenPlays,
 } from './runner/tcpRedis.js';
+
+warnIfWebPushDisabled(env);
 
 const redisUrls = [env.REDIS_URL, env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_TCP_URL];
 const blocked = guardRunnerStart({
