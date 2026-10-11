@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 
 import { AppTabBar } from '../../../components/AppTabBar';
-import { SHOW_BETS } from '../../../lib/featureFlags';
+import { useFeature } from '../../../lib/useFeature';
 import { lineupScreenMode } from '../../../lib/watchlistFilter';
 
 /**
@@ -11,12 +11,13 @@ import { lineupScreenMode } from '../../../lib/watchlistFilter';
  * Lineup/Settings flank it as plain text. See `AppTabBar`'s docstring for the active-state rules.
  */
 export default function TabsLayout() {
+  const betsOn = useFeature('bets');
   return (
     <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <AppTabBar {...props} />}>
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen
         name="lineup"
-        options={{ title: lineupScreenMode(SHOW_BETS) === 'watchlist' ? 'Watchlist' : 'Lineup' }}
+        options={{ title: lineupScreenMode(betsOn) === 'watchlist' ? 'Watchlist' : 'Lineup' }}
       />
       <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
     </Tabs>

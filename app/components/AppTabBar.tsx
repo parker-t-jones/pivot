@@ -2,9 +2,9 @@ import { Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { SHOW_BETS } from '../lib/featureFlags';
 import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
+import { useFeature } from '../lib/useFeature';
 import { lineupScreenMode } from '../lib/watchlistFilter';
 
 /**
@@ -23,6 +23,7 @@ type AppTabBarProps =
  * default tab bar would. Selected state is amber tint; unselected is gray, same as the label.
  */
 export function AppTabBar({ state, navigation, insets }: AppTabBarProps) {
+  const betsOn = useFeature('bets');
   const routesByName = new Map(state.routes.map((route, index) => [route.name, { route, index }]));
 
   const isFocused = (name: string) => routesByName.get(name)?.index === state.index;
@@ -44,7 +45,7 @@ export function AppTabBar({ state, navigation, insets }: AppTabBarProps) {
     <View style={[styles.bar, { paddingBottom: insets.bottom || theme.spacing.sm }]}>
       <SideTab
         active={isFocused('lineup')}
-        label={lineupScreenMode(SHOW_BETS) === 'watchlist' ? 'Watchlist' : 'Lineup'}
+        label={lineupScreenMode(betsOn) === 'watchlist' ? 'Watchlist' : 'Lineup'}
         onPress={() => go('lineup')}
       />
       <SideTab active={isFocused('index')} label="Home" onPress={() => go('index')} />

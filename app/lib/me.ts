@@ -1,5 +1,6 @@
 import type { UserService } from '@pivot/shared/broadcast';
 import { apiClient } from './apiClient';
+import { noteMeFeatures } from './featureGate';
 
 export interface QuietHours {
   enabled: boolean;
@@ -23,17 +24,20 @@ export interface AppPresenceEntry {
   has_subscription: boolean;
 }
 
-/** `GET /me` response (Section 9). */
+/** `GET /me` response (Section 9). `features` is absent on an older server. */
 export interface MeResponse {
   user_id: string;
   email: string;
   subscription_tier: 'free' | 'pro';
   preferences: Preferences;
   app_presence: AppPresenceEntry[];
+  features?: { bets: boolean };
 }
 
 export async function fetchMe(): Promise<MeResponse> {
-  return await apiClient.get<MeResponse>('/me');
+  const me = await apiClient.get<MeResponse>('/me');
+  noteMeFeatures(me);
+  return me;
 }
 
 export async function patchPreferences(patch: {
@@ -43,7 +47,9 @@ export async function patchPreferences(patch: {
   watchOpponent?: boolean;
   watchedLeagueIds?: string[];
 }): Promise<MeResponse> {
-  return await apiClient.patch<MeResponse>('/me/preferences', patch);
+  const me = await apiClient.patch<MeResponse>('/me/preferences', patch);
+  noteMeFeatures(me);
+  return me;
 }
 
 export async function setAppPresence(

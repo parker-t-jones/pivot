@@ -32,7 +32,7 @@ export function watchlistSections(filter: WatchlistFilter): readonly WatchlistSe
   }
 }
 
-/** `SHOW_BETS` off keeps today's Lineup screen. On, the tab is the Watchlist. */
+/** Off keeps today's Lineup screen. On, the tab is the Watchlist. */
 export function lineupScreenMode(showBets: boolean): 'watchlist' | 'legacy' {
   return showBets ? 'watchlist' : 'legacy';
 }

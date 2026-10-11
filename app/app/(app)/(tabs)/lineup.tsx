@@ -27,7 +27,7 @@ import { WatchlistFilters } from '../../../components/WatchlistFilters';
 import { WeekCard } from '../../../components/WeekCard';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
 import { ApiRequestError } from '../../../lib/apiClient';
-import { SHOW_BETS } from '../../../lib/featureFlags';
+import { useFeature } from '../../../lib/useFeature';
 import { SHOW_STAR_TOGGLES } from '../../../lib/flags';
 import { fonts } from '../../../lib/fonts';
 import {
@@ -163,7 +163,8 @@ export default function LineupScreen() {
   const [watchedStarterTotal, setWatchedStarterTotal] = useState<number | null>(null);
   const [filter, selectFilter] = useWatchlistFilter();
   const watchOpponentSave = useRef(false);
-  const watchlist = lineupScreenMode(SHOW_BETS) === 'watchlist';
+  const betsOn = useFeature('bets');
+  const watchlist = lineupScreenMode(betsOn) === 'watchlist';
 
   const selectedLeague = useMemo(
     () => leagues.find((league) => league.league_id === selectedLeagueId) ?? leagues[0] ?? null,
@@ -189,7 +190,7 @@ export default function LineupScreen() {
     if (!league) {
       setLineup(null);
       setWeekGames(null);
-      if (!SHOW_BETS) {
+      if (!betsOn) {
         setBets([]);
         setStakesKnown(false);
       }
@@ -200,7 +201,7 @@ export default function LineupScreen() {
     try {
       const response = await fetchLineup(league.league_id);
       setLineup(response);
-      if (SHOW_BETS) {
+      if (betsOn) {
         try {
           const stakes = await fetchStakes(response.week);
           setBets(stakes.stakes);
@@ -221,7 +222,7 @@ export default function LineupScreen() {
       setWeekGames(null);
       setLoadError(error instanceof ApiRequestError ? error.message : 'Could not load lineup.');
     }
-  }, []);
+  }, [betsOn]);
 
   useEffect(() => {
     void fetchMe()
@@ -237,7 +238,7 @@ export default function LineupScreen() {
   }, [loadLineup, selectedLeague, leaguesRevision]);
 
   useEffect(() => {
-    if (!SHOW_BETS) return;
+    if (!betsOn) return;
     let cancelled = false;
     void fetchNflState()
       .then((state) => {
@@ -249,10 +250,10 @@ export default function LineupScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [betsOn]);
 
   useEffect(() => {
-    if (!SHOW_BETS || me == null) return;
+    if (!betsOn || me == null) return;
     let cancelled = false;
     const watched = me.preferences.watchedLeagueIds;
     const targets =
@@ -279,11 +280,11 @@ export default function LineupScreen() {
     return () => {
       cancelled = true;
     };
-  }, [leagues, me]);
+  }, [betsOn, leagues, me]);
 
   useFocusEffect(
     useCallback(() => {
-      if (!SHOW_BETS) return;
+      if (!betsOn) return;
       const week = lineup?.week ?? nflWeek;
       if (week == null) return;
       void fetchStakes(week)
@@ -298,7 +299,7 @@ export default function LineupScreen() {
       void fetchGamesLive()
         .then((response) => setLiveGames(response.games))
         .catch(() => setLiveGames([]));
-    }, [lineup?.week, nflWeek]),
+    }, [betsOn, lineup?.week, nflWeek]),
   );
 
   const confirmRemoveBet = (stake: ManualStake) => {
@@ -744,7 +745,7 @@ export default function LineupScreen() {
           />
         ) : null}
 
-        {!watchlist && SHOW_BETS ? (
+        {!watchlist && betsOn ? (
           <View style={styles.opponentSection}>
             <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
               BETS
