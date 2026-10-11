@@ -5,6 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { apiClient } from './apiClient';
 import { getOrCreateDeviceId } from './deviceId';
+import { pushTokenRequestBody } from './pushTokenRequest';
 
 interface PushTokenResponse {
   expo_push_token: string | null;
@@ -25,9 +26,9 @@ function resolveEasProjectId(): string | null {
 }
 
 /**
- * Registers this device's current Expo push token with the server (`POST /me/push-token`),
- * unless it's unchanged from the last token this device successfully registered for this user
- * (Sprint 6 Phase 5 decision #3 — a SecureStore cache keyed by `user_id` keeps cold starts quiet).
+ * Registers this device's current Expo push token with the server (`POST /me/push-token`)
+ * on every launch that can produce one. The cache is updated after a successful post and
+ * is not a reason to skip: an upgraded install still has a null `expo_push_device_id`.
  *
  * Callers are responsible for permission already being granted (`PushPermissionContext` requests
  * it, gated on user intent per PLAN.md Section 10 step 5) — this function does not request it, and
@@ -56,16 +57,16 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
   const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
 
   const deviceId = await getOrCreateDeviceId();
-  const cacheKey = pushTokenCacheKey(userId);
-  const cacheValue = `${token}\n${deviceId}`;
-  const cachedToken = await SecureStore.getItemAsync(cacheKey);
-  if (cachedToken === cacheValue) {
-    return; // Unchanged since our last successful registration — skip the round trip.
-  }
-
+  // Every launch. A cache hit on the token string must not skip: the current
+  // TestFlight install has a null expo_push_device_id, and the foreground socket
+  // only suppresses the push once that column matches this device.
   console.log(`[push] registering token via POST /me/push-token for user ${userId}`);
-  await apiClient.post<PushTokenResponse>('/me/push-token', { token, platform: 'ios', deviceId });
-  await SecureStore.setItemAsync(cacheKey, cacheValue);
+  await apiClient.post<PushTokenResponse>('/me/push-token', pushTokenRequestBody(token, deviceId));
+  try {
+    await SecureStore.setItemAsync(pushTokenCacheKey(userId), `${token}\n${deviceId}`);
+  } catch (error) {
+    console.warn('[push] caching the registered token failed — the server already has it.', error);
+  }
 }
 
 /**

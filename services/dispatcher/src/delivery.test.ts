@@ -713,6 +713,31 @@ describe('deliverFlagEvent', () => {
       expect(await gameStateStore.isDeviceActive('u1', webDevice)).toBe(true);
     });
 
+    it('suppresses the push once a new build registers the device that is foregrounded', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const userDirectory = new InMemoryUserDirectory();
+      const gameStateStore = new InMemoryGameStateStore();
+      const iosDevice = '33333333-3333-4333-8333-333333333333';
+      userDirectory.setViewingSession('u1', { primaryGameId: 'g1', primaryPriorityScore: 5 });
+      await gameStateStore.markConnectionActive(
+        {
+          userId: 'u1',
+          deviceId: iosDevice,
+          connectionId: 'phone',
+          platform: 'ios',
+          visibility: 'visible',
+        },
+        60_000,
+      );
+      const deps = buildDeps({ pushNotifier, userDirectory, gameStateStore });
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+      expect(pushNotifier.calls).toHaveLength(1);
+
+      await deliverFlagEvent(deps, makeEvent({ id: 'evt-2' }), { ...pushUser, expoPushDeviceId: iosDevice });
+      expect(pushNotifier.calls).toHaveLength(1);
+    });
+
     it('does not count a hidden web tab as active', async () => {
       const gameStateStore = new InMemoryGameStateStore();
       const webDevice = '22222222-2222-4222-8222-222222222222';
