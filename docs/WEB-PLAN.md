@@ -259,8 +259,11 @@ SPA fallback: `app/public/_redirects` contains `/* /index.html 200`. Expo copies
 | `EXPO_PUBLIC_API_BASE_URL` | `https://pivot-sports-api.fly.dev` (https, no trailing slash, no `/v1`) |
 | `EXPO_PUBLIC_SUPABASE_URL` | `https://taucqrptzfyzhfzpinzo.supabase.co` |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | The publishable anon key already stored in EAS production under this name. Not the service-role key. Not the value in `app/.env`. |
+| `EXPO_PUBLIC_VAPID_PUBLIC_KEY` | The public VAPID key, a Pages build variable. The browser uses it for `PushManager.subscribe`. |
 
-Do not set `EXPO_PUBLIC_REVENUECAT_API_KEY` on the web build. `WEB_DEV_ORIGIN` is an API env var on Fly, not an `EXPO_PUBLIC_` var. Leave it empty in production. The production web origin is allowed without it.
+Do not set `EXPO_PUBLIC_REVENUECAT_API_KEY` on the web build.
+
+Web Push signing keys are Fly secrets on the API, not Pages variables. Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT=mailto:support@pivot-sports.app`. The private key never goes in the web bundle. In-tab alerts use the API's existing `/v1/realtime` socket. They do not use Supabase Realtime. `web_push_subscriptions` is service_role-only, same as the grant lock in `20261010195000` and `20261010201000`. `WEB_DEV_ORIGIN` is an API env var on Fly, not an `EXPO_PUBLIC_` var. Leave it empty in production. The production web origin is allowed without it.
 
 CORS on `https://pivot-sports-api.fly.dev` is still the old process until that API deploy. The Pages build will not fix preflight by itself.
 
@@ -311,9 +314,11 @@ No iOS behavior change. On web, do not call `Linking.canOpenURL` and do not use 
 
 Config only. `app/public/_redirects` is the SPA fallback, and Expo copies it into `app/dist`. Build command, output directory, and `EXPO_PUBLIC_*` production values are under "Deploy." The Pages project itself is created by hand.
 
-### Later — in-tab alerts and Web Push
+### W6 — Web Push and in-tab alerts
 
-Not started. Same event types and the same timing as the table above. No dispatcher delay. Web Push is a second sender beside Expo and must not write `users.expo_push_token`. A hidden web tab stays connected and does not count as active, so a later Web Push can reach it.
+Same event types and the same timing as the table above. No dispatcher delay. Web Push is a second sender beside Expo and must not write `users.expo_push_token`. A hidden web tab stays connected and does not count as active, so a Web Push can reach it.
+
+In-tab alerts use the API's existing socket (`GET /v1/realtime`). They do not use Supabase Realtime. The schema stays service_role-only (`20261010195000`, `20261010201000`). `web_push_subscriptions` grants nothing to `anon` or `authenticated`. Deploy Tue–Thu only, never Fri–Mon, and only after W5 is live in production.
 
 ### W5 — presence per connection
 

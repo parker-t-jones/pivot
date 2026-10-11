@@ -45,6 +45,19 @@ interface AppPresenceRow {
 class FakeSupabase {
   readonly users: Map<string, UserRow>;
   readonly appPresence: Map<string, AppPresenceRow[]>;
+  readonly webPush = new Map<
+    string,
+    {
+      user_id: string;
+      device_id: string;
+      endpoint: string;
+      p256dh: string;
+      auth: string;
+      user_agent: string | null;
+      created_at: string;
+      last_success_at: string | null;
+    }
+  >();
   readonly deletedAuthUserIds: string[] = [];
   authDeleteError: { message: string } | null = null;
 
@@ -129,6 +142,58 @@ class FakeSupabase {
             ]);
           }
           return Promise.resolve({ data: null, error: null });
+        },
+      };
+    }
+    if (table === 'web_push_subscriptions') {
+      return {
+        upsert: (
+          row: {
+            user_id: string;
+            device_id: string;
+            endpoint: string;
+            p256dh: string;
+            auth: string;
+            user_agent: string | null;
+          },
+        ) => {
+          const existing = this.webPush.get(row.endpoint);
+          this.webPush.set(row.endpoint, {
+            user_id: row.user_id,
+            device_id: row.device_id,
+            endpoint: row.endpoint,
+            p256dh: row.p256dh,
+            auth: row.auth,
+            user_agent: row.user_agent,
+            created_at: existing?.created_at ?? '2026-10-11T00:00:00.000Z',
+            last_success_at: existing?.last_success_at ?? null,
+          });
+          return Promise.resolve({ error: null });
+        },
+        delete: () => {
+          const filters: Array<[string, string]> = [];
+          const builder = {
+            eq: (column: string, value: string) => {
+              filters.push([column, value]);
+              return builder;
+            },
+            then: (
+              resolve: (value: { error: null }) => void,
+              reject?: (reason: unknown) => void,
+            ) => {
+              try {
+                const endpoint = filters.find(([column]) => column === 'endpoint')?.[1];
+                const userId = filters.find(([column]) => column === 'user_id')?.[1];
+                if (endpoint && userId && this.webPush.get(endpoint)?.user_id === userId) {
+                  this.webPush.delete(endpoint);
+                }
+                resolve({ error: null });
+              } catch (error) {
+                reject?.(error);
+              }
+            },
+          };
+          return builder;
         },
       };
     }
@@ -751,5 +816,124 @@ describe('DELETE /me', () => {
     app = await buildTestApp();
     const response = await app.fastify.inject({ method: 'DELETE', url: '/me' });
     expect(response.statusCode).toBe(401);
+  });
+});
+
+const WEB_DEVICE = '22222222-2222-4222-8222-222222222222';
+const WEB_ENDPOINT = 'https://push.example.test/subscriptions/1';
+
+describe('POST /me/web-push-subscription', () => {
+  let app: TestApp;
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  it('upserts by endpoint and keeps the Expo token untouched', async () => {
+    app = await buildTestApp({ 'user-1': 'ExponentPushToken[keep]' });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    const payload = {
+      deviceId: WEB_DEVICE,
+      endpoint: WEB_ENDPOINT,
+      p256dh: 'p256',
+      auth: 'authkey',
+    };
+
+    const created = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/web-push-subscription',
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json()).toEqual({ endpoint: WEB_ENDPOINT, device_id: WEB_DEVICE });
+    expect(app.supabase.users.get('user-1')?.expo_push_token).toBe('ExponentPushToken[keep]');
+
+    const moved = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/web-push-subscription',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { ...payload, deviceId: '33333333-3333-4333-8333-333333333333', p256dh: 'next' },
+    });
+    expect(moved.statusCode).toBe(200);
+    expect(app.supabase.webPush.size).toBe(1);
+    expect(app.supabase.webPush.get(WEB_ENDPOINT)?.device_id).toBe(
+      '33333333-3333-4333-8333-333333333333',
+    );
+    expect(app.supabase.webPush.get(WEB_ENDPOINT)?.p256dh).toBe('next');
+  });
+
+  it('rejects a non-https endpoint and a missing session', async () => {
+    app = await buildTestApp();
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const httpEndpoint = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/web-push-subscription',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        deviceId: WEB_DEVICE,
+        endpoint: 'http://push.example.test/subscriptions/1',
+        p256dh: 'p256',
+        auth: 'authkey',
+      },
+    });
+    expect(httpEndpoint.statusCode).toBe(400);
+
+    const anonymous = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/web-push-subscription',
+      payload: {
+        deviceId: WEB_DEVICE,
+        endpoint: WEB_ENDPOINT,
+        p256dh: 'p256',
+        auth: 'authkey',
+      },
+    });
+    expect(anonymous.statusCode).toBe(401);
+  });
+});
+
+describe('DELETE /me/web-push-subscription', () => {
+  let app: TestApp;
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  it('deletes only the caller row for that endpoint', async () => {
+    app = await buildTestApp();
+    app.supabase.webPush.set(WEB_ENDPOINT, {
+      user_id: 'user-1',
+      device_id: WEB_DEVICE,
+      endpoint: WEB_ENDPOINT,
+      p256dh: 'p256',
+      auth: 'authkey',
+      user_agent: null,
+      created_at: '2026-10-11T00:00:00.000Z',
+      last_success_at: null,
+    });
+    app.supabase.webPush.set('https://push.example.test/subscriptions/2', {
+      user_id: 'user-2',
+      device_id: WEB_DEVICE,
+      endpoint: 'https://push.example.test/subscriptions/2',
+      p256dh: 'p256',
+      auth: 'authkey',
+      user_agent: null,
+      created_at: '2026-10-11T00:00:00.000Z',
+      last_success_at: null,
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'DELETE',
+      url: '/me/web-push-subscription',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { endpoint: WEB_ENDPOINT },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(app.supabase.webPush.has(WEB_ENDPOINT)).toBe(false);
+    expect(app.supabase.webPush.has('https://push.example.test/subscriptions/2')).toBe(true);
   });
 });

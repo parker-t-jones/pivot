@@ -22,6 +22,20 @@ const EXPO_PUSH_TOKEN_PATTERN = /^Expo(nent)?PushToken\[.+\]$/;
  *  doesn't support yet, so it earns its own `unsupported_platform` code past that gate. */
 const PLATFORMS = ['ios', 'android'] as const;
 
+const webPushSubscriptionBody = z.object({
+  deviceId: z.string().uuid(),
+  endpoint: z.string().url().refine((value) => value.startsWith('https://'), {
+    message: 'endpoint must be https',
+  }),
+  p256dh: z.string().min(1),
+  auth: z.string().min(1),
+  userAgent: z.string().max(512).optional(),
+});
+
+const webPushUnsubscribeBody = z.object({
+  endpoint: z.string().url(),
+});
+
 const registerPushTokenBody = z.object({
   token: z.string().min(1),
   platform: z.enum(PLATFORMS),
@@ -316,6 +330,53 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
     return pushTokenResponse(data);
   });
+
+  /**
+   * Upsert one browser Push subscription. The endpoint is unique across users: a browser
+   * that signs into a different account moves the row. This does not write `expo_push_token`.
+   */
+  fastify.post(
+    '/me/web-push-subscription',
+    { schema: { body: webPushSubscriptionBody } },
+    async (request) => {
+      const user = requireUser(request);
+      const { deviceId, endpoint, p256dh, auth, userAgent } = request.body;
+      const headerAgent = request.headers['user-agent'];
+      const agent =
+        userAgent ?? (typeof headerAgent === 'string' ? headerAgent.slice(0, 512) : null);
+
+      const { error } = await fastify.supabase.from('web_push_subscriptions').upsert(
+        {
+          user_id: user.id,
+          device_id: deviceId,
+          endpoint,
+          p256dh,
+          auth,
+          user_agent: agent,
+        },
+        { onConflict: 'endpoint' },
+      );
+      if (error) throw error;
+
+      return { endpoint, device_id: deviceId };
+    },
+  );
+
+  /** Drop this browser's subscription only. A web sign-out must not clear the iOS token. */
+  fastify.delete(
+    '/me/web-push-subscription',
+    { schema: { body: webPushUnsubscribeBody } },
+    async (request, reply) => {
+      const user = requireUser(request);
+      const { error } = await fastify.supabase
+        .from('web_push_subscriptions')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('endpoint', request.body.endpoint);
+      if (error) throw error;
+      return reply.status(204).send();
+    },
+  );
 };
 
 export default meRoutes;
