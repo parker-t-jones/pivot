@@ -2,12 +2,12 @@
 export const FREE_BET_ALLOWANCE = 3;
 
 export interface WeekCardInputs {
-  /** Starters this week across watched leagues. Zero when the user has no leagues. */
-  starterCount: number;
+  /** Starters this week across watched leagues. Zero when the user has no leagues. `null` when the request failed. */
+  starterCount: number | null;
   watchOpponent: boolean;
-  /** Non-survivor bets this week. */
-  betCount: number;
-  survivorCount: number;
+  /** Non-survivor bets this week. `null` when the request failed. */
+  betCount: number | null;
+  survivorCount: number | null;
   /** `subscription_tier === 'pro'`. */
   isPro: boolean;
 }
@@ -17,6 +17,8 @@ export interface WeekCardCell {
   value: string;
   /** Free "N of 3 free" uses `accent`. Everything else stays primary. */
   accent: boolean;
+  /** Failed request. The value is an em dash in the muted color, never 0. */
+  muted: boolean;
 }
 
 export interface WeekCardModel {
@@ -26,19 +28,40 @@ export interface WeekCardModel {
   pools: WeekCardCell;
 }
 
+const UNKNOWN = '\u2014';
+
+function countValue(
+  count: number | null,
+  format: (count: number) => { value: string; accent: boolean },
+): Pick<WeekCardCell, 'value' | 'accent' | 'muted'> {
+  if (count == null) return { value: UNKNOWN, accent: false, muted: true };
+  return { ...format(count), muted: false };
+}
+
 export function weekCardModel(inputs: WeekCardInputs): WeekCardModel {
-  const betsValue = inputs.isPro
-    ? String(inputs.betCount)
-    : `${inputs.betCount} of ${FREE_BET_ALLOWANCE} free`;
   return {
-    fantasy: { label: 'Fantasy', value: String(inputs.starterCount), accent: false },
+    fantasy: {
+      label: 'Fantasy',
+      ...countValue(inputs.starterCount, (count) => ({ value: String(count), accent: false })),
+    },
     opponent: {
       label: 'Opponent',
       value: inputs.watchOpponent ? 'Tracking' : 'Off',
       accent: false,
+      muted: false,
     },
-    bets: { label: 'Bets & props', value: betsValue, accent: !inputs.isPro },
-    pools: { label: 'Pools', value: String(inputs.survivorCount), accent: false },
+    bets: {
+      label: 'Bets & props',
+      ...countValue(inputs.betCount, (count) =>
+        inputs.isPro
+          ? { value: String(count), accent: false }
+          : { value: `${count} of ${FREE_BET_ALLOWANCE} free`, accent: true },
+      ),
+    },
+    pools: {
+      label: 'Pools',
+      ...countValue(inputs.survivorCount, (count) => ({ value: String(count), accent: false })),
+    },
   };
 }
 

@@ -49,7 +49,14 @@ export function PrimaryButton({
       {loading ? (
         <ActivityIndicator color={theme.colors.onAccent} />
       ) : (
-        <Text style={[styles.label, labelStyle]}>{label}</Text>
+        <Text
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+          numberOfLines={2}
+          style={[styles.label, labelStyle]}
+        >
+          {label}
+        </Text>
       )}
     </Pressable>
   );
@@ -69,6 +76,8 @@ const styles = StyleSheet.create({
     color: theme.colors.onAccent,
     fontSize: theme.type.button.size,
     fontWeight: theme.type.button.weight,
+    textAlign: 'center',
+    width: '100%',
   },
   pressed: {
     backgroundColor: theme.colors.accentPressed,

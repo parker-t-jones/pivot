@@ -44,7 +44,7 @@ function Cell({ cell }: { cell: WeekCardModel['fantasy'] }) {
       <Text
         maxFontSizeMultiplier={theme.fontScaleCaps.dense}
         numberOfLines={2}
-        style={[styles.value, cell.accent && styles.valueAccent]}
+        style={[styles.value, cell.accent && styles.valueAccent, cell.muted && styles.valueMuted]}
       >
         {cell.value}
       </Text>
@@ -89,5 +89,8 @@ const styles = StyleSheet.create({
   },
   valueAccent: {
     color: theme.colors.accent,
+  },
+  valueMuted: {
+    color: theme.colors.textTertiary,
   },
 });

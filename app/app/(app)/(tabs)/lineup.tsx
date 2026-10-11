@@ -136,8 +136,10 @@ export default function LineupScreen() {
   /** Optimistic `watchOpponent` while a preferences PATCH is in flight. */
   const [watchOpponentPending, setWatchOpponentPending] = useState<boolean | null>(null);
   const [bets, setBets] = useState<ManualStake[]>([]);
+  /** False until this week's stakes load. A failed request stays false so the week card shows "—", not 0. */
+  const [stakesKnown, setStakesKnown] = useState(false);
   const [nflWeek, setNflWeek] = useState<number | null>(null);
-  const [watchedStarterTotal, setWatchedStarterTotal] = useState(0);
+  const [watchedStarterTotal, setWatchedStarterTotal] = useState<number | null>(null);
   const [filter, selectFilter] = useWatchlistFilter();
   const watchOpponentSave = useRef(false);
   const watchlist = lineupScreenMode(SHOW_BETS) === 'watchlist';
@@ -166,7 +168,10 @@ export default function LineupScreen() {
     if (!league) {
       setLineup(null);
       setWeekGames(null);
-      if (!SHOW_BETS) setBets([]);
+      if (!SHOW_BETS) {
+        setBets([]);
+        setStakesKnown(false);
+      }
       setLoadError(null);
       return;
     }
@@ -178,8 +183,10 @@ export default function LineupScreen() {
         try {
           const stakes = await fetchStakes(response.week);
           setBets(stakes.stakes);
+          setStakesKnown(true);
         } catch {
           setBets([]);
+          setStakesKnown(false);
         }
       }
       try {
@@ -234,6 +241,10 @@ export default function LineupScreen() {
     void fetchAllLineups(targets)
       .then((rows) => {
         if (cancelled) return;
+        if (targets.length > 0 && rows.length === 0) {
+          setWatchedStarterTotal(null);
+          return;
+        }
         setWatchedStarterTotal(
           watchedStarterCount(
             rows.map((row) => ({ leagueId: row.league_id, slots: row.slots })),
@@ -242,7 +253,7 @@ export default function LineupScreen() {
         );
       })
       .catch(() => {
-        if (!cancelled) setWatchedStarterTotal(0);
+        if (!cancelled) setWatchedStarterTotal(null);
       });
     return () => {
       cancelled = true;
@@ -255,8 +266,14 @@ export default function LineupScreen() {
       const week = lineup?.week ?? nflWeek;
       if (week == null) return;
       void fetchStakes(week)
-        .then((response) => setBets(response.stakes))
-        .catch(() => setBets([]));
+        .then((response) => {
+          setBets(response.stakes);
+          setStakesKnown(true);
+        })
+        .catch(() => {
+          setBets([]);
+          setStakesKnown(false);
+        });
     }, [lineup?.week, nflWeek]),
   );
 
@@ -362,8 +379,8 @@ export default function LineupScreen() {
   const weekCard = weekCardModel({
     starterCount: watchedStarterTotal,
     watchOpponent,
-    betCount: propBets.length,
-    survivorCount: poolBets.length,
+    betCount: stakesKnown ? propBets.length : null,
+    survivorCount: stakesKnown ? poolBets.length : null,
     isPro: me?.subscription_tier === 'pro',
   });
   const headerWeek = watchlist ? (lineup?.week ?? nflWeek) : (lineup?.week ?? null);

@@ -16,6 +16,7 @@ describe('weekCardModel', () => {
       label: 'Bets & props',
       value: '0 of 3 free',
       accent: true,
+      muted: false,
     });
   });
 
@@ -32,6 +33,7 @@ describe('weekCardModel', () => {
       label: 'Bets & props',
       value: '4',
       accent: false,
+      muted: false,
     });
   });
 
@@ -46,6 +48,7 @@ describe('weekCardModel', () => {
       label: 'Fantasy',
       value: '0',
       accent: false,
+      muted: false,
     });
   });
 
@@ -66,5 +69,41 @@ describe('weekCardModel', () => {
     ];
     expect(watchedStarterCount(lineups, ['watched'])).toBe(2);
     expect(watchedStarterCount(lineups, [])).toBe(3);
+  });
+
+  it('renders an em dash for a failed fantasy count and leaves the other cells', () => {
+    const model = weekCardModel({ ...free, starterCount: null });
+    expect(model.fantasy).toEqual({
+      label: 'Fantasy',
+      value: '\u2014',
+      accent: false,
+      muted: true,
+    });
+    expect(model.opponent.value).toBe('Off');
+    expect(model.bets.value).toBe('0 of 3 free');
+    expect(model.pools.value).toBe('1');
+  });
+
+  it('renders an em dash for a failed bet count and does not say of 3 free', () => {
+    const model = weekCardModel({ ...free, betCount: null, isPro: false });
+    expect(model.bets).toEqual({
+      label: 'Bets & props',
+      value: '\u2014',
+      accent: false,
+      muted: true,
+    });
+    expect(model.bets.value).not.toContain('free');
+    expect(model.fantasy.value).toBe('9');
+    expect(model.opponent.value).toBe('Off');
+    expect(model.pools.value).toBe('1');
+  });
+
+  it('renders an em dash for a failed pool count', () => {
+    expect(weekCardModel({ ...free, survivorCount: null }).pools).toEqual({
+      label: 'Pools',
+      value: '\u2014',
+      accent: false,
+      muted: true,
+    });
   });
 });
