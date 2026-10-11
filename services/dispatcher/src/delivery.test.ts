@@ -1166,4 +1166,131 @@ describe('web push beside Expo', () => {
     expect(rateLimitStore.entriesFor('u1')).toHaveLength(1);
     expect(subscriptions.rows.get('https://push.example.test/1')?.lastSuccessAt).toBe(1_700_000_061_500);
   });
+
+  function oneWebSub(): InMemoryWebPushSubscriptionStore {
+    return new InMemoryWebPushSubscriptionStore([
+      {
+        userId: 'u1',
+        endpoint: 'https://push.example.test/1',
+        deviceId: WEB_DEVICE,
+        p256dh: 'p256',
+        auth: 'authkey',
+      },
+    ]);
+  }
+
+  it('still sends the web push when Expo throws', async () => {
+    const pushNotifier = new CapturingPushNotifier();
+    pushNotifier.sendPush = async () => {
+      throw new Error('network down');
+    };
+    const web = new CapturingWebPushSender();
+    const persistence = new InMemoryFlagEventPersistence();
+    const deps = buildDeps({
+      pushNotifier,
+      persistence,
+      webPush: { sender: web, subscriptions: oneWebSub() },
+    });
+
+    await expect(deliverFlagEvent(deps, makeEvent(), legacyUser)).resolves.toBe('inserted');
+
+    expect(web.calls).toHaveLength(1);
+    expect(web.calls[0]?.title).toBeTruthy();
+    const rowId = persistence.records[0]?.id ?? '';
+    expect(persistence.pushOutcome(rowId)?.status).toBe('pending');
+    expect(persistence.pushOutcome(rowId)?.lastError).toBe('network down');
+  });
+
+  it('sends the web push while the Expo send is still pending', async () => {
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pushNotifier = new CapturingPushNotifier();
+    pushNotifier.sendPush = async (payload) => {
+      pushNotifier.calls.push(payload);
+      await gate;
+      return { success: true };
+    };
+    const web = new CapturingWebPushSender();
+    const deps = buildDeps({
+      pushNotifier,
+      webPush: { sender: web, subscriptions: oneWebSub() },
+    });
+
+    const pending = deliverFlagEvent(deps, makeEvent(), namedUser);
+    await vi.waitFor(() => expect(web.calls).toHaveLength(1));
+    expect(pushNotifier.calls).toHaveLength(1);
+    expect(web.calls[0]?.data).toEqual(pushNotifier.calls[0]?.data);
+    release();
+    await pending;
+  });
+
+  it('leaves the Expo payload and decision log unchanged when web fan-out throws', async () => {
+    async function expoSide(webThrows: boolean) {
+      const pushNotifier = new CapturingPushNotifier();
+      const persistence = new InMemoryFlagEventPersistence();
+      const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const subscriptions = oneWebSub();
+      if (webThrows) {
+        subscriptions.listForUser = async () => {
+          throw new Error('web down');
+        };
+      }
+      const deps = buildDeps({
+        pushNotifier,
+        persistence,
+        ...(webThrows
+          ? { webPush: { sender: new CapturingWebPushSender(), subscriptions } }
+          : {}),
+      });
+      await deliverFlagEvent(deps, makeEvent(), legacyUser);
+      const decisionLogs = logs.mock.calls.map((call) => String(call[0]));
+      const expoErrors = errors.mock.calls
+        .map((call) => String(call[0]))
+        .filter((line) => line.startsWith('[push]'));
+      logs.mockRestore();
+      errors.mockRestore();
+      const rowId = persistence.records[0]?.id ?? '';
+      return {
+        push: comparablePush(pushNotifier.calls[0]),
+        status: persistence.pushOutcome(rowId)?.status,
+        decisionLogs,
+        expoErrors,
+      };
+    }
+
+    const plain = await expoSide(false);
+    const thrown = await expoSide(true);
+    expect(thrown.push).toEqual(plain.push);
+    expect(thrown.status).toBe(plain.status);
+    expect(thrown.decisionLogs).toEqual(plain.decisionLogs);
+    expect(thrown.expoErrors).toEqual(plain.expoErrors);
+  });
+
+  it('leaves the Expo result unchanged when one web send throws', async () => {
+    const pushNotifier = new CapturingPushNotifier();
+    const web = new CapturingWebPushSender();
+    web.send = async () => {
+      throw new Error('push service down');
+    };
+    const persistence = new InMemoryFlagEventPersistence();
+    const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const deps = buildDeps({
+      pushNotifier,
+      persistence,
+      webPush: { sender: web, subscriptions: oneWebSub() },
+    });
+
+    await expect(deliverFlagEvent(deps, makeEvent(), namedUser)).resolves.toBe('inserted');
+
+    const rowId = persistence.records[0]?.id ?? '';
+    expect(persistence.pushOutcome(rowId)?.status).toBe('sent');
+    expect(comparablePush(pushNotifier.calls[0])).toMatchObject({ token: EXPO_TOKEN });
+    expect(logs.mock.calls.map((call) => String(call[0]))).toContain(
+      '[dispatcher] push decision user=u1 game=g1 flag=evt-1 result=sent anchor_play=- play_wallclock=- seen_at=- enqueued_at=- sent_at=2023-11-14T22:14:21.500Z post_lag_ms=- send_lag_ms=-',
+    );
+    logs.mockRestore();
+  });
 });

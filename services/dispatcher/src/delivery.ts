@@ -345,17 +345,23 @@ export async function deliverFlagEvent(
     seenAt: event.seenAt,
     enqueuedAt: event.enqueuedAt,
   };
-  if (pushDecision !== 'sent') {
-    console.log(
-      formatPushDecisionLog({
-        userId: event.userId,
-        gameId: event.gameId,
-        flagId: event.id,
-        result: pushDecision,
-        timing,
-      }),
-    );
-  } else if (user.expoPushToken && pushCopy) {
+  // Start both sends together. A hang or rejection on one must not block or alter the other.
+  // Gating above (rate limit, mode, quiet hours, per-device decision) is unchanged.
+  const expoDelivery = (async (): Promise<void> => {
+    if (pushDecision !== 'sent') {
+      console.log(
+        formatPushDecisionLog({
+          userId: event.userId,
+          gameId: event.gameId,
+          flagId: event.id,
+          result: pushDecision,
+          timing,
+        }),
+      );
+      return;
+    }
+    if (!user.expoPushToken || !pushCopy) return;
+
     let payload: PushPayload | null = null;
     try {
       payload = {
@@ -417,9 +423,10 @@ export async function deliverFlagEvent(
         },
       });
     }
-  }
+  })();
 
-  if (deps.webPush && pushCopy) {
+  const webDelivery = (async (): Promise<void> => {
+    if (!deps.webPush || !pushCopy) return;
     try {
       await deliverWebPushes({
         sender: deps.webPush.sender,
@@ -435,9 +442,16 @@ export async function deliverFlagEvent(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error('[web-push] fan-out failed', { userId: event.userId, eventId: event.id, error: message });
+      console.error('[web-push] fan-out failed', {
+        userId: event.userId,
+        eventId: event.id,
+        error: message,
+      });
     }
-  }
+  })();
+
+  const [expoSettled] = await Promise.allSettled([expoDelivery, webDelivery]);
+  if (expoSettled.status === 'rejected') throw expoSettled.reason;
 
   return 'inserted';
 }
