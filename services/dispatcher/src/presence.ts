@@ -6,15 +6,17 @@
  *
  * A current client writes `presence:{userId}`, a sorted set whose member is
  * `{deviceId}|{connectionId}|{platform}` and whose score is the same expiry.
- * Every write prunes that key with `ZREMRANGEBYSCORE 0 now-1`, then writes, then
- * `PEXPIRE`s the key to the TTL. Lookups read only that user's key.
+ * Every write prunes that key with `ZREMRANGEBYSCORE 0 now-1` and, in that same
+ * step, `HDEL`s those connections' fields from the visibility hash, then writes,
+ * then `PEXPIRE`s the key to the TTL. Lookups read only that user's key.
  *
  * Visibility is not part of the member. It lives in the hash `presence-vis:{userId}`,
  * field `{connectionId}`, value `visible` or `hidden`. The hash is written before the
  * sorted-set member, so a crash cannot leave a second "visible" member behind. A
  * missing field counts as visible (iOS never hides). A hidden web connection does
- * not count. The hash gets the same `PEXPIRE`, and fields for pruned connections
- * are removed on the next write.
+ * not count. The hash gets the same `PEXPIRE`. Pruning a connection removes its
+ * hash field before the new member is written, so a long-lived session does not
+ * keep fields for connections that have already expired.
  */
 
 export const LEGACY_IOS_DEVICE_ID = 'legacy-ios';
@@ -87,8 +89,9 @@ function visibilityOf(
 }
 
 /**
- * Prune expired members, commit visibility, refresh this connection's score, then
- * set the key TTL. Visibility is written before the sorted-set add.
+ * Prune expired members and delete their visibility fields, then commit this
+ * connection's visibility and refresh its score. Visibility is written before the
+ * sorted-set add.
  */
 export async function writePresenceConnection(
   redis: PresenceRedis,
@@ -99,13 +102,13 @@ export async function writePresenceConnection(
   const connectionsKey = presenceKey(connection.userId);
   const visibilityKey = presenceVisibilityKey(connection.userId);
   const expired = await redis.zrangeByScore(connectionsKey, 0, now - 1);
-  await redis.zremRangeByScore(connectionsKey, 0, now - 1);
-  await redis.hset(visibilityKey, connection.connectionId, connection.visibility);
-  await redis.zadd(connectionsKey, now + ttlMs, encodeConnectionMember(connection));
   const expiredIds = expired
     .map((member) => decodeConnectionMember(member)?.connectionId)
-    .filter((id): id is string => id !== undefined && id !== connection.connectionId);
+    .filter((id): id is string => id !== undefined);
+  await redis.zremRangeByScore(connectionsKey, 0, now - 1);
   if (expiredIds.length > 0) await redis.hdel(visibilityKey, expiredIds);
+  await redis.hset(visibilityKey, connection.connectionId, connection.visibility);
+  await redis.zadd(connectionsKey, now + ttlMs, encodeConnectionMember(connection));
   await redis.pexpire(connectionsKey, ttlMs);
   await redis.pexpire(visibilityKey, ttlMs);
 }
@@ -119,17 +122,15 @@ export async function removePresenceConnection(
   const connectionsKey = presenceKey(userId);
   const visibilityKey = presenceVisibilityKey(userId);
   const expired = await redis.zrangeByScore(connectionsKey, 0, now - 1);
+  const expiredIds = expired
+    .map((member) => decodeConnectionMember(member)?.connectionId)
+    .filter((id): id is string => id !== undefined);
   await redis.zremRangeByScore(connectionsKey, 0, now - 1);
+  if (expiredIds.length > 0) await redis.hdel(visibilityKey, expiredIds);
   const live = await redis.zrangeByScore(connectionsKey, now, LIVE_MAX);
   const mine = live.filter((member) => decodeConnectionMember(member)?.connectionId === connectionId);
   if (mine.length > 0) await redis.zrem(connectionsKey, mine);
-  const dropIds = [
-    connectionId,
-    ...expired
-      .map((member) => decodeConnectionMember(member)?.connectionId)
-      .filter((id): id is string => id !== undefined),
-  ];
-  await redis.hdel(visibilityKey, dropIds);
+  await redis.hdel(visibilityKey, [connectionId]);
   const remaining = await redis.zrangeByScore(connectionsKey, now, LIVE_MAX);
   if (remaining.length === 0) {
     await redis.del([connectionsKey, visibilityKey]);

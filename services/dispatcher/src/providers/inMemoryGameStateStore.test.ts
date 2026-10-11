@@ -199,11 +199,19 @@ describe('InMemoryGameStateStore', () => {
       5_000,
     );
     vi.advanceTimersByTime(501);
+    store.takePresenceCommands();
     await store.markConnectionActive(
       { userId, deviceId: live, connectionId: 'new', platform: 'ios', visibility: 'visible' },
       5_000,
     );
 
+    const pruneCommands = store.takePresenceCommands();
+    const prunedAt = pruneCommands.findIndex((command) => command === 'zremrangebyscore presence:u1');
+    const deletedAt = pruneCommands.findIndex((command) => command === 'hdel presence-vis:u1');
+    const writtenAt = pruneCommands.findIndex((command) => command.startsWith('zadd presence:u1'));
+    expect(prunedAt).toBeGreaterThanOrEqual(0);
+    expect(deletedAt).toBeGreaterThan(prunedAt);
+    expect(writtenAt).toBeGreaterThan(deletedAt);
     expect(store.presenceMembers(userId)).toEqual([`${live}|new|ios`]);
     expect(store.presenceVisibility(userId)).toEqual({ new: 'visible' });
     expect(await store.isDeviceActive(userId, dead)).toBe(false);
