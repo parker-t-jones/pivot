@@ -10,6 +10,7 @@ import type {
   ViewingSessionSnapshot,
 } from '@pivot/dispatcher';
 import type { AiringSeedRow, GameAiringsStore, StoredAiringKey } from '@pivot/ingestion';
+import { resolvePrimaryWatch } from '../lib/primaryWatch.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import { AIRING_COLUMNS, weekGameAirings } from '../lib/watchOptions.js';
 import type { GameDirectory, StaleGame, SeededGame } from './discovery.js';
@@ -169,15 +170,47 @@ export class SupabaseUserDirectory implements UserDirectory {
   async getViewingSession(userId: string): Promise<ViewingSessionSnapshot | null> {
     const { data, error } = await this.client
       .from('viewing_sessions')
-      .select('primary_game_id, primary_priority_score')
+      .select('primary_game_id, primary_priority_score, last_updated_at')
       .eq('user_id', userId)
       .maybeSingle();
     if (error) throw new Error(`viewing session lookup failed: ${error.message}`);
     if (!data) return null;
-    return {
+    const resolved = await resolvePrimaryWatch({
+      userId,
       primaryGameId: data.primary_game_id,
       primaryPriorityScore: data.primary_priority_score,
+      setAtIso: data.last_updated_at,
+      nowMs: Date.now(),
+      gameStatus: (gameId) => this.gameStatus(gameId),
+      clear: (id) => this.clearPrimary(id),
+    });
+    return {
+      primaryGameId: resolved.primaryGameId,
+      primaryPriorityScore: resolved.primaryPriorityScore,
     };
+  }
+
+  private async gameStatus(gameId: string): Promise<string | null> {
+    const { data, error } = await this.client
+      .from('games')
+      .select('status')
+      .eq('id', gameId)
+      .maybeSingle();
+    if (error) throw new Error(`game status lookup failed: ${error.message}`);
+    return data?.status ?? null;
+  }
+
+  private async clearPrimary(userId: string): Promise<void> {
+    const { error } = await this.client
+      .from('viewing_sessions')
+      .update({
+        primary_game_id: null,
+        primary_source: null,
+        primary_priority_score: null,
+        last_updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId);
+    if (error) throw new Error(`viewing session clear failed: ${error.message}`);
   }
 }
 

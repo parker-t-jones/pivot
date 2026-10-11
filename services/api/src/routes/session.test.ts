@@ -8,7 +8,8 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { SignJWT } from 'jose';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PRIMARY_WATCH_MS } from '../lib/primaryWatch.js';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import { ApiError, toErrorBody } from '../lib/errors.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
@@ -19,11 +20,11 @@ import sessionRoutes from './session.js';
 const JWT_SECRET = 'test-secret-at-least-32-characters-long';
 const WEEK = 5;
 
-async function signToken(payload: Record<string, unknown>): Promise<string> {
+async function signToken(payload: Record<string, unknown>, expiresIn = '1h'): Promise<string> {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('1h')
+    .setExpirationTime(expiresIn)
     .sign(new TextEncoder().encode(JWT_SECRET));
 }
 
@@ -43,10 +44,20 @@ interface SessionRow {
  *  exactly the behavior this route's merge logic (start vs. set-primary vs. clear-primary) depends on. */
 class FakeSupabase {
   private readonly sessions = new Map<string, SessionRow>();
-  private readonly games: Set<string>;
+  private readonly games = new Map<string, { id: string; status: string }>();
 
   constructor(gameIds: string[] = []) {
-    this.games = new Set(gameIds);
+    for (const id of gameIds) this.games.set(id, { id, status: 'scheduled' });
+  }
+
+  setGameStatus(id: string, status: string): void {
+    const game = this.games.get(id);
+    if (!game) throw new Error(`unknown game ${id}`);
+    game.status = status;
+  }
+
+  sessionRow(userId: string): SessionRow | undefined {
+    return this.sessions.get(userId);
   }
 
   from(table: string) {
@@ -54,7 +65,7 @@ class FakeSupabase {
       return {
         select: () => ({
           eq: (_col: string, id: string) => ({
-            maybeSingle: async () => ({ data: this.games.has(id) ? { id } : null, error: null }),
+            maybeSingle: async () => ({ data: this.games.get(id) ?? null, error: null }),
           }),
         }),
       };
@@ -133,6 +144,7 @@ interface TestApp {
   fastify: ReturnType<typeof Fastify>;
   lineupCache: InMemoryLineupCache;
   gameStateStore: InMemoryGameStateStore;
+  supabase: FakeSupabase;
 }
 
 async function buildTestApp(gameIds: string[] = []): Promise<TestApp> {
@@ -142,6 +154,7 @@ async function buildTestApp(gameIds: string[] = []): Promise<TestApp> {
     300,
   );
   const gameStateStore = new InMemoryGameStateStore();
+  const supabase = new FakeSupabase(gameIds);
 
   const fastify = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
   fastify.setValidatorCompiler(validatorCompiler);
@@ -165,14 +178,14 @@ async function buildTestApp(gameIds: string[] = []): Promise<TestApp> {
     supabaseUrl: 'http://127.0.0.1:54321',
   });
   await fastify.register(servicesPlugin, {
-    supabase: new FakeSupabase(gameIds) as unknown as SupabaseServiceClient,
+    supabase: supabase as unknown as SupabaseServiceClient,
     lineupCache,
     gameStateStore,
     realtimeSubscriber: new InMemoryRealtimeBus(),
   });
   await fastify.register(sessionRoutes);
 
-  return { fastify, lineupCache, gameStateStore };
+  return { fastify, lineupCache, gameStateStore, supabase };
 }
 
 async function setLineup(app: TestApp, userId: string): Promise<void> {
@@ -190,6 +203,7 @@ describe('session routes', () => {
   let app: TestApp;
 
   afterEach(async () => {
+    vi.useRealTimers();
     await app.fastify.close();
   });
 
@@ -393,6 +407,83 @@ describe('session routes', () => {
       app = await buildTestApp();
       const response = await app.fastify.inject({ method: 'POST', url: '/session/heartbeat' });
       expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe('primary watch expiry', () => {
+    const T0 = new Date('2026-10-11T16:00:00.000Z');
+
+    async function putPrimary(token: string): Promise<void> {
+      const response = await app.fastify.inject({
+        method: 'PUT',
+        url: '/session/primary',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { game_id: GAME_1, source: 'deeplink' },
+      });
+      expect(response.statusCode).toBe(200);
+    }
+
+    it('keeps the primary on a read within 4 hours of Switch', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(T0);
+      app = await buildTestApp([GAME_1]);
+      const token = await signToken({ sub: 'user-1', email: 'a@b.com' }, '1d');
+      await putPrimary(token);
+
+      vi.setSystemTime(new Date(T0.getTime() + PRIMARY_WATCH_MS - 1000));
+      const response = await app.fastify.inject({
+        method: 'GET',
+        url: '/session',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.json().primary_game_id).toBe(GAME_1);
+    });
+
+    it('reads as none and clears the row when that game is final', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(T0);
+      app = await buildTestApp([GAME_1]);
+      const token = await signToken({ sub: 'user-1', email: 'a@b.com' }, '1d');
+      await putPrimary(token);
+      app.supabase.setGameStatus(GAME_1, 'final');
+
+      const response = await app.fastify.inject({
+        method: 'GET',
+        url: '/session',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.json().primary_game_id).toBeNull();
+      expect(response.json().primary_source).toBeNull();
+      expect(response.json().primary_priority_score).toBeNull();
+      expect(app.supabase.sessionRow('user-1')?.primary_game_id).toBeNull();
+    });
+
+    it('reads as none 4 hours and 1 second after Switch, even if the app was foregrounded', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(T0);
+      app = await buildTestApp([GAME_1]);
+      const token = await signToken({ sub: 'user-1', email: 'a@b.com' }, '1d');
+      await putPrimary(token);
+
+      vi.setSystemTime(new Date(T0.getTime() + 30 * 60 * 1000));
+      const restart = await app.fastify.inject({
+        method: 'POST',
+        url: '/session/start',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(restart.json().primary_game_id).toBe(GAME_1);
+
+      vi.setSystemTime(new Date(T0.getTime() + PRIMARY_WATCH_MS + 1000));
+      const response = await app.fastify.inject({
+        method: 'GET',
+        url: '/session',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.json().primary_game_id).toBeNull();
+      expect(app.supabase.sessionRow('user-1')?.primary_game_id).toBeNull();
     });
   });
 });

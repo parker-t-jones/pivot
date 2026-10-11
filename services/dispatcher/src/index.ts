@@ -103,6 +103,8 @@ export {
 
 export { deliverFlagEvent, type DeliveryDeps, type FlagEventEnvelope } from './delivery.js';
 
+export { decidePushDelivery } from './pushDecision.js';
+
 export {
   CapturingPushNotifier,
   createPushNotifier,

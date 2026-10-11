@@ -5,6 +5,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
+import { resolvePrimaryWatch } from '../lib/primaryWatch.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
 
@@ -48,6 +49,71 @@ function sessionResponse(row: ViewingSessionRow | null) {
   };
 }
 
+async function gameStatus(fastify: FastifyInstance, gameId: string): Promise<string | null> {
+  const { data, error } = await fastify.supabase
+    .from('games')
+    .select('status')
+    .eq('id', gameId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.status ?? null;
+}
+
+async function clearStoredPrimary(
+  fastify: FastifyInstance,
+  userId: string,
+): Promise<ViewingSessionRow | null> {
+  const { data, error } = await fastify.supabase
+    .from('viewing_sessions')
+    .update({
+      primary_game_id: null,
+      primary_source: null,
+      primary_priority_score: null,
+      last_updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .select(SESSION_COLUMNS)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** Reads the session and, when the Switch primary has expired, clears that row before returning. */
+async function loadSession(
+  fastify: FastifyInstance,
+  userId: string,
+): Promise<ViewingSessionRow | null> {
+  const { data, error } = await fastify.supabase
+    .from('viewing_sessions')
+    .select(SESSION_COLUMNS)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  let cleared: ViewingSessionRow | null = null;
+  const resolved = await resolvePrimaryWatch({
+    userId,
+    primaryGameId: data.primary_game_id,
+    primaryPriorityScore: data.primary_priority_score,
+    setAtIso: data.last_updated_at,
+    nowMs: Date.now(),
+    gameStatus: (gameId) => gameStatus(fastify, gameId),
+    clear: async (id) => {
+      cleared = await clearStoredPrimary(fastify, id);
+    },
+  });
+  if (!resolved.expired) return data;
+  return (
+    cleared ?? {
+      ...data,
+      primary_game_id: null,
+      primary_source: null,
+      primary_priority_score: null,
+    }
+  );
+}
+
 /** Fresh `computeFlagState` priority for the game being set as primary (same discipline as
  *  `/flags/current` — never trust stale data). Missing lineup or no live `GameState` yet (game
  *  hasn't kicked off) both mean "nothing to flag," so `0` rather than an error. */
@@ -71,27 +137,31 @@ const sessionRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
   fastify.get('/session', async (request) => {
     const user = requireUser(request);
-    const { data, error } = await fastify.supabase
-      .from('viewing_sessions')
-      .select(SESSION_COLUMNS)
-      .eq('user_id', user.id)
-      .maybeSingle();
-    if (error) throw error;
-    return sessionResponse(data);
+    return sessionResponse(await loadSession(fastify, user.id));
   });
 
   /**
    * "Begin session (app foreground)." One row per user (Section 7), upserted rather than reset —
-   * touches `started_at`/`last_updated_at` without clobbering an existing `primary_game_id` (e.g.
-   * the user backgrounds/foregrounds the app while AirPlay is still mirroring the same game).
+   * touches `started_at` without clobbering an existing `primary_game_id` (e.g. the user
+   * backgrounds/foregrounds the app while AirPlay is still mirroring the same game).
+   * `last_updated_at` stays at the Switch set time while a primary survives, so a foreground does
+   * not extend the 4-hour watch. An already-expired primary is cleared first.
    */
   fastify.post('/session/start', async (request) => {
     const user = requireUser(request);
+    const current = await loadSession(fastify, user.id);
     const now = new Date().toISOString();
 
     const { data, error } = await fastify.supabase
       .from('viewing_sessions')
-      .upsert({ user_id: user.id, started_at: now, last_updated_at: now }, { onConflict: 'user_id' })
+      .upsert(
+        {
+          user_id: user.id,
+          started_at: now,
+          ...(current?.primary_game_id ? {} : { last_updated_at: now }),
+        },
+        { onConflict: 'user_id' },
+      )
       .select(SESSION_COLUMNS)
       .single();
     if (error) throw error;
@@ -139,6 +209,20 @@ const sessionRoutes: FastifyPluginAsyncZod = async (fastify) => {
         .select(SESSION_COLUMNS)
         .single();
       if (error) throw error;
+
+      let cleared: ViewingSessionRow | null = null;
+      const resolved = await resolvePrimaryWatch({
+        userId: user.id,
+        primaryGameId: data.primary_game_id,
+        primaryPriorityScore: data.primary_priority_score,
+        setAtIso: data.last_updated_at,
+        nowMs: Date.now(),
+        gameStatus: (id) => gameStatus(fastify, id),
+        clear: async (id) => {
+          cleared = await clearStoredPrimary(fastify, id);
+        },
+      });
+      if (resolved.expired) return sessionResponse(cleared);
       return sessionResponse(data);
     },
   );
