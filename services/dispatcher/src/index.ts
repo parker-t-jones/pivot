@@ -103,6 +103,20 @@ export {
 
 export { deliverFlagEvent, type DeliveryDeps, type FlagEventEnvelope } from './delivery.js';
 
+export {
+  CapturingWebPushSender,
+  InMemoryWebPushSubscriptionStore,
+  WEB_PUSH_TTL_SECONDS,
+  deliverWebPushes,
+  webPushCollapseKey,
+  type WebPushRequest,
+  type WebPushResult,
+  type WebPushSender,
+  type WebPushSubscription,
+  type WebPushSubscriptionStore,
+} from './webPush.js';
+export { createWebPushSender, WebPushLibrarySender } from './webPushLibrary.js';
+
 export { decidePushDelivery } from './pushDecision.js';
 
 export {

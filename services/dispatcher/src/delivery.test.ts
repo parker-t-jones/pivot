@@ -11,7 +11,13 @@ import {
 import { deliverFlagEvent, type DeliveryDeps, type FlagEventEnvelope } from './delivery.js';
 import { PUSH_RELEVANCE_MS, PUSH_RETRY_BACKOFF_MS, retryPendingPushes } from './pushRetry.js';
 import { notificationBody, notificationTitle } from './notificationContent.js';
-import { CapturingPushNotifier } from './pushNotifier.js';
+import { CapturingPushNotifier, type PushPayload } from './pushNotifier.js';
+import {
+  CapturingWebPushSender,
+  InMemoryWebPushSubscriptionStore,
+  WEB_PUSH_TTL_SECONDS,
+  webPushCollapseKey,
+} from './webPush.js';
 import { InMemoryGameStateStore } from './providers/inMemoryGameStateStore.js';
 import { InMemoryRateLimitStore } from './rateLimiter.js';
 import { InMemoryRealtimeBus, realtimeUserChannel } from './realtimeBus.js';
@@ -941,5 +947,223 @@ describe('deliverFlagEvent', () => {
       const envelope = bus.published[0]?.message as FlagEventEnvelope;
       expect(pushNotifier.calls[0]?.data).toBe(envelope.payload);
     });
+  });
+});
+
+const IOS_DEVICE = '33333333-3333-4333-8333-333333333333';
+const WEB_DEVICE = '22222222-2222-4222-8222-222222222222';
+const EXPO_TOKEN = 'ExponentPushToken[test-token-000000000]';
+
+function comparablePush(call: PushPayload | undefined): unknown {
+  const data = { ...(call?.data as Record<string, unknown>) };
+  delete data['event_id'];
+  return { token: call?.token, title: call?.title, body: call?.body, data };
+}
+
+describe('web push beside Expo', () => {
+  const legacyUser: DispatchUser = { ...freeUser, expoPushToken: EXPO_TOKEN };
+  const namedUser: DispatchUser = { ...legacyUser, expoPushDeviceId: IOS_DEVICE };
+
+  async function deliver(user: DispatchUser, withWeb: boolean) {
+    const pushNotifier = new CapturingPushNotifier();
+    const web = new CapturingWebPushSender();
+    const subscriptions = new InMemoryWebPushSubscriptionStore(
+      withWeb
+        ? [
+            {
+              userId: 'u1',
+              endpoint: 'https://push.example.test/1',
+              deviceId: WEB_DEVICE,
+              p256dh: 'p256',
+              auth: 'authkey',
+            },
+            {
+              userId: 'u1',
+              endpoint: 'https://push.example.test/2',
+              deviceId: '44444444-4444-4444-8444-444444444444',
+              p256dh: 'p256',
+              auth: 'authkey',
+            },
+          ]
+        : [],
+    );
+    const rateLimitStore = new InMemoryRateLimitStore();
+    const deps = buildDeps({
+      pushNotifier,
+      rateLimitStore,
+      ...(withWeb ? { webPush: { sender: web, subscriptions } } : {}),
+    });
+    await deliverFlagEvent(deps, makeEvent(), user);
+    return { pushNotifier, web, subscriptions, rateLimitStore };
+  }
+
+  it('keeps the Expo payload the same for a legacy device and a named device', async () => {
+    for (const user of [legacyUser, namedUser]) {
+      const plain = await deliver(user, false);
+      const fanned = await deliver(user, true);
+      expect(plain.pushNotifier.calls).toHaveLength(1);
+      expect(fanned.pushNotifier.calls).toHaveLength(1);
+      expect(comparablePush(fanned.pushNotifier.calls[0])).toEqual(comparablePush(plain.pushNotifier.calls[0]));
+      expect(fanned.web.calls).toHaveLength(2);
+      expect(fanned.web.calls[0]?.title).toBe(plain.pushNotifier.calls[0]?.title);
+      expect(fanned.web.calls[0]?.body).toBe(plain.pushNotifier.calls[0]?.body);
+      expect(fanned.web.calls[0]?.ttlSeconds).toBe(WEB_PUSH_TTL_SECONDS);
+      expect(fanned.web.calls[0]?.urgency).toBe('high');
+      expect(fanned.web.calls[0]?.collapseKey).toBe(webPushCollapseKey('u1'));
+      expect(fanned.web.calls[0]?.collapseKey).toBe(fanned.web.calls[1]?.collapseKey);
+      expect(fanned.rateLimitStore.entriesFor('u1')).toHaveLength(1);
+    }
+  });
+
+  it('skips only the web device that is visible on the primary, and still pushes to the phone', async () => {
+    const pushNotifier = new CapturingPushNotifier();
+    const web = new CapturingWebPushSender();
+    const subscriptions = new InMemoryWebPushSubscriptionStore([
+      {
+        userId: 'u1',
+        endpoint: 'https://push.example.test/1',
+        deviceId: WEB_DEVICE,
+        p256dh: 'p256',
+        auth: 'authkey',
+      },
+    ]);
+    const users = new InMemoryUserDirectory();
+    users.setViewingSession('u1', { primaryGameId: 'g1', primaryPriorityScore: 4 });
+    const gameStateStore = new InMemoryGameStateStore();
+    await gameStateStore.markConnectionActive(
+      {
+        userId: 'u1',
+        deviceId: WEB_DEVICE,
+        connectionId: 'web',
+        platform: 'web',
+        visibility: 'visible',
+      },
+      60_000,
+    );
+    const deps = buildDeps({
+      pushNotifier,
+      userDirectory: users,
+      gameStateStore,
+      webPush: { sender: web, subscriptions },
+    });
+
+    await deliverFlagEvent(deps, makeEvent(), namedUser);
+
+    expect(pushNotifier.calls).toHaveLength(1);
+    expect(web.calls).toHaveLength(0);
+  });
+
+  it('sends the web push when that tab is hidden, and still pushes to a backgrounded phone', async () => {
+    const pushNotifier = new CapturingPushNotifier();
+    const web = new CapturingWebPushSender();
+    const subscriptions = new InMemoryWebPushSubscriptionStore([
+      {
+        userId: 'u1',
+        endpoint: 'https://push.example.test/1',
+        deviceId: WEB_DEVICE,
+        p256dh: 'p256',
+        auth: 'authkey',
+      },
+    ]);
+    const users = new InMemoryUserDirectory();
+    users.setViewingSession('u1', { primaryGameId: 'g1', primaryPriorityScore: 4 });
+    const gameStateStore = new InMemoryGameStateStore();
+    await gameStateStore.markConnectionActive(
+      {
+        userId: 'u1',
+        deviceId: WEB_DEVICE,
+        connectionId: 'web',
+        platform: 'web',
+        visibility: 'hidden',
+      },
+      60_000,
+    );
+    const deps = buildDeps({
+      pushNotifier,
+      userDirectory: users,
+      gameStateStore,
+      webPush: { sender: web, subscriptions },
+    });
+
+    await deliverFlagEvent(deps, makeEvent(), legacyUser);
+
+    expect(pushNotifier.calls).toHaveLength(1);
+    expect(web.calls).toHaveLength(1);
+  });
+
+  it('does not push to the phone when the legacy device is on the primary, and still pushes to the laptop', async () => {
+    const pushNotifier = new CapturingPushNotifier();
+    const web = new CapturingWebPushSender();
+    const subscriptions = new InMemoryWebPushSubscriptionStore([
+      {
+        userId: 'u1',
+        endpoint: 'https://push.example.test/1',
+        deviceId: WEB_DEVICE,
+        p256dh: 'p256',
+        auth: 'authkey',
+      },
+    ]);
+    const users = new InMemoryUserDirectory();
+    users.setViewingSession('u1', { primaryGameId: 'g1', primaryPriorityScore: 4 });
+    const gameStateStore = new InMemoryGameStateStore();
+    await gameStateStore.markUserActive('u1', 60_000);
+    const deps = buildDeps({
+      pushNotifier,
+      userDirectory: users,
+      gameStateStore,
+      webPush: { sender: web, subscriptions },
+    });
+
+    await deliverFlagEvent(deps, makeEvent(), legacyUser);
+
+    expect(pushNotifier.calls).toHaveLength(0);
+    expect(web.calls).toHaveLength(1);
+  });
+
+  it('deletes a subscription the push service reports as gone', async () => {
+    const pushNotifier = new CapturingPushNotifier();
+    const web = new CapturingWebPushSender();
+    web.nextResult = { ok: false, statusCode: 410 };
+    const subscriptions = new InMemoryWebPushSubscriptionStore([
+      {
+        userId: 'u1',
+        endpoint: 'https://push.example.test/1',
+        deviceId: WEB_DEVICE,
+        p256dh: 'p256',
+        auth: 'authkey',
+      },
+    ]);
+    const deps = buildDeps({
+      pushNotifier,
+      webPush: { sender: web, subscriptions },
+    });
+
+    await deliverFlagEvent(deps, makeEvent(), legacyUser);
+
+    expect(pushNotifier.calls).toHaveLength(1);
+    expect(subscriptions.rows.has('https://push.example.test/1')).toBe(false);
+  });
+
+  it('records last success without a second rate-limit hit', async () => {
+    const rateLimitStore = new InMemoryRateLimitStore();
+    const web = new CapturingWebPushSender();
+    const subscriptions = new InMemoryWebPushSubscriptionStore([
+      {
+        userId: 'u1',
+        endpoint: 'https://push.example.test/1',
+        deviceId: WEB_DEVICE,
+        p256dh: 'p256',
+        auth: 'authkey',
+      },
+    ]);
+    const deps = buildDeps({
+      rateLimitStore,
+      webPush: { sender: web, subscriptions },
+    });
+
+    await deliverFlagEvent(deps, makeEvent(), legacyUser);
+
+    expect(rateLimitStore.entriesFor('u1')).toHaveLength(1);
+    expect(subscriptions.rows.get('https://push.example.test/1')?.lastSuccessAt).toBe(1_700_000_061_500);
   });
 });

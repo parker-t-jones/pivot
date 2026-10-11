@@ -28,7 +28,7 @@ import {
   type ResumptionOpenStore,
   type UserDirectory,
 } from '@pivot/dispatcher';
-import type { PushNotifier } from '@pivot/dispatcher';
+import type { PushNotifier, WebPushSender, WebPushSubscriptionStore } from '@pivot/dispatcher';
 import type { LineupCacheProvider } from '../cache/index.js';
 import type { FireClaimRedis } from '../lib/fireClaim.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
@@ -81,6 +81,11 @@ export interface LiveRunnerDeps {
   airings: GameAiringsStore;
   persistence: FlagEventPersistence;
   pushNotifier: PushNotifier;
+  /** Set only when VAPID keys are configured. Omitted, iOS delivery is unchanged. */
+  webPush?: {
+    sender: WebPushSender;
+    subscriptions: WebPushSubscriptionStore;
+  };
   scoreboard?: EspnClient;
   owner?: string;
   /** Postgres + the Redis lineup cache. Rebuilt when this process becomes leader. */
@@ -329,6 +334,7 @@ function deliveryDeps(deps: LiveRunnerDeps): DeliveryDeps {
     realtimeBus: deps.realtime,
     rateLimitStore: deps.rateLimit,
     pushNotifier: deps.pushNotifier,
+    ...(deps.webPush ? { webPush: deps.webPush } : {}),
   };
 }
 

@@ -1,11 +1,12 @@
 import { hostname } from 'node:os';
-import { createPushNotifier } from '@pivot/dispatcher';
+import { createPushNotifier, createWebPushSender } from '@pivot/dispatcher';
 import { espnClient } from '@pivot/ingestion';
 import { TcpLineupCache } from './cache/tcp.js';
 import { env } from './env.js';
 import { createSupabaseServiceClient } from './lib/supabase.js';
 import { leaderOwner } from './runner/leaderLock.js';
 import { startLiveRunner } from './runner/liveRunner.js';
+import { SupabaseWebPushSubscriptionStore } from './runner/webPushSubscriptions.js';
 import { guardRunnerStart } from './runner/redisGuard.js';
 import { SupabaseFlagEventPersistence } from './runner/supabaseFlagEventPersistence.js';
 import {
@@ -51,6 +52,11 @@ if (tcpUrl === undefined) {
 const redis = createTcpRedis(tcpUrl);
 const supabase = createSupabaseServiceClient(env);
 const lineupCache = new TcpLineupCache(redis);
+const webPushSender = createWebPushSender({
+  subject: env.VAPID_SUBJECT,
+  publicKey: env.VAPID_PUBLIC_KEY,
+  privateKey: env.VAPID_PRIVATE_KEY,
+});
 const handle = startLiveRunner({
   lock: tcpLeaderLock(redis),
   heartbeat: tcpRunnerHeartbeat(redis),
@@ -74,6 +80,9 @@ const handle = startLiveRunner({
     pushDriver: env.PUSH_DRIVER,
     expoAccessToken: env.EXPO_ACCESS_TOKEN,
   }),
+  ...(webPushSender
+    ? { webPush: { sender: webPushSender, subscriptions: new SupabaseWebPushSubscriptionStore(supabase) } }
+    : {}),
   scoreboard: espnClient,
   owner: leaderOwner(process.env['FLY_MACHINE_ID'], hostname(), process.pid),
 });

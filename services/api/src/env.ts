@@ -25,6 +25,10 @@ const envSchema = z.object({
   PUSH_DRIVER: z.enum(['expo', 'none']).default('none'),
   /** Optional Expo access token. `expo` still constructs without it. */
   EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
+  /** Web Push signing. All three are required together. Missing means iOS-only delivery. */
+  VAPID_PUBLIC_KEY: z.string().min(1).optional(),
+  VAPID_PRIVATE_KEY: z.string().min(1).optional(),
+  VAPID_SUBJECT: z.string().min(1).optional(),
   /**
    * Who sees bets. `off` (the default, also when unset), `all`, or a comma-separated
    * allowlist of user ids. Parsed once at startup; an invalid value is logged and treated as `off`.

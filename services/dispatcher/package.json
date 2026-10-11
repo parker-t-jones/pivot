@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "@types/web-push": "^3.6.4",
     "tsx": "^4.23.0",
     "typescript": "^5.7.2",
     "vitest": "^4.1.10"
@@ -20,6 +21,7 @@
     "@pivot/shared": "workspace:^",
     "@upstash/redis": "^1.38.0",
     "expo-server-sdk": "^6.1.0",
-    "ioredis": "^5.11.1"
+    "ioredis": "^5.11.1",
+    "web-push": "^3.6.7"
   }
 }

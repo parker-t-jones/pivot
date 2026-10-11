@@ -32,6 +32,7 @@ import { LEGACY_IOS_DEVICE_ID } from './presence.js';
 import type { GameStateStore } from './providers/gameStateStore.js';
 import type { PushNotifier, PushPayload } from './pushNotifier.js';
 import { decidePushDelivery, formatPushDecisionLog } from './pushDecision.js';
+import { deliverWebPushes, type WebPushSender, type WebPushSubscriptionStore } from './webPush.js';
 import { PUSH_RETRY_BACKOFF_MS } from './pushRetry.js';
 import type { RateLimitStore } from './rateLimiter.js';
 import { realtimeUserChannel, type RealtimeBus } from './realtimeBus.js';
@@ -47,6 +48,11 @@ export interface DeliveryDeps {
   realtimeBus: RealtimeBus;
   rateLimitStore: RateLimitStore;
   pushNotifier: PushNotifier;
+  /** Absent when VAPID is not configured. iOS delivery does not read this. */
+  webPush?: {
+    sender: WebPushSender;
+    subscriptions: WebPushSubscriptionStore;
+  };
   clock?: Clock;
 }
 
@@ -88,6 +94,11 @@ export interface FlagEventEnvelope {
       position: string;
     }[];
   };
+  /**
+   * Same title and body as the push. Outside `payload` so the Expo `data` object stays
+   * the payload. iOS ignores this field. The web banner reads it off the socket.
+   */
+  notification?: { title: string; body: string };
 }
 
 /**
@@ -259,6 +270,22 @@ export async function deliverFlagEvent(
   });
   if (!persisted.inserted) return 'duplicate';
 
+  const notificationGame: NotificationGameContext = {
+    ...resolveNotificationTeamNames(gameState, gameSummaryInfo),
+    quarter: gameState?.quarter ?? 0,
+    timeRemainingSec: gameState?.timeRemainingSec ?? 0,
+  };
+  const pushCopy = isPushEligibleEvent(event.type)
+    ? {
+        title: notificationTitle(
+          event,
+          notificationGame,
+          await resolveNotificationPlayers(deps, event, players),
+        ),
+        body: notificationBody(event, notificationGame, airingWithoutOption),
+      }
+    : null;
+
   const envelope: FlagEventEnvelope = {
     id: persisted.id,
     type: 'flag_event',
@@ -293,6 +320,7 @@ export async function deliverFlagEvent(
         position: p.position,
       })),
     },
+    ...(pushCopy ? { notification: pushCopy } : {}),
   };
 
   await deps.realtimeBus.publish(realtimeUserChannel(event.userId), envelope);
@@ -327,20 +355,13 @@ export async function deliverFlagEvent(
         timing,
       }),
     );
-  } else if (user.expoPushToken) {
+  } else if (user.expoPushToken && pushCopy) {
     let payload: PushPayload | null = null;
     try {
-      const notificationPlayers = await resolveNotificationPlayers(deps, event, players);
-      const game: NotificationGameContext = {
-        ...resolveNotificationTeamNames(gameState, gameSummaryInfo),
-        quarter: gameState?.quarter ?? 0,
-        timeRemainingSec: gameState?.timeRemainingSec ?? 0,
-      };
-
       payload = {
         token: user.expoPushToken,
-        title: notificationTitle(event, game, notificationPlayers),
-        body: notificationBody(event, game, airingWithoutOption),
+        title: pushCopy.title,
+        body: pushCopy.body,
         data: envelope.payload,
       };
       const result = await deps.pushNotifier.sendPush(payload);
@@ -395,6 +416,26 @@ export async function deliverFlagEvent(
           data: envelope.payload,
         },
       });
+    }
+  }
+
+  if (deps.webPush && pushCopy) {
+    try {
+      await deliverWebPushes({
+        sender: deps.webPush.sender,
+        subscriptions: deps.webPush.subscriptions,
+        userId: event.userId,
+        gameId: event.gameId,
+        primaryGameId: session?.primaryGameId ?? null,
+        isDeviceActive: (userId, deviceId) => deps.gameStateStore.isDeviceActive(userId, deviceId),
+        title: pushCopy.title,
+        body: pushCopy.body,
+        data: envelope.payload,
+        nowMs: clock(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[web-push] fan-out failed', { userId: event.userId, eventId: event.id, error: message });
     }
   }
 
