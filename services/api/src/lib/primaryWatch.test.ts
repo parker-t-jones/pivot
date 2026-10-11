@@ -51,12 +51,30 @@ class WatchFake {
             maybeSingle: async () => ({ data: session, error: null }),
           }),
         }),
-        update: (patch: Partial<SessionRow>) => ({
-          eq: async () => {
-            Object.assign(session, patch);
+        update: (patch: Partial<SessionRow>) => {
+          const filters: [string, unknown][] = [];
+          const apply = async () => {
+            const matches = filters.every(([column, value]) => {
+              if (column === 'user_id') return value === USER;
+              return session[column as keyof SessionRow] === value;
+            });
+            if (matches) Object.assign(session, patch);
             return { error: null };
-          },
-        }),
+          };
+          const builder = {
+            eq(column: string, value: unknown) {
+              filters.push([column, value]);
+              return builder;
+            },
+            then<TResult1 = { error: null }, TResult2 = never>(
+              onfulfilled?: (value: { error: null }) => TResult1 | PromiseLike<TResult1>,
+              onrejected?: (reason: unknown) => TResult2 | PromiseLike<TResult2>,
+            ) {
+              return apply().then(onfulfilled, onrejected);
+            },
+          };
+          return builder;
+        },
       };
     }
     throw new Error(`Unexpected table in test fixture: ${table}`);

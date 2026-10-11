@@ -61,7 +61,7 @@ async function gameStatus(fastify: FastifyInstance, gameId: string): Promise<str
 
 async function clearStoredPrimary(
   fastify: FastifyInstance,
-  userId: string,
+  row: { userId: string; primaryGameId: string; setAtIso: string },
 ): Promise<ViewingSessionRow | null> {
   const { data, error } = await fastify.supabase
     .from('viewing_sessions')
@@ -71,7 +71,9 @@ async function clearStoredPrimary(
       primary_priority_score: null,
       last_updated_at: new Date().toISOString(),
     })
-    .eq('user_id', userId)
+    .eq('user_id', row.userId)
+    .eq('primary_game_id', row.primaryGameId)
+    .eq('last_updated_at', row.setAtIso)
     .select(SESSION_COLUMNS)
     .maybeSingle();
   if (error) throw error;
@@ -99,8 +101,8 @@ async function loadSession(
     setAtIso: data.last_updated_at,
     nowMs: Date.now(),
     gameStatus: (gameId) => gameStatus(fastify, gameId),
-    clear: async (id) => {
-      cleared = await clearStoredPrimary(fastify, id);
+    clear: async (row) => {
+      cleared = await clearStoredPrimary(fastify, row);
     },
   });
   if (!resolved.expired) return data;
@@ -218,8 +220,8 @@ const sessionRoutes: FastifyPluginAsyncZod = async (fastify) => {
         setAtIso: data.last_updated_at,
         nowMs: Date.now(),
         gameStatus: (id) => gameStatus(fastify, id),
-        clear: async (id) => {
-          cleared = await clearStoredPrimary(fastify, id);
+        clear: async (row) => {
+          cleared = await clearStoredPrimary(fastify, row);
         },
       });
       if (resolved.expired) return sessionResponse(cleared);

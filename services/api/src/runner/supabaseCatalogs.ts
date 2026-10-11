@@ -182,7 +182,7 @@ export class SupabaseUserDirectory implements UserDirectory {
       setAtIso: data.last_updated_at,
       nowMs: Date.now(),
       gameStatus: (gameId) => this.gameStatus(gameId),
-      clear: (id) => this.clearPrimary(id),
+      clear: (row) => this.clearPrimary(row),
     });
     return {
       primaryGameId: resolved.primaryGameId,
@@ -200,7 +200,11 @@ export class SupabaseUserDirectory implements UserDirectory {
     return data?.status ?? null;
   }
 
-  private async clearPrimary(userId: string): Promise<void> {
+  private async clearPrimary(row: {
+    userId: string;
+    primaryGameId: string;
+    setAtIso: string;
+  }): Promise<void> {
     const { error } = await this.client
       .from('viewing_sessions')
       .update({
@@ -209,7 +213,9 @@ export class SupabaseUserDirectory implements UserDirectory {
         primary_priority_score: null,
         last_updated_at: new Date().toISOString(),
       })
-      .eq('user_id', userId);
+      .eq('user_id', row.userId)
+      .eq('primary_game_id', row.primaryGameId)
+      .eq('last_updated_at', row.setAtIso);
     if (error) throw new Error(`viewing session clear failed: ${error.message}`);
   }
 }

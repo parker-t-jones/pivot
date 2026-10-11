@@ -45,9 +45,24 @@ interface SessionRow {
 class FakeSupabase {
   private readonly sessions = new Map<string, SessionRow>();
   private readonly games = new Map<string, { id: string; status: string }>();
+  /** The next `games` read waits until `release` so a Switch can land before a lazy clear. */
+  private statusHold: { entered: () => void; ready: Promise<void> } | null = null;
 
   constructor(gameIds: string[] = []) {
     for (const id of gameIds) this.games.set(id, { id, status: 'scheduled' });
+  }
+
+  armStatusHold(): { entered: Promise<void>; release: () => void } {
+    let entered!: () => void;
+    let release!: () => void;
+    const enteredPromise = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.statusHold = { entered, ready };
+    return { entered: enteredPromise, release };
   }
 
   setGameStatus(id: string, status: string): void {
@@ -65,7 +80,15 @@ class FakeSupabase {
       return {
         select: () => ({
           eq: (_col: string, id: string) => ({
-            maybeSingle: async () => ({ data: this.games.get(id) ?? null, error: null }),
+            maybeSingle: async () => {
+              const hold = this.statusHold;
+              if (hold) {
+                this.statusHold = null;
+                hold.entered();
+                await hold.ready;
+              }
+              return { data: this.games.get(id) ?? null, error: null };
+            },
           }),
         }),
       };
@@ -98,19 +121,40 @@ class FakeSupabase {
             },
           }),
         }),
-        update: (payload: Partial<SessionRow>) => ({
-          eq: (_col: string, userId: string) => ({
-            select: (_cols: string) => ({
-              maybeSingle: async () => {
-                const existing = this.sessions.get(userId);
-                if (!existing) return { data: null, error: null };
-                const merged = { ...existing, ...payload };
-                this.sessions.set(userId, merged);
-                return { data: merged, error: null };
-              },
-            }),
-          }),
-        }),
+        update: (payload: Partial<SessionRow>) => {
+          const filters: [keyof SessionRow, unknown][] = [];
+          const apply = async () => {
+            const userId = filters.find(([column]) => column === 'user_id')?.[1];
+            const existing = typeof userId === 'string' ? this.sessions.get(userId) : undefined;
+            if (!existing) return { data: null, error: null };
+            const matches = filters.every(([column, value]) => existing[column] === value);
+            if (!matches) return { data: null, error: null };
+            const merged = { ...existing, ...payload };
+            this.sessions.set(existing.user_id, merged);
+            return { data: merged, error: null };
+          };
+          const builder = {
+            eq(column: string, value: unknown) {
+              filters.push([column as keyof SessionRow, value]);
+              return builder;
+            },
+            select(_cols: string) {
+              return builder;
+            },
+            maybeSingle() {
+              return apply();
+            },
+            then<TResult1 = { data: SessionRow | null; error: null }, TResult2 = never>(
+              onfulfilled?: (
+                value: { data: SessionRow | null; error: null },
+              ) => TResult1 | PromiseLike<TResult1>,
+              onrejected?: (reason: unknown) => TResult2 | PromiseLike<TResult2>,
+            ) {
+              return apply().then(onfulfilled, onrejected);
+            },
+          };
+          return builder;
+        },
       };
     }
     throw new Error(`Unexpected table in test fixture: ${table}`);
@@ -118,6 +162,7 @@ class FakeSupabase {
 }
 
 const GAME_1 = '11111111-1111-4111-8111-111111111111';
+const GAME_2 = '22222222-2222-4222-8222-222222222222';
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
   return {
@@ -484,6 +529,42 @@ describe('session routes', () => {
 
       expect(response.json().primary_game_id).toBeNull();
       expect(app.supabase.sessionRow('user-1')?.primary_game_id).toBeNull();
+    });
+
+    it('keeps a new Switch when it lands before the expired clear runs', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(T0);
+      app = await buildTestApp([GAME_1, GAME_2]);
+      const token = await signToken({ sub: 'user-1', email: 'a@b.com' }, '1d');
+      await putPrimary(token);
+
+      vi.setSystemTime(new Date(T0.getTime() + PRIMARY_WATCH_MS + 1000));
+      const hold = app.supabase.armStatusHold();
+      const expiredRead = app.fastify.inject({
+        method: 'GET',
+        url: '/session',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      await hold.entered;
+
+      const switched = await app.fastify.inject({
+        method: 'PUT',
+        url: '/session/primary',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { game_id: GAME_2, source: 'deeplink' },
+      });
+      expect(switched.json().primary_game_id).toBe(GAME_2);
+
+      hold.release();
+      await expiredRead;
+
+      expect(app.supabase.sessionRow('user-1')?.primary_game_id).toBe(GAME_2);
+      const again = await app.fastify.inject({
+        method: 'GET',
+        url: '/session',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(again.json().primary_game_id).toBe(GAME_2);
     });
   });
 });

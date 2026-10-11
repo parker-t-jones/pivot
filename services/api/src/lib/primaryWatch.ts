@@ -34,7 +34,11 @@ export async function resolvePrimaryWatch(input: {
   setAtIso: string;
   nowMs: number;
   gameStatus: (gameId: string) => Promise<string | null>;
-  clear: (userId: string) => Promise<void>;
+  /**
+   * Clears only the row that was read: `user_id`, `primary_game_id`, and `last_updated_at`
+   * together. A Switch that already replaced that primary must not match.
+   */
+  clear: (row: { userId: string; primaryGameId: string; setAtIso: string }) => Promise<void>;
 }): Promise<ResolvedPrimary> {
   if (input.primaryGameId === null) {
     return {
@@ -57,6 +61,10 @@ export async function resolvePrimaryWatch(input: {
       expired: false,
     };
   }
-  await input.clear(input.userId);
+  await input.clear({
+    userId: input.userId,
+    primaryGameId: input.primaryGameId,
+    setAtIso: input.setAtIso,
+  });
   return { primaryGameId: null, primaryPriorityScore: null, expired: true };
 }
