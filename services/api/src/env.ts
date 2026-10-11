@@ -2,6 +2,8 @@ import { config as loadEnv } from 'dotenv';
 import { z } from 'zod';
 
 loadEnv({ quiet: true });
+// Local VAPID keys. Gitignored. Does not override a variable already set by .env or the shell.
+loadEnv({ path: '.env.local', quiet: true });
 
 const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
