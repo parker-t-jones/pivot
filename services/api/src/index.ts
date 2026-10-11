@@ -1,6 +1,9 @@
 import { env } from './env.js';
+import { loadFeatureBets } from './lib/features.js';
 import { memoryCacheRefusal, productionRedisRefusal } from './runner/redisGuard.js';
 import { buildServer } from './server.js';
+
+loadFeatureBets(env.FEATURE_BETS);
 
 const memoryBlocked = memoryCacheRefusal({
   cacheDriver: env.CACHE_DRIVER,

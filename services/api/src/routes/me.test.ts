@@ -7,9 +7,10 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { SignJWT } from 'jose';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import { ApiError, toErrorBody } from '../lib/errors.js';
+import { FEATURE_BETS_INVALID, loadFeatureBets } from '../lib/features.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
@@ -109,10 +110,11 @@ class FakeSupabase {
     if (table === 'user_app_presence') {
       return {
         select: (_cols: string) => ({
-          eq: (_col: string, userId: string) => Promise.resolve({
-            data: this.appPresence.get(userId) ?? [],
-            error: null,
-          }),
+          eq: (_col: string, userId: string) =>
+            Promise.resolve({
+              data: this.appPresence.get(userId) ?? [],
+              error: null,
+            }),
         }),
         upsert: (
           rows: { user_id: string; service: string; has_subscription: boolean }[],
@@ -414,6 +416,7 @@ describe('GET /me', () => {
         watchedLeagueIds: [],
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
+      features: { bets: false },
     });
   });
 
@@ -421,6 +424,89 @@ describe('GET /me', () => {
     app = await buildTestApp();
     const response = await app.fastify.inject({ method: 'GET', url: '/me' });
     expect(response.statusCode).toBe(401);
+  });
+});
+
+describe('GET /me features.bets', () => {
+  const ALICE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const BOB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  let app: TestApp;
+
+  afterEach(async () => {
+    loadFeatureBets(undefined);
+    await app.fastify.close();
+  });
+
+  async function readMe(userId: string) {
+    app = await buildTestApp(
+      {},
+      { [userId]: { email: 'a@b.com', subscription_tier: 'pro', preferences: {} } },
+      { [userId]: [{ service: 'peacock', has_subscription: true }] },
+    );
+    const token = await signToken({ sub: userId, email: 'a@b.com' });
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(200);
+    return response.json() as Record<string, unknown>;
+  }
+
+  function expectRestUnchanged(body: Record<string, unknown>, userId: string) {
+    const { features, ...rest } = body;
+    expect(rest).toEqual({
+      user_id: userId,
+      email: 'a@b.com',
+      subscription_tier: 'pro',
+      preferences: {
+        notificationMode: 'all',
+        quietHours: { enabled: false, startHour: 22, endHour: 8, timezone: 'America/New_York' },
+        autoSwitch: false,
+        watchOpponent: false,
+        watchedLeagueIds: [],
+      },
+      app_presence: [{ service: 'peacock', has_subscription: true }],
+    });
+    return features;
+  }
+
+  it('is false when FEATURE_BETS is unset, and the rest of the body is unchanged', async () => {
+    loadFeatureBets(undefined);
+    const body = await readMe('user-1');
+    expect(expectRestUnchanged(body, 'user-1')).toEqual({ bets: false });
+  });
+
+  it('is false when FEATURE_BETS is off', async () => {
+    loadFeatureBets('off');
+    const body = await readMe('user-1');
+    expect(expectRestUnchanged(body, 'user-1')).toEqual({ bets: false });
+  });
+
+  it('is true when FEATURE_BETS is all', async () => {
+    loadFeatureBets('all');
+    const body = await readMe('user-1');
+    expect(expectRestUnchanged(body, 'user-1')).toEqual({ bets: true });
+  });
+
+  it('is true for an allowlist hit', async () => {
+    loadFeatureBets(ALICE);
+    const body = await readMe(ALICE);
+    expect(expectRestUnchanged(body, ALICE)).toEqual({ bets: true });
+  });
+
+  it('is false for an allowlist miss', async () => {
+    loadFeatureBets(ALICE);
+    const body = await readMe(BOB);
+    expect(expectRestUnchanged(body, BOB)).toEqual({ bets: false });
+  });
+
+  it('is false and logs when FEATURE_BETS is invalid', async () => {
+    const log = vi.fn();
+    loadFeatureBets('yes', log);
+    expect(log).toHaveBeenCalledWith(FEATURE_BETS_INVALID);
+    const body = await readMe('user-1');
+    expect(expectRestUnchanged(body, 'user-1')).toEqual({ bets: false });
   });
 });
 
@@ -457,6 +543,7 @@ describe('PATCH /me/preferences', () => {
       watchOpponent: false,
       watchedLeagueIds: [],
     });
+    expect(response.json().features).toEqual({ bets: false });
   });
 
   it('merges a partial quietHours update without resetting its other sub-fields', async () => {
@@ -529,7 +616,11 @@ describe('POST /me/app-presence', () => {
   });
 
   it('upserts services and returns the full merged list', async () => {
-    app = await buildTestApp({}, {}, { 'user-1': [{ service: 'peacock', has_subscription: false }] });
+    app = await buildTestApp(
+      {},
+      {},
+      { 'user-1': [{ service: 'peacock', has_subscription: false }] },
+    );
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
     const response = await app.fastify.inject({

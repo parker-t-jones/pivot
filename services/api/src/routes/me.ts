@@ -2,6 +2,7 @@ import { parsePreferences, FREE_MAX_WATCHED_LEAGUES, USER_SERVICES } from '@pivo
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
+import { betsEnabledForUser } from '../lib/features.js';
 import { getLineupSyncContext, rebuildUserLineupCache } from '../lib/lineup-sync.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
@@ -58,6 +59,7 @@ function meResponse(user: UserRowForMe, appPresence: AppPresenceRow[]) {
       service: row.service,
       has_subscription: row.has_subscription,
     })),
+    features: { bets: betsEnabledForUser(user.id) },
   };
 }
 

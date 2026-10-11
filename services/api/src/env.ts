@@ -25,6 +25,11 @@ const envSchema = z.object({
   PUSH_DRIVER: z.enum(['expo', 'none']).default('none'),
   /** Optional Expo access token. `expo` still constructs without it. */
   EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
+  /**
+   * Who sees bets. `off` (the default, also when unset), `all`, or a comma-separated
+   * allowlist of user ids. Parsed once at startup; an invalid value is logged and treated as `off`.
+   */
+  FEATURE_BETS: z.string().optional(),
   PORT: z.coerce.number().int().positive().default(3000),
   /**
    * Extra browser origin allowed to call this API, for local Expo web (`http://localhost:8081`).
