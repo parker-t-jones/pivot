@@ -8,18 +8,18 @@ import {
   GAME_STATE_KEY_TTL_SECONDS,
   LEGACY_IOS_DEVICE_ID,
   NOTIFICATIONS_KEY_TTL_SECONDS,
-  activeUserIdsFromMembers,
-  deviceHasCountingConnection,
-  encodePresenceMember,
-  membersForConnection,
+  connectionCountsAsActive,
+  listLivePresenceConnections,
   parseQueuedFlagEvent,
+  removePresenceConnection,
   serializeFlagState,
   serializeGameState,
   serializeQueuedFlagEvent,
-  userHasCountingConnection,
+  writePresenceConnection,
   type FlagEventQueue,
   type GameStateStore,
   type PresenceConnection,
+  type PresenceRedis,
   type QueuedFlagEvent,
   type RateLimitStore,
   type RealtimeBus,
@@ -158,7 +158,41 @@ export function tcpResumptionOpenStore(redis: Redis): ResumptionOpenStore {
   };
 }
 
+function ioredisPresence(redis: Redis): PresenceRedis {
+  return {
+    async zrangeByScore(key, min, max) {
+      const upper = max === Number.POSITIVE_INFINITY ? '+inf' : max;
+      return redis.zrangebyscore(key, min, upper);
+    },
+    async zremRangeByScore(key, min, max) {
+      await redis.zremrangebyscore(key, min, max);
+    },
+    async zadd(key, score, member) {
+      await redis.zadd(key, score, member);
+    },
+    async zrem(key, members) {
+      if (members.length > 0) await redis.zrem(key, ...members);
+    },
+    async hgetAll(key) {
+      return redis.hgetall(key);
+    },
+    async hset(key, field, value) {
+      await redis.hset(key, field, value);
+    },
+    async hdel(key, fields) {
+      if (fields.length > 0) await redis.hdel(key, ...fields);
+    },
+    async pexpire(key, ttlMs) {
+      await redis.pexpire(key, ttlMs);
+    },
+    async del(keys) {
+      if (keys.length > 0) await redis.del(...keys);
+    },
+  };
+}
+
 export function tcpGameState(redis: Redis): GameStateStore {
+  const presence = ioredisPresence(redis);
   return {
     async getGameState(gameId: string): Promise<GameState | null> {
       const raw = await redis.hgetall(gameStateKey(gameId));
@@ -186,7 +220,7 @@ export function tcpGameState(redis: Redis): GameStateStore {
     },
     async getActiveUsers(): Promise<string[]> {
       const members = await redis.zrangebyscore(ACTIVE_USERS_KEY, Date.now(), '+inf');
-      return activeUserIdsFromMembers(members);
+      return members.filter((member) => !member.includes('|'));
     },
     async getUsersWithStakeIn(teamId: string): Promise<string[]> {
       return redis.smembers(stakeKey(teamId));
@@ -198,29 +232,26 @@ export function tcpGameState(redis: Redis): GameStateStore {
       await redis.zrem(ACTIVE_USERS_KEY, userId);
     },
     async markConnectionActive(connection: PresenceConnection, ttlMs: number): Promise<void> {
-      const existing = await redis.zrange(ACTIVE_USERS_KEY, 0, -1);
-      const stale = membersForConnection(existing, connection.connectionId);
-      if (stale.length > 0) await redis.zrem(ACTIVE_USERS_KEY, ...stale);
-      await redis.zadd(ACTIVE_USERS_KEY, Date.now() + ttlMs, encodePresenceMember(connection));
+      await writePresenceConnection(presence, connection, ttlMs);
     },
-    async removeConnection(connectionId: string): Promise<void> {
-      const existing = await redis.zrange(ACTIVE_USERS_KEY, 0, -1);
-      const stale = membersForConnection(existing, connectionId);
-      if (stale.length > 0) await redis.zrem(ACTIVE_USERS_KEY, ...stale);
+    async removeConnection(userId: string, connectionId: string): Promise<void> {
+      await removePresenceConnection(presence, userId, connectionId);
     },
     async isUserActive(userId: string): Promise<boolean> {
       const score = await redis.zscore(ACTIVE_USERS_KEY, userId);
       if (score !== null && Number(score) >= Date.now()) return true;
-      const members = await redis.zrangebyscore(ACTIVE_USERS_KEY, Date.now(), '+inf');
-      return userHasCountingConnection(members, userId);
+      const live = await listLivePresenceConnections(presence, userId);
+      return live.some(connectionCountsAsActive);
     },
     async isDeviceActive(userId: string, deviceId: string): Promise<boolean> {
       if (deviceId === LEGACY_IOS_DEVICE_ID) {
         const score = await redis.zscore(ACTIVE_USERS_KEY, userId);
         if (score !== null && Number(score) >= Date.now()) return true;
       }
-      const members = await redis.zrangebyscore(ACTIVE_USERS_KEY, Date.now(), '+inf');
-      return deviceHasCountingConnection(members, userId, deviceId);
+      const live = await listLivePresenceConnections(presence, userId);
+      return live.some(
+        (connection) => connection.deviceId === deviceId && connectionCountsAsActive(connection),
+      );
     },
     async sweepExpiredActiveUsers(): Promise<void> {
       await redis.zremrangebyscore(ACTIVE_USERS_KEY, 0, Date.now() - 1);

@@ -130,17 +130,18 @@ export { ACTIVE_USER_TTL_MS } from './constants.js';
 
 export {
   LEGACY_IOS_DEVICE_ID,
-  activeUserIdsFromMembers,
   connectionCountsAsActive,
-  decodePresenceMember,
-  deviceHasCountingConnection,
-  encodePresenceMember,
+  decodeConnectionMember,
+  encodeConnectionMember,
   isDeviceId,
-  membersForConnection,
-  userHasCountingConnection,
-  type DecodedPresenceMember,
+  listLivePresenceConnections,
+  presenceKey,
+  presenceVisibilityKey,
+  removePresenceConnection,
+  writePresenceConnection,
   type PresenceConnection,
   type PresencePlatform,
+  type PresenceRedis,
   type PresenceVisibility,
 } from './presence.js';
 

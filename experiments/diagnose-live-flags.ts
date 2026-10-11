@@ -364,7 +364,7 @@ async function main(): Promise<void> {
       connection: Parameters<InMemoryGameStateStore['markConnectionActive']>[0],
       ttlMs: number,
     ) => store.markConnectionActive(connection, ttlMs),
-    removeConnection: (connectionId: string) => store.removeConnection(connectionId),
+    removeConnection: (userId: string, connectionId: string) => store.removeConnection(userId, connectionId),
     sweepExpiredActiveUsers: () => store.sweepExpiredActiveUsers(),
   };
 

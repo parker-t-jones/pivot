@@ -112,13 +112,13 @@ describe('InMemoryGameStateStore', () => {
     };
     await store.markConnectionActive({ ...connection, connectionId: 'c1' }, 60_000);
     await store.markConnectionActive({ ...connection, connectionId: 'c2' }, 60_000);
-    await store.removeConnection('c1');
+    await store.removeConnection('u1', 'c1');
 
     expect(await store.isDeviceActive('u1', deviceId)).toBe(true);
     expect(await store.isUserActive('u1')).toBe(true);
     expect(await store.getActiveUsers()).toEqual(['u1']);
 
-    await store.removeConnection('c2');
+    await store.removeConnection('u1', 'c2');
     expect(await store.isDeviceActive('u1', deviceId)).toBe(false);
     expect(await store.isUserActive('u1')).toBe(false);
   });
@@ -182,5 +182,86 @@ describe('InMemoryGameStateStore', () => {
 
     await store.sweepExpiredActiveUsers();
     expect(await store.getActiveUsers()).toEqual([]);
+  });
+
+  it('prunes a dead connection on the next write and drops the key once it is idle', async () => {
+    const store = new InMemoryGameStateStore();
+    const userId = 'u1';
+    const dead = '11111111-1111-4111-8111-111111111111';
+    const live = '22222222-2222-4222-8222-222222222222';
+    await store.markConnectionActive(
+      { userId, deviceId: dead, connectionId: 'old', platform: 'ios', visibility: 'visible' },
+      1_000,
+    );
+    vi.advanceTimersByTime(500);
+    await store.markConnectionActive(
+      { userId, deviceId: live, connectionId: 'new', platform: 'ios', visibility: 'visible' },
+      5_000,
+    );
+    vi.advanceTimersByTime(501);
+    await store.markConnectionActive(
+      { userId, deviceId: live, connectionId: 'new', platform: 'ios', visibility: 'visible' },
+      5_000,
+    );
+
+    expect(store.presenceMembers(userId)).toEqual([`${live}|new|ios`]);
+    expect(store.presenceVisibility(userId)).toEqual({ new: 'visible' });
+    expect(await store.isDeviceActive(userId, dead)).toBe(false);
+
+    await store.removeConnection(userId, 'new');
+    expect(store.hasPresenceKey(userId)).toBe(false);
+
+    await store.markConnectionActive(
+      { userId, deviceId: live, connectionId: 'idle', platform: 'ios', visibility: 'visible' },
+      1_000,
+    );
+    vi.advanceTimersByTime(1_001);
+    expect(store.hasPresenceKey(userId)).toBe(false);
+    expect(await store.isUserActive(userId)).toBe(false);
+  });
+
+  it('reads only that user\'s presence key', async () => {
+    const store = new InMemoryGameStateStore();
+    await store.markConnectionActive(
+      {
+        userId: 'user-b',
+        deviceId: '22222222-2222-4222-8222-222222222222',
+        connectionId: 'b',
+        platform: 'ios',
+        visibility: 'visible',
+      },
+      60_000,
+    );
+    store.takePresenceCommands();
+
+    expect(await store.isUserActive('user-a')).toBe(false);
+    expect(await store.isDeviceActive('user-a', '11111111-1111-4111-8111-111111111111')).toBe(false);
+    const commands = store.takePresenceCommands();
+    expect(commands.length).toBeGreaterThan(0);
+    expect(commands.every((command) => command.includes('presence:user-a'))).toBe(true);
+    expect(commands.some((command) => command.includes('user-b') || command.includes('active_users'))).toBe(false);
+  });
+
+  it('keeps one member and one visibility field when a connection flips to hidden', async () => {
+    const store = new InMemoryGameStateStore();
+    const connection = {
+      userId: 'u1',
+      deviceId: '22222222-2222-4222-8222-222222222222',
+      connectionId: 'web',
+      platform: 'web' as const,
+      visibility: 'visible' as const,
+    };
+    await store.markConnectionActive(connection, 60_000);
+    store.takePresenceCommands();
+    await store.markConnectionActive({ ...connection, visibility: 'hidden' }, 60_000);
+
+    expect(store.presenceMembers('u1')).toEqual([`${connection.deviceId}|web|web`]);
+    expect(store.presenceVisibility('u1')).toEqual({ web: 'hidden' });
+    const commands = store.takePresenceCommands();
+    const hset = commands.findIndex((command) => command.startsWith('hset '));
+    const zadd = commands.findIndex((command) => command.startsWith('zadd '));
+    expect(hset).toBeGreaterThanOrEqual(0);
+    expect(zadd).toBeGreaterThan(hset);
+    expect(await store.isDeviceActive('u1', connection.deviceId)).toBe(false);
   });
 });

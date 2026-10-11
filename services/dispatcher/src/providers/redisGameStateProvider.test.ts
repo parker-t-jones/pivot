@@ -65,3 +65,92 @@ describe('RedisGameStateProvider', () => {
     ]);
   });
 });
+
+function recordingRedis() {
+  const keys: string[] = [];
+  const redis = {
+    zscore: async (key: string) => {
+      keys.push(`zscore ${key}`);
+      return null;
+    },
+    zrange: async (key: string) => {
+      keys.push(`zrange ${key}`);
+      return [];
+    },
+    hgetall: async (key: string) => {
+      keys.push(`hgetall ${key}`);
+      return null;
+    },
+    zremrangebyscore: async (key: string) => {
+      keys.push(`zremrangebyscore ${key}`);
+      return 0;
+    },
+    zadd: async (key: string) => {
+      keys.push(`zadd ${key}`);
+      return 1;
+    },
+    hset: async (key: string) => {
+      keys.push(`hset ${key}`);
+      return 1;
+    },
+    hdel: async (key: string) => {
+      keys.push(`hdel ${key}`);
+      return 0;
+    },
+    pexpire: async (key: string) => {
+      keys.push(`pexpire ${key}`);
+      return 1;
+    },
+    del: async (key: string) => {
+      keys.push(`del ${key}`);
+      return 1;
+    },
+    zrem: async (key: string) => {
+      keys.push(`zrem ${key}`);
+      return 0;
+    },
+  };
+  return { redis: redis as unknown as Redis, keys };
+}
+
+describe('RedisGameStateProvider presence lookups', () => {
+  it('does not scan active_users or another user when checking one device', async () => {
+    const { redis, keys } = recordingRedis();
+    const provider = new RedisGameStateProvider(redis);
+    const userId = 'user-a';
+
+    expect(await provider.isUserActive(userId)).toBe(false);
+    expect(await provider.isDeviceActive(userId, '11111111-1111-4111-8111-111111111111')).toBe(false);
+
+    expect(keys).toContain('zscore active_users');
+    expect(keys.some((key) => key.includes('zrange active_users'))).toBe(false);
+    expect(keys.some((key) => key.includes('user-b'))).toBe(false);
+    expect(keys.filter((key) => key.startsWith('zrange '))).toEqual([
+      'zrange presence:user-a',
+      'zrange presence:user-a',
+    ]);
+  });
+
+  it('writes the per-user key and its visibility hash, not active_users', async () => {
+    const { redis, keys } = recordingRedis();
+    const provider = new RedisGameStateProvider(redis);
+    await provider.markConnectionActive(
+      {
+        userId: 'user-a',
+        deviceId: '11111111-1111-4111-8111-111111111111',
+        connectionId: 'c1',
+        platform: 'web',
+        visibility: 'hidden',
+      },
+      60_000,
+    );
+
+    expect(keys.some((key) => key.includes('active_users'))).toBe(false);
+    expect(keys).toContain('zremrangebyscore presence:user-a');
+    expect(keys).toContain('hset presence-vis:user-a');
+    expect(keys).toContain('zadd presence:user-a');
+    expect(keys).toContain('pexpire presence:user-a');
+    expect(keys).toContain('pexpire presence-vis:user-a');
+    expect(keys.indexOf('hset presence-vis:user-a')).toBeLessThan(keys.indexOf('zadd presence:user-a'));
+  });
+});

@@ -184,7 +184,7 @@ const realtimeRoutes: FastifyPluginAsync<RealtimeRoutesOptions> = async (fastify
         enqueuePresence('remove', () =>
           tracked.kind === 'legacy'
             ? fastify.gameStateStore.removeActiveUser(user.id)
-            : fastify.gameStateStore.removeConnection(connection.id),
+            : fastify.gameStateStore.removeConnection(user.id, connection.id),
         );
       });
     });

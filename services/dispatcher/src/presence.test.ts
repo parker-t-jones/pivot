@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  activeUserIdsFromMembers,
-  decodePresenceMember,
-  deviceHasCountingConnection,
-  encodePresenceMember,
-  membersForConnection,
+  decodeConnectionMember,
+  encodeConnectionMember,
+  listLivePresenceConnections,
+  presenceKey,
+  writePresenceConnection,
 } from './presence.js';
+import { MemoryPresenceRedis } from './presenceRedisMemory.js';
 
 const connection = {
   userId: 'user-1',
@@ -16,19 +17,21 @@ const connection = {
 };
 
 describe('presence members', () => {
-  it('round-trips a connection and leaves a bare user id as the legacy slot', () => {
-    const member = encodePresenceMember(connection);
-    expect(decodePresenceMember(member)).toEqual({ kind: 'connection', connection });
-    expect(decodePresenceMember('user-1')).toEqual({ kind: 'legacy-user', userId: 'user-1' });
+  it('encodes a connection without visibility or user id', () => {
+    expect(encodeConnectionMember(connection)).toBe(`${connection.deviceId}|conn-1|web`);
+    expect(decodeConnectionMember(encodeConnectionMember(connection))).toEqual({
+      deviceId: connection.deviceId,
+      connectionId: 'conn-1',
+      platform: 'web',
+    });
   });
 
-  it('drops a hidden web connection from the active user list and keeps the legacy phone', () => {
-    const hidden = encodePresenceMember({ ...connection, visibility: 'hidden' });
-    const visible = encodePresenceMember({ ...connection, connectionId: 'conn-2', visibility: 'visible' });
-    expect(activeUserIdsFromMembers(['user-1', hidden])).toEqual(['user-1']);
-    expect(activeUserIdsFromMembers([hidden])).toEqual([]);
-    expect(deviceHasCountingConnection([visible], 'user-1', connection.deviceId)).toBe(true);
-    expect(deviceHasCountingConnection([hidden], 'user-1', connection.deviceId)).toBe(false);
-    expect(membersForConnection([visible, hidden, 'user-1'], 'conn-2')).toEqual([visible]);
+  it('lists live connections from that user\'s key only', async () => {
+    const redis = new MemoryPresenceRedis();
+    await writePresenceConnection(redis, { ...connection, userId: 'user-b', connectionId: 'other' }, 60_000);
+    redis.commands.length = 0;
+
+    expect(await listLivePresenceConnections(redis, 'user-a')).toEqual([]);
+    expect(redis.commands).toEqual([`zrange ${presenceKey('user-a')}`]);
   });
 });

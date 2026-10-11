@@ -2,8 +2,14 @@ import type { FlagState, GameState } from '@pivot/shared';
 import {
   LEGACY_IOS_DEVICE_ID,
   connectionCountsAsActive,
+  listLivePresenceConnections,
+  presenceKey,
+  presenceVisibilityKey,
+  removePresenceConnection,
+  writePresenceConnection,
   type PresenceConnection,
 } from '../presence.js';
+import { MemoryPresenceRedis } from '../presenceRedisMemory.js';
 import type { GameStateStore } from './gameStateStore.js';
 
 function flagKey(userId: string, gameId: string): string {
@@ -25,8 +31,9 @@ export class InMemoryGameStateStore implements GameStateStore {
   private readonly flagStates = new Map<string, FlagState>();
   /** Legacy slot: userId -> expiry (unix ms). Active iff expiry >= now. Device `legacy-ios`. */
   private readonly activeUsers = new Map<string, number>();
-  /** One entry per connection. Hidden web stays here and does not count. */
-  private readonly connections = new Map<string, { connection: PresenceConnection; expiresAt: number }>();
+  /** Per-user `presence:{userId}` and `presence-vis:{userId}`. */
+  private readonly presence = new MemoryPresenceRedis();
+  private readonly presenceUsers = new Set<string>();
   private readonly stakes = new Map<string, Set<string>>();
 
   async getGameState(gameId: string): Promise<GameState | null> {
@@ -51,10 +58,9 @@ export class InMemoryGameStateStore implements GameStateStore {
     for (const [userId, expiry] of this.activeUsers) {
       if (expiry >= now) ids.add(userId);
     }
-    for (const entry of this.connections.values()) {
-      if (entry.expiresAt >= now && connectionCountsAsActive(entry.connection)) {
-        ids.add(entry.connection.userId);
-      }
+    for (const userId of this.presenceUsers) {
+      const live = await listLivePresenceConnections(this.presence, userId, now);
+      if (live.some(connectionCountsAsActive)) ids.add(userId);
     }
     return [...ids];
   }
@@ -72,30 +78,20 @@ export class InMemoryGameStateStore implements GameStateStore {
   }
 
   async markConnectionActive(connection: PresenceConnection, ttlMs: number): Promise<void> {
-    this.connections.set(connection.connectionId, {
-      connection,
-      expiresAt: Date.now() + ttlMs,
-    });
+    this.presenceUsers.add(connection.userId);
+    await writePresenceConnection(this.presence, connection, ttlMs);
   }
 
-  async removeConnection(connectionId: string): Promise<void> {
-    this.connections.delete(connectionId);
+  async removeConnection(userId: string, connectionId: string): Promise<void> {
+    await removePresenceConnection(this.presence, userId, connectionId);
   }
 
   async isUserActive(userId: string): Promise<boolean> {
     const now = Date.now();
     const expiry = this.activeUsers.get(userId);
     if (expiry !== undefined && expiry >= now) return true;
-    for (const entry of this.connections.values()) {
-      if (
-        entry.expiresAt >= now &&
-        entry.connection.userId === userId &&
-        connectionCountsAsActive(entry.connection)
-      ) {
-        return true;
-      }
-    }
-    return false;
+    const live = await listLivePresenceConnections(this.presence, userId, now);
+    return live.some(connectionCountsAsActive);
   }
 
   async isDeviceActive(userId: string, deviceId: string): Promise<boolean> {
@@ -104,18 +100,10 @@ export class InMemoryGameStateStore implements GameStateStore {
       const expiry = this.activeUsers.get(userId);
       if (expiry !== undefined && expiry >= now) return true;
     }
-    for (const entry of this.connections.values()) {
-      if (entry.expiresAt < now) continue;
-      const connection = entry.connection;
-      if (
-        connection.userId === userId &&
-        connection.deviceId === deviceId &&
-        connectionCountsAsActive(connection)
-      ) {
-        return true;
-      }
-    }
-    return false;
+    const live = await listLivePresenceConnections(this.presence, userId, now);
+    return live.some(
+      (connection) => connection.deviceId === deviceId && connectionCountsAsActive(connection),
+    );
   }
 
   async sweepExpiredActiveUsers(): Promise<void> {
@@ -123,9 +111,24 @@ export class InMemoryGameStateStore implements GameStateStore {
     for (const [userId, expiry] of this.activeUsers) {
       if (expiry < now) this.activeUsers.delete(userId);
     }
-    for (const [connectionId, entry] of this.connections) {
-      if (entry.expiresAt < now) this.connections.delete(connectionId);
-    }
+  }
+
+  /** Commands issued by the per-user presence backend since the last call. */
+  takePresenceCommands(): string[] {
+    const commands = this.presence.commands.splice(0, this.presence.commands.length);
+    return commands;
+  }
+
+  hasPresenceKey(userId: string): boolean {
+    return this.presence.hasKey(presenceKey(userId)) || this.presence.hasKey(presenceVisibilityKey(userId));
+  }
+
+  presenceMembers(userId: string): string[] {
+    return this.presence.members(presenceKey(userId));
+  }
+
+  presenceVisibility(userId: string): Record<string, string> {
+    return this.presence.hash(presenceVisibilityKey(userId));
   }
 
   // --- Seeding helpers (not part of the interface; used to set up tests) ---
