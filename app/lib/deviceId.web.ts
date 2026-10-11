@@ -1,3 +1,5 @@
+import * as Crypto from 'expo-crypto';
+
 import { readOrCreateDeviceId } from './deviceIdStorage';
 
 function browserStorage(): Storage | undefined {
@@ -9,6 +11,8 @@ function browserStorage(): Storage | undefined {
   }
 }
 
-export function getOrCreateDeviceId(): Promise<string> {
-  return readOrCreateDeviceId(browserStorage(), () => globalThis.crypto.randomUUID());
+export async function getOrCreateDeviceId(): Promise<string> {
+  const deviceId = await readOrCreateDeviceId(browserStorage(), () => Crypto.randomUUID());
+  console.log(`stored deviceId ${deviceId}`);
+  return deviceId;
 }

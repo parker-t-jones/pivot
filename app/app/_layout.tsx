@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { WebPhoneColumn } from '../components/WebPhoneColumn';
 import { SessionProvider, useSession } from '../contexts/SessionContext';
+import { getOrCreateDeviceId } from '../lib/deviceId';
 import { displayFontMap } from '../lib/fonts';
 import { theme } from '../lib/theme';
 
@@ -60,6 +61,10 @@ function RootNavigator() {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts(displayFontMap);
+
+  useEffect(() => {
+    void getOrCreateDeviceId();
+  }, []);
 
   if (!fontsLoaded) {
     return (
