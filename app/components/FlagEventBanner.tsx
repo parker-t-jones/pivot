@@ -1,11 +1,12 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from './PrimaryButton';
 import { SecondaryButton } from './SecondaryButton';
 import type { FlagEventPayload } from '../lib/flagEventPayload';
+import { playAlertSound } from '../lib/inTabAlerts';
 import type { NotificationUserAction } from '../lib/notificationActions';
 import { theme } from '../lib/theme';
 
@@ -41,7 +42,11 @@ export function FlagEventBanner({ banner, onAction }: FlagEventBannerProps) {
   const translateY = useRef(new Animated.Value(-250)).current;
 
   useEffect(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS === 'web') {
+      playAlertSound();
+    } else {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
 
     translateY.setValue(-250);
     Animated.timing(translateY, {

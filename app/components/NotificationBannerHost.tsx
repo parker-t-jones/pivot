@@ -7,6 +7,7 @@ import { FullWindowOverlay } from 'react-native-screens';
 import { FlagEventBanner, type FlagEventBannerData } from './FlagEventBanner';
 import { useSwitching } from '../contexts/SwitchingContext';
 import { isFlagEventPayload } from '../lib/flagEventPayload';
+import { isPivotPushMessage, offerInTabAlert, subscribeInTabAlerts } from '../lib/inTabAlerts';
 import { recordNotificationAction, type NotificationUserAction } from '../lib/notificationActions';
 import { resolvePossessingTeamDisplay } from '../lib/teamDisplay';
 
@@ -75,6 +76,34 @@ export function NotificationBannerHost() {
     return () => subscription.remove();
   }, []);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    return subscribeInTabAlerts((alert) => {
+      setActiveBanner({
+        key: nextBannerKey++,
+        title: alert.title,
+        body: alert.body,
+        payload: alert.payload,
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const worker = globalThis.navigator?.serviceWorker;
+    if (!worker) return;
+    const onMessage = (event: Event) => {
+      const data = (event as MessageEvent).data;
+      if (!isPivotPushMessage(data)) return;
+      offerInTabAlert(
+        { title: data.title, body: data.body, payload: data.payload },
+        globalThis.document?.visibilityState !== 'hidden',
+      );
+    };
+    worker.addEventListener('message', onMessage);
+    return () => worker.removeEventListener('message', onMessage);
+  }, []);
+
   const onAction = useCallback(
     (action: NotificationUserAction) => {
       const banner = activeBannerRef.current;
@@ -109,18 +138,27 @@ export function NotificationBannerHost() {
 
   if (!activeBanner) return null;
 
-  return (
-    <FullWindowOverlay>
-      <View collapsable={false} pointerEvents="box-none" style={styles.overlayRoot}>
-        <SafeAreaProvider initialMetrics={initialWindowMetrics} style={styles.overlayRoot}>
-          <FlagEventBanner banner={activeBanner} onAction={onAction} />
-        </SafeAreaProvider>
-      </View>
-    </FullWindowOverlay>
+  const banner = (
+    <View
+      collapsable={false}
+      pointerEvents="box-none"
+      style={[styles.overlayRoot, Platform.OS === 'web' ? styles.webOverlay : null]}
+    >
+      <SafeAreaProvider initialMetrics={initialWindowMetrics} style={styles.overlayRoot}>
+        <FlagEventBanner banner={activeBanner} onAction={onAction} />
+      </SafeAreaProvider>
+    </View>
   );
+
+  if (Platform.OS === 'web') return banner;
+
+  return <FullWindowOverlay>{banner}</FullWindowOverlay>;
 }
 
 const styles = StyleSheet.create({
+  webOverlay: {
+    zIndex: 1000,
+  },
   overlayRoot: {
     bottom: 0,
     left: 0,

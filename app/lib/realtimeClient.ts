@@ -39,6 +39,11 @@ export interface RealtimeClientOptions {
   apiBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
   onFlagEvent: (payload: FlagEventPayload) => void;
+  /**
+   * Web banner. Fired only when the envelope carries `notification` beside `payload`.
+   * iOS does not pass this. The payload handed to `onFlagEvent` is unchanged.
+   */
+  onInTabAlert?: (alert: { title: string; body: string; payload: FlagEventPayload }) => void;
   onGameState?: (game: GameStateMessage) => void;
   /**
    * Fires after a successful socket open that is NOT the first connect of this client instance
@@ -63,6 +68,9 @@ export class RealtimeClient {
   private readonly apiBaseUrl: string;
   private readonly getAccessToken: () => Promise<string | null>;
   private readonly onFlagEvent: (payload: FlagEventPayload) => void;
+  private readonly onInTabAlert:
+    | ((alert: { title: string; body: string; payload: FlagEventPayload }) => void)
+    | null;
   private readonly onGameState: ((game: GameStateMessage) => void) | null;
   private subscribedGameIds: readonly string[] = [];
   private readonly onReconnected: () => void;
@@ -91,6 +99,7 @@ export class RealtimeClient {
     this.apiBaseUrl = options.apiBaseUrl;
     this.getAccessToken = options.getAccessToken;
     this.onFlagEvent = options.onFlagEvent;
+    this.onInTabAlert = options.onInTabAlert ?? null;
     this.onGameState = options.onGameState ?? null;
     this.onReconnected = options.onReconnected;
     this.WebSocketImpl =
@@ -241,6 +250,10 @@ export class RealtimeClient {
 
     if (envelope.type === 'flag_event' && isFlagEventPayload(envelope.payload)) {
       this.onFlagEvent(envelope.payload);
+      const copy = readNotificationCopy(parsed);
+      if (copy && this.onInTabAlert) {
+        this.onInTabAlert({ title: copy.title, body: copy.body, payload: envelope.payload });
+      }
       return;
     }
 
@@ -382,6 +395,14 @@ export class RealtimeClient {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function readNotificationCopy(value: unknown): { title: string; body: string } | null {
+  if (!isRecord(value)) return null;
+  const notification = value['notification'];
+  if (!isRecord(notification)) return null;
+  if (typeof notification['title'] !== 'string' || typeof notification['body'] !== 'string') return null;
+  return { title: notification['title'], body: notification['body'] };
 }
 
 function isGameStateMessage(value: unknown): value is GameStateMessage {

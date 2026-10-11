@@ -320,6 +320,8 @@ Same event types and the same timing as the table above. No dispatcher delay. We
 
 In-tab alerts use the API's existing socket (`GET /v1/realtime`). They do not use Supabase Realtime. The schema stays service_role-only (`20261010195000`, `20261010201000`). `web_push_subscriptions` grants nothing to `anon` or `authenticated`. Deploy Tue–Thu only, never Fri–Mon, and only after W5 is live in production.
 
+While the tab is visible, `flag_added` and `bet_in_play` show `FlagEventBanner` from the socket's `notification` field (title and body, outside `payload`). A service-worker `postMessage` for an event the socket already delivered is dropped by event id, so the banner shows once. Switch uses the same click-time `window.open` as the watch handoff. Alert sound is a web-only Settings toggle, stored in `localStorage` under `pivot.alert-sound`, default on. A hidden tab does not show the banner; the system notification covers it.
+
 Fan-out uses the same title and body, and the same quiet-hours, mode, collapse, and push-retry gates, as the Expo send. A subscription is skipped only when that `deviceId` has a live visible connection and the flag's game is the primary. The rate limit records the event once. Headers are Urgency `high`, TTL 60 seconds, and Topic equal to the collapse key (the user id as 32 URL-safe characters). A 404 or 410 deletes that row. A success writes `last_success_at`. Web failures are not queued on the iOS push-retry path.
 
 ### W5 — presence per connection

@@ -274,6 +274,31 @@ describe('RealtimeClient', () => {
     expect(onFlagEvent.mock.calls[0]?.[0].game_id).toBe('g');
   });
 
+  it('forwards the notification copy without changing the flag payload', async () => {
+    const onInTabAlert = vi.fn();
+    const client = createClient({ onInTabAlert });
+    client.start();
+    const socket = await flushConnect();
+    socket.open();
+    const payload = {
+      event_id: 'evt',
+      user_id: 'u',
+      game_id: 'g',
+      event_type: 'bet_in_play',
+      game_summary: { home_team: 'KC' },
+    };
+    socket.emitJson({
+      id: 'e1',
+      type: 'flag_event',
+      timestamp: 1,
+      payload,
+      notification: { title: 'Chiefs', body: 'Q2' },
+    });
+    expect(onFlagEvent).toHaveBeenCalledTimes(1);
+    expect(onFlagEvent.mock.calls[0]?.[0]).toEqual(payload);
+    expect(onInTabAlert).toHaveBeenCalledWith({ title: 'Chiefs', body: 'Q2', payload });
+  });
+
   it('sends subscribe_game and applies a game_state message to the live list callback', async () => {
     const onGameState = vi.fn();
     const client = createClient({ onGameState });

@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
 
 import { getOrCreateDeviceId } from './deviceId';
+import { offerInTabAlert } from './inTabAlerts';
 import { shouldConnectHomeRealtime } from './homeState';
 import type { FlagEventPayload } from './flagEventPayload';
 import type { NflSeasonType } from './nflState';
@@ -89,6 +90,17 @@ export function useHomeRealtime(options: UseHomeRealtimeOptions): void {
         onFlagEvent: (payload) => {
           onFlagEventRef.current(payload);
         },
+        ...(platform === 'web'
+          ? {
+              onInTabAlert: (alert: {
+                title: string;
+                body: string;
+                payload: FlagEventPayload;
+              }) => {
+                offerInTabAlert(alert, globalThis.document?.visibilityState !== 'hidden');
+              },
+            }
+          : {}),
         onGameState: (game) => {
           onGameStateRef.current(game);
         },

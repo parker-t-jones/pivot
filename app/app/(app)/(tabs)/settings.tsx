@@ -23,6 +23,7 @@ import { useSession } from '../../../contexts/SessionContext';
 import { useUpgradeSheet } from '../../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../../lib/apiClient';
 import { desktopAlertCopy, lastDesktopAlertState } from '../../../lib/desktopAlerts';
+import { readAlertSoundEnabled, writeAlertSoundEnabled } from '../../../lib/inTabAlerts';
 import {
   NotificationsDisabledError,
   scheduleTestFlagNotificationAsync,
@@ -287,6 +288,7 @@ function NotificationsSection({
   }) => Promise<void>;
 }) {
   const [isSaving, setIsSaving] = useState(false);
+  const [soundOn, setSoundOn] = useState(readAlertSoundEnabled);
 
   const save = async (patch: Parameters<typeof onChange>[0]) => {
     setIsSaving(true);
@@ -340,6 +342,21 @@ function NotificationsSection({
           {formatHour(preferences.quietHours.startHour)}–
           {formatHour(preferences.quietHours.endHour)} ({preferences.quietHours.timezone})
         </Text>
+      ) : null}
+
+      {Platform.OS === 'web' ? (
+        <View style={styles.toggleRow}>
+          <Text style={styles.rowLabel}>Alert sound</Text>
+          <Switch
+            onValueChange={(enabled) => {
+              writeAlertSoundEnabled(enabled);
+              setSoundOn(enabled);
+            }}
+            thumbColor={SWITCH_THUMB}
+            trackColor={SWITCH_TRACK}
+            value={soundOn}
+          />
+        </View>
       ) : null}
 
       <View style={styles.toggleRow}>
