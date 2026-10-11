@@ -1,13 +1,14 @@
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { WebPhoneColumn } from '../components/WebPhoneColumn';
 import { SessionProvider, useSession } from '../contexts/SessionContext';
 import { getOrCreateDeviceId } from '../lib/deviceId';
 import { displayFontMap } from '../lib/fonts';
+import { registerServiceWorker } from '../lib/webPush';
 import { theme } from '../lib/theme';
 
 function LoadingState({ message }: { message: string }) {
@@ -64,6 +65,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     void getOrCreateDeviceId();
+    if (Platform.OS === 'web') registerServiceWorker();
   }, []);
 
   if (!fontsLoaded) {

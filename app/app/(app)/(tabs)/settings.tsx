@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import {
   Alert,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,9 +18,11 @@ import { ErrorState } from '../../../components/ErrorState';
 import { LoadingState } from '../../../components/LoadingState';
 import { SecondaryButton } from '../../../components/SecondaryButton';
 import { TextButton } from '../../../components/TextButton';
+import { usePushPermission } from '../../../contexts/PushPermissionContext';
 import { useSession } from '../../../contexts/SessionContext';
 import { useUpgradeSheet } from '../../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../../lib/apiClient';
+import { desktopAlertCopy, lastDesktopAlertState } from '../../../lib/desktopAlerts';
 import {
   NotificationsDisabledError,
   scheduleTestFlagNotificationAsync,
@@ -32,6 +35,7 @@ import {
   type MeResponse,
 } from '../../../lib/me';
 import { unregisterPushNotificationsAsync } from '../../../lib/pushNotifications';
+import { revokeDesktopAlerts } from '../../../lib/webPush';
 import {
   showsSundayTicketHint,
   USER_SERVICE_OPTIONS,
@@ -94,7 +98,9 @@ export default function SettingsScreen() {
 
   const onSignOut = async () => {
     setIsSigningOut(true);
-    if (user) {
+    if (Platform.OS === 'web') {
+      await revokeDesktopAlerts();
+    } else if (user) {
       await unregisterPushNotificationsAsync(user.id);
     }
     await supabase.auth.signOut();
@@ -427,6 +433,30 @@ function promptEnableNotifications(): void {
   );
 }
 
+function DesktopAlertsButton() {
+  const { requestAndRegister } = usePushPermission();
+  const [detail, setDetail] = useState(desktopAlertCopy('default'));
+  const [isEnabling, setIsEnabling] = useState(false);
+
+  return (
+    <>
+      <TextButton
+        disabled={isEnabling}
+        label={isEnabling ? 'Enabling…' : 'Enable desktop alerts'}
+        onPress={() => {
+          setIsEnabling(true);
+          void requestAndRegister()
+            .then(() => setDetail(desktopAlertCopy(lastDesktopAlertState())))
+            .finally(() => setIsEnabling(false));
+        }}
+        size="small"
+        style={styles.aboutLink}
+      />
+      <Text style={styles.rowSubtext}>{detail}</Text>
+    </>
+  );
+}
+
 function AboutSection() {
   const version = Constants.expoConfig?.version ?? '0.0.0';
   const [isSendingTest, setIsSendingTest] = useState(false);
@@ -476,13 +506,17 @@ function AboutSection() {
         size="small"
         style={styles.aboutLink}
       />
-      <TextButton
-        disabled={isSendingTest}
-        label={isSendingTest ? 'Sending in 2s…' : 'Send test notification'}
-        onPress={() => void onSendTestNotification()}
-        size="small"
-        style={styles.aboutLink}
-      />
+      {Platform.OS === 'web' ? (
+        <DesktopAlertsButton />
+      ) : (
+        <TextButton
+          disabled={isSendingTest}
+          label={isSendingTest ? 'Sending in 2s…' : 'Send test notification'}
+          onPress={() => void onSendTestNotification()}
+          size="small"
+          style={styles.aboutLink}
+        />
+      )}
     </SectionCard>
   );
 }

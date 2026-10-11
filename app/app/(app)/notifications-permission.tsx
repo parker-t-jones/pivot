@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { usePushPermission } from '../../contexts/PushPermissionContext';
+import { desktopAlertCopy, lastDesktopAlertState } from '../../lib/desktopAlerts';
 import { theme } from '../../lib/theme';
 
 /**
@@ -16,11 +17,14 @@ import { theme } from '../../lib/theme';
 export default function NotificationsPermissionScreen() {
   const { requestAndRegister } = usePushPermission();
   const [isRequesting, setIsRequesting] = useState(false);
+  const [detail, setDetail] = useState<string | null>(null);
+  const onWeb = Platform.OS === 'web';
 
   const onEnable = async () => {
     setIsRequesting(true);
     try {
       await requestAndRegister();
+      if (onWeb) setDetail(desktopAlertCopy(lastDesktopAlertState()));
       // Layout `leave_notifications` navigates once status leaves `'undetermined'`.
     } finally {
       setIsRequesting(false);
@@ -37,9 +41,10 @@ export default function NotificationsPermissionScreen() {
           before you miss it.
         </Text>
         <Text style={styles.body}>You can turn these off any time in Settings.</Text>
+        {detail ? <Text style={styles.body}>{detail}</Text> : null}
 
         <PrimaryButton
-          label="Enable notifications"
+          label={onWeb ? 'Enable desktop alerts' : 'Enable notifications'}
           loading={isRequesting}
           onPress={onEnable}
           style={styles.button}

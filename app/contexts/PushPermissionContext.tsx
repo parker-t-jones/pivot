@@ -11,6 +11,7 @@ import {
 import { Platform } from 'react-native';
 
 import { registerForPushNotificationsAsync } from '../lib/pushNotifications';
+import { enableDesktopAlerts, readDesktopAlertPermission } from '../lib/webPush';
 import { useSession } from './SessionContext';
 
 /** `'checking'` is this context's own loading state (reading the OS permission on mount) — distinct
@@ -52,8 +53,15 @@ export function PushPermissionProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      // Browsers have no Expo push permission. `undetermined` would trap Home on the iOS prompt.
-      setStatus(Notifications.PermissionStatus.DENIED);
+      // Read only. Safari rejects a permission request that is not inside a click.
+      const current = readDesktopAlertPermission();
+      setStatus(
+        current === 'granted'
+          ? Notifications.PermissionStatus.GRANTED
+          : current === 'default'
+            ? Notifications.PermissionStatus.UNDETERMINED
+            : Notifications.PermissionStatus.DENIED,
+      );
       return;
     }
 
@@ -79,7 +87,14 @@ export function PushPermissionProvider({ children }: PropsWithChildren) {
 
   const requestAndRegister = useCallback(async () => {
     if (Platform.OS === 'web') {
-      setStatus(Notifications.PermissionStatus.DENIED);
+      const next = await enableDesktopAlerts();
+      setStatus(
+        next === 'granted'
+          ? Notifications.PermissionStatus.GRANTED
+          : next === 'default'
+            ? Notifications.PermissionStatus.UNDETERMINED
+            : Notifications.PermissionStatus.DENIED,
+      );
       return;
     }
 

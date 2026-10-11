@@ -250,7 +250,7 @@ pnpm --filter @pivot/app exec expo export -p web --output-dir dist
 
 Output directory: `app/dist`.
 
-SPA fallback: `app/public/_redirects` contains `/* /index.html 200`. Expo copies that file into the export root. A check export on 2026-10-10 wrote `/tmp/pivot-web-w4/_redirects` with that line. Cache `/_expo/static/js/web/entry-*.js` for a long time. Cache `index.html` briefly.
+SPA fallback: `app/public/_redirects` lists `/sw.js /sw.js 200` before `/* /index.html 200`, so the service worker is not rewritten to `index.html`. Expo copies both `sw.js` and `_redirects` into the export root. Cache `/_expo/static/js/web/entry-*.js` for a long time. Cache `index.html` briefly. Do not cache `sw.js` for long.
 
 `EXPO_PUBLIC_*` is inlined at build time. Set these as Pages build variables. Do not upload `app/.env`. That file is the local stack (`http://127.0.0.1:54321` and `:3000`).
 
