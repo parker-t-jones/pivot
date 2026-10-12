@@ -141,6 +141,8 @@ Still a static glow, as originally scoped — pulsing needs an animation primiti
 
 No `lg:` breakpoint, no CSS grid — this is a paragraph, not a component.
 
+The paragraph above is the historical note. The web build now has a real desktop layout; see **Desktop layout** below. It does not change the phone.
+
 **TV / AirPlay billboard mode — not a v1 presentation flag.** `PLAN.md` §14 already scoped this territory as the "Screen Mirroring reframe": unbuilt, needs its own UX design, and premised on the *user* enabling Screen Mirroring from Control Center — an app cannot trigger a presentation mode on its own, and §14 is explicit that deep-linking into a streaming app ends any mirrored session, so "big-screen mode" and the shipping deep-link flow may be mutually exclusive rather than layered. This spec doesn't add a `isPresenting` flag or a scaled-up card variant; it points at §14 as the place that idea already lives.
 
 ## 5. Sketch: `theme.ts` additions (documentation only — not applied)
@@ -244,3 +246,23 @@ No "current" render for Settings: the existing screen (`app/app/(app)/(tabs)/set
 ![Settings proposed](docs/ui-spec/settings-proposed.png)
 
 No sync slider rendered, matching §3.2 — that control has no backing preference yet.
+
+## Desktop layout
+
+Web only. The phone tokens in §1–§3 are the palette; this section does not add a color. Width is `useWindowDimensions`, and `Platform.OS !== 'web'` always takes the phone tree, including on an iPad.
+
+| Tier | Width | What you see |
+| --- | --- | --- |
+| Companion | under 900px | The phone column and the bottom tab bar, at the window's width. A window around 600px, snapped beside a broadcast, stays on this tier. |
+| Medium | 900–1279px | An icon-only left rail (Home, Watchlist, Settings). Home is two panes. |
+| Wide | 1280px and up | A labeled sidebar. The Pivot Pro card is pinned to the bottom of that sidebar. Home adds a right column of about 360px. |
+
+The whole frame, nav included, is at most 1440px and centered. Board rows, table rows, and settings cards stop at that frame. They do not stretch to the edges of the monitor. The active destination uses `colors.accent`.
+
+**Home.** Center pane: the Now Active card (team-color score blocks and the field gauge), then Also Flagged tiles with Switch, then the upcoming board rows. Right column: My card (stake summary and the compact watchlist). At medium and wide both are on screen and the Board | My card toggle is not. Under 900px the toggle comes back and only one of the two shows, as on the phone.
+
+**Watchlist.** Medium and wide replace the stacked list with a table: Slot, Player (name and team · position), Game (opponent, and a live score or a kickoff), Network, Status, and the action. A live row has Switch, and that click opens the https watch URL in the same turn as the phone's web switch. Rows hover and use a pointer. Slot order is the phone's order. All / Fantasy / Bets / Pools stay, as a compact tab bar. The 2×2 week card becomes one line under the title: Fantasy, Bets & props, Pools, Opponent. Add a stake is a normal primary button at the right of the header. Under 900px the week card and the list stay.
+
+**Settings.** Wide is two columns: the section names on the left, the open section on the right. Every narrower width, including the phone, is the single scrolling stack.
+
+Interactive controls on web get a hover state, a visible keyboard focus ring, and a pointer. Anything the phone does with a press-and-hold has a click that does the same thing. None of those states are added to the native components.

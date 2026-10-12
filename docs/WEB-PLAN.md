@@ -14,7 +14,7 @@ Approved 2026-10-10. These override the audit's earlier recommendations where th
 
 **Purchases.** Web v1 has no purchase flow. The web UI shows Pro status read-only and says "Upgrade in the iOS app." That UI is a later slice. The entitlement check is not client-only, and it is not safe to rely on yet. See "Pro entitlement" below. That hole is a blocker for treating read-only status as enough.
 
-**Layout v1.** Centered phone-width column (420px).
+**Layout.** Responsive, on `pivot-sports.app`. Under 900px the phone composition stays (a window snapped beside a broadcast). From 900px a left nav and two panes. From 1280px a labeled sidebar, a center pane, and a right column. The frame is 1440px and centered. The iPhone UI is unchanged.
 
 **Order.** Slices that cannot change iOS behavior come first: W1 web build and crash safety, W2 CORS, W3 switch, W4 hosting prep. Presence, Web Push, Settings, and the upgrade sheet wait.
 
@@ -182,9 +182,23 @@ Web behavior to add, without changing the iOS order: ignore custom schemes; open
 
 ## 6. Layout
 
-v1 should be a centered phone-width column (about 420px) on the existing dark background, applied once at the web root. The UI spec, type scale, `FieldGauge`, board rows, and tab bar are designed as a phone. There is no breakpoint system. `maxWidth` shows up on the switch error card (380) and a couple of chips, not on screens. A responsive Home and Lineup is a redesign, not a port.
+The web product is a responsive laptop page on `pivot-sports.app`. It is not a 420px phone column, and it is not a separate phone app at `app.pivot-sports.app`. Width comes from `useWindowDimensions` and only applies when `Platform.OS === 'web'`. iOS keeps the bottom tab bar and the single column, pixel for pixel.
 
-The column is web-only. iOS already has a phone-width window.
+| Tier | Width | Chrome |
+| --- | --- | --- |
+| Companion | under 900px | Today's single column and the bottom tab bar. This is the window snapped beside a broadcast, and it stays usable around 600px. |
+| Medium | 900–1279px | Icon-only left rail. Home shows the board and My card together. |
+| Wide | 1280px and up | Labeled sidebar (Home, Watchlist, Settings) with the Pivot Pro card pinned at the bottom, a center pane, and a right column about 360px. |
+
+The sidebar, the page, and the right column sit in one frame at most 1440px wide, centered. Rows do not run to the edges of a monitor. Active nav uses the amber accent. There is no new color.
+
+Home's center pane is the board: the Now Active card, Also Flagged tiles with Switch, then the upcoming rows. The right column is My card. The Board | My card toggle is hidden at medium and wide, and returns under 900px.
+
+Watchlist at medium and wide is a table (Slot, Player, Game, Network, Status, action) with the All / Fantasy / Bets / Pools tabs and a one-line stat strip. Add a stake sits in the page header. Under 900px the phone list and the 2×2 week card stay.
+
+Settings is two columns at wide (section list, then the section) and one column otherwise.
+
+Hover, focus, and pointer cursors are web-only. A control that was press-and-hold on the phone gets a click.
 
 | Screen | Route | Readiness | At desktop width |
 | --- | --- | --- | --- |
