@@ -44,6 +44,8 @@ import {
 } from '../../../lib/streamingServices';
 import { supabase } from '../../../lib/supabase';
 import { theme } from '../../../lib/theme';
+import { useDesktopTier } from '../../../lib/useDesktopTier';
+import { webPressState } from '../../../lib/webPress';
 
 const NOTIFICATION_MODES: {
   value: MeResponse['preferences']['notificationMode'];
@@ -58,6 +60,15 @@ const SUPPORT_EMAIL = 'support@pivot-sports.app';
 const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}`;
 const PRIVACY_POLICY_URL = 'https://pivot-sports.app/privacy';
 const TERMS_OF_SERVICE_URL = 'https://pivot-sports.app/terms';
+
+const SETTINGS_SECTIONS = [
+  { key: 'account', label: 'Account' },
+  { key: 'notifications', label: 'Notifications' },
+  { key: 'streaming', label: 'Streaming' },
+  { key: 'about', label: 'About' },
+] as const;
+
+type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['key'];
 
 const SWITCH_TRACK = { false: theme.colors.border, true: theme.colors.accent } as const;
 const SWITCH_THUMB = theme.colors.textPrimary;
@@ -82,6 +93,8 @@ export default function SettingsScreen() {
 
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('account');
+  const desktopTier = useDesktopTier();
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -155,6 +168,91 @@ export default function SettingsScreen() {
     );
   }
 
+  const account = (
+    <AccountSection
+      email={me.email}
+      subscriptionTier={me.subscription_tier}
+      isSigningOut={isSigningOut}
+      isDeletingAccount={isDeletingAccount}
+      onSignOut={onSignOut}
+      onDeleteAccount={onDeleteAccount}
+    />
+  );
+  const notifications = (
+    <NotificationsSection
+      preferences={me.preferences}
+      onChange={async (patch) => {
+        const updated = await patchPreferences(patch);
+        setMe(updated);
+      }}
+    />
+  );
+  const streaming = (
+    <StreamingServicesSection
+      appPresence={me.app_presence}
+      onChange={async (service, hasSubscription) => {
+        const { app_presence } = await setAppPresence([
+          { service, has_subscription: hasSubscription },
+        ]);
+        setMe((current) => (current ? { ...current, app_presence } : current));
+      }}
+    />
+  );
+  const about = <AboutSection />;
+  const sectionBody = {
+    account,
+    notifications,
+    streaming,
+    about,
+  }[settingsSection];
+
+  if (Platform.OS === 'web' && desktopTier === 'wide') {
+    return (
+      <View
+        style={[
+          styles.screen,
+          styles.desktop,
+          { paddingTop: insets.top + theme.spacing.lg, paddingBottom: insets.bottom },
+        ]}
+      >
+        <View style={styles.sectionNav}>
+          <Text style={styles.headerTitle}>Settings</Text>
+          {SETTINGS_SECTIONS.map((item) => {
+            const selected = item.key === settingsSection;
+            return (
+              <Pressable
+                key={item.key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+                onPress={() => setSettingsSection(item.key)}
+                style={(state) => {
+                  const { pressed, hovered, focused } = webPressState(state);
+                  return [
+                    styles.sectionLink,
+                    selected && styles.sectionLinkSelected,
+                    hovered && !selected && styles.sectionLinkHover,
+                    pressed && styles.sectionLinkPressed,
+                    focused && styles.sectionLinkFocused,
+                  ];
+                }}
+              >
+                <Text style={[styles.sectionLinkLabel, selected && styles.sectionLinkLabelSelected]}>
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <ScrollView
+          style={styles.desktopDetail}
+          contentContainerStyle={[styles.content, styles.desktopDetailContent]}
+        >
+          {sectionBody}
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={styles.screen}
@@ -167,35 +265,10 @@ export default function SettingsScreen() {
       ]}
     >
       <Text style={styles.headerTitle}>Settings</Text>
-
-      <AccountSection
-        email={me.email}
-        subscriptionTier={me.subscription_tier}
-        isSigningOut={isSigningOut}
-        isDeletingAccount={isDeletingAccount}
-        onSignOut={onSignOut}
-        onDeleteAccount={onDeleteAccount}
-      />
-
-      <NotificationsSection
-        preferences={me.preferences}
-        onChange={async (patch) => {
-          const updated = await patchPreferences(patch);
-          setMe(updated);
-        }}
-      />
-
-      <StreamingServicesSection
-        appPresence={me.app_presence}
-        onChange={async (service, hasSubscription) => {
-          const { app_presence } = await setAppPresence([
-            { service, has_subscription: hasSubscription },
-          ]);
-          setMe((current) => (current ? { ...current, app_presence } : current));
-        }}
-      />
-
-      <AboutSection />
+      {account}
+      {notifications}
+      {streaming}
+      {about}
     </ScrollView>
   );
 }
@@ -548,6 +621,50 @@ const styles = StyleSheet.create({
   content: {
     gap: theme.spacing.lg2,
     paddingHorizontal: theme.spacing.lg2,
+  },
+  desktop: {
+    flexDirection: 'row',
+    gap: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.xl,
+  },
+  desktopDetail: {
+    flex: 1,
+    minWidth: 0,
+  },
+  desktopDetailContent: {
+    paddingHorizontal: 0,
+    paddingBottom: theme.spacing.huge,
+  },
+  sectionLink: {
+    borderRadius: theme.radii.control,
+    cursor: 'pointer',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.md,
+  },
+  sectionLinkFocused: {
+    borderColor: theme.colors.accent,
+    borderWidth: theme.effects.panelBorderWidth,
+  },
+  sectionLinkHover: {
+    backgroundColor: theme.colors.surface,
+  },
+  sectionLinkLabel: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.body.size,
+  },
+  sectionLinkLabelSelected: {
+    color: theme.colors.accent,
+  },
+  sectionLinkPressed: {
+    backgroundColor: theme.colors.surfaceRaised,
+  },
+  sectionLinkSelected: {
+    backgroundColor: theme.colors.accentMuted,
+  },
+  sectionNav: {
+    gap: theme.spacing.xs,
+    width: 220,
   },
   deleteAccount: {
     alignItems: 'center',
