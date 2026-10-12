@@ -5,9 +5,11 @@ import type { BoardRowData, BoardWindowGroup } from '../lib/board';
 import { fonts } from '../lib/fonts';
 import type { LineupGameGroup } from '../lib/homeState';
 import { useHomeSegment } from '../lib/homeSegment';
+import { DESKTOP_RIGHT_COLUMN } from '../lib/desktopLayout';
 import type { LiveBoardSection } from '../lib/liveBoard';
 import type { LiveGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
+import { useDesktopTier } from '../lib/useDesktopTier';
 import { BoardRow } from './BoardRow';
 import { HomeSegmentRow } from './HomeSegmentRow';
 import { MyCardList } from './MyCardList';
@@ -44,7 +46,24 @@ export function HomeLiveView({
   lineupGroups,
   liveGames,
 }: HomeLiveViewProps) {
+  const tier = useDesktopTier();
   const [segment, selectSegment] = useHomeSegment();
+
+  if (tier !== 'companion') {
+    return (
+      <View style={styles.split}>
+        <View style={styles.center}>
+          {hero}
+          {sections.map((section) => (
+            <LiveBoardSectionView key={section.kind} section={section} />
+          ))}
+        </View>
+        <View style={styles.side}>
+          <MyCardList groups={groups} lineupGroups={lineupGroups} liveGames={liveGames} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
@@ -155,6 +174,21 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.xs,
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.md,
+  },
+  center: {
+    flex: 1,
+    gap: theme.spacing.lg,
+    minWidth: 0,
+  },
+  side: {
+    flexShrink: 0,
+    width: DESKTOP_RIGHT_COLUMN,
+  },
+  split: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: theme.spacing.lg,
+    width: '100%',
   },
   wrap: {
     gap: theme.spacing.lg,

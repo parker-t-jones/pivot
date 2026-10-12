@@ -2,8 +2,10 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { BoardWindowGroup } from '../lib/board';
 import { fonts } from '../lib/fonts';
+import { DESKTOP_RIGHT_COLUMN } from '../lib/desktopLayout';
 import { formatCountdown, type LineupGameGroup } from '../lib/homeState';
 import { useHomeSegment } from '../lib/homeSegment';
+import { useDesktopTier } from '../lib/useDesktopTier';
 import type { ScheduleGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { BoardRow } from './BoardRow';
@@ -44,7 +46,65 @@ export function HomePregameView({
   hero,
   countdownMs,
 }: HomePregameViewProps) {
+  const tier = useDesktopTier();
   const [segment, selectSegment] = useHomeSegment();
+
+  const board = (
+    <>
+      {hero === null ? null : (
+        <FeaturedStakeCard
+          game={hero.game}
+          players={hero.players}
+          {...(hero.eyebrow === undefined ? {} : { eyebrow: hero.eyebrow })}
+        />
+      )}
+      {groups.length > 0 ? (
+        <View style={styles.board}>
+          {groups.map((group) => (
+            <View key={group.label} style={styles.boardGroup}>
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.windowLabel}>
+                {group.label}
+              </Text>
+              {group.rows.map((row, index) => (
+                <BoardRow key={row.gameId} row={row} showDivider={index > 0} />
+              ))}
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </>
+  );
+
+  if (tier !== 'companion') {
+    return (
+      <View style={styles.split}>
+        <View style={styles.center}>
+          <View style={styles.header}>
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.modeEyebrow}>
+              {`WEEK ${week} · PRE-GAME`}
+            </Text>
+            {countdownMs === null ? null : (
+              <View style={styles.headerMeta}>
+                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.metaLabel}>
+                  NEXT KICKOFF
+                </Text>
+                <Text
+                  maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                  style={[styles.countdown, countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
+                >
+                  {formatCountdown(countdownMs)}
+                </Text>
+              </View>
+            )}
+          </View>
+          {board}
+        </View>
+        <View style={styles.side}>
+          <MyCardList groups={groups} lineupGroups={lineupGroups} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
@@ -70,33 +130,7 @@ export function HomePregameView({
       <HomeSegmentRow segment={segment} onChange={selectSegment} />
 
       {segment === 'board' ? (
-        <>
-          {hero === null ? null : (
-            <FeaturedStakeCard
-              game={hero.game}
-              players={hero.players}
-              {...(hero.eyebrow === undefined ? {} : { eyebrow: hero.eyebrow })}
-            />
-          )}
-
-          {groups.length > 0 ? (
-            <View style={styles.board}>
-              {groups.map((group) => (
-                <View key={group.label} style={styles.boardGroup}>
-                  <Text
-                    maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-                    style={styles.windowLabel}
-                  >
-                    {group.label}
-                  </Text>
-                  {group.rows.map((row, index) => (
-                    <BoardRow key={row.gameId} row={row} showDivider={index > 0} />
-                  ))}
-                </View>
-              ))}
-            </View>
-          ) : null}
-        </>
+        board
       ) : (
         <MyCardList groups={groups} lineupGroups={lineupGroups} />
       )}
@@ -159,6 +193,21 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.xs,
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.md,
+  },
+  center: {
+    flex: 1,
+    gap: theme.spacing.lg,
+    minWidth: 0,
+  },
+  side: {
+    flexShrink: 0,
+    width: DESKTOP_RIGHT_COLUMN,
+  },
+  split: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: theme.spacing.lg,
+    width: '100%',
   },
   wrap: {
     gap: theme.spacing.lg,
