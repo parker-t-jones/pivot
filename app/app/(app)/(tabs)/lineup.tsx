@@ -23,6 +23,7 @@ import {
   TotalLineCard,
 } from '../../../components/StakeCards';
 import { TextButton } from '../../../components/TextButton';
+import { WatchlistDesktop } from '../../../components/WatchlistDesktop';
 import { WatchlistFilters } from '../../../components/WatchlistFilters';
 import { WeekCard } from '../../../components/WeekCard';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
@@ -66,6 +67,7 @@ import {
 import { formatStakeLabel, stakeTeams, type ManualStake } from '../../../lib/stakes';
 import { deleteStake, fetchStakes } from '../../../lib/stakesClient';
 import { theme } from '../../../lib/theme';
+import { useDesktopTier } from '../../../lib/useDesktopTier';
 import { isBenchSlot, watchedStarterCount, weekCardModel } from '../../../lib/weekCardModel';
 import {
   lineupScreenMode,
@@ -162,6 +164,7 @@ export default function LineupScreen() {
   const [nflWeek, setNflWeek] = useState<number | null>(null);
   const [watchedStarterTotal, setWatchedStarterTotal] = useState<number | null>(null);
   const [filter, selectFilter] = useWatchlistFilter();
+  const desktopTier = useDesktopTier();
   const watchOpponentSave = useRef(false);
   const betsOn = useFeature('bets');
   const watchlist = lineupScreenMode(betsOn) === 'watchlist';
@@ -507,6 +510,115 @@ export default function LineupScreen() {
         {watchlist ? <WatchlistHeader week={nflWeek} /> : <LineupHeader week={null} />}
         <LoadingState message="Loading lineup…" />
       </View>
+    );
+  }
+
+  if (watchlist && desktopTier !== 'companion') {
+    return (
+      <WatchlistDesktop
+        benchSlots={showRoster ? benchSlots : []}
+        bottomInset={insets.bottom + theme.spacing.huge}
+        extras={
+          <>
+            {showActions ? (
+              <View style={styles.leagueActions}>
+                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+                  LEAGUE
+                </Text>
+                <View style={styles.leagueActionRow}>
+                  <TextButton
+                    label="Connect"
+                    onPress={() => {
+                      router.push('/(app)/connect-team');
+                    }}
+                    size="smallStrong"
+                  />
+                  {selectedLeague?.platform === 'sleeper' ? (
+                    <TextButton
+                      disabled={manageBusy}
+                      label="Sync"
+                      onPress={() => runLeagueAction('Sync')}
+                      size="smallStrong"
+                    />
+                  ) : null}
+                  {selectedLeague && selectedLeague.platform !== 'sleeper' ? (
+                    <TextButton
+                      disabled={manageBusy}
+                      label="Edit lineup"
+                      onPress={() => runLeagueAction('Edit lineup')}
+                      size="smallStrong"
+                    />
+                  ) : null}
+                  {selectedLeague && selectedLeague.platform !== 'sleeper' ? (
+                    <TextButton
+                      disabled={manageBusy}
+                      label="Rename"
+                      onPress={() => runLeagueAction('Rename')}
+                      size="smallStrong"
+                    />
+                  ) : null}
+                  {selectedLeague ? (
+                    <TextButton
+                      disabled={manageBusy}
+                      label="Disconnect"
+                      onPress={() => runLeagueAction('Disconnect')}
+                      size="smallStrong"
+                      tone="danger"
+                    />
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+            {showLeagueChips ? (
+              <View style={styles.switcherBlock}>
+                <LeagueSwitcher
+                  leagues={leagues}
+                  selectedLeagueId={selectedLeague?.league_id ?? null}
+                  onSelect={setSelectedLeagueId}
+                />
+                {selectedLeague ? (
+                  <Text
+                    maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                    style={watchingSelected ? styles.watching : styles.notWatching}
+                  >
+                    {watchingSelected ? 'WATCHING' : 'NOT WATCHING'}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+          </>
+        }
+        filter={filter}
+        liveGames={liveGames}
+        now={now}
+        onAddStake={() => {
+          router.push('/(app)/add-stake');
+        }}
+        onFilter={selectFilter}
+        onRefresh={() => {
+          void onRefresh();
+        }}
+        onRemoveStake={confirmRemoveBet}
+        onWatchOpponent={(value) => {
+          void onWatchOpponent(value);
+        }}
+        opponentSlots={
+          showOpponent && opponentView === 'on' && lineup?.opponent
+            ? lineup.opponent.starters.map(opponentStarterSlot)
+            : []
+        }
+        pools={showPools ? poolBets : []}
+        refreshing={isRefreshing}
+        showOpponentToggle={showOpponent && opponentView !== 'hidden'}
+        stakes={showPropBets ? propBets : []}
+        starterSlots={showRoster ? starterSlots : []}
+        timeZone={timeZone}
+        topInset={insets.top + theme.spacing.lg}
+        watchOpponent={watchOpponent}
+        week={headerWeek}
+        weekCard={weekCard}
+        weekGames={weekGames}
+      />
     );
   }
 
