@@ -1,11 +1,14 @@
 import type { CarriageMapVersion } from './types.js';
 
 /**
- * Carriage map 2026.1 (docs/B1-BROADCAST-DESIGN.md §1.5).
+ * Carriage map 2026.2 (docs/B1-BROADCAST-DESIGN.md §1.5).
  * Expansion uses only `confirmed: true` entries — see experiments/carriage-confirm.md.
+ *
+ * 2026.2: Peacock carries NBC and Paramount+ carries CBS. ESPN lists those games
+ * under the network name only (2026-10-11 scoreboard: SNF geoBroadcasts is "NBC").
  */
 export const CARRIAGE_2026_1: CarriageMapVersion = {
-  version: '2026.1',
+  version: '2026.2',
   effectiveFrom: '2026-09-01',
   entries: [
     {
@@ -61,14 +64,14 @@ export const CARRIAGE_2026_1: CarriageMapVersion = {
     },
     {
       service: 'peacock',
-      networks: ['peacock'],
+      networks: ['nbc', 'peacock'],
       marketRule: 'any',
       requiresSubscription: true,
       confirmed: true,
     },
     {
       service: 'paramount_plus',
-      networks: ['paramount_plus'],
+      networks: ['cbs', 'paramount_plus'],
       marketRule: 'any',
       requiresSubscription: true,
       confirmed: true,

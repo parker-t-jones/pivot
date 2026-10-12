@@ -7,6 +7,8 @@ import type { AiringNetwork } from './types.js';
 const MEDIA_NAME_TO_NETWORK: ReadonlyMap<string, AiringNetwork> = new Map([
   ['CBS', 'cbs'],
   ['FOX', 'fox'],
+  // 2026-10-11 scoreboard spells it "Fox" (Week 3 used "FOX"). Not an alias for "FOX Sports".
+  ['Fox', 'fox'],
   ['NBC', 'nbc'],
   ['ABC', 'abc'],
   ['ESPN', 'espn'],

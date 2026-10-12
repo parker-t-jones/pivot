@@ -1,0 +1,122 @@
+{
+  "fetchedAt": "2026-10-12T02:05:00.000Z",
+  "scoreboardUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+  "summaryUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401872993",
+  "snf": {
+    "id": "401872993",
+    "shortName": "BAL @ ATL",
+    "name": "Baltimore Ravens at Atlanta Falcons",
+    "date": "2026-10-12T00:20Z",
+    "broadcast": "NBC",
+    "broadcasts": [
+      {
+        "market": "national",
+        "names": [
+          "NBC"
+        ]
+      }
+    ],
+    "geoBroadcasts": [
+      {
+        "type": {
+          "id": "1",
+          "shortName": "TV"
+        },
+        "market": {
+          "id": "1",
+          "type": "National"
+        },
+        "media": {
+          "shortName": "NBC"
+        },
+        "lang": "en",
+        "region": "us"
+      }
+    ]
+  },
+  "summary": {
+    "broadcasts": [],
+    "headerBroadcasts": [
+      {
+        "type": {
+          "id": "1",
+          "shortName": "TV"
+        },
+        "market": {
+          "id": "1",
+          "type": "National"
+        },
+        "media": {
+          "shortName": "NBC"
+        },
+        "lang": "en",
+        "region": "us",
+        "isNational": true
+      }
+    ]
+  },
+  "cbs": {
+    "id": "401872984",
+    "shortName": "HOU @ TEN",
+    "name": "Houston Texans at Tennessee Titans",
+    "date": "2026-10-11T17:00Z",
+    "broadcast": "CBS",
+    "broadcasts": [
+      {
+        "market": "national",
+        "names": [
+          "CBS"
+        ]
+      }
+    ],
+    "geoBroadcasts": [
+      {
+        "type": {
+          "id": "1",
+          "shortName": "TV"
+        },
+        "market": {
+          "id": "1",
+          "type": "National"
+        },
+        "media": {
+          "shortName": "CBS"
+        },
+        "lang": "en",
+        "region": "us"
+      }
+    ]
+  },
+  "fox": {
+    "id": "401872990",
+    "shortName": "CHI @ GB",
+    "name": "Chicago Bears at Green Bay Packers",
+    "date": "2026-10-11T17:00Z",
+    "broadcast": "Fox",
+    "broadcasts": [
+      {
+        "market": "national",
+        "names": [
+          "Fox"
+        ]
+      }
+    ],
+    "geoBroadcasts": [
+      {
+        "type": {
+          "id": "1",
+          "shortName": "TV"
+        },
+        "market": {
+          "id": "1",
+          "type": "National"
+        },
+        "media": {
+          "shortName": "Fox"
+        },
+        "lang": "en",
+        "region": "us"
+      }
+    ]
+  }
+}

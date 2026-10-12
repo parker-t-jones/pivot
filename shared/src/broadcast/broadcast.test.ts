@@ -10,6 +10,7 @@ import {
   networkLabelFromAirings,
   parseEspnAirings,
   rankWatchOptions,
+  serviceWatchUrl,
   USER_SERVICE_LANDING_URLS,
   watchOptionsForGame,
   type CarriageMapVersion,
@@ -87,6 +88,7 @@ describe('mapMediaName', () => {
   it('maps the §3.3 table exactly and rejects aliases', () => {
     expect(mapMediaName('CBS')).toBe('cbs');
     expect(mapMediaName('FOX')).toBe('fox');
+    expect(mapMediaName('Fox')).toBe('fox');
     expect(mapMediaName('NBC')).toBe('nbc');
     expect(mapMediaName('ABC')).toBe('abc');
     expect(mapMediaName('ESPN')).toBe('espn');
@@ -393,5 +395,121 @@ describe('CARRIAGE_2026_1', () => {
     const sling = CARRIAGE_2026_1.entries.find((e) => e.service === 'sling');
     expect(sling?.networks).toEqual([]);
     expect(sling?.confirmed).toBe(false);
+  });
+});
+
+const TONIGHT_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '__fixtures__/broadcasts-2026-10-11-snf.json',
+);
+
+interface TonightGame {
+  id: string;
+  shortName: string;
+  date: string;
+  broadcast: string;
+  broadcasts: NonNullable<NonNullable<EspnBroadcastEvent['competitions']>[number]['broadcasts']>;
+  geoBroadcasts: NonNullable<
+    NonNullable<EspnBroadcastEvent['competitions']>[number]['geoBroadcasts']
+  >;
+}
+
+const tonight = JSON.parse(readFileSync(TONIGHT_PATH, 'utf8')) as {
+  snf: TonightGame;
+  cbs: TonightGame;
+  fox: TonightGame;
+};
+
+function tonightEvent(game: TonightGame): EspnBroadcastEvent {
+  return {
+    id: game.id,
+    shortName: game.shortName,
+    date: game.date,
+    competitions: [
+      {
+        broadcast: game.broadcast,
+        broadcasts: game.broadcasts,
+        geoBroadcasts: game.geoBroadcasts,
+      },
+    ],
+  };
+}
+
+function tonightWeek(game: TonightGame): WeekGameAirings[] {
+  return [
+    {
+      id: game.id,
+      kickoff: new Date(game.date),
+      airings: parseEspnAirings(tonightEvent(game), (info) => {
+        throw new Error(`unmapped ${info.rawName} on ${game.shortName}`);
+      }),
+    },
+  ];
+}
+
+function watchLink(
+  service: WatchOption['service'],
+  network: WatchOption['network'],
+  away: string,
+  home: string,
+  kickoff: string,
+): string {
+  return serviceWatchUrl({
+    service,
+    network,
+    awayNickname: away,
+    homeNickname: home,
+    kickoff: new Date(kickoff),
+  });
+}
+
+describe('2026-10-11 scoreboard carriage', () => {
+  it('maps tonight\'s Fox shortName to fox', () => {
+    expect(parseEspnAirings(tonightEvent(tonight.fox), () => undefined).map((a) => a.network)).toEqual([
+      'fox',
+    ]);
+  });
+
+  it('gives a Peacock-only user the Peacock link on tonight\'s NBC SNF', () => {
+    const options = watchOptionsForGame(tonight.snf.id, tonightWeek(tonight.snf), new Set(['peacock']));
+    expect(options.map((o) => [o.service, o.network, o.preferred])).toEqual([['peacock', 'nbc', true]]);
+    expect(watchLink('peacock', 'nbc', 'Ravens', 'Falcons', tonight.snf.date)).toBe(
+      'https://www.peacocktv.com/watch/sports',
+    );
+  });
+
+  it('gives a Paramount+-only user the Paramount+ link on a CBS game', () => {
+    const options = watchOptionsForGame(
+      tonight.cbs.id,
+      tonightWeek(tonight.cbs),
+      new Set(['paramount_plus']),
+    );
+    expect(options.map((o) => [o.service, o.network, o.preferred])).toEqual([
+      ['paramount_plus', 'cbs', true],
+    ]);
+    expect(watchLink('paramount_plus', 'cbs', 'Texans', 'Titans', tonight.cbs.date)).toBe(
+      'https://www.paramountplus.com/live-tv/',
+    );
+  });
+
+  it('leaves a YouTube TV user on YouTube TV for NBC and CBS', () => {
+    const snf = watchOptionsForGame(tonight.snf.id, tonightWeek(tonight.snf), new Set(['youtube_tv']));
+    expect(snf.map((o) => [o.service, o.network, o.preferred])).toEqual([['youtube_tv', 'nbc', true]]);
+    expect(watchLink('youtube_tv', 'nbc', 'Ravens', 'Falcons', tonight.snf.date)).toBe(
+      'https://tv.youtube.com/search/Ravens%20vs%20Falcons%20today',
+    );
+
+    const cbs = watchOptionsForGame(tonight.cbs.id, tonightWeek(tonight.cbs), new Set(['youtube_tv']));
+    expect(cbs.map((o) => [o.service, o.network, o.preferred])).toEqual([['youtube_tv', 'cbs', true]]);
+    expect(watchLink('youtube_tv', 'cbs', 'Texans', 'Titans', tonight.cbs.date)).toBe(
+      'https://tv.youtube.com/search/Texans%20vs%20Titans%20today',
+    );
+  });
+
+  it('gives a user with no matching service no option', () => {
+    expect(
+      watchOptionsForGame(tonight.snf.id, tonightWeek(tonight.snf), new Set(['amazon_prime'])),
+    ).toEqual([]);
+    expect(watchOptionsForGame(tonight.cbs.id, tonightWeek(tonight.cbs), new Set())).toEqual([]);
   });
 });
