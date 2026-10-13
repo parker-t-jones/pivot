@@ -58,5 +58,15 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Service worker global scope: `self` and `URL` exist there but not in the default env.
+    files: ['app/public/sw.js'],
+    languageOptions: {
+      globals: {
+        self: 'readonly',
+        URL: 'readonly',
+      },
+    },
+  },
   eslintConfigPrettier,
 );

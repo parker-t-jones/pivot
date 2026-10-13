@@ -1207,7 +1207,9 @@ describe('web push beside Expo', () => {
   });
 
   it('sends the web push while the Expo send is still pending', async () => {
-    let release = (): void => {};
+    let release = (): void => {
+      // Replaced by the gate promise's resolver below.
+    };
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });

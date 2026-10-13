@@ -10,7 +10,7 @@ describe('VAPID config', () => {
   afterEach(() => {
     for (const name of NAMES) {
       const previous = saved.get(name);
-      if (previous === undefined) delete process.env[name];
+      if (previous === undefined) Reflect.deleteProperty(process.env, name);
       else process.env[name] = previous;
     }
     saved.clear();

@@ -16,7 +16,7 @@ describe('GET /health', () => {
   beforeEach(() => {
     for (const name of VAPID_NAMES) {
       saved.set(name, process.env[name]);
-      delete process.env[name];
+      Reflect.deleteProperty(process.env, name);
     }
   });
 
@@ -24,7 +24,7 @@ describe('GET /health', () => {
     delete process.env['GIT_SHA'];
     for (const name of VAPID_NAMES) {
       const previous = saved.get(name);
-      if (previous === undefined) delete process.env[name];
+      if (previous === undefined) Reflect.deleteProperty(process.env, name);
       else process.env[name] = previous;
     }
     saved.clear();

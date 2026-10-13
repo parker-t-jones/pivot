@@ -61,7 +61,7 @@ export class CapturingWebPushSender implements WebPushSender {
 export class InMemoryWebPushSubscriptionStore implements WebPushSubscriptionStore {
   readonly rows = new Map<string, WebPushSubscription & { userId: string; lastSuccessAt: number | null }>();
 
-  constructor(seed: Array<WebPushSubscription & { userId: string }> = []) {
+  constructor(seed: (WebPushSubscription & { userId: string })[] = []) {
     for (const row of seed) {
       this.rows.set(row.endpoint, { ...row, lastSuccessAt: null });
     }

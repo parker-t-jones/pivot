@@ -171,7 +171,7 @@ class FakeSupabase {
           return Promise.resolve({ error: null });
         },
         delete: () => {
-          const filters: Array<[string, string]> = [];
+          const filters: [string, string][] = [];
           const builder = {
             eq: (column: string, value: string) => {
               filters.push([column, value]);
