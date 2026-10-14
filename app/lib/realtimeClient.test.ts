@@ -415,6 +415,36 @@ describe('RealtimeClient', () => {
     expect(client.isStarted()).toBe(false);
   });
 
+  it('schedules reconnect through timers bound to globalThis', async () => {
+    const realSetTimeout = globalThis.setTimeout;
+    const realClearTimeout = globalThis.clearTimeout;
+    const scheduled: number[] = [];
+    function hostSetTimeout(
+      this: unknown,
+      _fn: () => void,
+      ms?: number,
+    ): ReturnType<typeof setTimeout> {
+      if (this !== globalThis) throw new TypeError('Illegal invocation');
+      scheduled.push(ms ?? 0);
+      return 1 as unknown as ReturnType<typeof setTimeout>;
+    }
+    function hostClearTimeout(this: unknown): void {
+      if (this !== globalThis) throw new TypeError('Illegal invocation');
+    }
+    globalThis.setTimeout = hostSetTimeout as typeof setTimeout;
+    globalThis.clearTimeout = hostClearTimeout as typeof clearTimeout;
+    try {
+      const client = createClient();
+      client.start();
+      const socket = await flushConnect();
+      socket.close();
+      expect(scheduled).toEqual([1000]);
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+      globalThis.clearTimeout = realClearTimeout;
+    }
+  });
+
   it('stop then start after a prior connect fires onReconnected (foreground-resume seam)', async () => {
     const client = createClient();
     client.start();

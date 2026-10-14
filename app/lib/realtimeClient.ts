@@ -108,8 +108,10 @@ export class RealtimeClient {
     this.pongTimeoutMs = options.pongTimeoutMs ?? REALTIME_PONG_TIMEOUT_MS;
     this.initialBackoffMs = options.initialBackoffMs ?? DEFAULT_BACKOFF_MS;
     this.maxBackoffMs = options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS;
-    this.setTimeoutFn = options.setTimeoutFn ?? setTimeout;
-    this.clearTimeoutFn = options.clearTimeoutFn ?? clearTimeout;
+    // A browser throws "Illegal invocation" when setTimeout is stored and called later,
+    // because the host function requires `window` as `this`. Tests pass their own timers.
+    this.setTimeoutFn = options.setTimeoutFn ?? setTimeout.bind(globalThis);
+    this.clearTimeoutFn = options.clearTimeoutFn ?? clearTimeout.bind(globalThis);
     this.createId =
       options.createId ??
       (() =>
@@ -401,7 +403,8 @@ function readNotificationCopy(value: unknown): { title: string; body: string } |
   if (!isRecord(value)) return null;
   const notification = value['notification'];
   if (!isRecord(notification)) return null;
-  if (typeof notification['title'] !== 'string' || typeof notification['body'] !== 'string') return null;
+  if (typeof notification['title'] !== 'string' || typeof notification['body'] !== 'string')
+    return null;
   return { title: notification['title'], body: notification['body'] };
 }
 
