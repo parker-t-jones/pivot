@@ -8,6 +8,9 @@ const config = getDefaultConfig(__dirname);
 // `shared/` is NodeNext ESM, so its relative imports name the emitted `.js` file
 // (`./types.js`) while only `types.ts` exists in `shared/src`. Metro has no `.js` -> `.ts`
 // fallback, so drop the extension and let `sourceExts` find the `.ts`.
+// Web export resolves `@pivot/shared/*` through the `browser` condition (not
+// `react-native`). That condition points at this source tree; `dist/` is not
+// built by the Pages command.
 const sharedSrc = path.resolve(__dirname, '../shared/src') + path.sep;
 const upstreamResolveRequest = config.resolver.resolveRequest;
 

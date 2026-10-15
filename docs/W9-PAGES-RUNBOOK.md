@@ -22,6 +22,8 @@ Build command (the [WEB-PLAN](WEB-PLAN.md) export, with pnpm 9.15.0 activated fi
 corepack enable && corepack prepare pnpm@9.15.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @pivot/app exec expo export -p web --output-dir dist
 ```
 
+Verify web builds on a clean clone; a local shared/dist hides missing exports.
+
 Environment variable (not an `EXPO_PUBLIC_` var): `NODE_VERSION` = `22`.
 
 The export writes `app/dist/index.html`, `app/dist/_redirects`, and `app/dist/sw.js`. `_redirects` serves `/sw.js` as itself and sends every other path to `index.html`. Do not turn on a second single-page-application rewrite that would replace the service worker.

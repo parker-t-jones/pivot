@@ -12,16 +12,19 @@
     },
     "./broadcast": {
       "react-native": "./src/broadcast/index.ts",
+      "browser": "./src/broadcast/index.ts",
       "types": "./dist/broadcast/index.d.ts",
       "default": "./dist/broadcast/index.js"
     },
     "./lineupOrder": {
       "react-native": "./src/lineupOrder.ts",
+      "browser": "./src/lineupOrder.ts",
       "types": "./dist/lineupOrder.d.ts",
       "default": "./dist/lineupOrder.js"
     },
     "./stakeLabel": {
       "react-native": "./src/stakeLabel.ts",
+      "browser": "./src/stakeLabel.ts",
       "types": "./dist/stakeLabel.d.ts",
       "default": "./dist/stakeLabel.js"
     },
