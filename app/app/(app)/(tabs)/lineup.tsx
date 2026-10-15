@@ -473,11 +473,12 @@ export default function LineupScreen() {
       type: 'set-active',
       leagueId: selectedLeague.league_id,
     });
-    if (!decision.preferencePatch) return;
+    const patch = decision.preferencePatch;
+    if (!patch) return;
     setSettingActive(true);
     void (async () => {
       try {
-        const updated = await patchPreferences(decision.preferencePatch);
+        const updated = await patchPreferences(patch);
         setMe(updated);
         setSelectedLeagueId(decision.selectedLeagueId);
       } catch (error) {
