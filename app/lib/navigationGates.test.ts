@@ -5,11 +5,18 @@ import { navigateAfterConnect, resetToHomeRoot } from './navigateAfterConnect';
 import {
   isHomeRouteLeaf,
   isOnZeroLeaguesAllowlist,
+  NOTIF_PROMPT_DISMISS_KEY,
+  NOTIF_PROMPT_SNOOZE_MS,
+  readNotifPromptSnoozed,
+  resetNotifPromptSessionForTests,
   resolveAppGate,
+  webPushConfigured,
+  writeNotifPromptDismissed,
 } from './navigationGates';
 
 afterEach(() => {
   resetConnectDeferredForSessionForTests();
+  resetNotifPromptSessionForTests();
 });
 
 describe('isHomeRouteLeaf', () => {
@@ -36,6 +43,8 @@ describe('resolveAppGate — zero leagues', () => {
     routeLeaf: 'index' as string | undefined,
     pushStatus: 'denied' as const,
     notificationsOnboarding: false,
+    webPushConfigured: true,
+    notifPromptSnoozed: false,
   };
 
   it('zero leagues → redirect_connect', () => {
@@ -95,6 +104,8 @@ describe('resolveAppGate — push permission', () => {
     routeLeaf: 'index' as string | undefined,
     pushStatus: 'undetermined' as const,
     notificationsOnboarding: false,
+    webPushConfigured: true,
+    notifPromptSnoozed: false,
   };
 
   it('push gate does not fire when league count is 0', () => {
@@ -139,6 +150,8 @@ describe('resolveAppGate — push permission', () => {
           routeLeaf: leaf,
           pushStatus: 'undetermined',
           notificationsOnboarding: leaf === 'notifications-permission',
+          webPushConfigured: true,
+          notifPromptSnoozed: false,
         }),
       ).toEqual({ action: 'render' });
     }
@@ -164,6 +177,120 @@ describe('resolveAppGate — push permission', () => {
         notificationsOnboarding: false,
       }),
     ).toEqual({ action: 'leave_notifications', destination: 'home' });
+  });
+
+  it('unconfigured web push → no redirect', () => {
+    expect(resolveAppGate({ ...withLeagues, webPushConfigured: false })).toEqual({
+      action: 'render',
+    });
+  });
+
+  it('snoozed prompt → no redirect', () => {
+    expect(resolveAppGate({ ...withLeagues, notifPromptSnoozed: true })).toEqual({
+      action: 'render',
+    });
+  });
+
+  it('configured and not snoozed → redirect_notifications', () => {
+    expect(
+      resolveAppGate({
+        ...withLeagues,
+        webPushConfigured: true,
+        notifPromptSnoozed: false,
+      }),
+    ).toEqual({ action: 'redirect_notifications' });
+  });
+
+  it('native inputs (configured, not snoozed) redirect on Home the same as before', () => {
+    expect(
+      resolveAppGate({
+        ...withLeagues,
+        webPushConfigured: true,
+        notifPromptSnoozed: false,
+        routeLeaf: 'index',
+        pushStatus: 'undetermined',
+      }),
+    ).toEqual({ action: 'redirect_notifications' });
+  });
+});
+
+describe('web push prompt inputs', () => {
+  it('native is configured even without a VAPID key, and never snoozed', () => {
+    expect(webPushConfigured('ios', undefined)).toBe(true);
+    expect(webPushConfigured('ios', '')).toBe(true);
+    expect(
+      readNotifPromptSnoozed({
+        platform: 'ios',
+        readItem: () => {
+          throw new Error('native has no localStorage');
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('web is unconfigured only when the VAPID public key is missing', () => {
+    expect(webPushConfigured('web', undefined)).toBe(false);
+    expect(webPushConfigured('web', '')).toBe(false);
+    expect(webPushConfigured('web', 'BPublicKey')).toBe(true);
+  });
+
+  it('a dismiss within 7 days snoozes; exactly 7 days later does not', () => {
+    const now = 1_700_000_000_000;
+    const store = new Map<string, string>();
+    writeNotifPromptDismissed({
+      platform: 'web',
+      now,
+      writeItem: (key, value) => {
+        store.set(key, value);
+      },
+    });
+    expect(store.get(NOTIF_PROMPT_DISMISS_KEY)).toBe(String(now));
+    const readItem = (key: string) => store.get(key) ?? null;
+    expect(
+      readNotifPromptSnoozed({
+        platform: 'web',
+        now: now + NOTIF_PROMPT_SNOOZE_MS - 1,
+        readItem,
+      }),
+    ).toBe(true);
+    expect(
+      readNotifPromptSnoozed({
+        platform: 'web',
+        now: now + NOTIF_PROMPT_SNOOZE_MS,
+        readItem,
+      }),
+    ).toBe(false);
+  });
+
+  it('a storage throw snoozes for the rest of the session', () => {
+    expect(
+      readNotifPromptSnoozed({
+        platform: 'web',
+        readItem: () => {
+          throw new Error('blocked');
+        },
+      }),
+    ).toBe(true);
+    expect(
+      readNotifPromptSnoozed({
+        platform: 'web',
+        readItem: () => null,
+      }),
+    ).toBe(true);
+
+    resetNotifPromptSessionForTests();
+    writeNotifPromptDismissed({
+      platform: 'web',
+      writeItem: () => {
+        throw new Error('blocked');
+      },
+    });
+    expect(
+      readNotifPromptSnoozed({
+        platform: 'web',
+        readItem: () => null,
+      }),
+    ).toBe(true);
   });
 });
 

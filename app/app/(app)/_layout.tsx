@@ -11,7 +11,12 @@ import { PushPermissionProvider, usePushPermission } from '../../contexts/PushPe
 import { SwitchingProvider } from '../../contexts/SwitchingContext';
 import { UpgradeSheetProvider } from '../../contexts/UpgradeSheetContext';
 import { isConnectDeferredForSession } from '../../lib/connectDeferredSession';
-import { resolveAppGate, type PushGateStatus } from '../../lib/navigationGates';
+import {
+  readNotifPromptSnoozed,
+  resolveAppGate,
+  webPushConfigured,
+  type PushGateStatus,
+} from '../../lib/navigationGates';
 import { resetToHomeRoot } from '../../lib/navigateAfterConnect';
 import { theme } from '../../lib/theme';
 
@@ -40,6 +45,11 @@ function AppNavigator() {
     routeLeaf === 'notifications-permission' && params.onboarding === '1';
 
   const pushStatus = pushStatusRaw as PushGateStatus;
+  const pushConfigured = webPushConfigured(Platform.OS, process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY);
+  const notifPromptSnoozed = readNotifPromptSnoozed({
+    platform: Platform.OS,
+    readItem: (key) => globalThis.localStorage.getItem(key),
+  });
 
   const decision = resolveAppGate({
     leaguesStatus,
@@ -48,6 +58,8 @@ function AppNavigator() {
     routeLeaf,
     pushStatus,
     notificationsOnboarding,
+    webPushConfigured: pushConfigured,
+    notifPromptSnoozed,
   });
 
   const decisionKey =

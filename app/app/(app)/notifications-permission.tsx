@@ -1,9 +1,12 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { TextButton } from '../../components/TextButton';
 import { usePushPermission } from '../../contexts/PushPermissionContext';
 import { desktopAlertCopy, lastDesktopAlertState } from '../../lib/desktopAlerts';
+import { writeNotifPromptDismissed } from '../../lib/navigationGates';
 import { theme } from '../../lib/theme';
 
 /**
@@ -13,8 +16,10 @@ import { theme } from '../../lib/theme';
  * Two entry paths (Sprint 10 Phase 4):
  * - Onboarding chain: `?onboarding=1` from streaming; after the OS prompt, layout leaves to all-set.
  * - Catch-all: `(app)/_layout` when Home + leagues >= 1 + still `'undetermined'`; leave → Home.
+ *   Web only: "Not now" snoozes that catch-all for 7 days. The native screen has no dismiss.
  */
 export default function NotificationsPermissionScreen() {
+  const router = useRouter();
   const { requestAndRegister } = usePushPermission();
   const [isRequesting, setIsRequesting] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
@@ -49,6 +54,20 @@ export default function NotificationsPermissionScreen() {
           onPress={onEnable}
           style={styles.button}
         />
+        {onWeb ? (
+          <TextButton
+            label="Not now"
+            onPress={() => {
+              writeNotifPromptDismissed({
+                platform: Platform.OS,
+                writeItem: (key, value) => {
+                  globalThis.localStorage.setItem(key, value);
+                },
+              });
+              router.replace('/(app)');
+            }}
+          />
+        ) : null}
       </View>
     </View>
   );
