@@ -27,6 +27,7 @@ import { WatchlistDesktop } from '../../../components/WatchlistDesktop';
 import { WatchlistFilters } from '../../../components/WatchlistFilters';
 import { WeekCard } from '../../../components/WeekCard';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
+import { resolveActiveLeagueId, watchlistLeagueSelection } from '../../../lib/activeLeague';
 import { ApiRequestError } from '../../../lib/apiClient';
 import { useFeature } from '../../../lib/useFeature';
 import { SHOW_STAR_TOGGLES } from '../../../lib/flags';
@@ -155,6 +156,7 @@ export default function LineupScreen() {
   const [busyLeagueId, setBusyLeagueId] = useState<string | null>(null);
   const [savingSlotId, setSavingSlotId] = useState<string | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [settingActive, setSettingActive] = useState(false);
   /** Optimistic `watchOpponent` while a preferences PATCH is in flight. */
   const [watchOpponentPending, setWatchOpponentPending] = useState<boolean | null>(null);
   const [bets, setBets] = useState<ManualStake[]>([]);
@@ -169,25 +171,54 @@ export default function LineupScreen() {
   const betsOn = useFeature('bets');
   const watchlist = lineupScreenMode(betsOn) === 'watchlist';
 
-  const selectedLeague = useMemo(
-    () => leagues.find((league) => league.league_id === selectedLeagueId) ?? leagues[0] ?? null,
-    [leagues, selectedLeagueId],
+  const leaguesRef = useRef(leagues);
+  leaguesRef.current = leagues;
+
+  const activeLeagueId = resolveActiveLeagueId(
+    leagues,
+    me?.preferences.watchedLeagueIds ?? [],
   );
+  // A chip sets `selectedLeagueId` for this visit. Until focus (or a chip), and
+  // while `me` is still loading, fall through to the active league once `me` exists
+  // so we never default to `leagues[0]` ahead of the watched set.
+  const selectedLeague = useMemo(() => {
+    const browsed = leagues.find((league) => league.league_id === selectedLeagueId);
+    if (browsed) return browsed;
+    if (me == null) return null;
+    return leagues.find((league) => league.league_id === activeLeagueId) ?? null;
+  }, [activeLeagueId, leagues, me, selectedLeagueId]);
 
   const watchedIds = useMemo(() => new Set(me?.preferences.watchedLeagueIds ?? []), [me]);
 
-  useEffect(() => {
-    if (leagues.length === 0) {
-      setSelectedLeagueId(null);
-      return;
-    }
-    setSelectedLeagueId((current) => {
-      if (current && leagues.some((league) => league.league_id === current)) {
-        return current;
-      }
-      return leagues[0]?.league_id ?? null;
-    });
-  }, [leagues, leaguesRevision]);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void fetchMe()
+        .then((meResponse) => {
+          if (cancelled) return;
+          setMe(meResponse);
+          const next = watchlistLeagueSelection({
+            type: 'focus',
+            leagues: leaguesRef.current,
+            watchedLeagueIds: meResponse.preferences.watchedLeagueIds,
+          });
+          setSelectedLeagueId(next.selectedLeagueId);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setMe(null);
+          const next = watchlistLeagueSelection({
+            type: 'focus',
+            leagues: leaguesRef.current,
+            watchedLeagueIds: [],
+          });
+          setSelectedLeagueId(next.selectedLeagueId);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const loadLineup = useCallback(async (league: LeagueSummary | null) => {
     if (!league) {
@@ -236,9 +267,12 @@ export default function LineupScreen() {
   }, [leaguesRevision]);
 
   useEffect(() => {
+    // Wait for `me` (or a chip / focus choice) so the first load is the active
+    // league, not whichever row `GET /leagues` returned first.
+    if (leagues.length > 0 && me == null && selectedLeagueId == null) return;
     setIsLoading(true);
     void loadLineup(selectedLeague).finally(() => setIsLoading(false));
-  }, [loadLineup, selectedLeague, leaguesRevision]);
+  }, [leagues.length, leaguesRevision, loadLineup, me, selectedLeague, selectedLeagueId]);
 
   useEffect(() => {
     if (!betsOn) return;
@@ -428,8 +462,36 @@ export default function LineupScreen() {
     }
   };
 
+  const onSelectLeague = (leagueId: string) => {
+    const next = watchlistLeagueSelection({ type: 'chip', leagueId });
+    setSelectedLeagueId(next.selectedLeagueId);
+  };
+
+  const onSetActive = () => {
+    if (!selectedLeague || settingActive) return;
+    const decision = watchlistLeagueSelection({
+      type: 'set-active',
+      leagueId: selectedLeague.league_id,
+    });
+    if (!decision.preferencePatch) return;
+    setSettingActive(true);
+    void (async () => {
+      try {
+        const updated = await patchPreferences(decision.preferencePatch);
+        setMe(updated);
+        setSelectedLeagueId(decision.selectedLeagueId);
+      } catch (error) {
+        Alert.alert('Could not save', errorMessage(error));
+      } finally {
+        setSettingActive(false);
+      }
+    })();
+  };
+
   const watchingSelected =
     selectedLeague != null && isWatchingLeague(watchedIds, selectedLeague.league_id);
+  const showingActiveLeague =
+    selectedLeague != null && selectedLeague.league_id === activeLeagueId;
   const manageBusy = busyLeagueId != null && busyLeagueId === selectedLeague?.league_id;
 
   const runLeagueAction = (choice: string | undefined) => {
@@ -570,21 +632,16 @@ export default function LineupScreen() {
               </View>
             ) : null}
             {showLeagueChips ? (
-              <View style={styles.switcherBlock}>
-                <LeagueSwitcher
-                  leagues={leagues}
-                  selectedLeagueId={selectedLeague?.league_id ?? null}
-                  onSelect={setSelectedLeagueId}
-                />
-                {selectedLeague ? (
-                  <Text
-                    maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-                    style={watchingSelected ? styles.watching : styles.notWatching}
-                  >
-                    {watchingSelected ? 'WATCHING' : 'NOT WATCHING'}
-                  </Text>
-                ) : null}
-              </View>
+              <LeagueBrowse
+                activeLeagueId={activeLeagueId}
+                leagues={leagues}
+                onSelect={onSelectLeague}
+                onSetActive={onSetActive}
+                selectedLeague={selectedLeague}
+                settingActive={settingActive}
+                showingActiveLeague={showingActiveLeague}
+                watchingSelected={watchingSelected}
+              />
             ) : null}
           </>
         }
@@ -720,21 +777,16 @@ export default function LineupScreen() {
       ) : null}
 
       {showLeagueChips ? (
-        <View style={styles.switcherBlock}>
-          <LeagueSwitcher
-            leagues={leagues}
-            selectedLeagueId={selectedLeague?.league_id ?? null}
-            onSelect={setSelectedLeagueId}
-          />
-          {selectedLeague ? (
-            <Text
-              maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-              style={watchingSelected ? styles.watching : styles.notWatching}
-            >
-              {watchingSelected ? 'WATCHING' : 'NOT WATCHING'}
-            </Text>
-          ) : null}
-        </View>
+        <LeagueBrowse
+          activeLeagueId={activeLeagueId}
+          leagues={leagues}
+          onSelect={onSelectLeague}
+          onSetActive={onSetActive}
+          selectedLeague={selectedLeague}
+          settingActive={settingActive}
+          showingActiveLeague={showingActiveLeague}
+          watchingSelected={watchingSelected}
+        />
       ) : null}
 
       {watchlist && sections.includes('leagueActions') ? (
@@ -1152,6 +1204,60 @@ function LineupHeader({ week }: { week: number | null }) {
   );
 }
 
+function LeagueBrowse({
+  leagues,
+  selectedLeague,
+  activeLeagueId,
+  watchingSelected,
+  showingActiveLeague,
+  onSelect,
+  onSetActive,
+  settingActive,
+}: {
+  leagues: LeagueSummary[];
+  selectedLeague: LeagueSummary | null;
+  activeLeagueId: string | null;
+  watchingSelected: boolean;
+  showingActiveLeague: boolean;
+  onSelect: (leagueId: string) => void;
+  onSetActive: () => void;
+  settingActive: boolean;
+}) {
+  return (
+    <View style={styles.switcherBlock}>
+      <View style={styles.switcherHead}>
+        <View style={styles.switcherChips}>
+          <LeagueSwitcher
+            leagues={leagues}
+            onSelect={onSelect}
+            selectedLeagueId={selectedLeague?.league_id ?? null}
+          />
+        </View>
+        {selectedLeague == null || activeLeagueId == null ? null : showingActiveLeague ? (
+          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.activeTag}>
+            ACTIVE
+          </Text>
+        ) : (
+          <TextButton
+            disabled={settingActive}
+            label="Set as active"
+            onPress={onSetActive}
+            size="smallStrong"
+          />
+        )}
+      </View>
+      {selectedLeague ? (
+        <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          style={watchingSelected ? styles.watching : styles.notWatching}
+        >
+          {watchingSelected ? 'WATCHING' : 'NOT WATCHING'}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 const SWITCHER_GAP = theme.spacing.xs;
 const SWITCHER_INSET = theme.spacing.xs;
 
@@ -1508,7 +1614,22 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     width: STRIPE_WIDTH,
   },
+  activeTag: {
+    color: theme.colors.brass,
+    fontFamily: fonts.monoBold,
+    fontSize: theme.type.eyebrow.size,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
+  },
   switcherBlock: {
+    gap: theme.spacing.sm,
+  },
+  switcherChips: {
+    flex: 1,
+    minWidth: 0,
+  },
+  switcherHead: {
+    alignItems: 'center',
+    flexDirection: 'row',
     gap: theme.spacing.sm,
   },
   switcherChip: {

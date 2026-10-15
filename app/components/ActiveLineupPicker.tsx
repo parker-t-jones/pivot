@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { TextButton } from './TextButton';
 import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
+import { resolveActiveLeagueId } from '../lib/activeLeague';
 import type { LeagueSummary } from '../lib/leagues';
-import { patchPreferences, type MeResponse } from '../lib/me';
+import { fetchMe, patchPreferences, type MeResponse } from '../lib/me';
 import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
 
@@ -27,11 +29,35 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
   // sheet is itself an RN `Modal`, so deferring `openUpgrade()` until `onDismiss` (rather than
   // firing it the instant `setOpen(false)` is called) avoids two modals racing to present.
   const pendingUpgradeRef = useRef(false);
+  const onMeUpdatedRef = useRef(onMeUpdated);
+  onMeUpdatedRef.current = onMeUpdated;
 
   const isPro = me.subscription_tier === 'pro';
   const watched = me.preferences.watchedLeagueIds;
-  const activeLeague =
-    leagues.find((l) => watched.includes(l.league_id)) ?? leagues[0] ?? null;
+  const watchedKey = JSON.stringify(watched);
+  const watchedKeyRef = useRef(watchedKey);
+  watchedKeyRef.current = watchedKey;
+  const activeLeagueId = resolveActiveLeagueId(leagues, watched);
+  const activeLeague = leagues.find((l) => l.league_id === activeLeagueId) ?? null;
+
+  // Home keeps its own `me`. Refetch on focus so a Watchlist "Set as active"
+  // shows up here without a shared context. Skip the reload when nothing changed.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void fetchMe()
+        .then((updated) => {
+          if (cancelled) return;
+          const nextKey = JSON.stringify(updated.preferences.watchedLeagueIds);
+          if (nextKey === watchedKeyRef.current) return;
+          onMeUpdatedRef.current(updated);
+        })
+        .catch(() => undefined);
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const openSheet = () => {
     setDraft(
