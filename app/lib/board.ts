@@ -6,8 +6,10 @@
  * the screen calls these in render via `useMemo` over data it already has.
  */
 import { groupWindow, networkLabelFromAirings, type WindowLabel } from '@pivot/shared/broadcast';
+import { formatStakeLabel } from '@pivot/shared/stakeLabel';
 import type { HomeBranch, LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
+import type { ManualStake } from './stakes';
 import { isDefensePosition } from './teamDisplay';
 
 /**
@@ -25,12 +27,99 @@ export { groupWindow };
 
 /**
  * One stake riding on one game. `teamId` is the team abbreviation, matching
- * `ScheduleGame.home_team`/`away_team`. Today these come from `lineupGroups` (one per active
- * starter); after stakes Phase 1 the same shape carries non-fantasy stakes.
+ * `ScheduleGame.home_team`/`away_team`. Fantasy refs come from `lineupGroups` (one per active
+ * starter). Bet refs (`kind: 'bet'`) come from `GET /stakes`; a total leaves `teamId` empty
+ * so it does not pull the stripe to either side.
  */
 export interface StakeRef {
   gameId: string;
   teamId: string;
+  kind?: 'bet';
+  stakeId?: string;
+  label?: string;
+}
+
+/** A live `/flags/current` bet chip. `stake_id` matches `GET /stakes` `id`. */
+export interface LiveBetEntry {
+  stake_id: string;
+  gameId: string;
+  label: string;
+}
+
+const FANTASY_STAKE_TYPES = new Set(['ROSTERED', 'OPPONENT_ROSTERED']);
+
+function gameById(weekGames: readonly ScheduleGame[]): Map<string, ScheduleGame> {
+  return new Map(weekGames.map((game) => [game.game_id, game]));
+}
+
+function pickedTeamAbbreviation(stake: ManualStake, game: ScheduleGame): string {
+  const teamId = stake.subject.teamId ?? '';
+  if (teamId.length === 0) return '';
+  if (teamId === game.home_team_id || teamId === game.home_team) return game.home_team;
+  if (teamId === game.away_team_id || teamId === game.away_team) return game.away_team;
+  return '';
+}
+
+function betRefForStake(stake: ManualStake, game: ScheduleGame): StakeRef {
+  const teamId = pickedTeamAbbreviation(stake, game);
+  const teams = [
+    game.away_team_id
+      ? { teamId: game.away_team_id, abbreviation: game.away_team }
+      : { teamId: game.away_team, abbreviation: game.away_team },
+    game.home_team_id
+      ? { teamId: game.home_team_id, abbreviation: game.home_team }
+      : { teamId: game.home_team, abbreviation: game.home_team },
+  ];
+  return {
+    kind: 'bet',
+    stakeId: stake.id,
+    gameId: stake.game_id,
+    teamId,
+    label: formatStakeLabel(
+      {
+        condition: stake.condition,
+        subject: { type: stake.subject.type, teamId: stake.subject.teamId ?? null },
+      },
+      teams,
+    ),
+  };
+}
+
+/**
+ * Fantasy refs plus one ref per bet on this week's board. `ROSTERED` and
+ * `OPPONENT_ROSTERED` stay on the lineup. A stake id that is also in the live
+ * payload is kept once, from the stake row (it has the team side).
+ */
+export function boardStakeRefs(input: {
+  fantasyRefs: readonly StakeRef[];
+  stakes: readonly ManualStake[];
+  weekGames: readonly ScheduleGame[];
+  liveBets: readonly LiveBetEntry[];
+}): StakeRef[] {
+  const games = gameById(input.weekGames);
+  const bets = new Map<string, StakeRef>();
+
+  for (const stake of input.stakes) {
+    if (FANTASY_STAKE_TYPES.has(stake.condition.type)) continue;
+    const game = games.get(stake.game_id);
+    if (!game) continue;
+    if (bets.has(stake.id)) continue;
+    bets.set(stake.id, betRefForStake(stake, game));
+  }
+
+  for (const live of input.liveBets) {
+    if (bets.has(live.stake_id)) continue;
+    if (!games.has(live.gameId)) continue;
+    bets.set(live.stake_id, {
+      kind: 'bet',
+      stakeId: live.stake_id,
+      gameId: live.gameId,
+      teamId: '',
+      label: live.label,
+    });
+  }
+
+  return [...input.fantasyRefs, ...bets.values()];
 }
 
 export interface BoardRowData {
@@ -82,6 +171,9 @@ export function buildBoardRows(
     const refs = refsByGame.get(game.game_id) ?? [];
     const homeStakes = refs.filter((ref) => ref.teamId === game.home_team).length;
     const awayStakes = refs.filter((ref) => ref.teamId === game.away_team).length;
+    // A total matches neither abbreviation, so it does not move the stripe. With no
+    // team-sided ref at all the stripe stays unset (neutral) instead of defaulting home.
+    const sided = homeStakes + awayStakes;
 
     rows.push({
       gameId: game.game_id,
@@ -94,7 +186,7 @@ export function buildBoardRows(
       network: networkLabelFromAirings(game.airings),
       stakeCount: refs.length,
       // Tie goes to the home team, so the stripe is stable rather than order-dependent.
-      stripeSide: refs.length === 0 ? null : awayStakes > homeStakes ? 'away' : 'home',
+      stripeSide: sided === 0 ? null : awayStakes > homeStakes ? 'away' : 'home',
     });
   }
 

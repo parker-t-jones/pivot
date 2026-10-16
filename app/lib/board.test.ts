@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  boardStakeRefs,
   buildBoardRows,
   buildMyCardGames,
   flattenRows,
@@ -12,6 +13,7 @@ import {
 import type { GameAiring, GameBroadcast } from './gameDisplay';
 import { resolveHomeBranch, type HomeBranch, type LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
+import type { ManualStake } from './stakes';
 import { AIRING_NETWORKS } from '@pivot/shared/broadcast';
 
 function airing(network: string): GameAiring {
@@ -514,5 +516,165 @@ describe('buildMyCardGames', () => {
       ['Jaylen Warren', 'RB'],
       ['Lions D/ST', 'DEF'],
     ]);
+  });
+});
+
+function manualStake(overrides: Partial<ManualStake> & Pick<ManualStake, 'id' | 'game_id'>): ManualStake {
+  return {
+    season: 2026,
+    week: 3,
+    source: 'MANUAL',
+    weight: 1,
+    subject: { type: 'TEAM', teamId: 'away-id' },
+    condition: { type: 'MONEYLINE' },
+    game: null,
+    ...overrides,
+  };
+}
+
+describe('boardStakeRefs', () => {
+  const fantasySlate: ScheduleGame[] = [
+    game('g1', '2026-09-18T00:15:00Z', {
+      away_team: 'BUF',
+      home_team: 'MIA',
+      airings: [airing('amazon_prime')],
+    }),
+    game('g2', '2026-09-20T17:00:00Z', { away_team: 'NYJ', home_team: 'NE' }),
+    game('g10', '2026-09-20T17:00:00Z', { away_team: 'DAL', home_team: 'PHI' }),
+    game('g3', '2026-09-20T20:25:00Z', { away_team: 'SF', home_team: 'SEA' }),
+    game('g4', '2026-09-22T00:15:00Z', { away_team: 'KC', home_team: 'DEN' }),
+  ];
+  const fantasyRefs: StakeRef[] = [
+    { gameId: 'g2', teamId: 'NYJ' },
+    { gameId: 'g2', teamId: 'NYJ' },
+    { gameId: 'g2', teamId: 'NE' },
+    { gameId: 'g3', teamId: 'SEA' },
+  ];
+
+  const seaDen = game('sea-den', '2026-09-20T20:25:00Z', {
+    away_team: 'SEA',
+    home_team: 'DEN',
+    away_team_id: 'sea-id',
+    home_team_id: 'den-id',
+    status: 'final',
+  });
+  const open = game('open', '2026-09-21T17:00:00Z', {
+    away_team: 'SEA',
+    home_team: 'DEN',
+    away_team_id: 'sea-id',
+    home_team_id: 'den-id',
+  });
+
+  it('matches today’s board when there are no bets', () => {
+    const refs = boardStakeRefs({
+      fantasyRefs,
+      stakes: [],
+      weekGames: fantasySlate,
+      liveBets: [],
+    });
+    expect(refs).toEqual(fantasyRefs);
+    expect(buildBoardRows(fantasySlate, refs)).toEqual(buildBoardRows(fantasySlate, fantasyRefs));
+  });
+
+  it('makes a moneyline on a game with no fantasy players hero-eligible on that side', () => {
+    const now = new Date('2026-09-21T12:00:00Z');
+    const refs = boardStakeRefs({
+      fantasyRefs: [],
+      stakes: [
+        manualStake({
+          id: 'ml-1',
+          game_id: 'open',
+          subject: { type: 'TEAM', teamId: 'sea-id' },
+          condition: { type: 'MONEYLINE' },
+        }),
+      ],
+      weekGames: [open],
+      liveBets: [],
+    });
+    const rows = flattenRows(buildBoardRows([open], refs));
+    expect(refs).toEqual([
+      {
+        kind: 'bet',
+        stakeId: 'ml-1',
+        gameId: 'open',
+        teamId: 'SEA',
+        label: 'SEA ML',
+      },
+    ]);
+    expect(rows[0]?.stakeCount).toBe(1);
+    expect(rows[0]?.stripeSide).toBe('away');
+    expect(pickFeaturedGame(rows, now)?.gameId).toBe('open');
+  });
+
+  it('leaves a total on neither side', () => {
+    const refs = boardStakeRefs({
+      fantasyRefs: [],
+      stakes: [
+        manualStake({
+          id: 'tot-1',
+          game_id: 'open',
+          subject: { type: 'GAME', gameId: 'open' },
+          condition: { type: 'TOTAL_OVER', line: 44.5 },
+        }),
+      ],
+      weekGames: [open],
+      liveBets: [],
+    });
+    const rows = flattenRows(buildBoardRows([open], refs));
+    expect(refs[0]?.label).toBe('Over 44.5');
+    expect(refs[0]?.teamId).toBe('');
+    expect(rows[0]?.stakeCount).toBe(1);
+    expect(rows[0]?.stripeSide).toBeNull();
+  });
+
+  it('drops fantasy-managed stakes and stakes for games off the board', () => {
+    const refs = boardStakeRefs({
+      fantasyRefs: [],
+      stakes: [
+        manualStake({
+          id: 'rost',
+          game_id: 'open',
+          condition: { type: 'ROSTERED' },
+        }),
+        manualStake({
+          id: 'opp',
+          game_id: 'open',
+          condition: { type: 'OPPONENT_ROSTERED' },
+        }),
+        manualStake({
+          id: 'elsewhere',
+          game_id: 'not-on-board',
+          condition: { type: 'MONEYLINE' },
+        }),
+      ],
+      weekGames: [open, seaDen],
+      liveBets: [],
+    });
+    expect(refs).toEqual([]);
+  });
+
+  it('keeps a final on the board and collapses the same stake id to one ref', () => {
+    const stake = manualStake({
+      id: 'ml-final',
+      game_id: 'sea-den',
+      subject: { type: 'TEAM', teamId: 'sea-id' },
+      condition: { type: 'SURVIVOR' },
+    });
+    const refs = boardStakeRefs({
+      fantasyRefs: [],
+      stakes: [stake],
+      weekGames: [seaDen],
+      liveBets: [{ stake_id: 'ml-final', gameId: 'sea-den', label: 'Survivor · SEA' }],
+    });
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({
+      stakeId: 'ml-final',
+      teamId: 'SEA',
+      label: 'Survivor · SEA',
+    });
+    const rows = flattenRows(buildBoardRows([seaDen], refs));
+    expect(rows[0]?.status).toBe('final');
+    expect(rows[0]?.stakeCount).toBe(1);
+    expect(rows[0]?.stripeSide).toBe('away');
   });
 });
