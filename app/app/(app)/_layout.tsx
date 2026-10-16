@@ -6,6 +6,7 @@ import { ErrorState } from '../../components/ErrorState';
 import { NotificationBannerHost } from '../../components/NotificationBannerHost';
 import { NotificationResponseHandler } from '../../components/NotificationResponseHandler';
 import { UpgradeSheet } from '../../components/UpgradeSheet';
+import { GameLinksProvider } from '../../contexts/GameLinksContext';
 import { LeaguesGateProvider, useLeaguesGate } from '../../contexts/LeaguesGateContext';
 import { PushPermissionProvider, usePushPermission } from '../../contexts/PushPermissionContext';
 import { SwitchingProvider } from '../../contexts/SwitchingContext';
@@ -127,14 +128,16 @@ export default function AppGroupLayout() {
   return (
     <PushPermissionProvider>
       <LeaguesGateProvider>
-        <SwitchingProvider>
-          <UpgradeSheetProvider>
-            <AppNavigator />
-            <NotificationBannerHost />
-            {Platform.OS === 'web' ? null : <NotificationResponseHandler />}
-            <UpgradeSheet />
-          </UpgradeSheetProvider>
-        </SwitchingProvider>
+        <GameLinksProvider>
+          <SwitchingProvider>
+            <UpgradeSheetProvider>
+              <AppNavigator />
+              <NotificationBannerHost />
+              {Platform.OS === 'web' ? null : <NotificationResponseHandler />}
+              <UpgradeSheet />
+            </UpgradeSheetProvider>
+          </SwitchingProvider>
+        </GameLinksProvider>
       </LeaguesGateProvider>
     </PushPermissionProvider>
   );

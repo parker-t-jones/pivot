@@ -21,13 +21,15 @@ import {
 import { ListRow } from '../components/ListRow';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SecondaryButton } from '../components/SecondaryButton';
+import { useGameLinks } from './GameLinksContext';
 import { apiClient } from '../lib/apiClient';
 import type { GameBroadcast, GameBroadcastsResponse } from '../lib/gameDisplay';
 import { watchOptionLabel } from '../lib/gameDisplay';
+import { webWatchUrl } from '../lib/primeWatchUrl';
 import { userServiceAppStoreUrl } from '../lib/streamingServices';
 import { resolveSwitch } from '../lib/switching';
 import { theme } from '../lib/theme';
-import { webWatchUrl } from '../lib/primeWatchUrl';
+import { nativeSwitchUrl, webSwitchUrl } from '../lib/watchTarget';
 import { selectWatchLink, watchLinkInputFor } from '../lib/watchLink';
 
 export interface SwitchInput {
@@ -102,6 +104,16 @@ async function openDeepLink(url: string): Promise<boolean> {
   }
 }
 
+/** A saved link is opened as-is. The generated link still goes through `selectWatchLink`. */
+async function openExact(url: string): Promise<boolean> {
+  try {
+    await Linking.openURL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Sprint 7 Phase 6 — owns the app-wide "Switch" action, shared by the Home CTA (Section 10 State 1)
  * and the notification banner's Switch button. Flow: show the transition overlay, resolve a
@@ -120,7 +132,11 @@ async function openDeepLink(url: string): Promise<boolean> {
 export function SwitchingProvider({ children }: PropsWithChildren) {
   const [phase, setPhase] = useState<SwitchPhase>({ status: 'idle' });
   const inFlight = useRef(false);
-  const matchup = useRef({ awayNickname: null as string | null, homeNickname: null as string | null });
+  const matchup = useRef({
+    awayNickname: null as string | null,
+    homeNickname: null as string | null,
+  });
+  const { get: getGameLink } = useGameLinks();
 
   /** Sets the error phase and, when the caller didn't already have a broadcast list handy (the
    *  notification/banner path never prefetches one), kicks off `GET /games/:id/broadcasts` right
@@ -184,12 +200,18 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
       // Browsers block window.open after the overlay delay. Open the https URL in this turn and
       // skip Linking.canOpenURL, which is always true on web and would pick sportscenter://.
       // Prime's native link is the Get-the-app page in a browser, so web swaps in the search URL.
+      const customUrl = getGameLink(input.gameId)?.url ?? null;
+
       if (Platform.OS === 'web') {
         matchup.current = {
           awayNickname: input.awayNickname ?? null,
           homeNickname: input.homeNickname ?? null,
         };
-        const httpsUrl = webWatchUrl(input.deepLinkUrl, matchup.current);
+        const httpsUrl = webSwitchUrl({
+          customUrl,
+          deepLinkUrl: input.deepLinkUrl,
+          matchup: matchup.current,
+        });
         if (httpsUrl) {
           globalThis.open(httpsUrl, '_blank', 'noopener');
         }
@@ -233,13 +255,31 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
 
       void (async () => {
         try {
-          const resolution = await resolveSwitch(
-            { id: input.gameId, deepLinkUrl: input.deepLinkUrl ?? undefined },
-            // DeepLinkPlaybackSource ignores userContext; real subscription context arrives in Sprint 8.
-            { subscribedServices: [] },
-          );
+          const hasCustom = (customUrl?.trim() ?? '').length > 0;
+          let generated: string | null = null;
+          let source = 'deeplink';
+          if (!hasCustom) {
+            const resolution = await resolveSwitch(
+              { id: input.gameId, deepLinkUrl: input.deepLinkUrl ?? undefined },
+              // DeepLinkPlaybackSource ignores userContext; real subscription context arrives in Sprint 8.
+              { subscribedServices: [] },
+            );
 
-          if (!resolution.ok || !resolution.session.deepLinkUrl) {
+            if (!resolution.ok || !resolution.session.deepLinkUrl) {
+              enterErrorPhase(
+                input.gameId,
+                "We couldn't find a way to open this game yet. Try another broadcast.",
+                null,
+                input.broadcasts,
+              );
+              return;
+            }
+            generated = resolution.session.deepLinkUrl;
+            source = resolution.session.source;
+          }
+
+          const chosen = nativeSwitchUrl({ customUrl, generatedUrl: generated });
+          if (!chosen) {
             enterErrorPhase(
               input.gameId,
               "We couldn't find a way to open this game yet. Try another broadcast.",
@@ -251,12 +291,12 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
 
           // Best-effort primary-game update — never blocks the switch.
           void apiClient
-            .put('/session/primary', { game_id: input.gameId, source: resolution.session.source })
+            .put('/session/primary', { game_id: input.gameId, source })
             .catch((error: unknown) => console.warn('[switch] failed to set primary game', error));
 
           await delay(MIN_OVERLAY_MS);
 
-          const opened = await openDeepLink(resolution.session.deepLinkUrl);
+          const opened = hasCustom ? await openExact(chosen) : await openDeepLink(chosen);
 
           if (opened) {
             setPhase({ status: 'idle' });
@@ -264,7 +304,7 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
             enterErrorPhase(
               input.gameId,
               "That app doesn't seem to be installed. Try another broadcast.",
-              resolution.session.source,
+              hasCustom ? null : source,
               input.broadcasts,
             );
           }
@@ -273,7 +313,7 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
         }
       })();
     },
-    [enterErrorPhase],
+    [enterErrorPhase, getGameLink],
   );
 
   const dismissError = useCallback(() => setPhase({ status: 'idle' }), []);
