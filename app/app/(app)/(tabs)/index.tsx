@@ -596,6 +596,8 @@ export default function HomeScreen() {
         gameId: flag.game_id,
         deepLinkUrl: broadcast.deep_link_url,
         label: `${flag.game.away_team} @ ${flag.game.home_team}`,
+        awayNickname: flag.game.away_team_name,
+        homeNickname: flag.game.home_team_name,
         teamName: flaggedTeam?.name,
         teamColors: flaggedTeam
           ? { primary: flaggedTeam.primaryColor, secondary: flaggedTeam.secondaryColor }
@@ -627,6 +629,8 @@ export default function HomeScreen() {
             gameId: flag.game_id,
             deepLinkUrl: cta.broadcast.deep_link_url,
             label: `${flag.game.away_team} @ ${flag.game.home_team}`,
+            awayNickname: flag.game.away_team_name,
+            homeNickname: flag.game.home_team_name,
             teamName: flaggedTeam?.name,
             teamColors: flaggedTeam
               ? { primary: flaggedTeam.primaryColor, secondary: flaggedTeam.secondaryColor }
@@ -656,6 +660,8 @@ export default function HomeScreen() {
         gameId: flag.game_id,
         deepLinkUrl: broadcast?.deep_link_url ?? null,
         label: `${flag.game.away_team} @ ${flag.game.home_team}`,
+        awayNickname: flag.game.away_team_name,
+        homeNickname: flag.game.home_team_name,
         teamName: flaggedTeam?.name,
         teamColors: flaggedTeam
           ? { primary: flaggedTeam.primaryColor, secondary: flaggedTeam.secondaryColor }

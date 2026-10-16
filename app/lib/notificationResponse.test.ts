@@ -118,6 +118,8 @@ describe('applyNotificationResponse', () => {
       gameId: 'game-1',
       deepLinkUrl: 'https://tv.youtube.com/live',
       label: 'DEN @ IND',
+      awayNickname: 'Broncos',
+      homeNickname: 'Colts',
       teamName: 'Colts',
       teamColors: { primary: '#002C5F', secondary: '#A2AAAD' },
     });

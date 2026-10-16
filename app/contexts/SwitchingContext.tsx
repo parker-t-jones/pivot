@@ -27,7 +27,8 @@ import { watchOptionLabel } from '../lib/gameDisplay';
 import { userServiceAppStoreUrl } from '../lib/streamingServices';
 import { resolveSwitch } from '../lib/switching';
 import { theme } from '../lib/theme';
-import { httpsWatchUrl, selectWatchLink, watchLinkInputFor } from '../lib/watchLink';
+import { webWatchUrl } from '../lib/primeWatchUrl';
+import { selectWatchLink, watchLinkInputFor } from '../lib/watchLink';
 
 export interface SwitchInput {
   gameId: string;
@@ -46,6 +47,9 @@ export interface SwitchInput {
    *  When omitted, the overlay fetches them lazily itself if the user hits the error state and
    *  needs the alternate-broadcast picker (the notification/banner path doesn't prefetch this). */
   broadcasts?: GameBroadcast[];
+  /** Same nicknames the YouTube TV link is built from. Web uses them for the Prime search. */
+  awayNickname?: string | null;
+  homeNickname?: string | null;
 }
 
 type SwitchPhase =
@@ -116,6 +120,7 @@ async function openDeepLink(url: string): Promise<boolean> {
 export function SwitchingProvider({ children }: PropsWithChildren) {
   const [phase, setPhase] = useState<SwitchPhase>({ status: 'idle' });
   const inFlight = useRef(false);
+  const matchup = useRef({ awayNickname: null as string | null, homeNickname: null as string | null });
 
   /** Sets the error phase and, when the caller didn't already have a broadcast list handy (the
    *  notification/banner path never prefetches one), kicks off `GET /games/:id/broadcasts` right
@@ -178,8 +183,13 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
 
       // Browsers block window.open after the overlay delay. Open the https URL in this turn and
       // skip Linking.canOpenURL, which is always true on web and would pick sportscenter://.
+      // Prime's native link is the Get-the-app page in a browser, so web swaps in the search URL.
       if (Platform.OS === 'web') {
-        const httpsUrl = httpsWatchUrl(input.deepLinkUrl);
+        matchup.current = {
+          awayNickname: input.awayNickname ?? null,
+          homeNickname: input.homeNickname ?? null,
+        };
+        const httpsUrl = webWatchUrl(input.deepLinkUrl, matchup.current);
         if (httpsUrl) {
           globalThis.open(httpsUrl, '_blank', 'noopener');
         }
@@ -270,7 +280,7 @@ export function SwitchingProvider({ children }: PropsWithChildren) {
 
   const onSelectAlternate = useCallback((broadcast: GameBroadcast) => {
     if (Platform.OS === 'web') {
-      const httpsUrl = httpsWatchUrl(broadcast.deep_link_url);
+      const httpsUrl = webWatchUrl(broadcast.deep_link_url, matchup.current);
       if (httpsUrl) {
         globalThis.open(httpsUrl, '_blank', 'noopener');
         setPhase({ status: 'idle' });

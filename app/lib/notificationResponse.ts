@@ -51,6 +51,8 @@ export interface SwitchToGameInput {
   gameId: string;
   deepLinkUrl: string | null;
   label: string;
+  awayNickname?: string | null;
+  homeNickname?: string | null;
   teamName?: string;
   teamColors: { primary: string; secondary: string } | null;
 }
@@ -98,6 +100,8 @@ export function applyNotificationResponse(
     gameId: game_id,
     deepLinkUrl: payloadAction.deep_link_url,
     label: `${game_summary.away_team} @ ${game_summary.home_team}`,
+    awayNickname: game_summary.away_team_name,
+    homeNickname: game_summary.home_team_name,
     teamName: possessingTeam?.name,
     teamColors: possessingTeam
       ? { primary: possessingTeam.primaryColor, secondary: possessingTeam.secondaryColor }

@@ -126,6 +126,8 @@ export function NotificationBannerHost() {
           gameId: game_id,
           deepLinkUrl: payloadAction.deep_link_url,
           label: `${game_summary.away_team} @ ${game_summary.home_team}`,
+          awayNickname: game_summary.away_team_name,
+          homeNickname: game_summary.home_team_name,
           teamName: possessingTeam?.name,
           teamColors: possessingTeam
             ? { primary: possessingTeam.primaryColor, secondary: possessingTeam.secondaryColor }

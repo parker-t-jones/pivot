@@ -78,6 +78,8 @@ export function WatchlistDesktop({
       gameId: row.gameId,
       deepLinkUrl: row.deepLinkUrl,
       label: row.switchLabel,
+      awayNickname: source?.away_team_name,
+      homeNickname: source?.home_team_name,
       broadcasts: source?.broadcasts,
     });
   };
