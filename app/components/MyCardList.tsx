@@ -6,6 +6,7 @@ import {
   flattenRows,
   type BoardWindowGroup,
   type MyCardGame,
+  type StakeRef,
 } from '../lib/board';
 import { fonts } from '../lib/fonts';
 import { compactScoreLabel, liveClockLabel } from '../lib/gameDisplay';
@@ -27,6 +28,8 @@ interface MyCardListProps {
   lineupGroups: LineupGameGroup[];
   /** Games in progress, for the clock and score on live headers. */
   liveGames?: LiveGame[];
+  /** Bet refs already merged onto the board. Fantasy lines still come from `lineupGroups`. */
+  betRefs?: readonly StakeRef[];
 }
 
 function formatKickoffTime(kickoff: Date): string {
@@ -34,10 +37,10 @@ function formatKickoffTime(kickoff: Date): string {
 }
 
 /** The MY CARD segment (PIVOT-STAKES-PLAN.md §11.3): one `well` block per stake game. */
-export function MyCardList({ groups, lineupGroups, liveGames = [] }: MyCardListProps) {
+export function MyCardList({ groups, lineupGroups, liveGames = [], betRefs = [] }: MyCardListProps) {
   const myCardGames = useMemo(
-    () => buildMyCardGames(flattenRows(groups), lineupGroups),
-    [groups, lineupGroups],
+    () => buildMyCardGames(flattenRows(groups), lineupGroups, betRefs),
+    [groups, lineupGroups, betRefs],
   );
   const liveById = useMemo(
     () => new Map(liveGames.map((game) => [game.game_id, game])),
@@ -145,13 +148,15 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
           <Text numberOfLines={1} style={styles.stakeLabel}>
             {stake.label}
           </Text>
-          <Text
-            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-            numberOfLines={1}
-            style={styles.stakeValue}
-          >
-            {stake.value}
-          </Text>
+          {stake.value.length > 0 ? (
+            <Text
+              maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+              numberOfLines={1}
+              style={styles.stakeValue}
+            >
+              {stake.value}
+            </Text>
+          ) : null}
         </View>
       ))}
     </View>

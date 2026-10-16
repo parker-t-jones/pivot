@@ -18,11 +18,13 @@ import { useSwitching } from '../../../contexts/SwitchingContext';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
 import { ApiRequestError, apiClient } from '../../../lib/apiClient';
 import {
+  boardStakeRefs,
   buildBoardRows,
   flattenRows,
   isPregameBranch,
   nextKickoff,
   pickFeaturedGame,
+  type LiveBetEntry,
   type StakeRef,
 } from '../../../lib/board';
 import type { FlagEventPayload } from '../../../lib/flagEventPayload';
@@ -83,6 +85,8 @@ import {
   type LiveGame,
   type ScheduleGame,
 } from '../../../lib/schedule';
+import { fetchStakes } from '../../../lib/stakesClient';
+import type { ManualStake } from '../../../lib/stakes';
 import { resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../../../lib/teamDisplay';
 import { theme } from '../../../lib/theme';
 import { useHomeRealtime } from '../../../lib/useHomeRealtime';
@@ -138,6 +142,19 @@ function toFlagSlice(data: HomeData): HomeFlagSlice {
   };
 }
 
+function heroBetChips(
+  refs: readonly StakeRef[],
+  gameId: string,
+): { stakeId: string; label: string }[] {
+  const chips: { stakeId: string; label: string }[] = [];
+  for (const ref of refs) {
+    if (ref.kind !== 'bet' || ref.gameId !== gameId) continue;
+    if (ref.stakeId === undefined || ref.label === undefined || ref.label.length === 0) continue;
+    chips.push({ stakeId: ref.stakeId, label: ref.label });
+  }
+  return chips;
+}
+
 function emptyHome(partial: Partial<HomeData> & Pick<HomeData, 'hasLeagues' | 'branch'>): HomeData {
   return {
     leagueCount: 0,
@@ -170,6 +187,7 @@ export default function HomeScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [homeData, setHomeData] = useState<HomeData | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [manualStakes, setManualStakes] = useState<ManualStake[]>([]);
   const [pregameNowMs, setPregameNowMs] = useState(() => Date.now());
 
   const opponentRefresh = useRef<OpponentRefreshState>(emptyOpponentRefresh());
@@ -322,6 +340,20 @@ export default function HomeScreen() {
   useEffect(() => clearOpponentTimer, [clearOpponentTimer]);
 
   /**
+   * Bets are written on other screens. A failed fetch leaves Home as it is with no bets
+   * rather than failing the rest of the slate.
+   */
+  const loadManualStakes = useCallback(async (week: number) => {
+    try {
+      const response = await fetchStakes(week);
+      setManualStakes(response.stakes);
+    } catch (error) {
+      console.warn('[home] failed to load stakes', error);
+      setManualStakes([]);
+    }
+  }, []);
+
+  /**
    * Section 10 Home cold-start (Sprint 10 Phase 2). Order matters:
    * 1. leagues from LeaguesGateContext (single SoT) → State 5 short-circuit
    * 2. GET /state/nfl → display_phase branch (off/pre idle vs regular/post live machine)
@@ -336,6 +368,7 @@ export default function HomeScreen() {
       try {
         if (leagueRows.length === 0) {
           setMe(null);
+          setManualStakes([]);
           resetOpponentWatch([], []);
           setHomeData(
             emptyHome({
@@ -361,6 +394,7 @@ export default function HomeScreen() {
         });
 
         if (idleBranch.branch === 'season_idle') {
+          setManualStakes([]);
           resetOpponentWatch([], []);
           setHomeData(
             emptyHome({
@@ -449,13 +483,14 @@ export default function HomeScreen() {
           countdownMs,
           liveFeedOk: flagsResponse.live_feed_ok,
         });
+        void loadManualStakes(nflState.week);
       } catch (error) {
         const message =
           error instanceof ApiRequestError ? error.message : 'Could not load your games.';
         setLoadError(message);
       }
     },
-    [resetOpponentWatch],
+    [loadManualStakes, resetOpponentWatch],
   );
 
   const onGameState = useCallback(
@@ -662,8 +697,30 @@ export default function HomeScreen() {
     }, [isPregame]),
   );
 
-  /** One ref per active starter, so `buildBoardRows` can take real stakes after stakes Phase 1. */
-  const stakeRefs = useMemo<StakeRef[]>(
+  const stakesWeek = homeData?.nflState?.week ?? null;
+  const stakesBranch = homeData?.branch.branch ?? null;
+  useFocusEffect(
+    useCallback(() => {
+      if (stakesWeek === null) return;
+      if (stakesBranch === 'no_leagues' || stakesBranch === 'season_idle') return;
+      void loadManualStakes(stakesWeek);
+    }, [loadManualStakes, stakesBranch, stakesWeek]),
+  );
+
+  const liveBets = useMemo<LiveBetEntry[]>(() => {
+    const flags = [homeData?.flag, ...(homeData?.otherFlags ?? [])].filter(
+      (flag): flag is CurrentFlag => flag != null,
+    );
+    return flags.flatMap((flag) =>
+      (flag.bets ?? []).map((bet) => ({
+        stake_id: bet.stake_id,
+        gameId: flag.game_id,
+        label: bet.label,
+      })),
+    );
+  }, [homeData?.flag, homeData?.otherFlags]);
+
+  const fantasyRefs = useMemo<StakeRef[]>(
     () =>
       (homeData?.lineupGroups ?? []).flatMap((group) =>
         group.players.map((player) => ({
@@ -673,6 +730,19 @@ export default function HomeScreen() {
       ),
     [homeData?.lineupGroups],
   );
+
+  const stakeRefs = useMemo(
+    () =>
+      boardStakeRefs({
+        fantasyRefs,
+        stakes: manualStakes,
+        weekGames: homeData?.weekGames ?? [],
+        liveBets,
+      }),
+    [fantasyRefs, homeData?.weekGames, liveBets, manualStakes],
+  );
+
+  const betRefs = useMemo(() => stakeRefs.filter((ref) => ref.kind === 'bet'), [stakeRefs]);
 
   // Derived in render rather than in `loadHome`: the board is a pure function of the week's
   // schedule plus the lineups that callback already fetches.
@@ -724,9 +794,10 @@ export default function HomeScreen() {
             players:
               homeData?.lineupGroups.find((group) => group.game.game_id === target.gameId)
                 ?.players ?? [],
+            bets: heroBetChips(stakeRefs, target.gameId),
           };
     return { hero, countdownMs };
-  }, [boardGroups, pregameNowMs, homeData?.weekGames, homeData?.lineupGroups]);
+  }, [boardGroups, pregameNowMs, homeData?.weekGames, homeData?.lineupGroups, stakeRefs]);
 
   function renderBody() {
     if (!homeData) return null;
@@ -790,6 +861,7 @@ export default function HomeScreen() {
               )
             }
             sections={liveBoardSections}
+            betRefs={betRefs}
             groups={boardGroups}
             lineupGroups={homeData.lineupGroups}
             liveGames={homeData.liveGames}
@@ -803,6 +875,7 @@ export default function HomeScreen() {
         return (
           <HomePregameView
             countdownMs={pregameCountdownMs}
+            betRefs={betRefs}
             groups={boardGroups}
             hero={pregameHero}
             lineupGroups={homeData.lineupGroups}

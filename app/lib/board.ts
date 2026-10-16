@@ -251,9 +251,9 @@ export function nextKickoff(rows: BoardRowData[], now: Date): BoardRowData | nul
   return soonest;
 }
 
-/** One stake line on MY CARD. Fantasy-only in U3; PROP / SPREAD / … arrive with stakes Phase 1+. */
+/** One stake line on MY CARD. A bet line uses the stake label and leaves `value` empty. */
 export interface MyCardStakeLine {
-  tag: 'FANTASY';
+  tag: 'FANTASY' | 'BET';
   label: string;
   value: string;
 }
@@ -298,13 +298,22 @@ function stakeLineLabel(
  *
  * Player lines come from `lineupGroups` as-is. That helper already dedupes by `player_id` across
  * leagues (`groupLineupByGame` / `listStakePlayersInGame`), so a player on two rosters appears
- * once per game — not once per league.
+ * once per game — not once per league. Bet refs add a line on the same game, including a game
+ * with no rostered starter.
  */
 export function buildMyCardGames(
   rows: BoardRowData[],
   lineupGroups: LineupGameGroup[],
+  betRefs: readonly StakeRef[] = [],
 ): MyCardGame[] {
-  if (lineupGroups.length === 0) return [];
+  const betsByGame = new Map<string, StakeRef[]>();
+  for (const ref of betRefs) {
+    if (ref.kind !== 'bet') continue;
+    const list = betsByGame.get(ref.gameId) ?? [];
+    list.push(ref);
+    betsByGame.set(ref.gameId, list);
+  }
+  if (lineupGroups.length === 0 && betsByGame.size === 0) return [];
 
   const playersByGame = new Map(
     lineupGroups.map((group) => [group.game.game_id, group.players] as const),
@@ -313,8 +322,9 @@ export function buildMyCardGames(
 
   const games: MyCardGame[] = [];
   for (const row of rows) {
-    const players = playersByGame.get(row.gameId);
-    if (!players || players.length === 0) continue;
+    const players = playersByGame.get(row.gameId) ?? [];
+    const bets = betsByGame.get(row.gameId) ?? [];
+    if (players.length === 0 && bets.length === 0) continue;
 
     games.push({
       gameId: row.gameId,
@@ -326,11 +336,18 @@ export function buildMyCardGames(
       homeTeamColor: row.homeTeamColor,
       network: row.network,
       stripeSide: row.stripeSide,
-      stakes: players.map((player) => ({
-        tag: 'FANTASY',
-        label: stakeLineLabel(player, playersGame.get(row.gameId) ?? null),
-        value: player.position,
-      })),
+      stakes: [
+        ...players.map((player) => ({
+          tag: 'FANTASY' as const,
+          label: stakeLineLabel(player, playersGame.get(row.gameId) ?? null),
+          value: player.position,
+        })),
+        ...bets.map((bet) => ({
+          tag: 'BET' as const,
+          label: bet.label ?? '',
+          value: '',
+        })),
+      ],
     });
   }
 

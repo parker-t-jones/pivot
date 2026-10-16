@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { BoardRowData, BoardWindowGroup } from '../lib/board';
+import type { BoardRowData, BoardWindowGroup, StakeRef } from '../lib/board';
 import { fonts } from '../lib/fonts';
 import type { LineupGameGroup } from '../lib/homeState';
 import { useHomeSegment } from '../lib/homeSegment';
@@ -30,6 +30,8 @@ interface HomeLiveViewProps {
   /** The full week's board groups, for MY CARD. */
   groups: BoardWindowGroup[];
   lineupGroups: LineupGameGroup[];
+  /** Bet refs for MY CARD lines. Markers already come from the board groups. */
+  betRefs?: readonly StakeRef[];
   /** Every game in progress, for MY CARD's live headers. */
   liveGames: LiveGame[];
 }
@@ -44,6 +46,7 @@ export function HomeLiveView({
   sections,
   groups,
   lineupGroups,
+  betRefs = [],
   liveGames,
 }: HomeLiveViewProps) {
   const tier = useDesktopTier();
@@ -59,7 +62,12 @@ export function HomeLiveView({
           ))}
         </View>
         <View style={styles.side}>
-          <MyCardList groups={groups} lineupGroups={lineupGroups} liveGames={liveGames} />
+          <MyCardList
+            betRefs={betRefs}
+            groups={groups}
+            lineupGroups={lineupGroups}
+            liveGames={liveGames}
+          />
         </View>
       </View>
     );
@@ -76,7 +84,12 @@ export function HomeLiveView({
           ))}
         </>
       ) : (
-        <MyCardList groups={groups} lineupGroups={lineupGroups} liveGames={liveGames} />
+        <MyCardList
+          betRefs={betRefs}
+          groups={groups}
+          lineupGroups={lineupGroups}
+          liveGames={liveGames}
+        />
       )}
     </View>
   );

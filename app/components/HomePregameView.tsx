@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { BoardWindowGroup } from '../lib/board';
+import type { BoardWindowGroup, StakeRef } from '../lib/board';
 import { fonts } from '../lib/fonts';
 import { DESKTOP_RIGHT_COLUMN } from '../lib/desktopLayout';
 import { formatCountdown, type LineupGameGroup } from '../lib/homeState';
@@ -9,7 +9,7 @@ import { useDesktopTier } from '../lib/useDesktopTier';
 import type { ScheduleGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { BoardRow } from './BoardRow';
-import { FeaturedStakeCard } from './FeaturedStakeCard';
+import { FeaturedStakeCard, type FeaturedBetChip } from './FeaturedStakeCard';
 import { HomeSegmentRow } from './HomeSegmentRow';
 import { MyCardList } from './MyCardList';
 
@@ -20,6 +20,8 @@ export interface PregameHero {
   game: ScheduleGame;
   /** Empty for the NEXT KICKOFF fallback, which is a game with no stake in it. */
   players: LineupGameGroup['players'];
+  /** Bet chips for the featured game. Absent on the NEXT KICKOFF fallback. */
+  bets?: FeaturedBetChip[];
   eyebrow?: string;
 }
 
@@ -28,6 +30,8 @@ interface HomePregameViewProps {
   groups: BoardWindowGroup[];
   /** Active-roster groups for MY CARD — same `lineupGroups` Home already holds. */
   lineupGroups: LineupGameGroup[];
+  /** Bet refs for MY CARD lines. Markers already come from the board groups. */
+  betRefs?: readonly StakeRef[];
   hero: PregameHero | null;
   /** Milliseconds to the next kickoff anywhere in the slate, or null to hide the countdown. */
   countdownMs: number | null;
@@ -43,6 +47,7 @@ export function HomePregameView({
   week,
   groups,
   lineupGroups,
+  betRefs = [],
   hero,
   countdownMs,
 }: HomePregameViewProps) {
@@ -55,6 +60,7 @@ export function HomePregameView({
         <FeaturedStakeCard
           game={hero.game}
           players={hero.players}
+          bets={hero.bets ?? []}
           {...(hero.eyebrow === undefined ? {} : { eyebrow: hero.eyebrow })}
         />
       )}
@@ -100,7 +106,7 @@ export function HomePregameView({
           {board}
         </View>
         <View style={styles.side}>
-          <MyCardList groups={groups} lineupGroups={lineupGroups} />
+          <MyCardList betRefs={betRefs} groups={groups} lineupGroups={lineupGroups} />
         </View>
       </View>
     );
@@ -132,7 +138,7 @@ export function HomePregameView({
       {segment === 'board' ? (
         board
       ) : (
-        <MyCardList groups={groups} lineupGroups={lineupGroups} />
+        <MyCardList betRefs={betRefs} groups={groups} lineupGroups={lineupGroups} />
       )}
     </View>
   );

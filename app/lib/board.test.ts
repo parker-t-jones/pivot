@@ -517,6 +517,35 @@ describe('buildMyCardGames', () => {
       ['Lions D/ST', 'DEF'],
     ]);
   });
+
+  it('adds a bet line beside fantasy lines and a card for a bet-only game', () => {
+    const fantasy = game('g2', '2026-09-20T17:00:00Z', { away_team: 'NYJ', home_team: 'NE' });
+    const betOnly = game('open', '2026-09-21T17:00:00Z', { away_team: 'SEA', home_team: 'DEN' });
+    const groups = [lineupGroup(fantasy, [starter('p1', 'Tyrod', 'Taylor', 'QB', 'NYJ')])];
+    const rows = flattenRows(
+      buildBoardRows(
+        [fantasy, betOnly],
+        [
+          { gameId: 'g2', teamId: 'NYJ' },
+          { kind: 'bet', stakeId: 'tot', gameId: 'g2', teamId: '', label: 'Over 44.5' },
+          { kind: 'bet', stakeId: 'ml', gameId: 'open', teamId: 'SEA', label: 'SEA ML' },
+        ],
+      ),
+    );
+    const card = buildMyCardGames(rows, groups, [
+      { kind: 'bet', stakeId: 'tot', gameId: 'g2', teamId: '', label: 'Over 44.5' },
+      { kind: 'bet', stakeId: 'ml', gameId: 'open', teamId: 'SEA', label: 'SEA ML' },
+    ]);
+    const jets = card.find((entry) => entry.gameId === 'g2');
+    const openCard = card.find((entry) => entry.gameId === 'open');
+    expect(jets?.stripeSide).toBe('away');
+    expect(jets?.stakes).toEqual([
+      { tag: 'FANTASY', label: 'Tyrod Taylor', value: 'QB' },
+      { tag: 'BET', label: 'Over 44.5', value: '' },
+    ]);
+    expect(openCard?.stripeSide).toBe('away');
+    expect(openCard?.stakes).toEqual([{ tag: 'BET', label: 'SEA ML', value: '' }]);
+  });
 });
 
 function manualStake(overrides: Partial<ManualStake> & Pick<ManualStake, 'id' | 'game_id'>): ManualStake {

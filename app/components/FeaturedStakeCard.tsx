@@ -11,6 +11,11 @@ import { Slip } from './Slip';
 /** Split team-color band across the top edge (PIVOT-STAKES-PLAN.md §11.2). */
 const BAND_HEIGHT = 4;
 
+export interface FeaturedBetChip {
+  stakeId: string;
+  label: string;
+}
+
 interface FeaturedStakeCardProps {
   game: ScheduleGame;
   /**
@@ -19,6 +24,8 @@ interface FeaturedStakeCardProps {
    * become stake conditions rather than roster players.
    */
   players?: LineupGameGroup['players'];
+  /** Bet refs on this game, rendered as chips beside the player chips. */
+  bets?: FeaturedBetChip[];
   /** `NEXT KICKOFF` when Home is falling back to a game with no stake in it. */
   eyebrow?: string;
 }
@@ -30,6 +37,7 @@ interface FeaturedStakeCardProps {
 export function FeaturedStakeCard({
   game,
   players = [],
+  bets = [],
   eyebrow = 'BIGGEST STAKE',
 }: FeaturedStakeCardProps) {
   const network = networkLabelFromAirings(game.airings);
@@ -67,7 +75,7 @@ export function FeaturedStakeCard({
           {game.home_team_name.toUpperCase()}
         </Text>
 
-        {players.length > 0 ? (
+        {players.length > 0 || bets.length > 0 ? (
           <View style={styles.chips}>
             {players.map((player) => (
               <View key={player.player_id} style={styles.chip}>
@@ -76,6 +84,16 @@ export function FeaturedStakeCard({
                 </Text>
                 <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipPosition}>
                   {player.position}
+                </Text>
+              </View>
+            ))}
+            {bets.map((bet) => (
+              <View key={bet.stakeId} style={styles.chip}>
+                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipName}>
+                  {bet.label}
+                </Text>
+                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipPosition}>
+                  BET
                 </Text>
               </View>
             ))}
