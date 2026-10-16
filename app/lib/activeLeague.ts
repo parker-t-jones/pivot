@@ -22,6 +22,30 @@ export function resolveActiveLeagueId(
   return match?.league_id ?? leagues[0]?.league_id ?? null;
 }
 
+/** True only when this league's id is in the watched list. An empty list matches nothing. */
+export function leagueShowsActiveTag(
+  leagueId: string | null,
+  watchedLeagueIds: readonly string[],
+): boolean {
+  return leagueId != null && watchedLeagueIds.includes(leagueId);
+}
+
+/**
+ * Free replaces the watched list with this league. Pro appends it and drops a
+ * duplicate. Pro with an empty list writes `[id]`.
+ */
+export function nextWatchedLeagueIds(input: {
+  tier: 'free' | 'pro';
+  leagueId: string;
+  watchedLeagueIds: readonly string[];
+}): string[] {
+  if (input.tier === 'pro') {
+    if (input.watchedLeagueIds.includes(input.leagueId)) return [...input.watchedLeagueIds];
+    return [...input.watchedLeagueIds, input.leagueId];
+  }
+  return [input.leagueId];
+}
+
 export type WatchlistLeagueEvent =
   | {
       type: 'focus';
@@ -29,7 +53,12 @@ export type WatchlistLeagueEvent =
       watchedLeagueIds: readonly string[];
     }
   | { type: 'chip'; leagueId: string }
-  | { type: 'set-active'; leagueId: string };
+  | {
+      type: 'set-active';
+      leagueId: string;
+      tier: 'free' | 'pro';
+      watchedLeagueIds: readonly string[];
+    };
 
 export interface WatchlistLeagueDecision {
   selectedLeagueId: string | null;
@@ -40,7 +69,7 @@ export interface WatchlistLeagueDecision {
   preferencePatch: { watchedLeagueIds: string[] } | null;
 }
 
-/** Focus snaps back to the active league. A chip only browses. Set as active writes one id. */
+/** Focus snaps back to the active league. A chip only browses. The watch button is the only write. */
 export function watchlistLeagueSelection(event: WatchlistLeagueEvent): WatchlistLeagueDecision {
   switch (event.type) {
     case 'focus':
@@ -53,7 +82,13 @@ export function watchlistLeagueSelection(event: WatchlistLeagueEvent): Watchlist
     case 'set-active':
       return {
         selectedLeagueId: event.leagueId,
-        preferencePatch: { watchedLeagueIds: [event.leagueId] },
+        preferencePatch: {
+          watchedLeagueIds: nextWatchedLeagueIds({
+            tier: event.tier,
+            leagueId: event.leagueId,
+            watchedLeagueIds: event.watchedLeagueIds,
+          }),
+        },
       };
   }
 }

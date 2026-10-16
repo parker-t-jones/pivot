@@ -27,7 +27,11 @@ import { WatchlistDesktop } from '../../../components/WatchlistDesktop';
 import { WatchlistFilters } from '../../../components/WatchlistFilters';
 import { WeekCard } from '../../../components/WeekCard';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
-import { resolveActiveLeagueId, watchlistLeagueSelection } from '../../../lib/activeLeague';
+import {
+  leagueShowsActiveTag,
+  resolveActiveLeagueId,
+  watchlistLeagueSelection,
+} from '../../../lib/activeLeague';
 import { ApiRequestError } from '../../../lib/apiClient';
 import { useFeature } from '../../../lib/useFeature';
 import { SHOW_STAR_TOGGLES } from '../../../lib/flags';
@@ -119,11 +123,6 @@ function rowAccessibilityLabel(slot: LineupSlot, gameLine: string | null): strin
  * Live points / detail sheet deferred.
  */
 
-/** Empty `watchedLeagueIds` means nothing has been picked yet, which Home treats as watching every league. */
-function isWatchingLeague(watchedIds: Set<string>, leagueId: string): boolean {
-  return watchedIds.size === 0 || watchedIds.has(leagueId);
-}
-
 function weekEyebrow(week: number | null): string {
   return week == null ? 'FANTASY' : `WEEK ${week} · FANTASY`;
 }
@@ -187,8 +186,6 @@ export default function LineupScreen() {
     if (me == null) return null;
     return leagues.find((league) => league.league_id === activeLeagueId) ?? null;
   }, [activeLeagueId, leagues, me, selectedLeagueId]);
-
-  const watchedIds = useMemo(() => new Set(me?.preferences.watchedLeagueIds ?? []), [me]);
 
   useFocusEffect(
     useCallback(() => {
@@ -468,10 +465,12 @@ export default function LineupScreen() {
   };
 
   const onSetActive = () => {
-    if (!selectedLeague || settingActive) return;
+    if (!selectedLeague || !me || settingActive) return;
     const decision = watchlistLeagueSelection({
       type: 'set-active',
       leagueId: selectedLeague.league_id,
+      tier: me.subscription_tier === 'pro' ? 'pro' : 'free',
+      watchedLeagueIds: me.preferences.watchedLeagueIds,
     });
     const patch = decision.preferencePatch;
     if (!patch) return;
@@ -489,10 +488,14 @@ export default function LineupScreen() {
     })();
   };
 
-  const watchingSelected =
-    selectedLeague != null && isWatchingLeague(watchedIds, selectedLeague.league_id);
-  const showingActiveLeague =
-    selectedLeague != null && selectedLeague.league_id === activeLeagueId;
+  const watchedLeagueIds = me?.preferences.watchedLeagueIds ?? [];
+  const showsActiveTag = leagueShowsActiveTag(selectedLeague?.league_id ?? null, watchedLeagueIds);
+  const watchLabel =
+    me != null && selectedLeague != null && !showsActiveTag
+      ? me.subscription_tier === 'pro'
+        ? 'Also watch'
+        : 'Set as active'
+      : null;
   const manageBusy = busyLeagueId != null && busyLeagueId === selectedLeague?.league_id;
 
   const runLeagueAction = (choice: string | undefined) => {
@@ -634,14 +637,13 @@ export default function LineupScreen() {
             ) : null}
             {showLeagueChips ? (
               <LeagueBrowse
-                activeLeagueId={activeLeagueId}
                 leagues={leagues}
                 onSelect={onSelectLeague}
                 onSetActive={onSetActive}
                 selectedLeague={selectedLeague}
                 settingActive={settingActive}
-                showingActiveLeague={showingActiveLeague}
-                watchingSelected={watchingSelected}
+                showsActiveTag={showsActiveTag}
+                watchLabel={watchLabel}
               />
             ) : null}
           </>
@@ -779,14 +781,13 @@ export default function LineupScreen() {
 
       {showLeagueChips ? (
         <LeagueBrowse
-          activeLeagueId={activeLeagueId}
           leagues={leagues}
           onSelect={onSelectLeague}
           onSetActive={onSetActive}
           selectedLeague={selectedLeague}
           settingActive={settingActive}
-          showingActiveLeague={showingActiveLeague}
-          watchingSelected={watchingSelected}
+          showsActiveTag={showsActiveTag}
+          watchLabel={watchLabel}
         />
       ) : null}
 
@@ -1208,18 +1209,16 @@ function LineupHeader({ week }: { week: number | null }) {
 function LeagueBrowse({
   leagues,
   selectedLeague,
-  activeLeagueId,
-  watchingSelected,
-  showingActiveLeague,
+  showsActiveTag,
+  watchLabel,
   onSelect,
   onSetActive,
   settingActive,
 }: {
   leagues: LeagueSummary[];
   selectedLeague: LeagueSummary | null;
-  activeLeagueId: string | null;
-  watchingSelected: boolean;
-  showingActiveLeague: boolean;
+  showsActiveTag: boolean;
+  watchLabel: 'Set as active' | 'Also watch' | null;
   onSelect: (leagueId: string) => void;
   onSetActive: () => void;
   settingActive: boolean;
@@ -1234,27 +1233,19 @@ function LeagueBrowse({
             selectedLeagueId={selectedLeague?.league_id ?? null}
           />
         </View>
-        {selectedLeague == null || activeLeagueId == null ? null : showingActiveLeague ? (
+        {showsActiveTag ? (
           <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.activeTag}>
             ACTIVE
           </Text>
-        ) : (
+        ) : watchLabel != null ? (
           <TextButton
             disabled={settingActive}
-            label="Set as active"
+            label={watchLabel}
             onPress={onSetActive}
             size="smallStrong"
           />
-        )}
+        ) : null}
       </View>
-      {selectedLeague ? (
-        <Text
-          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-          style={watchingSelected ? styles.watching : styles.notWatching}
-        >
-          {watchingSelected ? 'WATCHING' : 'NOT WATCHING'}
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -1529,12 +1520,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: theme.type.body.size,
   },
-  notWatching: {
-    color: theme.colors.textTertiary,
-    fontFamily: fonts.monoBold,
-    fontSize: theme.type.eyebrow.size,
-    letterSpacing: theme.type.eyebrow.letterSpacing,
-  },
   // Basis stays auto. `flex: 1` (basis 0) measures this column at width 0 once the
   // slot width comes from its label, and the name then lays out as a tall line box.
   playerInfo: {
@@ -1680,11 +1665,5 @@ const styles = StyleSheet.create({
     borderRadius: theme.radii.md,
     borderWidth: theme.effects.panelBorderWidth,
     flexGrow: 0,
-  },
-  watching: {
-    color: theme.colors.brass,
-    fontFamily: fonts.monoBold,
-    fontSize: theme.type.eyebrow.size,
-    letterSpacing: theme.type.eyebrow.letterSpacing,
   },
 });

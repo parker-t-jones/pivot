@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveActiveLeagueId, watchlistLeagueSelection } from './activeLeague';
+import {
+  leagueShowsActiveTag,
+  nextWatchedLeagueIds,
+  resolveActiveLeagueId,
+  watchlistLeagueSelection,
+} from './activeLeague';
 
 const leagues = [{ league_id: 'espn' }, { league_id: 'sleeper' }, { league_id: 'manual' }];
 
@@ -45,10 +50,61 @@ describe('watchlistLeagueSelection', () => {
     });
   });
 
-  it('writes a single watched id only from Set as active', () => {
-    expect(watchlistLeagueSelection({ type: 'set-active', leagueId: 'manual' })).toEqual({
+  it('writes the tier-specific watched list only from the watch button', () => {
+    expect(
+      watchlistLeagueSelection({
+        type: 'set-active',
+        leagueId: 'manual',
+        tier: 'free',
+        watchedLeagueIds: ['espn', 'sleeper'],
+      }),
+    ).toEqual({
       selectedLeagueId: 'manual',
       preferencePatch: { watchedLeagueIds: ['manual'] },
     });
+  });
+});
+
+describe('leagueShowsActiveTag', () => {
+  it('is on only for a league in the watched list', () => {
+    expect(leagueShowsActiveTag('sleeper', ['espn', 'sleeper'])).toBe(true);
+    expect(leagueShowsActiveTag('manual', ['espn', 'sleeper'])).toBe(false);
+    expect(leagueShowsActiveTag('espn', [])).toBe(false);
+    expect(leagueShowsActiveTag(null, ['espn'])).toBe(false);
+  });
+});
+
+describe('nextWatchedLeagueIds', () => {
+  it('replaces the list for Free', () => {
+    expect(
+      nextWatchedLeagueIds({
+        tier: 'free',
+        leagueId: 'manual',
+        watchedLeagueIds: ['espn', 'sleeper'],
+      }),
+    ).toEqual(['manual']);
+  });
+
+  it('appends for Pro and drops a duplicate', () => {
+    expect(
+      nextWatchedLeagueIds({
+        tier: 'pro',
+        leagueId: 'manual',
+        watchedLeagueIds: ['espn', 'sleeper'],
+      }),
+    ).toEqual(['espn', 'sleeper', 'manual']);
+    expect(
+      nextWatchedLeagueIds({
+        tier: 'pro',
+        leagueId: 'sleeper',
+        watchedLeagueIds: ['espn', 'sleeper'],
+      }),
+    ).toEqual(['espn', 'sleeper']);
+  });
+
+  it('writes a single id when Pro has nothing watched yet', () => {
+    expect(
+      nextWatchedLeagueIds({ tier: 'pro', leagueId: 'manual', watchedLeagueIds: [] }),
+    ).toEqual(['manual']);
   });
 });
