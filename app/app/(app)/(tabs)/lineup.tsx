@@ -27,11 +27,7 @@ import { WatchlistDesktop } from '../../../components/WatchlistDesktop';
 import { WatchlistFilters } from '../../../components/WatchlistFilters';
 import { WeekCard } from '../../../components/WeekCard';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
-import {
-  leagueShowsActiveTag,
-  resolveActiveLeagueId,
-  watchlistLeagueSelection,
-} from '../../../lib/activeLeague';
+import { resolveActiveLeagueId, watchlistChipCue, watchlistLeagueSelection } from '../../../lib/activeLeague';
 import { ApiRequestError } from '../../../lib/apiClient';
 import { useFeature } from '../../../lib/useFeature';
 import { SHOW_STAR_TOGGLES } from '../../../lib/flags';
@@ -488,14 +484,16 @@ export default function LineupScreen() {
     })();
   };
 
-  const watchedLeagueIds = me?.preferences.watchedLeagueIds ?? [];
-  const showsActiveTag = leagueShowsActiveTag(selectedLeague?.league_id ?? null, watchedLeagueIds);
-  const watchLabel =
-    me != null && selectedLeague != null && !showsActiveTag
-      ? me.subscription_tier === 'pro'
-        ? 'Also watch'
-        : 'Set as active'
-      : null;
+  const chipCue =
+    me == null
+      ? { showsActiveTag: false, watchLabel: null }
+      : watchlistChipCue({
+          leagueId: selectedLeague?.league_id ?? null,
+          tier: me.subscription_tier === 'pro' ? 'pro' : 'free',
+          watchedLeagueIds: me.preferences.watchedLeagueIds,
+        });
+  const showsActiveTag = chipCue.showsActiveTag;
+  const watchLabel = chipCue.watchLabel;
   const manageBusy = busyLeagueId != null && busyLeagueId === selectedLeague?.league_id;
 
   const runLeagueAction = (choice: string | undefined) => {

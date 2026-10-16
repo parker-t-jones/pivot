@@ -22,12 +22,33 @@ export function resolveActiveLeagueId(
   return match?.league_id ?? leagues[0]?.league_id ?? null;
 }
 
-/** True only when this league's id is in the watched list. An empty list matches nothing. */
+/**
+ * True when this league is active. An empty watched list means every league, matching
+ * Home's lineup filter. A non-empty list is membership only. No selected league is false.
+ */
 export function leagueShowsActiveTag(
   leagueId: string | null,
   watchedLeagueIds: readonly string[],
 ): boolean {
-  return leagueId != null && watchedLeagueIds.includes(leagueId);
+  if (leagueId == null) return false;
+  if (watchedLeagueIds.length === 0) return true;
+  return watchedLeagueIds.includes(leagueId);
+}
+
+/** Tag and watch button for the chip currently on screen. An active league has no button. */
+export function watchlistChipCue(input: {
+  leagueId: string | null;
+  tier: 'free' | 'pro';
+  watchedLeagueIds: readonly string[];
+}): { showsActiveTag: boolean; watchLabel: 'Set as active' | 'Also watch' | null } {
+  const showsActiveTag = leagueShowsActiveTag(input.leagueId, input.watchedLeagueIds);
+  if (input.leagueId == null || showsActiveTag) {
+    return { showsActiveTag, watchLabel: null };
+  }
+  return {
+    showsActiveTag: false,
+    watchLabel: input.tier === 'pro' ? 'Also watch' : 'Set as active',
+  };
 }
 
 /**

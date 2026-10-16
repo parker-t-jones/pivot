@@ -4,6 +4,7 @@ import {
   leagueShowsActiveTag,
   nextWatchedLeagueIds,
   resolveActiveLeagueId,
+  watchlistChipCue,
   watchlistLeagueSelection,
 } from './activeLeague';
 
@@ -69,8 +70,34 @@ describe('leagueShowsActiveTag', () => {
   it('is on only for a league in the watched list', () => {
     expect(leagueShowsActiveTag('sleeper', ['espn', 'sleeper'])).toBe(true);
     expect(leagueShowsActiveTag('manual', ['espn', 'sleeper'])).toBe(false);
-    expect(leagueShowsActiveTag('espn', [])).toBe(false);
     expect(leagueShowsActiveTag(null, ['espn'])).toBe(false);
+  });
+});
+
+describe('empty watched list', () => {
+  it('marks every league active and shows no button, for Free and Pro', () => {
+    for (const tier of ['free', 'pro'] as const) {
+      for (const leagueId of ['espn', 'sleeper', 'manual']) {
+        expect(watchlistChipCue({ leagueId, tier, watchedLeagueIds: [] })).toEqual({
+          showsActiveTag: true,
+          watchLabel: null,
+        });
+      }
+    }
+    expect(leagueShowsActiveTag(null, [])).toBe(false);
+  });
+
+  it('still opens focus on the first league and does not write', () => {
+    expect(
+      watchlistLeagueSelection({
+        type: 'focus',
+        leagues,
+        watchedLeagueIds: [],
+      }),
+    ).toEqual({
+      selectedLeagueId: 'espn',
+      preferencePatch: null,
+    });
   });
 });
 
