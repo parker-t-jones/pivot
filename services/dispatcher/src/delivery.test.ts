@@ -1423,8 +1423,8 @@ describe('web push saved_url', () => {
 
     expect(calls).toEqual(['u1:g1']);
     expect(sent.web.calls).toHaveLength(2);
-    expect(webAction(sent.web.calls[0]?.data).saved_url).toBe(SAVED);
-    expect(webAction(sent.web.calls[1]?.data).saved_url).toBe(SAVED);
+    expect(webAction(sent.web.calls[0]?.data)['saved_url']).toBe(SAVED);
+    expect(webAction(sent.web.calls[1]?.data)['saved_url']).toBe(SAVED);
     expect(iosPayload(sent.pushNotifier.calls[0])).toEqual(FLAG_ADDED_IOS_PAYLOAD);
     expect(sent.pushNotifier.calls[0]?.data).not.toHaveProperty('action.saved_url');
     expect((sent.pushNotifier.calls[0]?.data as { action: object }).action).not.toHaveProperty(
@@ -1473,6 +1473,6 @@ describe('web push saved_url', () => {
       BET_IN_PLAY_IOS_PAYLOAD,
     );
     expect(iosPayload(withLink.pushNotifier.calls[0])).toEqual(BET_IN_PLAY_IOS_PAYLOAD);
-    expect(webAction(withLink.web.calls[0]?.data).saved_url).toBe(SAVED);
+    expect(webAction(withLink.web.calls[0]?.data)['saved_url']).toBe(SAVED);
   });
 });

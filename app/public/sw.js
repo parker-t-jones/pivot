@@ -32,18 +32,29 @@ self.addEventListener('push', (event) => {
   })());
 });
 
+/**
+ * https URL a notification click should open. A saved stream link wins. Otherwise the
+ * generated watch URL. Only flag_added and bet_in_play. Anything else returns null.
+ */
+function watchUrlForNotificationClick(payload) {
+  const eventType = payload && payload.event_type;
+  if (eventType !== 'flag_added' && eventType !== 'bet_in_play') return null;
+  const action = payload.action && typeof payload.action === 'object' ? payload.action : {};
+  const saved = action.saved_url;
+  if (typeof saved === 'string' && saved.startsWith('https://')) return saved;
+  const generated = action.deep_link_url;
+  if (typeof generated === 'string' && generated.startsWith('https://')) return generated;
+  return null;
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
   const payload = data.payload || {};
-  const eventType = payload.event_type;
-  const watchUrl = payload.action && payload.action.deep_link_url;
-  const openWatch = (eventType === 'flag_added' || eventType === 'bet_in_play')
-    && typeof watchUrl === 'string'
-    && watchUrl.startsWith('https://');
+  const watchUrl = watchUrlForNotificationClick(payload);
 
   event.waitUntil((async () => {
-    if (openWatch) {
+    if (watchUrl) {
       await self.clients.openWindow(watchUrl);
       return;
     }
