@@ -28,7 +28,12 @@ import {
   type ResumptionOpenStore,
   type UserDirectory,
 } from '@pivot/dispatcher';
-import type { PushNotifier, WebPushSender, WebPushSubscriptionStore } from '@pivot/dispatcher';
+import type {
+  PushNotifier,
+  SavedGameLinkLookup,
+  WebPushSender,
+  WebPushSubscriptionStore,
+} from '@pivot/dispatcher';
 import type { LineupCacheProvider } from '../cache/index.js';
 import type { FireClaimRedis } from '../lib/fireClaim.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
@@ -85,6 +90,7 @@ export interface LiveRunnerDeps {
   webPush?: {
     sender: WebPushSender;
     subscriptions: WebPushSubscriptionStore;
+    savedLinks?: SavedGameLinkLookup;
   };
   scoreboard?: EspnClient;
   owner?: string;

@@ -102,6 +102,12 @@ export {
 } from './resumptionCeiling.js';
 
 export { deliverFlagEvent, type DeliveryDeps, type FlagEventEnvelope } from './delivery.js';
+export {
+  lookupSavedGameLink,
+  SAVED_LINK_LOOKUP_MS,
+  withSavedUrl,
+  type SavedGameLinkLookup,
+} from './savedGameLink.js';
 
 export {
   CapturingWebPushSender,

@@ -39,8 +39,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API_DIR = path.resolve(__dirname, '../services/api');
 const APP_DIR = path.resolve(__dirname, '../app');
 
-const USAGE =
-  'pnpm tsx experiments/send-test-flag.ts --user <uuid> --game <id> [--count 1]';
+const USAGE = 'pnpm tsx experiments/send-test-flag.ts --user <uuid> --game <id> [--count 1]';
 
 function fail(message: string): never {
   console.error(message);
@@ -91,6 +90,9 @@ interface LoadedApi {
   SupabaseWebPushSubscriptionStore: new (client: unknown) => {
     listForUser: (userId: string) => Promise<WebPushSubscription[]>;
   } & NonNullable<DeliveryDeps['webPush']>['subscriptions'];
+  SupabaseSavedGameLinkLookup: new (
+    client: unknown,
+  ) => NonNullable<NonNullable<DeliveryDeps['webPush']>['savedLinks']>;
   localUrlRefusal: (name: string, raw: string | undefined) => string | null;
 }
 
@@ -117,6 +119,9 @@ async function loadApi(): Promise<LoadedApi> {
   const webSubs = (await import(mod('runner/webPushSubscriptions.js'))) as {
     SupabaseWebPushSubscriptionStore: LoadedApi['SupabaseWebPushSubscriptionStore'];
   };
+  const savedLinks = (await import(mod('runner/savedGameLinks.js'))) as {
+    SupabaseSavedGameLinkLookup: LoadedApi['SupabaseSavedGameLinkLookup'];
+  };
   const local = (await import(mod('lib/localStack.js'))) as {
     localUrlRefusal: LoadedApi['localUrlRefusal'];
   };
@@ -134,6 +139,7 @@ async function loadApi(): Promise<LoadedApi> {
     SupabaseBroadcastCatalog: catalogs.SupabaseBroadcastCatalog,
     SupabaseFlagEventPersistence: persistence.SupabaseFlagEventPersistence,
     SupabaseWebPushSubscriptionStore: webSubs.SupabaseWebPushSubscriptionStore,
+    SupabaseSavedGameLinkLookup: savedLinks.SupabaseSavedGameLinkLookup,
     localUrlRefusal: local.localUrlRefusal,
   };
 }
@@ -195,7 +201,15 @@ async function main(): Promise<void> {
         pushDriver: api.env.PUSH_DRIVER,
         expoAccessToken: api.env.EXPO_ACCESS_TOKEN,
       }),
-      ...(sender ? { webPush: { sender, subscriptions } } : {}),
+      ...(sender
+        ? {
+            webPush: {
+              sender,
+              subscriptions,
+              savedLinks: new api.SupabaseSavedGameLinkLookup(supabase),
+            },
+          }
+        : {}),
     };
 
     console.log(

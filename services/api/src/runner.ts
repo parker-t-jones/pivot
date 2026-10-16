@@ -7,6 +7,7 @@ import { warnIfWebPushDisabled } from './lib/vapidConfig.js';
 import { createSupabaseServiceClient } from './lib/supabase.js';
 import { leaderOwner } from './runner/leaderLock.js';
 import { startLiveRunner } from './runner/liveRunner.js';
+import { SupabaseSavedGameLinkLookup } from './runner/savedGameLinks.js';
 import { SupabaseWebPushSubscriptionStore } from './runner/webPushSubscriptions.js';
 import { guardRunnerStart } from './runner/redisGuard.js';
 import { SupabaseFlagEventPersistence } from './runner/supabaseFlagEventPersistence.js';
@@ -84,7 +85,13 @@ const handle = startLiveRunner({
     expoAccessToken: env.EXPO_ACCESS_TOKEN,
   }),
   ...(webPushSender
-    ? { webPush: { sender: webPushSender, subscriptions: new SupabaseWebPushSubscriptionStore(supabase) } }
+    ? {
+        webPush: {
+          sender: webPushSender,
+          subscriptions: new SupabaseWebPushSubscriptionStore(supabase),
+          savedLinks: new SupabaseSavedGameLinkLookup(supabase),
+        },
+      }
     : {}),
   scoreboard: espnClient,
   owner: leaderOwner(process.env['FLY_MACHINE_ID'], hostname(), process.pid),

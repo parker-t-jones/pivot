@@ -740,7 +740,10 @@ describe('deliverFlagEvent', () => {
       await deliverFlagEvent(deps, makeEvent(), pushUser);
       expect(pushNotifier.calls).toHaveLength(1);
 
-      await deliverFlagEvent(deps, makeEvent({ id: 'evt-2' }), { ...pushUser, expoPushDeviceId: iosDevice });
+      await deliverFlagEvent(deps, makeEvent({ id: 'evt-2' }), {
+        ...pushUser,
+        expoPushDeviceId: iosDevice,
+      });
       expect(pushNotifier.calls).toHaveLength(1);
     });
 
@@ -1003,7 +1006,9 @@ describe('web push beside Expo', () => {
       const fanned = await deliver(user, true);
       expect(plain.pushNotifier.calls).toHaveLength(1);
       expect(fanned.pushNotifier.calls).toHaveLength(1);
-      expect(comparablePush(fanned.pushNotifier.calls[0])).toEqual(comparablePush(plain.pushNotifier.calls[0]));
+      expect(comparablePush(fanned.pushNotifier.calls[0])).toEqual(
+        comparablePush(plain.pushNotifier.calls[0]),
+      );
       expect(fanned.web.calls).toHaveLength(2);
       expect(fanned.web.calls[0]?.title).toBe(plain.pushNotifier.calls[0]?.title);
       expect(fanned.web.calls[0]?.body).toBe(plain.pushNotifier.calls[0]?.body);
@@ -1169,7 +1174,9 @@ describe('web push beside Expo', () => {
     await deliverFlagEvent(deps, makeEvent(), legacyUser);
 
     expect(rateLimitStore.entriesFor('u1')).toHaveLength(1);
-    expect(subscriptions.rows.get('https://push.example.test/1')?.lastSuccessAt).toBe(1_700_000_061_500);
+    expect(subscriptions.rows.get('https://push.example.test/1')?.lastSuccessAt).toBe(
+      1_700_000_061_500,
+    );
   });
 
   function oneWebSub(): InMemoryWebPushSubscriptionStore {
@@ -1248,9 +1255,7 @@ describe('web push beside Expo', () => {
       const deps = buildDeps({
         pushNotifier,
         persistence,
-        ...(webThrows
-          ? { webPush: { sender: new CapturingWebPushSender(), subscriptions } }
-          : {}),
+        ...(webThrows ? { webPush: { sender: new CapturingWebPushSender(), subscriptions } } : {}),
       });
       await deliverFlagEvent(deps, makeEvent(), legacyUser);
       const decisionLogs = logs.mock.calls.map((call) => String(call[0]));
@@ -1299,5 +1304,175 @@ describe('web push beside Expo', () => {
       '[dispatcher] push decision user=u1 game=g1 flag=evt-1 result=sent anchor_play=- play_wallclock=- seen_at=- enqueued_at=- sent_at=2023-11-14T22:14:21.500Z post_lag_ms=- send_lag_ms=-',
     );
     logs.mockRestore();
+  });
+});
+
+/** iOS `data` from a delivery with no web push, recorded before `saved_url` existed. */
+const FLAG_ADDED_IOS_PAYLOAD = {
+  event_id: '<uuid>',
+  user_id: 'u1',
+  game_id: 'g1',
+  event_type: 'flag_added',
+  old_state: null,
+  new_state: {
+    gameId: 'g1',
+    flagged: true,
+    priorityScore: 10,
+    reasons: [{ type: 'offense_active', triggeringPlayerIds: ['p1', 'p2'] }],
+    computedAt: 1700000000000,
+    possession_team: null,
+  },
+  action: {
+    type: 'prompt',
+    cta: 'switch_primary',
+    recommended_source: null,
+    deep_link_url: null,
+  },
+  game_summary: {
+    home_team: '',
+    away_team: '',
+    home_team_name: '',
+    away_team_name: '',
+    home_team_primary_color: '',
+    home_team_secondary_color: '',
+    away_team_primary_color: '',
+    away_team_secondary_color: '',
+    score: { home: 0, away: 0 },
+    quarter: 0,
+    time_remaining_sec: 0,
+    possession_team: null,
+    yards_to_endzone: null,
+    down: null,
+    distance: null,
+    in_red_zone: false,
+  },
+  flagged_players: [],
+};
+
+const BET_IN_PLAY_IOS_PAYLOAD = {
+  ...FLAG_ADDED_IOS_PAYLOAD,
+  event_type: 'bet_in_play',
+  new_state: {
+    gameId: 'g1',
+    flagged: false,
+    priorityScore: 1,
+    reasons: [],
+    computedAt: 1700000000000,
+    possession_team: null,
+  },
+};
+
+const SAVED = 'https://www.primevideo.com/detail/test';
+
+function iosPayload(call: PushPayload | undefined): unknown {
+  const copy = structuredClone(call?.data) as { event_id?: string };
+  copy.event_id = '<uuid>';
+  return copy;
+}
+
+function webAction(data: unknown): Record<string, unknown> {
+  return (data as { action: Record<string, unknown> }).action;
+}
+
+describe('web push saved_url', () => {
+  const iosUser: DispatchUser = { ...freeUser, expoPushToken: EXPO_TOKEN };
+
+  function twoBrowsers(): InMemoryWebPushSubscriptionStore {
+    return new InMemoryWebPushSubscriptionStore([
+      {
+        userId: 'u1',
+        endpoint: 'https://push.example.test/1',
+        deviceId: WEB_DEVICE,
+        p256dh: 'p256',
+        auth: 'authkey',
+      },
+      {
+        userId: 'u1',
+        endpoint: 'https://push.example.test/2',
+        deviceId: '44444444-4444-4444-8444-444444444444',
+        p256dh: 'p256',
+        auth: 'authkey',
+      },
+    ]);
+  }
+
+  async function deliver(
+    event: FlagEvent,
+    savedLinks?: { urlFor: (userId: string, gameId: string) => Promise<string | null> },
+  ) {
+    const pushNotifier = new CapturingPushNotifier();
+    const web = new CapturingWebPushSender();
+    const bus = new InMemoryRealtimeBus();
+    const deps = buildDeps({
+      pushNotifier,
+      realtimeBus: bus,
+      webPush: { sender: web, subscriptions: twoBrowsers(), ...(savedLinks ? { savedLinks } : {}) },
+    });
+    await deliverFlagEvent(deps, event, iosUser);
+    return { pushNotifier, web, bus };
+  }
+
+  it('puts the saved url on every web payload and leaves the Expo payload unchanged', async () => {
+    const calls: string[] = [];
+    const sent = await deliver(makeEvent(), {
+      urlFor: async (userId, gameId) => {
+        calls.push(`${userId}:${gameId}`);
+        return SAVED;
+      },
+    });
+
+    expect(calls).toEqual(['u1:g1']);
+    expect(sent.web.calls).toHaveLength(2);
+    expect(webAction(sent.web.calls[0]?.data).saved_url).toBe(SAVED);
+    expect(webAction(sent.web.calls[1]?.data).saved_url).toBe(SAVED);
+    expect(iosPayload(sent.pushNotifier.calls[0])).toEqual(FLAG_ADDED_IOS_PAYLOAD);
+    expect(sent.pushNotifier.calls[0]?.data).not.toHaveProperty('action.saved_url');
+    expect((sent.pushNotifier.calls[0]?.data as { action: object }).action).not.toHaveProperty(
+      'saved_url',
+    );
+    const envelope = sent.bus.published[0]?.message as FlagEventEnvelope;
+    expect(envelope.payload.action).not.toHaveProperty('saved_url');
+  });
+
+  it('omits saved_url when the user has no link for the game', async () => {
+    const sent = await deliver(makeEvent(), { urlFor: async () => null });
+    expect(sent.web.calls).toHaveLength(2);
+    expect(webAction(sent.web.calls[0]?.data)).not.toHaveProperty('saved_url');
+    expect(sent.web.calls[0]?.data).toEqual(sent.pushNotifier.calls[0]?.data);
+  });
+
+  it('omits saved_url and still sends when the lookup throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const sent = await deliver(makeEvent(), {
+      urlFor: async () => {
+        throw new Error('db down');
+      },
+    });
+    expect(sent.web.calls).toHaveLength(2);
+    expect(sent.pushNotifier.calls).toHaveLength(1);
+    expect(webAction(sent.web.calls[0]?.data)).not.toHaveProperty('saved_url');
+    expect(iosPayload(sent.pushNotifier.calls[0])).toEqual(FLAG_ADDED_IOS_PAYLOAD);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it('keeps the bet_in_play Expo payload identical to the pre-change builder output', async () => {
+    const plain = buildDeps({ pushNotifier: new CapturingPushNotifier() });
+    const event = makeEvent({
+      type: 'bet_in_play',
+      label: 'spread',
+      code: 'ONE_SCORE_LATE',
+      stakeId: 'stake-1',
+      newState: makeFlagState({ flagged: false, reasons: [], priorityScore: 1 }),
+    });
+    await deliverFlagEvent(plain, event, iosUser);
+
+    const withLink = await deliver(event, { urlFor: async () => SAVED });
+
+    expect(iosPayload((plain.pushNotifier as CapturingPushNotifier).calls[0])).toEqual(
+      BET_IN_PLAY_IOS_PAYLOAD,
+    );
+    expect(iosPayload(withLink.pushNotifier.calls[0])).toEqual(BET_IN_PLAY_IOS_PAYLOAD);
+    expect(webAction(withLink.web.calls[0]?.data).saved_url).toBe(SAVED);
   });
 });

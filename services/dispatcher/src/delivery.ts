@@ -32,6 +32,7 @@ import { LEGACY_IOS_DEVICE_ID } from './presence.js';
 import type { GameStateStore } from './providers/gameStateStore.js';
 import type { PushNotifier, PushPayload } from './pushNotifier.js';
 import { decidePushDelivery, formatPushDecisionLog } from './pushDecision.js';
+import { lookupSavedGameLink, withSavedUrl, type SavedGameLinkLookup } from './savedGameLink.js';
 import { deliverWebPushes, type WebPushSender, type WebPushSubscriptionStore } from './webPush.js';
 import { PUSH_RETRY_BACKOFF_MS } from './pushRetry.js';
 import type { RateLimitStore } from './rateLimiter.js';
@@ -52,6 +53,8 @@ export interface DeliveryDeps {
   webPush?: {
     sender: WebPushSender;
     subscriptions: WebPushSubscriptionStore;
+    /** One read of `user_game_links` per fan-out. Omitted, web payloads have no `saved_url`. */
+    savedLinks?: SavedGameLinkLookup;
   };
   clock?: Clock;
 }
@@ -220,14 +223,15 @@ export async function deliverFlagEvent(
   const deliveredAt = clock();
 
   const pushDeviceId = user.expoPushDeviceId || LEGACY_IOS_DEVICE_ID;
-  const [session, present, deviceActive, gameState, gameSummaryInfo, likelyBroadcast] = await Promise.all([
-    deps.userDirectory.getViewingSession(event.userId),
-    deps.gameStateStore.isUserActive(event.userId),
-    deps.gameStateStore.isDeviceActive(event.userId, pushDeviceId),
-    deps.gameStateStore.getGameState(event.gameId),
-    deps.gameCatalog.getGameSummary(event.gameId),
-    resolveLikelyBroadcastSource(event.gameId, event.userId, deps.broadcastCatalog),
-  ]);
+  const [session, present, deviceActive, gameState, gameSummaryInfo, likelyBroadcast] =
+    await Promise.all([
+      deps.userDirectory.getViewingSession(event.userId),
+      deps.gameStateStore.isUserActive(event.userId),
+      deps.gameStateStore.isDeviceActive(event.userId, pushDeviceId),
+      deps.gameStateStore.getGameState(event.gameId),
+      deps.gameCatalog.getGameSummary(event.gameId),
+      resolveLikelyBroadcastSource(event.gameId, event.userId, deps.broadcastCatalog),
+    ]);
 
   // `present` is any counting device, including the legacy member. Hidden web does not count.
   // The push decision below uses `deviceActive` for the token's device only.
@@ -432,6 +436,11 @@ export async function deliverFlagEvent(
 
   const webDelivery = (async (): Promise<void> => {
     if (!deps.webPush || !pushCopy) return;
+    // One lookup for every device in this fan-out. A failure omits `saved_url` and still sends.
+    // The Expo payload and the realtime envelope keep the object built above.
+    const savedUrl = deps.webPush.savedLinks
+      ? await lookupSavedGameLink(deps.webPush.savedLinks, event.userId, event.gameId)
+      : null;
     try {
       await deliverWebPushes({
         sender: deps.webPush.sender,
@@ -442,7 +451,7 @@ export async function deliverFlagEvent(
         isDeviceActive: (userId, deviceId) => deps.gameStateStore.isDeviceActive(userId, deviceId),
         title: pushCopy.title,
         body: pushCopy.body,
-        data: envelope.payload,
+        data: withSavedUrl(envelope.payload, savedUrl),
         nowMs: clock(),
       });
     } catch (error) {
