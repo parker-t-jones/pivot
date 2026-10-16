@@ -23,6 +23,7 @@ import authPlugin from './plugins/auth.js';
 import servicesPlugin from './plugins/services.js';
 import billingRoutes from './routes/billing.js';
 import flagsRoutes from './routes/flags.js';
+import gameLinksRoutes from './routes/gameLinks.js';
 import gamesRoutes from './routes/games.js';
 import healthRoutes from './routes/health.js';
 import leaguesRoutes from './routes/leagues.js';
@@ -126,6 +127,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
   await fastify.register(stateRoutes);
   await fastify.register(gamesRoutes);
   await fastify.register(stakesRoutes);
+  await fastify.register(gameLinksRoutes);
   await fastify.register(sessionRoutes);
   await fastify.register(meRoutes);
   await fastify.register(billingRoutes);
