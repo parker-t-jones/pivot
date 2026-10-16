@@ -15,10 +15,14 @@ export interface WeekCardInputs {
 export interface WeekCardCell {
   label: string;
   value: string;
-  /** Free "N of 3 free" uses `accent`. Everything else stays primary. */
+  /** Free remaining-allowance copy uses `accent`. Everything else stays primary. */
   accent: boolean;
   /** Failed request. The value is an em dash in the muted color, never 0. */
   muted: boolean;
+  /** Desktop segment when it differs from `label` + `value`. */
+  strip?: string;
+  /** Free user has used the weekly allowance. */
+  upgrade?: boolean;
 }
 
 export interface WeekCardModel {
@@ -29,6 +33,30 @@ export interface WeekCardModel {
 }
 
 const UNKNOWN = '\u2014';
+
+function betCell(count: number | null, isPro: boolean): WeekCardCell {
+  if (count == null) {
+    return {
+      label: isPro ? 'Bets & props' : 'Free bets',
+      value: UNKNOWN,
+      accent: false,
+      muted: true,
+    };
+  }
+  if (isPro) {
+    return { label: 'Bets & props', value: String(count), accent: false, muted: false };
+  }
+  const left = Math.max(0, FREE_BET_ALLOWANCE - count);
+  const atCap = count >= FREE_BET_ALLOWANCE;
+  return {
+    label: 'Free bets',
+    value: atCap ? 'No free bets left' : `${left} left`,
+    strip: atCap ? 'No free bets left' : `${left} free bets left this week`,
+    accent: true,
+    muted: false,
+    upgrade: atCap,
+  };
+}
 
 function countValue(
   count: number | null,
@@ -50,14 +78,7 @@ export function weekCardModel(inputs: WeekCardInputs): WeekCardModel {
       accent: false,
       muted: false,
     },
-    bets: {
-      label: 'Bets & props',
-      ...countValue(inputs.betCount, (count) =>
-        inputs.isPro
-          ? { value: String(count), accent: false }
-          : { value: `${count} of ${FREE_BET_ALLOWANCE} free`, accent: true },
-      ),
-    },
+    bets: betCell(inputs.betCount, inputs.isPro),
     pools: {
       label: 'Pools',
       ...countValue(inputs.survivorCount, (count) => ({ value: String(count), accent: false })),

@@ -11,21 +11,45 @@ const free: WeekCardInputs = {
 };
 
 describe('weekCardModel', () => {
-  it('shows 0 of 3 free for a Free user with no bets', () => {
+  it('shows 3 left for a Free user with no bets', () => {
     expect(weekCardModel(free).bets).toEqual({
-      label: 'Bets & props',
-      value: '0 of 3 free',
+      label: 'Free bets',
+      value: '3 left',
+      strip: '3 free bets left this week',
       accent: true,
       muted: false,
+      upgrade: false,
     });
   });
 
-  it('shows 2 of 3 free', () => {
-    expect(weekCardModel({ ...free, betCount: 2 }).bets.value).toBe('2 of 3 free');
+  it('shows 2 left with one bet', () => {
+    expect(weekCardModel({ ...free, betCount: 1 }).bets).toEqual({
+      label: 'Free bets',
+      value: '2 left',
+      strip: '2 free bets left this week',
+      accent: true,
+      muted: false,
+      upgrade: false,
+    });
   });
 
-  it('shows 3 of 3 free', () => {
-    expect(weekCardModel({ ...free, betCount: 3 }).bets.value).toBe('3 of 3 free');
+  it('says there are no free bets left at the cap and offers Upgrade', () => {
+    expect(weekCardModel({ ...free, betCount: 3 }).bets).toEqual({
+      label: 'Free bets',
+      value: 'No free bets left',
+      strip: 'No free bets left',
+      accent: true,
+      muted: false,
+      upgrade: true,
+    });
+  });
+
+  it('stays at no free bets left when the count is over the cap', () => {
+    const bets = weekCardModel({ ...free, betCount: 4 }).bets;
+    expect(bets.value).toBe('No free bets left');
+    expect(bets.strip).toBe('No free bets left');
+    expect(bets.upgrade).toBe(true);
+    expect(bets.value.includes('-')).toBe(false);
   });
 
   it('shows the plain count for Pro', () => {
@@ -80,14 +104,14 @@ describe('weekCardModel', () => {
       muted: true,
     });
     expect(model.opponent.value).toBe('Off');
-    expect(model.bets.value).toBe('0 of 3 free');
+    expect(model.bets.value).toBe('3 left');
     expect(model.pools.value).toBe('1');
   });
 
   it('renders an em dash for a failed bet count and does not say of 3 free', () => {
     const model = weekCardModel({ ...free, betCount: null, isPro: false });
     expect(model.bets).toEqual({
-      label: 'Bets & props',
+      label: 'Free bets',
       value: '\u2014',
       accent: false,
       muted: true,

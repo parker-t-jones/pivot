@@ -24,6 +24,7 @@ import {
   type WatchlistTableRow,
 } from '../lib/watchlistTable';
 import { useSwitching } from '../contexts/SwitchingContext';
+import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
 import { PrimaryButton } from './PrimaryButton';
 import { StreamLinkControl } from './StreamLinkControl';
 import { TextButton } from './TextButton';
@@ -63,6 +64,7 @@ export function WatchlistDesktop({
   extras,
 }: WatchlistDesktopProps) {
   const { switchToGame } = useSwitching();
+  const { openUpgrade } = useUpgradeSheet();
   const games = weekGames ?? [];
   const rows = useMemo(
     () => [
@@ -118,7 +120,12 @@ export function WatchlistDesktop({
           <PrimaryButton label="Add a stake" onPress={onAddStake} />
         </View>
       </View>
-      <Text style={styles.strip}>{statStrip(weekCard)}</Text>
+      <View style={styles.stripRow}>
+        <Text style={styles.strip}>{statStrip(weekCard)}</Text>
+        {weekCard.bets.upgrade ? (
+          <TextButton label="Upgrade" onPress={() => openUpgrade()} size="small" />
+        ) : null}
+      </View>
       <WatchlistFilters onChange={onFilter} value={filter} />
       {extras}
       <View style={styles.table}>
@@ -353,7 +360,7 @@ function rosterMeta(slot: LineupSlot): string {
 function statStrip(model: WeekCardModel): string {
   return [
     `Fantasy ${model.fantasy.value}`,
-    `${model.bets.label} ${model.bets.value}`,
+    model.bets.strip ?? `${model.bets.label} ${model.bets.value}`,
     `Pools ${model.pools.value}`,
     `Opponent ${model.opponent.value.toLowerCase()}`,
   ].join(' · ');
@@ -512,6 +519,12 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     fontSize: theme.type.small.size,
     lineHeight: theme.type.small.lineHeight,
+  },
+  stripRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
   },
   switchButton: {
     ...FILLED_BUTTON_RECIPE,

@@ -1,10 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { WeekCardModel } from '../lib/weekCardModel';
+import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
 import { theme } from '../lib/theme';
+import type { WeekCardCell, WeekCardModel } from '../lib/weekCardModel';
 import { PrimaryButton } from './PrimaryButton';
 import { Slip } from './Slip';
 import { SlipPerforation } from './SlipPerforation';
+import { TextButton } from './TextButton';
 
 interface WeekCardProps {
   model: WeekCardModel;
@@ -15,12 +17,13 @@ interface WeekCardProps {
  * Watchlist week card (PIVOT-STAKES-PLAN.md §11.4): a 2×2 grid, perforation, then Add a stake.
  */
 export function WeekCard({ model, onAddStake }: WeekCardProps) {
+  const { openUpgrade } = useUpgradeSheet();
   return (
     <Slip style={styles.slip}>
       <View style={styles.grid}>
         <Cell cell={model.fantasy} />
         <Cell cell={model.opponent} />
-        <Cell cell={model.bets} />
+        <Cell cell={model.bets} onUpgrade={model.bets.upgrade ? () => openUpgrade() : undefined} />
         <Cell cell={model.pools} />
       </View>
       <SlipPerforation style={styles.perforation} />
@@ -31,7 +34,7 @@ export function WeekCard({ model, onAddStake }: WeekCardProps) {
   );
 }
 
-function Cell({ cell }: { cell: WeekCardModel['fantasy'] }) {
+function Cell({ cell, onUpgrade }: { cell: WeekCardCell; onUpgrade?: () => void }) {
   return (
     <View style={styles.cell}>
       <Text
@@ -48,6 +51,7 @@ function Cell({ cell }: { cell: WeekCardModel['fantasy'] }) {
       >
         {cell.value}
       </Text>
+      {onUpgrade ? <TextButton label="Upgrade" onPress={onUpgrade} size="small" /> : null}
     </View>
   );
 }
