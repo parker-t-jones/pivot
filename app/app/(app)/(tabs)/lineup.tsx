@@ -46,6 +46,12 @@ import {
   type OpponentStarter,
 } from '../../../lib/leagues';
 import { leagueChipScrollOffset, leagueChipWidth } from '../../../lib/leagueChipScroll';
+import {
+  lineupLoadingMessage,
+  readRememberedWatchlist,
+  rememberWatchlist,
+  showFullLoading,
+} from '../../../lib/lineupLoading';
 import { orderLineupSlots, slotLabel } from '../../../lib/lineupOrder';
 import { fetchMe, patchPreferences, type MeResponse } from '../../../lib/me';
 import { fetchNflState } from '../../../lib/nflState';
@@ -142,25 +148,37 @@ export default function LineupScreen() {
   const insets = useSafeAreaInsets();
   const { leagues, leaguesRevision, refreshLeagues, deferConnect } = useLeaguesGate();
 
-  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
-  const [lineup, setLineup] = useState<LineupResponse | null>(null);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(
+    () => readRememberedWatchlist()?.selectedLeagueId ?? null,
+  );
+  const [lineup, setLineup] = useState<LineupResponse | null>(
+    () => readRememberedWatchlist()?.lineup ?? null,
+  );
   /** `null` when this week's games did not load — rows then omit the game line. */
-  const [weekGames, setWeekGames] = useState<ScheduleGame[] | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [weekGames, setWeekGames] = useState<ScheduleGame[] | null>(
+    () => readRememberedWatchlist()?.weekGames ?? null,
+  );
+  const [isLoading, setIsLoading] = useState(() => readRememberedWatchlist()?.lineup == null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyLeagueId, setBusyLeagueId] = useState<string | null>(null);
   const [savingSlotId, setSavingSlotId] = useState<string | null>(null);
-  const [me, setMe] = useState<MeResponse | null>(null);
+  const [me, setMe] = useState<MeResponse | null>(() => readRememberedWatchlist()?.me ?? null);
   const [settingActive, setSettingActive] = useState(false);
   /** Optimistic `watchOpponent` while a preferences PATCH is in flight. */
   const [watchOpponentPending, setWatchOpponentPending] = useState<boolean | null>(null);
-  const [bets, setBets] = useState<ManualStake[]>([]);
+  const [bets, setBets] = useState<ManualStake[]>(() => readRememberedWatchlist()?.bets ?? []);
   /** False until this week's stakes load. A failed request stays false so the week card shows "—", not 0. */
-  const [stakesKnown, setStakesKnown] = useState(false);
+  const [stakesKnown, setStakesKnown] = useState(
+    () => readRememberedWatchlist()?.stakesKnown ?? false,
+  );
   const [liveGames, setLiveGames] = useState<LiveGame[]>([]);
-  const [nflWeek, setNflWeek] = useState<number | null>(null);
-  const [watchedStarterTotal, setWatchedStarterTotal] = useState<number | null>(null);
+  const [nflWeek, setNflWeek] = useState<number | null>(
+    () => readRememberedWatchlist()?.nflWeek ?? null,
+  );
+  const [watchedStarterTotal, setWatchedStarterTotal] = useState<number | null>(
+    () => readRememberedWatchlist()?.watchedStarterTotal ?? null,
+  );
   const [filter, selectFilter] = useWatchlistFilter();
   const desktopTier = useDesktopTier();
   const watchOpponentSave = useRef(false);
@@ -169,6 +187,8 @@ export default function LineupScreen() {
 
   const leaguesRef = useRef(leagues);
   leaguesRef.current = leagues;
+  const hasLineupRef = useRef(lineup != null);
+  hasLineupRef.current = lineup != null;
 
   const activeLeagueId = resolveActiveLeagueId(
     leagues,
@@ -264,8 +284,16 @@ export default function LineupScreen() {
     // Wait for `me` (or a chip / focus choice) so the first load is the active
     // league, not whichever row `GET /leagues` returned first.
     if (leagues.length > 0 && me == null && selectedLeagueId == null) return;
-    setIsLoading(true);
-    void loadLineup(selectedLeague).finally(() => setIsLoading(false));
+    let cancelled = false;
+    // A Home → Watchlist return already has a lineup (in state, or remembered
+    // across the remount). Refetch behind it; don't replace the screen.
+    if (!hasLineupRef.current) setIsLoading(true);
+    void loadLineup(selectedLeague).finally(() => {
+      if (!cancelled) setIsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [leagues.length, leaguesRevision, loadLineup, me, selectedLeague, selectedLeagueId]);
 
   useEffect(() => {
@@ -569,11 +597,31 @@ export default function LineupScreen() {
     );
   };
 
-  if (isLoading && !lineup) {
+  useEffect(() => {
+    if (!lineup) return;
+    rememberWatchlist({
+      lineup,
+      weekGames,
+      bets,
+      stakesKnown,
+      me,
+      nflWeek,
+      watchedStarterTotal,
+      selectedLeagueId,
+    });
+  }, [bets, lineup, me, nflWeek, selectedLeagueId, stakesKnown, watchedStarterTotal, weekGames]);
+
+  if (showFullLoading(lineup != null, isLoading)) {
     return (
-      <View style={[styles.screen, { paddingTop: insets.top + theme.spacing.lg }]}>
+      <View
+        style={[
+          styles.screen,
+          styles.content,
+          { paddingTop: insets.top + theme.spacing.lg },
+        ]}
+      >
         {watchlist ? <WatchlistHeader week={nflWeek} /> : <LineupHeader week={null} />}
-        <LoadingState message="Loading lineup…" />
+        <LoadingState message={lineupLoadingMessage(watchlist)} />
       </View>
     );
   }

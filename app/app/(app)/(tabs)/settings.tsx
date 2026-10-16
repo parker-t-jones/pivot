@@ -23,6 +23,7 @@ import { useUpgradeSheet } from '../../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../../lib/apiClient';
 import { alertAsync, confirmAsync } from '../../../lib/confirm';
 import { desktopAlertCopy, lastDesktopAlertState } from '../../../lib/desktopAlerts';
+import { clearRememberedWatchlist } from '../../../lib/lineupLoading';
 import { readAlertSoundEnabled, writeAlertSoundEnabled } from '../../../lib/inTabAlerts';
 import {
   NotificationsDisabledError,
@@ -117,6 +118,7 @@ export default function SettingsScreen() {
     } else if (user) {
       await unregisterPushNotificationsAsync(user.id);
     }
+    clearRememberedWatchlist();
     await supabase.auth.signOut();
     setIsSigningOut(false);
   };
@@ -135,6 +137,7 @@ export default function SettingsScreen() {
       void (async () => {
         try {
           await deleteAccount();
+          clearRememberedWatchlist();
           await supabase.auth.signOut();
         } catch (error) {
           void alertAsync('Could not delete account', errorMessage(error));
