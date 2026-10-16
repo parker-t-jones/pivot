@@ -1,7 +1,6 @@
 import Constants from 'expo-constants';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Alert,
   Linking,
   Platform,
   Pressable,
@@ -22,6 +21,7 @@ import { usePushPermission } from '../../../contexts/PushPermissionContext';
 import { useSession } from '../../../contexts/SessionContext';
 import { useUpgradeSheet } from '../../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../../lib/apiClient';
+import { alertAsync, confirmAsync } from '../../../lib/confirm';
 import { desktopAlertCopy, lastDesktopAlertState } from '../../../lib/desktopAlerts';
 import { readAlertSoundEnabled, writeAlertSoundEnabled } from '../../../lib/inTabAlerts';
 import {
@@ -75,7 +75,7 @@ const SWITCH_THUMB = theme.colors.textPrimary;
 
 function openExternalUrl(url: string, failedMessage: string): void {
   void Linking.openURL(url).catch(() => {
-    Alert.alert('Could not open', failedMessage);
+    void alertAsync('Could not open', failedMessage);
   });
 }
 
@@ -122,27 +122,26 @@ export default function SettingsScreen() {
   };
 
   const onDeleteAccount = () => {
-    Alert.alert(
-      'Delete account?',
-      'This permanently deletes your account, leagues, and lineup data. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setIsDeletingAccount(true);
-            try {
-              await deleteAccount();
-              await supabase.auth.signOut();
-            } catch (error) {
-              Alert.alert('Could not delete account', errorMessage(error));
-              setIsDeletingAccount(false);
-            }
-          },
-        },
-      ],
-    );
+    void confirmAsync({
+      title: 'Delete account?',
+      message:
+        'This permanently deletes your account, leagues, and lineup data. This cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      destructive: true,
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      setIsDeletingAccount(true);
+      void (async () => {
+        try {
+          await deleteAccount();
+          await supabase.auth.signOut();
+        } catch (error) {
+          void alertAsync('Could not delete account', errorMessage(error));
+          setIsDeletingAccount(false);
+        }
+      })();
+    });
   };
 
   if (isLoading) {
@@ -315,7 +314,7 @@ function AccountSection({
           label="Manage subscription"
           onPress={() => {
             void Linking.openURL('https://apps.apple.com/account/subscriptions').catch(() => {
-              Alert.alert('Could not open', 'Open Settings → Apple ID → Subscriptions.');
+              void alertAsync('Could not open', 'Open Settings → Apple ID → Subscriptions.');
             });
           }}
           size="smallStrong"
@@ -368,7 +367,7 @@ function NotificationsSection({
     try {
       await onChange(patch);
     } catch (error) {
-      Alert.alert('Could not save', errorMessage(error));
+      void alertAsync('Could not save', errorMessage(error));
     } finally {
       setIsSaving(false);
     }
@@ -482,7 +481,7 @@ function StreamingServicesSection({
                 try {
                   await onChange(service, value);
                 } catch (error) {
-                  Alert.alert('Could not save', errorMessage(error));
+                  void alertAsync('Could not save', errorMessage(error));
                 } finally {
                   setSavingService(null);
                 }
@@ -504,23 +503,20 @@ function StreamingServicesSection({
 }
 
 function promptEnableNotifications(): void {
-  Alert.alert(
-    'Notifications are off',
-    'Turn on notifications for Pivot in the Settings app, then try again.',
-    [
-      { text: 'Not now', style: 'cancel' },
-      {
-        text: 'Open Settings',
-        onPress: () =>
-          void Linking.openSettings().catch(() => {
-            Alert.alert(
-              'Could not open Settings',
-              'Open the Settings app, tap Pivot, and enable notifications.',
-            );
-          }),
-      },
-    ],
-  );
+  void confirmAsync({
+    title: 'Notifications are off',
+    message: 'Turn on notifications for Pivot in the Settings app, then try again.',
+    confirmLabel: 'Open Settings',
+    cancelLabel: 'Not now',
+  }).then((confirmed) => {
+    if (!confirmed) return;
+    void Linking.openSettings().catch(() => {
+      void alertAsync(
+        'Could not open Settings',
+        'Open the Settings app, tap Pivot, and enable notifications.',
+      );
+    });
+  });
 }
 
 function DesktopAlertsButton() {
@@ -559,7 +555,7 @@ function AboutSection() {
       if (error instanceof NotificationsDisabledError) {
         promptEnableNotifications();
       } else {
-        Alert.alert('Could not send test notification', errorMessage(error));
+        void alertAsync('Could not send test notification', errorMessage(error));
       }
     } finally {
       setIsSendingTest(false);

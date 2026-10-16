@@ -29,6 +29,7 @@ import { WeekCard } from '../../../components/WeekCard';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
 import { resolveActiveLeagueId, watchlistChipCue, watchlistLeagueSelection } from '../../../lib/activeLeague';
 import { ApiRequestError } from '../../../lib/apiClient';
+import { alertAsync, confirmAsync } from '../../../lib/confirm';
 import { useFeature } from '../../../lib/useFeature';
 import { SHOW_STAR_TOGGLES } from '../../../lib/flags';
 import { fonts } from '../../../lib/fonts';
@@ -334,23 +335,23 @@ export default function LineupScreen() {
 
   const confirmRemoveBet = (stake: ManualStake) => {
     const label = formatStakeLabel(stake, stakeTeams(stake));
-    Alert.alert('Remove this bet?', label, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            try {
-              await deleteStake(stake.id);
-              setBets((current) => current.filter((row) => row.id !== stake.id));
-            } catch (error) {
-              Alert.alert('Could not remove', errorMessage(error));
-            }
-          })();
-        },
-      },
-    ]);
+    void confirmAsync({
+      title: 'Remove this bet?',
+      message: label,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      destructive: true,
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      void (async () => {
+        try {
+          await deleteStake(stake.id);
+          setBets((current) => current.filter((row) => row.id !== stake.id));
+        } catch (error) {
+          void alertAsync('Could not remove', errorMessage(error));
+        }
+      })();
+    });
   };
 
   const onRefresh = useCallback(async () => {
@@ -365,7 +366,7 @@ export default function LineupScreen() {
         rows.find((league) => league.league_id === selectedLeague?.league_id) ?? rows[0] ?? null;
       await loadLineup(next);
     } catch (error) {
-      Alert.alert('Refresh failed', errorMessage(error));
+      void alertAsync('Refresh failed', errorMessage(error));
     } finally {
       setIsRefreshing(false);
     }
@@ -388,7 +389,7 @@ export default function LineupScreen() {
                 await renameManualLeague(league.league_id, next);
                 await refreshLeagues();
               } catch (error) {
-                Alert.alert('Could not rename', errorMessage(error));
+                void alertAsync('Could not rename', errorMessage(error));
               } finally {
                 setBusyLeagueId(null);
               }
@@ -415,7 +416,7 @@ export default function LineupScreen() {
       await setStarPlayer(lineup.league_id, lineup.week, slot.player.player_id, value);
       await loadLineup(selectedLeague);
     } catch (error) {
-      Alert.alert('Could not update star', errorMessage(error));
+      void alertAsync('Could not update star', errorMessage(error));
     } finally {
       setSavingSlotId(null);
     }
@@ -448,7 +449,7 @@ export default function LineupScreen() {
       const updated = await patchPreferences({ watchOpponent: next });
       setMe(updated);
     } catch (error) {
-      Alert.alert('Could not update', errorMessage(error));
+      void alertAsync('Could not update', errorMessage(error));
     } finally {
       setWatchOpponentPending(null);
       watchOpponentSave.current = false;
@@ -477,7 +478,7 @@ export default function LineupScreen() {
         setMe(updated);
         setSelectedLeagueId(decision.selectedLeagueId);
       } catch (error) {
-        Alert.alert('Could not save', errorMessage(error));
+        void alertAsync('Could not save', errorMessage(error));
       } finally {
         setSettingActive(false);
       }
@@ -507,7 +508,7 @@ export default function LineupScreen() {
           const next = rows.find((league) => league.league_id === selectedLeague.league_id) ?? null;
           await loadLineup(next);
         } catch (error) {
-          Alert.alert('Sync failed', errorMessage(error));
+          void alertAsync('Sync failed', errorMessage(error));
         } finally {
           setBusyLeagueId(null);
         }
@@ -521,29 +522,29 @@ export default function LineupScreen() {
     } else if (choice === 'Connect another team') {
       router.push('/(app)/connect-team');
     } else if (choice === 'Disconnect') {
-      Alert.alert('Disconnect league?', `Remove "${selectedLeague.name}" from Pivot?`, [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              setBusyLeagueId(selectedLeague.league_id);
-              try {
-                await disconnectLeague(selectedLeague.league_id);
-                const rows = await refreshLeagues();
-                if (rows.length === 0) {
-                  deferConnect();
-                }
-              } catch (error) {
-                Alert.alert('Could not disconnect', errorMessage(error));
-              } finally {
-                setBusyLeagueId(null);
-              }
-            })();
-          },
-        },
-      ]);
+      void confirmAsync({
+        title: 'Disconnect league?',
+        message: `Remove "${selectedLeague.name}" from Pivot?`,
+        confirmLabel: 'Disconnect',
+        cancelLabel: 'Cancel',
+        destructive: true,
+      }).then((confirmed) => {
+        if (!confirmed) return;
+        void (async () => {
+          setBusyLeagueId(selectedLeague.league_id);
+          try {
+            await disconnectLeague(selectedLeague.league_id);
+            const rows = await refreshLeagues();
+            if (rows.length === 0) {
+              deferConnect();
+            }
+          } catch (error) {
+            void alertAsync('Could not disconnect', errorMessage(error));
+          } finally {
+            setBusyLeagueId(null);
+          }
+        })();
+      });
     }
   };
 

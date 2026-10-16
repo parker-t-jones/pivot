@@ -1,6 +1,5 @@
-import { Alert } from 'react-native';
-
 import { ApiRequestError } from './apiClient';
+import { confirmAsync } from './confirm';
 import { isUpgradeCapCode } from './upgradeCap';
 
 export { isUpgradeCapCode, upgradeContextLine } from './upgradeCap';
@@ -23,9 +22,13 @@ export function promptUpgradeForCapError(
   const title =
     error.code === 'league_limit_free' ? 'League limit reached' : 'Lineup limit reached';
 
-  Alert.alert(title, error.message, [
-    { text: 'Not now', style: 'cancel' },
-    { text: 'Upgrade', onPress: () => openUpgrade() },
-  ]);
+  void confirmAsync({
+    title,
+    message: error.message,
+    confirmLabel: 'Upgrade',
+    cancelLabel: 'Not now',
+  }).then((confirmed) => {
+    if (confirmed) openUpgrade();
+  });
   return true;
 }

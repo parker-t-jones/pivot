@@ -1,10 +1,11 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { TextButton } from './TextButton';
 import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
 import { resolveActiveLeagueId } from '../lib/activeLeague';
+import { alertAsync } from '../lib/confirm';
 import type { LeagueSummary } from '../lib/leagues';
 import { fetchMe, patchPreferences, type MeResponse } from '../lib/me';
 import { fonts } from '../lib/fonts';
@@ -81,7 +82,7 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
       const updated = await patchPreferences({ watchedLeagueIds: next });
       onMeUpdated(updated);
     } catch (error) {
-      Alert.alert('Could not save', error instanceof Error ? error.message : 'Try again.');
+      void alertAsync('Could not save', error instanceof Error ? error.message : 'Try again.');
       setDraft(watched);
     } finally {
       setSaving(false);
@@ -105,7 +106,7 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
         ? current.filter((id) => id !== leagueId)
         : [...current, leagueId];
       if (next.length === 0) {
-        Alert.alert('Pick a lineup', 'Watch at least one league.');
+        void alertAsync('Pick a lineup', 'Watch at least one league.');
         return current;
       }
       void persist(next);

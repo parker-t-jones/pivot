@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Alert,
-  Linking,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from './PrimaryButton';
@@ -17,6 +8,7 @@ import { Slip } from './Slip';
 import { TextButton } from './TextButton';
 import { useSession } from '../contexts/SessionContext';
 import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
+import { alertAsync } from '../lib/confirm';
 import { fonts } from '../lib/fonts';
 import { fetchMe } from '../lib/me';
 import {
@@ -95,7 +87,7 @@ export function UpgradeSheet() {
 
   const onPurchase = async () => {
     if (!isPurchasesConfigured()) {
-      Alert.alert(
+      void alertAsync(
         'Purchases unavailable',
         'Set EXPO_PUBLIC_REVENUECAT_API_KEY and rebuild a dev client to buy Pro. For local UI testing, set users.subscription_tier to pro in Supabase.',
       );
@@ -106,14 +98,16 @@ export function UpgradeSheet() {
       const info = await purchaseProMonthly();
       if (customerHasPro(info)) {
         await refreshTier();
-        Alert.alert('You are Pro', 'Unlimited leagues and multi-lineup watching are unlocked.', [
-          { text: 'Done', onPress: closeUpgrade },
-        ]);
+        void alertAsync(
+          'You are Pro',
+          'Unlimited leagues and multi-lineup watching are unlocked.',
+          [{ text: 'Done', onPress: closeUpgrade }],
+        );
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Purchase failed.';
       if (!/cancel/i.test(message)) {
-        Alert.alert('Could not purchase', message);
+        void alertAsync('Could not purchase', message);
       }
     } finally {
       setIsPurchasing(false);
@@ -122,7 +116,7 @@ export function UpgradeSheet() {
 
   const onRestore = async () => {
     if (!isPurchasesConfigured()) {
-      Alert.alert('Purchases unavailable', 'RevenueCat is not configured in this build.');
+      void alertAsync('Purchases unavailable', 'RevenueCat is not configured in this build.');
       return;
     }
     setIsRestoring(true);
@@ -130,12 +124,15 @@ export function UpgradeSheet() {
       const info = await restorePurchases();
       await refreshTier();
       if (customerHasPro(info)) {
-        Alert.alert('Restored', 'Your Pro subscription is active.');
+        void alertAsync('Restored', 'Your Pro subscription is active.');
       } else {
-        Alert.alert('Nothing to restore', 'No active Pro subscription found for this Apple ID.');
+        void alertAsync(
+          'Nothing to restore',
+          'No active Pro subscription found for this Apple ID.',
+        );
       }
     } catch (error) {
-      Alert.alert(
+      void alertAsync(
         'Could not restore',
         error instanceof Error ? error.message : 'Try again later.',
       );
@@ -208,7 +205,10 @@ export function UpgradeSheet() {
                   label="Manage subscription"
                   onPress={() => {
                     void Linking.openURL(MANAGE_SUBSCRIPTIONS_URL).catch(() => {
-                      Alert.alert('Could not open', 'Open Settings → Apple ID → Subscriptions.');
+                      void alertAsync(
+                        'Could not open',
+                        'Open Settings → Apple ID → Subscriptions.',
+                      );
                     });
                   }}
                 />
