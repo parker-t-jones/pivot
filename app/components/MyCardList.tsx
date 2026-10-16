@@ -14,6 +14,7 @@ import type { LineupGameGroup } from '../lib/homeState';
 import type { LiveGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { ManageLineupLink } from './HomeSegmentRow';
+import { StreamLinkControl } from './StreamLinkControl';
 
 /** Same 3pt stake stripe BoardRow uses — kept local so MY CARD doesn't import BoardRow styles. */
 const STRIPE_WIDTH = 3;
@@ -37,7 +38,12 @@ function formatKickoffTime(kickoff: Date): string {
 }
 
 /** The MY CARD segment (PIVOT-STAKES-PLAN.md §11.3): one `well` block per stake game. */
-export function MyCardList({ groups, lineupGroups, liveGames = [], betRefs = [] }: MyCardListProps) {
+export function MyCardList({
+  groups,
+  lineupGroups,
+  liveGames = [],
+  betRefs = [],
+}: MyCardListProps) {
   const myCardGames = useMemo(
     () => buildMyCardGames(flattenRows(groups), lineupGroups, betRefs),
     [groups, lineupGroups, betRefs],
@@ -123,6 +129,7 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
         >
           {game.network ?? ''}
         </Text>
+        <StreamLinkControl away={game.awayTeamId} gameId={game.gameId} home={game.homeTeamId} />
         {score !== null ? (
           <Text
             maxFontSizeMultiplier={theme.fontScaleCaps.dense}

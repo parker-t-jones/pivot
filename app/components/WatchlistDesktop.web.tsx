@@ -1,5 +1,13 @@
 import { useMemo } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 
 import { FILLED_BUTTON_RECIPE } from '../lib/controlRecipes';
 import { fonts } from '../lib/fonts';
@@ -17,6 +25,7 @@ import {
 } from '../lib/watchlistTable';
 import { useSwitching } from '../contexts/SwitchingContext';
 import { PrimaryButton } from './PrimaryButton';
+import { StreamLinkControl } from './StreamLinkControl';
 import { TextButton } from './TextButton';
 import type { WatchlistDesktopProps } from './WatchlistDesktop';
 import { WatchlistFilters } from './WatchlistFilters';
@@ -87,12 +96,13 @@ export function WatchlistDesktop({
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: topInset, paddingBottom: bottomInset },
-      ]}
+      contentContainerStyle={[styles.content, { paddingTop: topInset, paddingBottom: bottomInset }]}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={theme.colors.accent}
+        />
       }
     >
       <View style={styles.header}>
@@ -153,7 +163,9 @@ export function WatchlistDesktop({
         </View>
       ) : null}
       {showOpponentToggle && !watchOpponent ? (
-        <Text style={styles.hint}>See your opponent's red-zone trips on Home. No notifications.</Text>
+        <Text style={styles.hint}>
+          See your opponent's red-zone trips on Home. No notifications.
+        </Text>
       ) : null}
     </ScrollView>
   );
@@ -168,9 +180,9 @@ function TableRow({
   onOpen: () => void;
   onRemove: (() => void) | null;
 }) {
+  const teams = row.gameId ? matchupTeams(row.switchLabel) : null;
   return (
     <Pressable
-      accessibilityRole={row.live ? 'button' : undefined}
       onPress={row.live ? onOpen : undefined}
       style={(state) => {
         const { pressed, hovered, focused } = webPressState(state);
@@ -195,13 +207,21 @@ function TableRow({
           </Text>
         ) : null}
       </View>
-      <Text numberOfLines={1} style={[styles.game, styles.gameCol]}>
-        {row.game}
-      </Text>
+      <View style={[styles.gameCell, styles.gameCol]}>
+        <Text numberOfLines={1} style={[styles.game, styles.gameText]}>
+          {row.game}
+        </Text>
+        {row.gameId && teams ? (
+          <StreamLinkControl away={teams.away} gameId={row.gameId} home={teams.home} />
+        ) : null}
+      </View>
       <Text numberOfLines={1} style={[styles.network, styles.networkCol]}>
         {row.network}
       </Text>
-      <Text numberOfLines={1} style={[styles.status, row.live && styles.statusLive, styles.statusCol]}>
+      <Text
+        numberOfLines={1}
+        style={[styles.status, row.live && styles.statusLive, styles.statusCol]}
+      >
         {row.status}
       </Text>
       <View style={styles.actionCol}>
@@ -227,6 +247,11 @@ function TableRow({
       </View>
     </Pressable>
   );
+}
+
+function matchupTeams(label: string): { away: string; home: string } {
+  const [away = '', home = ''] = label.split(' @ ');
+  return { away: away.trim(), home: home.trim() };
 }
 
 function playerRow(
@@ -362,6 +387,14 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     fontFamily: fonts.monoMedium,
     fontSize: theme.type.ticker.size,
+  },
+  gameCell: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  gameText: {
+    flexShrink: 1,
   },
   gameCol: {
     flex: 1.3,
