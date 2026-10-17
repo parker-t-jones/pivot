@@ -3,7 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { BoardWindowGroup, StakeRef } from '../lib/board';
 import { fonts } from '../lib/fonts';
 import { DESKTOP_RIGHT_COLUMN } from '../lib/desktopLayout';
-import { formatCountdown, type LineupGameGroup } from '../lib/homeState';
+import type { LineupGameGroup } from '../lib/homeState';
+import { kickoffLabel } from '../lib/kickoffLabel';
 import { useHomeSegment } from '../lib/homeSegment';
 import { useDesktopTier } from '../lib/useDesktopTier';
 import type { ScheduleGame } from '../lib/schedule';
@@ -35,6 +36,9 @@ interface HomePregameViewProps {
   hero: PregameHero | null;
   /** Milliseconds to the next kickoff anywhere in the slate, or null to hide the countdown. */
   countdownMs: number | null;
+  /** Instant behind `countdownMs`. The weekday label needs the clock, not just the distance. */
+  nextKickoffAt: Date | null;
+  nowMs: number;
 }
 
 /**
@@ -50,7 +54,13 @@ export function HomePregameView({
   betRefs = [],
   hero,
   countdownMs,
+  nextKickoffAt,
+  nowMs,
 }: HomePregameViewProps) {
+  const kickoff =
+    countdownMs === null || nextKickoffAt === null
+      ? null
+      : kickoffLabel(nextKickoffAt, new Date(nowMs));
   const tier = useDesktopTier();
   const [segment, selectSegment] = useHomeSegment();
 
@@ -90,13 +100,13 @@ export function HomePregameView({
               <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.modeEyebrow}>
                 {`WEEK ${week} · PRE-GAME`}
               </Text>
-              {countdownMs === null ? null : (
+              {kickoff === null ? null : (
                 <Text
                   maxFontSizeMultiplier={theme.fontScaleCaps.dense}
                   numberOfLines={1}
-                  style={[styles.metaLabel, countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
+                  style={[styles.metaLabel, countdownMs !== null && countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
                 >
-                  {`NEXT KICKOFF · ${formatCountdown(countdownMs)}`}
+                  {`NEXT KICKOFF · ${kickoff}`}
                 </Text>
               )}
             </View>
@@ -133,16 +143,16 @@ export function HomePregameView({
             <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.modeEyebrow}>
               {`WEEK ${week} · PRE-GAME`}
             </Text>
-            {countdownMs === null ? null : (
+            {kickoff === null ? null : (
               <View style={styles.headerMeta}>
                 <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.metaLabel}>
                   NEXT KICKOFF
                 </Text>
                 <Text
                   maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-                  style={[styles.countdown, countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
+                  style={[styles.countdown, countdownMs !== null && countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
                 >
-                  {formatCountdown(countdownMs)}
+                  {kickoff}
                 </Text>
               </View>
             )}
@@ -162,16 +172,16 @@ export function HomePregameView({
         <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.modeEyebrow}>
           {`WEEK ${week} · PRE-GAME`}
         </Text>
-        {countdownMs === null ? null : (
+        {kickoff === null ? null : (
           <View style={styles.headerMeta}>
             <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.metaLabel}>
               NEXT KICKOFF
             </Text>
             <Text
               maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-              style={[styles.countdown, countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
+              style={[styles.countdown, countdownMs !== null && countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
             >
-              {formatCountdown(countdownMs)}
+              {kickoff}
             </Text>
           </View>
         )}

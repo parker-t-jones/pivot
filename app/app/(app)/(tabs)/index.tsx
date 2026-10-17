@@ -7,6 +7,7 @@ import { ActiveLineupPicker } from '../../../components/ActiveLineupPicker';
 import { AlsoFlaggedRow } from '../../../components/AlsoFlaggedRow';
 import { EmptyState } from '../../../components/EmptyState';
 import { ErrorState } from '../../../components/ErrorState';
+import type { FeaturedBetChip } from '../../../components/FeaturedStakeCard';
 import { HomeDashboard } from '../../../components/HomeDashboard';
 import { HomeLiveIdleCard } from '../../../components/HomeLiveIdleCard';
 import { HomeLiveView, LiveModeEyebrow } from '../../../components/HomeLiveView';
@@ -142,15 +143,12 @@ function toFlagSlice(data: HomeData): HomeFlagSlice {
   };
 }
 
-function heroBetChips(
-  refs: readonly StakeRef[],
-  gameId: string,
-): { stakeId: string; label: string }[] {
-  const chips: { stakeId: string; label: string }[] = [];
+function heroBetChips(refs: readonly StakeRef[], gameId: string): FeaturedBetChip[] {
+  const chips: FeaturedBetChip[] = [];
   for (const ref of refs) {
     if (ref.kind !== 'bet' || ref.gameId !== gameId) continue;
     if (ref.stakeId === undefined || ref.label === undefined || ref.label.length === 0) continue;
-    chips.push({ stakeId: ref.stakeId, label: ref.label });
+    chips.push({ stakeId: ref.stakeId, label: ref.label, eyebrow: ref.eyebrow ?? 'BET' });
   }
   return chips;
 }
@@ -777,18 +775,19 @@ export default function HomeScreen() {
     });
   }, [homeData, isLive, branchKey, stakeRefs]);
 
-  const { hero: pregameHero, countdownMs: pregameCountdownMs } = useMemo(() => {
+  const { hero: pregameHero, countdownMs: pregameCountdownMs, nextKickoffAt } = useMemo(() => {
     const rows = flattenRows(boardGroups);
     const now = new Date(pregameNowMs);
     const next = nextKickoff(rows, now);
     const featured = pickFeaturedGame(rows, now);
     const target = featured ?? next;
     const countdownMs = next ? Math.max(0, next.kickoff.getTime() - pregameNowMs) : null;
+    const nextKickoffAt = next?.kickoff ?? null;
 
-    if (!target) return { hero: null, countdownMs };
+    if (!target) return { hero: null, countdownMs, nextKickoffAt };
 
     const game = homeData?.weekGames.find((row) => row.game_id === target.gameId) ?? null;
-    if (!game) return { hero: null, countdownMs };
+    if (!game) return { hero: null, countdownMs, nextKickoffAt };
 
     // Falling back to `nextKickoff` means the user has nothing riding on this game, so it gets
     // the NEXT KICKOFF eyebrow and no player chips.
@@ -802,7 +801,7 @@ export default function HomeScreen() {
                 ?.players ?? [],
             bets: heroBetChips(stakeRefs, target.gameId),
           };
-    return { hero, countdownMs };
+    return { hero, countdownMs, nextKickoffAt };
   }, [boardGroups, pregameNowMs, homeData?.weekGames, homeData?.lineupGroups, stakeRefs]);
 
   function renderBody() {
@@ -881,6 +880,8 @@ export default function HomeScreen() {
         return (
           <HomePregameView
             countdownMs={pregameCountdownMs}
+            nextKickoffAt={nextKickoffAt}
+            nowMs={pregameNowMs}
             betRefs={betRefs}
             groups={boardGroups}
             hero={pregameHero}

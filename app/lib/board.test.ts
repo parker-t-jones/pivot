@@ -628,6 +628,7 @@ describe('boardStakeRefs', () => {
         gameId: 'open',
         teamId: 'SEA',
         label: 'SEA ML',
+        eyebrow: 'BET',
       },
     ]);
     expect(rows[0]?.stakeCount).toBe(1);
@@ -700,6 +701,7 @@ describe('boardStakeRefs', () => {
       stakeId: 'ml-final',
       teamId: 'SEA',
       label: 'Survivor · SEA',
+      eyebrow: 'POOL',
     });
     const rows = flattenRows(buildBoardRows([seaDen], refs));
     expect(rows[0]?.status).toBe('final');

@@ -14,6 +14,8 @@ const BAND_HEIGHT = 4;
 export interface FeaturedBetChip {
   stakeId: string;
   label: string;
+  /** Same eyebrow as the YOUR STAKES line. Survivor is POOL. */
+  eyebrow?: 'BET' | 'POOL';
 }
 
 interface FeaturedStakeCardProps {
@@ -93,7 +95,7 @@ export function FeaturedStakeCard({
                   {bet.label}
                 </Text>
                 <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipPosition}>
-                  BET
+                  {bet.eyebrow ?? 'BET'}
                 </Text>
               </View>
             ))}

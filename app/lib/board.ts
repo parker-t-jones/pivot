@@ -9,6 +9,7 @@ import { groupWindow, networkLabelFromAirings, type WindowLabel } from '@pivot/s
 import { formatStakeLabel } from '@pivot/shared/stakeLabel';
 import type { HomeBranch, LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
+import { stakeLineEyebrow } from './stakeEyebrow';
 import type { ManualStake } from './stakes';
 import { isDefensePosition } from './teamDisplay';
 
@@ -37,6 +38,8 @@ export interface StakeRef {
   kind?: 'bet';
   stakeId?: string;
   label?: string;
+  /** Survivor is POOL. Other bet types, and a live chip with no type, are BET. */
+  eyebrow?: 'BET' | 'POOL';
 }
 
 /** A live `/flags/current` bet chip. `stake_id` matches `GET /stakes` `id`. */
@@ -82,6 +85,7 @@ function betRefForStake(stake: ManualStake, game: ScheduleGame): StakeRef {
       },
       teams,
     ),
+    eyebrow: stakeLineEyebrow(stake.condition.type),
   };
 }
 
@@ -253,7 +257,7 @@ export function nextKickoff(rows: BoardRowData[], now: Date): BoardRowData | nul
 
 /** One stake line on MY CARD. A bet line uses the stake label and leaves `value` empty. */
 export interface MyCardStakeLine {
-  tag: 'FANTASY' | 'BET';
+  tag: 'FANTASY' | 'BET' | 'POOL';
   label: string;
   value: string;
 }
@@ -343,7 +347,7 @@ export function buildMyCardGames(
           value: player.position,
         })),
         ...bets.map((bet) => ({
-          tag: 'BET' as const,
+          tag: bet.eyebrow ?? 'BET',
           label: bet.label ?? '',
           value: '',
         })),
