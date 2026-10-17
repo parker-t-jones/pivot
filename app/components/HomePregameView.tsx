@@ -120,9 +120,9 @@ export function HomePregameView({
             />
           </View>
         </View>
-        <View style={styles.wideRow}>
+        <View style={[styles.wideRow, styles.wideBodyRow]}>
           <View style={[styles.wideMain, styles.wideBody]}>{board}</View>
-          <View style={styles.wideSide}>
+          <View style={[styles.wideSide, styles.wideBodyColumn]}>
             <MyCardList
               betRefs={betRefs}
               groups={groups}
@@ -275,6 +275,14 @@ const styles = StyleSheet.create({
   },
   wideBody: {
     gap: theme.spacing.lg,
+    justifyContent: 'flex-start',
+  },
+  wideBodyColumn: {
+    justifyContent: 'flex-start',
+  },
+  /** Cards start with the hero. The header row above keeps vertical centering. */
+  wideBodyRow: {
+    alignItems: 'flex-start',
   },
   wideKickoff: {
     alignItems: 'center',
