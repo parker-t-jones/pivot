@@ -82,7 +82,12 @@ import { formatStakeLabel, stakeTeams, type ManualStake } from '../../../lib/sta
 import { deleteStake, fetchStakes } from '../../../lib/stakesClient';
 import { theme } from '../../../lib/theme';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
-import { isBenchSlot, watchedStarterCount, weekCardModel } from '../../../lib/weekCardModel';
+import {
+  freeBetCount,
+  isBenchSlot,
+  watchedStarterCount,
+  weekCardModel,
+} from '../../../lib/weekCardModel';
 import {
   lineupScreenMode,
   splitBets,
@@ -493,7 +498,7 @@ export default function LineupScreen() {
   const weekCard = weekCardModel({
     starterCount: watchedStarterTotal,
     watchOpponent,
-    betCount: stakesKnown ? propBets.length : null,
+    betCount: stakesKnown ? freeBetCount(bets) : null,
     survivorCount: stakesKnown ? poolBets.length : null,
     isPro: me?.subscription_tier === 'pro',
   });

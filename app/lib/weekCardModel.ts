@@ -1,6 +1,21 @@
 /** Free weekly allowance for bets and props. Pro is uncapped. M1 replaces the Pro check. */
 export const FREE_BET_ALLOWANCE = 3;
 
+const FANTASY_TYPES = new Set(['ROSTERED', 'OPPONENT_ROSTERED']);
+
+/**
+ * Same rule as the API cap: a survivor pick does not use a free slot, and neither does a
+ * fantasy row. Every other condition does, including a missing type.
+ */
+export function countsTowardFreeCap(type: string | null | undefined): boolean {
+  if (type === 'SURVIVOR') return false;
+  return type == null || !FANTASY_TYPES.has(type);
+}
+
+export function freeBetCount(stakes: readonly { condition: { type: string } }[]): number {
+  return stakes.filter((stake) => countsTowardFreeCap(stake.condition.type)).length;
+}
+
 export interface WeekCardInputs {
   /** Starters this week across watched leagues. Zero when the user has no leagues. `null` when the request failed. */
   starterCount: number | null;

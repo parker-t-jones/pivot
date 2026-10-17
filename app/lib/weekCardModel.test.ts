@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { watchedStarterCount, weekCardModel, type WeekCardInputs } from './weekCardModel';
+import {
+  freeBetCount,
+  watchedStarterCount,
+  weekCardModel,
+  type WeekCardInputs,
+} from './weekCardModel';
 
 const free: WeekCardInputs = {
   starterCount: 9,
@@ -20,6 +25,30 @@ describe('weekCardModel', () => {
       muted: false,
       upgrade: false,
     });
+  });
+
+  it('does not count survivor picks against free bets left, and still counts bets', () => {
+    const stakes = [
+      { condition: { type: 'SPREAD' } },
+      { condition: { type: 'SURVIVOR' } },
+      { condition: { type: 'SURVIVOR' } },
+      { condition: { type: 'ROSTERED' } },
+    ];
+    expect(freeBetCount(stakes)).toBe(1);
+    const bets = weekCardModel({ ...free, betCount: freeBetCount(stakes), survivorCount: 2 }).bets;
+    expect(bets.value).toBe('2 left');
+    expect(bets.strip).toBe('2 free bets left this week');
+
+    const atCap = [
+      { condition: { type: 'SPREAD' } },
+      { condition: { type: 'MONEYLINE' } },
+      { condition: { type: 'TOTAL_OVER' } },
+      { condition: { type: 'SURVIVOR' } },
+    ];
+    expect(freeBetCount(atCap)).toBe(3);
+    expect(weekCardModel({ ...free, betCount: freeBetCount(atCap) }).bets.value).toBe(
+      'No free bets left',
+    );
   });
 
   it('shows 2 left with one bet', () => {

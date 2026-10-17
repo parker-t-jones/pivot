@@ -56,8 +56,10 @@ interface StakeRow {
   created_at: string;
 }
 
+/** Free weekly slots. Survivor picks do not use one. Fantasy rows do not either. */
 function countsTowardFreeCap(condition: Json): boolean {
   const type = conditionType(condition);
+  if (type === 'SURVIVOR') return false;
   return type === null || !FANTASY_TYPES.has(type);
 }
 
@@ -194,9 +196,11 @@ const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .eq('id', user.id)
       .single();
     if (userError) throw userError;
+    const counted = owned.filter((stake) => countsTowardFreeCap(stake.condition)).length;
     if (
       userRow.subscription_tier !== 'pro' &&
-      owned.filter((stake) => countsTowardFreeCap(stake.condition)).length >= FREE_BET_LIMIT
+      countsTowardFreeCap(condition) &&
+      counted >= FREE_BET_LIMIT
     ) {
       throw new ApiError(
         403,

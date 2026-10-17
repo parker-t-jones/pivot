@@ -465,9 +465,24 @@ describe('manual stakes', () => {
       201,
     );
     expect((await post({ type: 'TOTAL_OVER', gameId: GAME, line: 47.5 })).statusCode).toBe(201);
-    const survivor = await post({ type: 'SURVIVOR', gameId: GAME, teamId: HOME });
-    expect(survivor.statusCode).toBe(201);
-    return survivor;
+    const third = await post({ type: 'MONEYLINE', gameId: GAME, teamId: HOME });
+    expect(third.statusCode).toBe(201);
+    return third;
+  }
+
+  function seedSurvivor(index: number, teamId: string) {
+    mem.stakes.push({
+      id: `50000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      user_id: USER,
+      season: 2026,
+      week: 5,
+      game_id: GAME,
+      subject: { type: 'TEAM', teamId },
+      condition: { type: 'SURVIVOR' },
+      source: 'MANUAL',
+      weight: 1,
+      created_at: '2026-10-09T15:00:00.000Z',
+    });
   }
 
   it('returns 403 when a free user already has 3 bets that week, and 201 for the third', async () => {
@@ -484,10 +499,32 @@ describe('manual stakes', () => {
     });
   });
 
+  it('lets a free user add a survivor pick when 3 bets already fill the cap', async () => {
+    await setup();
+    await fillFreeCap();
+    const survivor = await post({ type: 'SURVIVOR', gameId: GAME, teamId: AWAY });
+    expect(survivor.statusCode).toBe(201);
+  });
+
+  it('does not let existing survivor picks use free-bet slots', async () => {
+    await setup();
+    expect((await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 })).statusCode).toBe(
+      201,
+    );
+    expect((await post({ type: 'TOTAL_OVER', gameId: GAME, line: 47.5 })).statusCode).toBe(201);
+    seedSurvivor(1, HOME);
+    seedSurvivor(2, AWAY);
+    const third = await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY });
+    expect(third.statusCode).toBe(201);
+    const fourth = await post({ type: 'TOTAL_UNDER', gameId: GAME, line: 44.5 });
+    expect(fourth.statusCode).toBe(403);
+    expect(fourth.json().error.code).toBe('stake_limit_free');
+  });
+
   it('frees the slot when a counted stake is deleted', async () => {
     await setup();
-    const survivor = await fillFreeCap();
-    const id = (survivor.json() as { stake: { id: string } }).stake.id;
+    const counted = await fillFreeCap();
+    const id = (counted.json() as { stake: { id: string } }).stake.id;
     const removed = await app.inject({
       method: 'DELETE',
       url: `/stakes/${id}`,
