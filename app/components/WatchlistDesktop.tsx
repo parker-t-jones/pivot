@@ -33,9 +33,10 @@ export interface WatchlistDesktopProps {
   onRefresh: () => void;
   topInset: number;
   bottomInset: number;
-  showOpponentToggle: boolean;
-  watchOpponent: boolean;
   onWatchOpponent: (value: boolean) => void;
-  onRemoveStake: (stake: ManualStake) => void;
+  /** Deletes the stake. The table hides the row first and calls this when the undo window ends. */
+  onRemoveStake: (stake: ManualStake) => void | Promise<void>;
+  /** Bets-tab prompt. Null when that tab has 3 or more rows, or the free cap is used up. */
+  betPrompt: string | null;
   extras: ReactNode;
 }

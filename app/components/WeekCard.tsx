@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
 import { theme } from '../lib/theme';
@@ -11,18 +11,22 @@ import { TextButton } from './TextButton';
 interface WeekCardProps {
   model: WeekCardModel;
   onAddStake: () => void;
+  onOpponentToggle?: () => void;
 }
 
 /**
  * Watchlist week card (PIVOT-STAKES-PLAN.md §11.4): a 2×2 grid, perforation, then Add a stake.
  */
-export function WeekCard({ model, onAddStake }: WeekCardProps) {
+export function WeekCard({ model, onAddStake, onOpponentToggle }: WeekCardProps) {
   const { openUpgrade } = useUpgradeSheet();
   return (
     <Slip style={styles.slip}>
       <View style={styles.grid}>
         <Cell cell={model.fantasy} />
-        <Cell cell={model.opponent} />
+        <Cell
+          cell={model.opponent}
+          onPress={model.opponent.toggleable ? onOpponentToggle : undefined}
+        />
         <Cell cell={model.bets} onUpgrade={model.bets.upgrade ? () => openUpgrade() : undefined} />
         <Cell cell={model.pools} />
       </View>
@@ -34,9 +38,17 @@ export function WeekCard({ model, onAddStake }: WeekCardProps) {
   );
 }
 
-function Cell({ cell, onUpgrade }: { cell: WeekCardCell; onUpgrade?: () => void }) {
-  return (
-    <View style={styles.cell}>
+function Cell({
+  cell,
+  onUpgrade,
+  onPress,
+}: {
+  cell: WeekCardCell;
+  onUpgrade?: () => void;
+  onPress?: () => void;
+}) {
+  const body = (
+    <>
       <Text
         maxFontSizeMultiplier={theme.fontScaleCaps.dense}
         numberOfLines={1}
@@ -52,7 +64,18 @@ function Cell({ cell, onUpgrade }: { cell: WeekCardCell; onUpgrade?: () => void 
         {cell.value}
       </Text>
       {onUpgrade ? <TextButton label="Upgrade" onPress={onUpgrade} size="small" /> : null}
-    </View>
+    </>
+  );
+  if (!onPress) return <View style={styles.cell}>{body}</View>;
+  return (
+    <Pressable
+      accessibilityLabel={`${cell.label}, ${cell.value}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={styles.cell}
+    >
+      {body}
+    </Pressable>
   );
 }
 

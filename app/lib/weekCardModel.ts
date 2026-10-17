@@ -16,10 +16,29 @@ export function freeBetCount(stakes: readonly { condition: { type: string } }[])
   return stakes.filter((stake) => countsTowardFreeCap(stake.condition.type)).length;
 }
 
-export interface WeekCardInputs {
-  /** Starters this week across watched leagues. Zero when the user has no leagues. `null` when the request failed. */
-  starterCount: number | null;
+/** Opponent strip for the league currently selected on the chip row. */
+export type OpponentStripStatus = 'unknown' | 'sleeper-only' | 'on' | 'off';
+
+/**
+ * Unknown until the browsed league's lineup and the preference have both loaded.
+ * A loaded non-Sleeper league is "Sleeper only". On/off is the preference for a
+ * loaded Sleeper league — never a default Off while the league is still unknown.
+ */
+export function opponentStripStatus(input: {
+  browsedLeagueReady: boolean;
+  platform: string | null;
+  preferenceKnown: boolean;
   watchOpponent: boolean;
+}): OpponentStripStatus {
+  if (!input.browsedLeagueReady || !input.preferenceKnown) return 'unknown';
+  if (input.platform !== 'sleeper') return 'sleeper-only';
+  return input.watchOpponent ? 'on' : 'off';
+}
+
+export interface WeekCardInputs {
+  /** Unique starters in the browsed league who play this week. `null` while that lineup or the week schedule is unknown. */
+  starterCount: number | null;
+  opponentStatus: OpponentStripStatus;
   /** Non-survivor bets this week. `null` when the request failed. */
   betCount: number | null;
   survivorCount: number | null;
@@ -38,6 +57,8 @@ export interface WeekCardCell {
   strip?: string;
   /** Free user has used the weekly allowance. */
   upgrade?: boolean;
+  /** Opponent cell can be tapped to toggle tracking. */
+  toggleable?: boolean;
 }
 
 export interface WeekCardModel {
@@ -87,18 +108,83 @@ export function weekCardModel(inputs: WeekCardInputs): WeekCardModel {
       label: 'Fantasy',
       ...countValue(inputs.starterCount, (count) => ({ value: String(count), accent: false })),
     },
-    opponent: {
-      label: 'Opponent',
-      value: inputs.watchOpponent ? 'Tracking' : 'Off',
-      accent: false,
-      muted: false,
-    },
+    opponent: opponentCell(inputs.opponentStatus),
     bets: betCell(inputs.betCount, inputs.isPro),
     pools: {
       label: 'Pools',
       ...countValue(inputs.survivorCount, (count) => ({ value: String(count), accent: false })),
     },
   };
+}
+
+function opponentCell(status: OpponentStripStatus): WeekCardCell {
+  if (status === 'unknown') {
+    return { label: 'Opponent', value: '\u2026', accent: false, muted: true, toggleable: false };
+  }
+  if (status === 'sleeper-only') {
+    return {
+      label: 'Opponent',
+      value: 'Sleeper only',
+      accent: false,
+      muted: true,
+      toggleable: false,
+    };
+  }
+  return {
+    label: 'Opponent',
+    value: status === 'on' ? 'Tracking' : 'Off',
+    accent: false,
+    muted: false,
+    toggleable: true,
+  };
+}
+
+/**
+ * Bets-tab prompt when that tab has fewer than 3 rows. At the free cap the
+ * week card already says there are no free bets left, so this row stays hidden.
+ * Survivor picks are not in `betsUsed` (`freeBetCount`).
+ */
+export function sparseBetPrompt(input: {
+  rowCount: number;
+  betsUsed: number;
+  isPro: boolean;
+}): string | null {
+  if (input.rowCount >= 3) return null;
+  if (input.isPro) return 'Add a pick';
+  const left = FREE_BET_ALLOWANCE - input.betsUsed;
+  if (left <= 0) return null;
+  return `${left} free bets left · Add a pick`;
+}
+
+export interface BrowsedStarterSlot {
+  slot_type: string;
+  position_in_lineup: string;
+  player: { player_id: string; team: { abbreviation: string } | null };
+}
+
+/**
+ * Unique starters in one league who have a game this week. Bench and bye-week
+ * players are left out. A player in two slots counts once.
+ */
+export function browsedStarterCount(
+  slots: readonly BrowsedStarterSlot[],
+  weekGames: readonly { home_team: string; away_team: string }[],
+): number {
+  const playing = new Set<string>();
+  for (const game of weekGames) {
+    playing.add(game.home_team.trim().toUpperCase());
+    playing.add(game.away_team.trim().toUpperCase());
+  }
+  const seen = new Set<string>();
+  for (const slot of slots) {
+    if (isBenchSlot(slot)) continue;
+    const id = slot.player.player_id;
+    if (seen.has(id)) continue;
+    const abbr = slot.player.team?.abbreviation.trim().toUpperCase() ?? '';
+    if (abbr.length === 0 || !playing.has(abbr)) continue;
+    seen.add(id);
+  }
+  return seen.size;
 }
 
 /** Same bench rule as the Lineup roster wells: bench slot type, or BN / BENCH / IR / TAXI. */

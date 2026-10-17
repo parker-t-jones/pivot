@@ -83,8 +83,11 @@ import { deleteStake, fetchStakes } from '../../../lib/stakesClient';
 import { theme } from '../../../lib/theme';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
 import {
+  browsedStarterCount,
   freeBetCount,
   isBenchSlot,
+  opponentStripStatus,
+  sparseBetPrompt,
   watchedStarterCount,
   weekCardModel,
 } from '../../../lib/weekCardModel';
@@ -396,6 +399,11 @@ export default function LineupScreen() {
     }, [betsOn, lineup?.week, nflWeek]),
   );
 
+  const commitStakeRemoval = async (stake: ManualStake) => {
+    await deleteStake(stake.id);
+    setBets((current) => current.filter((row) => row.id !== stake.id));
+  };
+
   const confirmRemoveBet = (stake: ManualStake) => {
     const label = formatStakeLabel(stake, stakeTeams(stake));
     void confirmAsync({
@@ -485,8 +493,15 @@ export default function LineupScreen() {
     }
   };
 
+  const browsedLeagueReady = lineup != null && lineup.league_id === selectedLeague?.league_id;
   const watchOpponent = watchOpponentPending ?? me?.preferences.watchOpponent ?? false;
-  const opponentView = opponentSectionState(lineup?.opponent, watchOpponent);
+  const opponentStatus = opponentStripStatus({
+    browsedLeagueReady,
+    platform: browsedLeagueReady ? (selectedLeague?.platform ?? null) : null,
+    preferenceKnown: me != null,
+    watchOpponent,
+  });
+  const opponentView = opponentSectionState(lineup?.opponent, opponentStatus === 'on');
   const { bets: propBets, pools: poolBets } = splitBets(bets);
   const sections = watchlistSections(filter);
   const showLeagueChips = !watchlist || sections.includes('leagueChips');
@@ -496,12 +511,23 @@ export default function LineupScreen() {
   const showPropBets = watchlist && sections.includes('bets');
   const showPools = watchlist && sections.includes('pools');
   const weekCard = weekCardModel({
-    starterCount: watchedStarterTotal,
-    watchOpponent,
+    starterCount:
+      browsedLeagueReady && weekGames != null
+        ? browsedStarterCount(lineup.slots, weekGames)
+        : null,
+    opponentStatus,
     betCount: stakesKnown ? freeBetCount(bets) : null,
     survivorCount: stakesKnown ? poolBets.length : null,
     isPro: me?.subscription_tier === 'pro',
   });
+  const betPrompt =
+    filter === 'bets' && stakesKnown
+      ? sparseBetPrompt({
+          rowCount: propBets.length,
+          betsUsed: freeBetCount(bets),
+          isPro: me?.subscription_tier === 'pro',
+        })
+      : null;
   const headerWeek = watchlist ? (lineup?.week ?? nflWeek) : (lineup?.week ?? null);
 
   const onWatchOpponent = async (next: boolean) => {
@@ -745,7 +771,8 @@ export default function LineupScreen() {
         onRefresh={() => {
           void onRefresh();
         }}
-        onRemoveStake={confirmRemoveBet}
+        betPrompt={betPrompt}
+        onRemoveStake={(stake) => commitStakeRemoval(stake)}
         onWatchOpponent={(value) => {
           void onWatchOpponent(value);
         }}
@@ -756,12 +783,10 @@ export default function LineupScreen() {
         }
         pools={showPools ? poolBets : []}
         refreshing={isRefreshing}
-        showOpponentToggle={showOpponent && opponentView !== 'hidden'}
         stakes={showPropBets ? propBets : []}
         starterSlots={showRoster ? starterSlots : []}
         timeZone={timeZone}
         topInset={insets.top + theme.spacing.lg}
-        watchOpponent={watchOpponent}
         week={headerWeek}
         weekCard={weekCard}
         weekGames={weekGames}
@@ -810,6 +835,9 @@ export default function LineupScreen() {
             model={weekCard}
             onAddStake={() => {
               router.push('/(app)/add-stake');
+            }}
+            onOpponentToggle={() => {
+              void onWatchOpponent(opponentStatus !== 'on');
             }}
           />
           <WatchlistFilters onChange={selectFilter} value={filter} />
@@ -981,7 +1009,15 @@ export default function LineupScreen() {
           <BetGroup
             empty="No bets this week."
             liveGames={liveGames}
+            onAdd={
+              betPrompt
+                ? () => {
+                    router.push('/(app)/add-stake');
+                  }
+                : undefined
+            }
             onRemove={confirmRemoveBet}
+            prompt={betPrompt}
             stakes={propBets}
             title="BETS"
             weekGames={weekGames}
@@ -1039,30 +1075,11 @@ export default function LineupScreen() {
           </View>
         ) : null}
 
-        {showOpponent && opponentView !== 'hidden' && lineup?.opponent ? (
+        {showOpponent && browsedLeagueReady && opponentView !== 'hidden' && lineup?.opponent ? (
           <View style={styles.opponentSection}>
-            <View style={styles.opponentHeader}>
-              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
-                OPPONENT
-              </Text>
-              <View style={styles.opponentToggle}>
-                <Text
-                  maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-                  style={styles.opponentToggleLabel}
-                >
-                  Also watch my opponent
-                </Text>
-                <Switch
-                  accessibilityLabel="Also watch my opponent"
-                  onValueChange={(value) => {
-                    void onWatchOpponent(value);
-                  }}
-                  thumbColor={SWITCH_THUMB}
-                  trackColor={SWITCH_TRACK}
-                  value={watchOpponent}
-                />
-              </View>
-            </View>
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+              OPPONENT
+            </Text>
             {opponentView === 'off' ? (
               <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.opponentHint}>
                 See your opponent's red-zone trips on Home. No notifications.
@@ -1137,6 +1154,8 @@ function BetGroup({
   liveGames,
   weekGames,
   onRemove,
+  prompt,
+  onAdd,
 }: {
   title: string;
   empty: string;
@@ -1144,25 +1163,27 @@ function BetGroup({
   liveGames: readonly LiveGame[];
   weekGames: ScheduleGame[] | null;
   onRemove: (stake: ManualStake) => void;
+  prompt?: string | null;
+  onAdd?: () => void;
 }) {
   return (
     <View style={styles.opponentSection}>
       <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
         {title}
       </Text>
-      {stakes.length === 0 ? (
-        <Text style={styles.emptyCopy}>{empty}</Text>
-      ) : (
-        stakes.map((stake) => (
-          <StakeEntry
-            key={stake.id}
-            liveGames={liveGames}
-            onRemove={onRemove}
-            stake={stake}
-            weekGames={weekGames}
-          />
-        ))
-      )}
+      {stakes.length === 0 && !prompt ? <Text style={styles.emptyCopy}>{empty}</Text> : null}
+      {stakes.map((stake) => (
+        <StakeEntry
+          key={stake.id}
+          liveGames={liveGames}
+          onRemove={onRemove}
+          stake={stake}
+          weekGames={weekGames}
+        />
+      ))}
+      {prompt && onAdd ? (
+        <TextButton label={prompt} onPress={onAdd} size="smallStrong" />
+      ) : null}
     </View>
   );
 }

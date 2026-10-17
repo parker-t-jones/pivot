@@ -20,15 +20,10 @@ import {
   restorePurchases,
 } from '../lib/purchases';
 import { theme } from '../lib/theme';
+import { PRO_PERKS, UPGRADE_SUBTITLE } from '../lib/upgradeCopy';
 import { upgradeContextLine } from '../lib/upgradeCap';
 
 const MANAGE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
-
-const PRO_PERKS = [
-  'Unlimited connected leagues',
-  'Watch multiple Active Lineups at once',
-  'Unlimited manual lineup players',
-] as const;
 
 /**
  * Global "Upgrade to Pro" sheet — an RN `Modal` (`transparent`), not a router screen backed by
@@ -183,9 +178,7 @@ export function UpgradeSheet() {
           >
             {contextLine ? <Text style={styles.contextLine}>{contextLine}</Text> : null}
             <Text style={styles.title}>Watch every league that matters</Text>
-            <Text style={styles.subtitle}>
-              Free covers three leagues and one Active Lineup. Pro removes the caps.
-            </Text>
+            <Text style={styles.subtitle}>{UPGRADE_SUBTITLE}</Text>
 
             <View style={styles.perkList}>
               {PRO_PERKS.map((perk) => (

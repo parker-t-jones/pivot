@@ -1,22 +1,24 @@
-import { useMemo } from 'react';
-import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { TeamBadge } from './TeamBadge';
 import { FILLED_BUTTON_RECIPE } from '../lib/controlRecipes';
+import {
+  beginRemoval,
+  EMPTY_REMOVAL,
+  expireRemoval,
+  failRemoval,
+  STAKE_UNDO_MS,
+  undoRemoval,
+} from '../lib/deferredStakeRemoval';
 import { fonts } from '../lib/fonts';
 import { slotLabel } from '../lib/lineupOrder';
 import type { LineupSlot } from '../lib/leagues';
 import type { LiveGame, ScheduleGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { formatStakeLabel, stakeTeams, type ManualStake } from '../lib/stakes';
-import type { WeekCardModel } from '../lib/weekCardModel';
+import { deleteStakeKeepalive } from '../lib/stakesClient';
+import { supabase } from '../lib/supabase';
 import { webPressState } from '../lib/webPress';
 import {
   watchlistPlayerRow,
@@ -30,9 +32,6 @@ import { StreamLinkControl } from './StreamLinkControl';
 import { TextButton } from './TextButton';
 import type { WatchlistDesktopProps } from './WatchlistDesktop';
 import { WatchlistFilters } from './WatchlistFilters';
-
-const SWITCH_TRACK = { false: theme.colors.border, true: theme.colors.accent } as const;
-const SWITCH_THUMB = theme.colors.textPrimary;
 
 /**
  * Laptop watchlist. The phone list stays in `lineup.tsx` and is what iOS renders.
@@ -57,10 +56,9 @@ export function WatchlistDesktop({
   onRefresh,
   topInset,
   bottomInset,
-  showOpponentToggle,
-  watchOpponent,
   onWatchOpponent,
   onRemoveStake,
+  betPrompt,
   extras,
 }: WatchlistDesktopProps) {
   const { switchToGame } = useSwitching();
@@ -81,6 +79,88 @@ export function WatchlistDesktop({
     for (const stake of [...stakes, ...pools]) byId.set(stake.id, stake);
     return byId;
   }, [pools, stakes]);
+  const [removal, setRemoval] = useState(EMPTY_REMOVAL);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const removalRef = useRef(removal);
+  removalRef.current = removal;
+  const sentRef = useRef(new Set<string>());
+  const removableRef = useRef(removable);
+  removableRef.current = removable;
+  const onRemoveRef = useRef(onRemoveStake);
+  onRemoveRef.current = onRemoveStake;
+  const tokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      tokenRef.current = data.session?.access_token ?? null;
+    });
+  }, []);
+
+  const commitRemoval = useRef((id: string) => {
+    if (sentRef.current.has(id)) return;
+    const stake = removableRef.current.get(id);
+    if (!stake) return;
+    sentRef.current.add(id);
+    void Promise.resolve(onRemoveRef.current(stake)).catch(() => {
+      sentRef.current.delete(id);
+      setRemoval((current) => failRemoval(current, id));
+      setRemoveError('Could not remove that bet.');
+    });
+  });
+
+  useEffect(() => {
+    if (removal.pendingId == null) return;
+    const timer = setTimeout(() => {
+      setRemoval((current) => {
+        const step = expireRemoval(current);
+        if (step.commitId) commitRemoval.current(step.commitId);
+        return step.state;
+      });
+    }, STAKE_UNDO_MS);
+    return () => clearTimeout(timer);
+  }, [removal.pendingId]);
+
+  useEffect(() => {
+    const commitPending = () => {
+      const step = expireRemoval(removalRef.current);
+      removalRef.current = step.state;
+      if (step.commitId) commitRemoval.current(step.commitId);
+    };
+    const onUnload = () => {
+      const id = removalRef.current.pendingId;
+      const token = tokenRef.current;
+      if (id == null || token == null || sentRef.current.has(id)) return;
+      sentRef.current.add(id);
+      removalRef.current = { ...removalRef.current, pendingId: null };
+      deleteStakeKeepalive(id, token);
+    };
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      window.removeEventListener('beforeunload', onUnload);
+      commitPending();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (removeError == null) return;
+    const timer = setTimeout(() => setRemoveError(null), STAKE_UNDO_MS);
+    return () => clearTimeout(timer);
+  }, [removeError]);
+
+  const visibleRows = rows.filter((row) => !removal.hiddenIds.includes(row.id));
+
+  const hideRow = (id: string) => {
+    setRemoveError(null);
+    setRemoval((current) => {
+      const step = beginRemoval(current, id);
+      if (step.commitId) commitRemoval.current(step.commitId);
+      return step.state;
+    });
+  };
+
+  const undo = () => {
+    setRemoval((current) => undoRemoval(current).state);
+  };
 
   const openRow = (row: WatchlistTableRow) => {
     if (!row.live || !row.gameId) return;
@@ -96,8 +176,9 @@ export function WatchlistDesktop({
   };
 
   return (
+    <View style={styles.screen}>
     <ScrollView
-      style={styles.screen}
+      style={styles.scroll}
       contentContainerStyle={[styles.content, { paddingTop: topInset, paddingBottom: bottomInset }]}
       refreshControl={
         <RefreshControl
@@ -121,60 +202,84 @@ export function WatchlistDesktop({
         </View>
       </View>
       <View style={styles.stripRow}>
-        <Text style={styles.strip}>{statStrip(weekCard)}</Text>
+        <Text style={styles.strip}>Fantasy {weekCard.fantasy.value}</Text>
+        <Text style={styles.strip}>·</Text>
+        <Pressable
+          accessibilityLabel={`Opponent, ${weekCard.opponent.value}`}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: weekCard.opponent.toggleable !== true }}
+          disabled={weekCard.opponent.toggleable !== true}
+          onPress={() => onWatchOpponent(weekCard.opponent.value === 'Off')}
+        >
+          <Text
+            style={[
+              styles.strip,
+              weekCard.opponent.toggleable === true && styles.stripToggle,
+              weekCard.opponent.muted && styles.stripMuted,
+            ]}
+          >
+            Opponent {weekCard.opponent.value}
+          </Text>
+        </Pressable>
+        <Text style={styles.strip}>·</Text>
+        <Text style={styles.strip}>
+          {weekCard.bets.strip ?? `${weekCard.bets.label} ${weekCard.bets.value}`}
+        </Text>
         {weekCard.bets.upgrade ? (
           <TextButton label="Upgrade" onPress={() => openUpgrade()} size="small" />
         ) : null}
+        <Text style={styles.strip}>·</Text>
+        <Text style={styles.strip}>Pools {weekCard.pools.value}</Text>
       </View>
       <WatchlistFilters onChange={onFilter} value={filter} />
       {extras}
       <View style={styles.table}>
         <View style={styles.head}>
           <Text style={[styles.headCell, styles.slotCol]}>Slot</Text>
-          <Text style={[styles.headCell, styles.playerCol]}>Player</Text>
+          <Text style={[styles.headCell, styles.playerCol]}>Stake</Text>
           <Text style={[styles.headCell, styles.gameCol]}>Game</Text>
           <Text style={[styles.headCell, styles.networkCol]}>Network</Text>
           <Text style={[styles.headCell, styles.statusCol]}>Status</Text>
           <Text style={[styles.headCell, styles.actionCol]}> </Text>
         </View>
-        {rows.length === 0 ? (
+        {visibleRows.length === 0 && !betPrompt ? (
           <Text style={styles.empty}>Nothing in this view yet.</Text>
-        ) : (
-          rows.map((row) => (
+        ) : visibleRows.length === 0 ? null : (
+          visibleRows.map((row) => (
             <TableRow
               key={row.id}
               onOpen={() => openRow(row)}
-              onRemove={
-                removable.has(row.id)
-                  ? () => {
-                      const stake = removable.get(row.id);
-                      if (stake) onRemoveStake(stake);
-                    }
-                  : null
-              }
+              onRemove={removable.has(row.id) ? () => hideRow(row.id) : null}
               row={row}
             />
           ))
         )}
+        {betPrompt ? (
+          <Pressable accessibilityRole="button" onPress={onAddStake} style={styles.promptRow}>
+            <Text style={styles.prompt}>{betPrompt}</Text>
+          </Pressable>
+        ) : null}
       </View>
-      {showOpponentToggle ? (
-        <View style={styles.opponent}>
-          <Text style={styles.opponentLabel}>Also watch my opponent</Text>
-          <Switch
-            accessibilityLabel="Also watch my opponent"
-            onValueChange={onWatchOpponent}
-            thumbColor={SWITCH_THUMB}
-            trackColor={SWITCH_TRACK}
-            value={watchOpponent}
-          />
+    </ScrollView>
+      {removal.pendingId || removeError ? (
+        <View
+          pointerEvents="box-none"
+          style={[styles.toastDock, { bottom: bottomInset + theme.spacing.lg }]}
+        >
+          {removal.pendingId ? (
+            <View style={styles.toast}>
+              <Text style={styles.toastText}>Removed</Text>
+              <TextButton label="Undo" onPress={undo} size="smallStrong" />
+            </View>
+          ) : null}
+          {removeError ? (
+            <View style={styles.toast}>
+              <Text style={styles.toastText}>{removeError}</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
-      {showOpponentToggle && !watchOpponent ? (
-        <Text style={styles.hint}>
-          See your opponent's red-zone trips on Home. No notifications.
-        </Text>
-      ) : null}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -187,9 +292,21 @@ function TableRow({
   onOpen: () => void;
   onRemove: (() => void) | null;
 }) {
-  const teams = row.gameId ? matchupTeams(row.switchLabel) : null;
+  const teams =
+    row.awayTeam && row.homeTeam
+      ? { away: row.awayTeam, home: row.homeTeam }
+      : row.gameId
+        ? matchupTeams(row.switchLabel)
+        : null;
+  const [hot, setHot] = useState(false);
+  const [removeFocused, setRemoveFocused] = useState(false);
+  const showRemove = hot || removeFocused;
   return (
     <Pressable
+      onBlur={() => setHot(false)}
+      onFocus={() => setHot(true)}
+      onHoverIn={() => setHot(true)}
+      onHoverOut={() => setHot(false)}
       onPress={row.live ? onOpen : undefined}
       style={(state) => {
         const { pressed, hovered, focused } = webPressState(state);
@@ -215,9 +332,17 @@ function TableRow({
         ) : null}
       </View>
       <View style={[styles.gameCell, styles.gameCol]}>
-        <Text numberOfLines={1} style={[styles.game, styles.gameText]}>
-          {row.game}
-        </Text>
+        {row.awayTeam && row.homeTeam ? (
+          <View style={styles.matchup}>
+            <TeamBadge abbr={row.awayTeam} size="sm" />
+            <Text style={styles.at}>@</Text>
+            <TeamBadge abbr={row.homeTeam} size="sm" />
+          </View>
+        ) : (
+          <Text numberOfLines={1} style={[styles.game, styles.gameText]}>
+            {row.game}
+          </Text>
+        )}
         {row.gameId && teams ? (
           <StreamLinkControl away={teams.away} gameId={row.gameId} home={teams.home} />
         ) : null}
@@ -227,7 +352,12 @@ function TableRow({
       </Text>
       <Text
         numberOfLines={1}
-        style={[styles.status, row.live && styles.statusLive, styles.statusCol]}
+        style={[
+          styles.status,
+          row.statusMuted && styles.statusMuted,
+          row.live && styles.statusLive,
+          styles.statusCol,
+        ]}
       >
         {row.status}
       </Text>
@@ -249,7 +379,17 @@ function TableRow({
             <Text style={styles.switchLabel}>Switch</Text>
           </Pressable>
         ) : onRemove ? (
-          <TextButton label="Remove" onPress={onRemove} size="smallStrong" tone="danger" />
+          <Pressable
+            accessibilityLabel="Remove"
+            accessibilityRole="button"
+            onBlur={() => setRemoveFocused(false)}
+            onFocus={() => setRemoveFocused(true)}
+            onPress={onRemove}
+            pointerEvents={showRemove ? 'auto' : 'none'}
+            style={[styles.removeHit, !showRemove && styles.removeHidden]}
+          >
+            <Text style={styles.removeLabel}>Remove</Text>
+          </Pressable>
         ) : null}
       </View>
     </Pressable>
@@ -357,16 +497,64 @@ function rosterMeta(slot: LineupSlot): string {
   return team.length > 0 ? team : position;
 }
 
-function statStrip(model: WeekCardModel): string {
-  return [
-    `Fantasy ${model.fantasy.value}`,
-    model.bets.strip ?? `${model.bets.label} ${model.bets.value}`,
-    `Pools ${model.pools.value}`,
-    `Opponent ${model.opponent.value.toLowerCase()}`,
-  ].join(' · ');
-}
-
 const styles = StyleSheet.create({
+  at: {
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.small.size,
+  },
+  matchup: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  prompt: {
+    color: theme.colors.accent,
+    fontSize: theme.type.smallStrong.size,
+    fontWeight: theme.type.smallStrong.weight,
+  },
+  promptRow: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+  },
+  removeHidden: {
+    opacity: 0,
+  },
+  removeHit: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.sm,
+  },
+  removeLabel: {
+    color: theme.colors.danger,
+    fontSize: theme.type.smallStrong.size,
+    fontWeight: theme.type.smallStrong.weight,
+  },
+  stripMuted: {
+    color: theme.colors.textTertiary,
+  },
+  stripToggle: {
+    color: theme.colors.textPrimary,
+  },
+  toast: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderRadius: theme.radii.control,
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+  },
+  toastDock: {
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+  },
+  toastText: {
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.small.size,
+  },
   actionCol: {
     alignItems: 'flex-end',
     width: 88,
@@ -495,6 +683,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     flex: 1,
   },
+  scroll: {
+    flex: 1,
+  },
   slot: {
     color: theme.colors.brass,
     fontFamily: theme.type.eyebrow.fontFamily,
@@ -505,12 +696,15 @@ const styles = StyleSheet.create({
     width: 52,
   },
   status: {
-    color: theme.colors.textTertiary,
+    color: theme.colors.textSecondary,
     fontFamily: fonts.monoMedium,
     fontSize: theme.type.ticker.size,
   },
+  statusMuted: {
+    color: theme.colors.textTertiary,
+  },
   statusCol: {
-    width: 88,
+    width: 148,
   },
   statusLive: {
     color: theme.colors.flare,

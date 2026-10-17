@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { watchlistPlayerRow, type WatchlistTableGame } from './watchlistTable';
+import { watchlistPlayerRow, watchlistStatusLabel, type WatchlistTableGame } from './watchlistTable';
 
 const NOW = new Date('2026-10-11T17:00:00.000Z');
 
@@ -30,9 +30,11 @@ describe('watchlistPlayerRow', () => {
       now: NOW,
       timeZone: 'America/New_York',
     });
-    expect(row.game).toContain('@ SEA');
+    expect(row.game).toBe('SF @ SEA');
+    expect(row.awayTeam).toBe('SF');
+    expect(row.homeTeam).toBe('SEA');
     expect(row.network).toBe('CBS');
-    expect(row.status).toBe('Upcoming');
+    expect(row.status).toBe('in 24h 0m');
     expect(row.live).toBe(false);
     expect(row.deepLinkUrl).toBe('https://tv.youtube.com/watch/abc');
   });
@@ -57,8 +59,9 @@ describe('watchlistPlayerRow', () => {
       timeZone: 'America/New_York',
     });
     expect(row.live).toBe(true);
-    expect(row.game).toBe('@ SEA · 10–21');
-    expect(row.status).toContain('Q3');
+    expect(row.game).toBe('SF @ SEA');
+    expect(row.status).toBe('10–21 · Q3 7:35');
+    expect(row.statusMuted).toBe(false);
     expect(row.deepLinkUrl).toBe('https://tv.youtube.com/watch/abc');
   });
 
@@ -79,7 +82,7 @@ describe('watchlistPlayerRow', () => {
       timeZone: 'America/New_York',
     });
     expect(row.deepLinkUrl).toBeNull();
-    expect(row.game.startsWith('vs SF')).toBe(true);
+    expect(row.game).toBe('SF @ SEA');
   });
 
   it('calls a missing game a bye', () => {
@@ -95,7 +98,72 @@ describe('watchlistPlayerRow', () => {
       timeZone: 'America/New_York',
     });
     expect(row.status).toBe('BYE');
+    expect(row.statusMuted).toBe(true);
     expect(row.live).toBe(false);
     expect(row.gameId).toBeNull();
+  });
+});
+
+describe('watchlistStatusLabel', () => {
+  const now = new Date('2026-10-11T16:00:00.000Z');
+
+  it('counts down inside a day and uses an Eastern weekday past a day', () => {
+    const soon = watchlistStatusLabel({
+      bye: false,
+      isFinal: false,
+      inProgress: false,
+      kickoff: new Date('2026-10-11T17:07:00.000Z'),
+      now,
+      live: null,
+    });
+    expect(soon).toEqual({ text: 'in 1h 7m', muted: false });
+
+    const later = watchlistStatusLabel({
+      bye: false,
+      isFinal: false,
+      inProgress: false,
+      kickoff: new Date('2026-10-13T17:00:00.000Z'),
+      now,
+      live: null,
+    });
+    expect(later.muted).toBe(false);
+    expect(later.text.startsWith('in ')).toBe(false);
+    expect(later.text).toMatch(/^TUE /);
+  });
+
+  it('shows the live score and clock, or LIVE when the feed has no clock', () => {
+    expect(
+      watchlistStatusLabel({
+        bye: false,
+        isFinal: false,
+        inProgress: true,
+        kickoff: now,
+        now,
+        live: { game_id: 'g', score: { away: 3, home: 10 }, quarter: 2, time_remaining_sec: 0 },
+      }).text,
+    ).toBe('3–10 · HALF');
+    expect(
+      watchlistStatusLabel({
+        bye: false,
+        isFinal: false,
+        inProgress: true,
+        kickoff: now,
+        now,
+        live: null,
+      }),
+    ).toEqual({ text: 'LIVE', muted: false });
+  });
+
+  it('marks a final game muted without inventing a score', () => {
+    expect(
+      watchlistStatusLabel({
+        bye: false,
+        isFinal: true,
+        inProgress: false,
+        kickoff: now,
+        now,
+        live: null,
+      }),
+    ).toEqual({ text: 'FINAL', muted: true });
   });
 });

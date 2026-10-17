@@ -8,14 +8,10 @@ import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
 import { fonts } from '../lib/fonts';
 import { fetchMe } from '../lib/me';
 import { theme } from '../lib/theme';
+import { PRO_PERKS, UPGRADE_CARD_WIDTH, UPGRADE_SUBTITLE } from '../lib/upgradeCopy';
 import { upgradeContextLine } from '../lib/upgradeCap';
+import { useDesktopTier } from '../lib/useDesktopTier';
 import { webUpgradeStatus } from '../lib/webUpgradeStatus';
-
-const PRO_PERKS = [
-  'Unlimited connected leagues',
-  'Watch multiple Active Lineups at once',
-  'Unlimited manual lineup players',
-] as const;
 
 /**
  * Web upgrade sheet. Pro is purchased in the iOS app, so this build never loads
@@ -26,7 +22,17 @@ export function UpgradeSheet() {
   const { isOpen, code, closeUpgrade } = useUpgradeSheet();
   const contextLine = upgradeContextLine(code);
   const insets = useSafeAreaInsets();
+  const wide = useDesktopTier() === 'wide';
   const [isPro, setIsPro] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || typeof window === 'undefined') return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeUpgrade();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeUpgrade, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -66,9 +72,10 @@ export function UpgradeSheet() {
           onPress={() => undefined}
           style={{
             maxHeight: '80%',
+            maxWidth: wide ? UPGRADE_CARD_WIDTH : undefined,
             paddingBottom: theme.spacing.lg,
             paddingTop: theme.spacing.md,
-            width: '100%',
+            width: wide ? UPGRADE_CARD_WIDTH : '100%',
           }}
         >
           <View style={styles.cardHeader}>
@@ -83,9 +90,7 @@ export function UpgradeSheet() {
           >
             {contextLine ? <Text style={styles.contextLine}>{contextLine}</Text> : null}
             <Text style={styles.title}>Watch every league that matters</Text>
-            <Text style={styles.subtitle}>
-              Free covers three leagues and one Active Lineup. Pro removes the caps.
-            </Text>
+            <Text style={styles.subtitle}>{UPGRADE_SUBTITLE}</Text>
 
             <View style={styles.perkList}>
               {PRO_PERKS.map((perk) => (

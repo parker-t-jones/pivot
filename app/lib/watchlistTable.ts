@@ -1,6 +1,7 @@
 import { networkLabelFromAirings } from '@pivot/shared/broadcast';
 
 import { compactScoreLabel, liveClockLabel } from './gameDisplay';
+import { kickoffLabel } from './kickoffLabel';
 import { httpsWatchUrl } from './watchLink';
 
 /** The week-game fields the table reads. Home and Watchlist already hold the full schedule row. */
@@ -26,10 +27,14 @@ export interface WatchlistTableRow {
   slot: string;
   name: string;
   meta: string;
-  /** Opponent, then a live score or a kickoff. */
+  /** Away @ home, or "Bye". */
   game: string;
+  awayTeam: string | null;
+  homeTeam: string | null;
   network: string;
   status: string;
+  /** Final (and bye) stay in the muted status color. */
+  statusMuted: boolean;
   live: boolean;
   gameId: string | null;
   /** https watch URL, or null when this row has nothing a browser can open. */
@@ -39,6 +44,40 @@ export interface WatchlistTableRow {
 }
 
 const EMPTY = '\u2014';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Status column. Inside a day, "in 1h 7m". Further out, the Eastern weekday and
+ * time from `kickoffLabel`. Live is the score plus the clock when the live feed
+ * has them, otherwise "LIVE". Final scores are not on the week schedule or the
+ * live feed, so a finished game says FINAL.
+ */
+export function watchlistStatusLabel(input: {
+  bye: boolean;
+  isFinal: boolean;
+  inProgress: boolean;
+  kickoff: Date | null;
+  now: Date;
+  live: WatchlistTableLive | null;
+}): { text: string; muted: boolean } {
+  if (input.bye) return { text: 'BYE', muted: true };
+  if (input.isFinal) return { text: 'FINAL', muted: true };
+  if (input.inProgress) {
+    if (!input.live) return { text: 'LIVE', muted: false };
+    return {
+      text: `${compactScoreLabel(input.live.score)} · ${liveClockLabel(input.live.quarter, input.live.time_remaining_sec)}`,
+      muted: false,
+    };
+  }
+  if (input.kickoff == null || Number.isNaN(input.kickoff.getTime())) {
+    return { text: 'Upcoming', muted: false };
+  }
+  const label = kickoffLabel(input.kickoff, input.now);
+  const ms = input.kickoff.getTime() - input.now.getTime();
+  if (ms > DAY_MS) return { text: label, muted: false };
+  if (ms <= 0) return { text: label, muted: false };
+  return { text: `in ${label}`, muted: false };
+}
 
 export function watchlistPlayerRow(input: {
   id: string;
@@ -82,17 +121,28 @@ export function watchlistStakeRow(input: {
   const live = input.liveGames.find((candidate) => candidate.game_id === input.gameId) ?? null;
   const status = game?.status ?? (live ? 'in_progress' : 'scheduled');
   const inProgress = status === 'in_progress' || live !== null;
-  const side = matchupSide(game, input.matchup);
+  const kickoff = game ? new Date(game.scheduled_start) : null;
+  const label = watchlistStatusLabel({
+    bye: false,
+    isFinal: status === 'final',
+    inProgress,
+    kickoff,
+    now: input.now,
+    live,
+  });
   return {
     id: input.id,
     slot: input.slot,
     name: input.name,
     meta: input.meta,
-    game: gameLine(side || input.matchup || EMPTY, inProgress, status === 'final', live, input.kickoff),
+    game: game ? `${game.away_team} @ ${game.home_team}` : input.matchup || EMPTY,
+    awayTeam: game?.away_team ?? null,
+    homeTeam: game?.home_team ?? null,
     network: game ? networkOrDash(game) : EMPTY,
-    status: statusLabel(inProgress, status === 'final', false, live),
+    status: label.text,
+    statusMuted: label.muted,
     live: inProgress && status !== 'final',
-    gameId: game?.game_id ?? (inProgress ? input.gameId : input.gameId),
+    gameId: game?.game_id ?? input.gameId,
     deepLinkUrl: preferredHttps(game),
     switchLabel: input.matchup || input.name,
   };
@@ -110,14 +160,25 @@ function rowFromGame(input: {
   timeZone: string;
 }): WatchlistTableRow {
   if (!input.game) {
+    const label = watchlistStatusLabel({
+      bye: true,
+      isFinal: false,
+      inProgress: false,
+      kickoff: null,
+      now: input.now,
+      live: null,
+    });
     return {
       id: input.id,
       slot: input.slot,
       name: input.name,
       meta: input.meta,
       game: 'Bye',
+      awayTeam: null,
+      homeTeam: null,
       network: EMPTY,
-      status: 'BYE',
+      status: label.text,
+      statusMuted: label.muted,
       live: false,
       gameId: null,
       deepLinkUrl: null,
@@ -125,56 +186,35 @@ function rowFromGame(input: {
     };
   }
 
-  const team = input.teamAbbr.trim().toUpperCase();
-  const isHome = input.game.home_team.toUpperCase() === team;
-  const opponent = isHome ? input.game.away_team : input.game.home_team;
-  const side = `${isHome ? 'vs' : '@'} ${opponent}`;
   const live = input.liveGames.find((candidate) => candidate.game_id === input.game?.game_id) ?? null;
   const inProgress = input.game.status === 'in_progress' || (live !== null && input.game.status !== 'final');
   const isFinal = input.game.status === 'final';
-  const kickoff = kickoffLabel(input.game.scheduled_start, input.now, input.timeZone);
+  const kickoff = new Date(input.game.scheduled_start);
+  const label = watchlistStatusLabel({
+    bye: false,
+    isFinal,
+    inProgress,
+    kickoff,
+    now: input.now,
+    live,
+  });
 
   return {
     id: input.id,
     slot: input.slot,
     name: input.name,
     meta: input.meta,
-    game: gameLine(side, inProgress, isFinal, live, kickoff),
+    game: `${input.game.away_team} @ ${input.game.home_team}`,
+    awayTeam: input.game.away_team,
+    homeTeam: input.game.home_team,
     network: networkOrDash(input.game),
-    status: statusLabel(inProgress, isFinal, false, live),
+    status: label.text,
+    statusMuted: label.muted,
     live: inProgress && !isFinal,
     gameId: input.game.game_id,
     deepLinkUrl: preferredHttps(input.game),
     switchLabel: `${input.game.away_team} @ ${input.game.home_team}`,
   };
-}
-
-function gameLine(
-  side: string,
-  inProgress: boolean,
-  isFinal: boolean,
-  live: WatchlistTableLive | null,
-  kickoff: string,
-): string {
-  if (inProgress && !isFinal && live) return `${side} · ${compactScoreLabel(live.score)}`;
-  if (inProgress && !isFinal) return side;
-  if (!isFinal && kickoff.length > 0) return `${side} · ${kickoff}`;
-  return side;
-}
-
-function statusLabel(
-  inProgress: boolean,
-  isFinal: boolean,
-  bye: boolean,
-  live: WatchlistTableLive | null,
-): string {
-  if (bye) return 'BYE';
-  if (isFinal) return 'FINAL';
-  if (inProgress) {
-    if (!live) return 'LIVE';
-    return liveClockLabel(live.quarter, live.time_remaining_sec);
-  }
-  return 'Upcoming';
 }
 
 function closestGame(
@@ -199,30 +239,6 @@ function kickoffDistance(game: WatchlistTableGame, now: Date): number {
   return Math.abs(kickoff - now.getTime());
 }
 
-function kickoffLabel(iso: string, now: Date, timeZone: string): string {
-  const kickoff = new Date(iso);
-  if (Number.isNaN(kickoff.getTime())) return '';
-  const day = sameLocalDay(kickoff, now, timeZone)
-    ? 'Today'
-    : new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(kickoff);
-  const clock = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(kickoff);
-  return `${day} ${clock}`;
-}
-
-function sameLocalDay(a: Date, b: Date, timeZone: string): boolean {
-  const format = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  return format.format(a) === format.format(b);
-}
-
 function networkOrDash(game: WatchlistTableGame): string {
   return networkLabelFromAirings(game.airings) ?? EMPTY;
 }
@@ -231,9 +247,4 @@ function preferredHttps(game: WatchlistTableGame | null): string | null {
   if (!game) return null;
   const preferred = game.broadcasts.find((broadcast) => broadcast.preferred) ?? game.broadcasts[0];
   return httpsWatchUrl(preferred?.deep_link_url);
-}
-
-function matchupSide(game: WatchlistTableGame | null, matchup: string): string {
-  if (!game) return matchup;
-  return `${game.away_team} @ ${game.home_team}`;
 }
