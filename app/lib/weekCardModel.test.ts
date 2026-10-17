@@ -51,6 +51,46 @@ describe('weekCardModel', () => {
     );
   });
 
+  it('leaves free bets left unchanged for survivor picks and spends them on spread, total, and moneyline', () => {
+    const survivors = [{ condition: { type: 'SURVIVOR' } }, { condition: { type: 'SURVIVOR' } }];
+    expect(freeBetCount(survivors)).toBe(0);
+    expect(
+      weekCardModel({ ...free, betCount: freeBetCount(survivors), survivorCount: 2 }).bets,
+    ).toEqual({
+      label: 'Free bets',
+      value: '3 left',
+      strip: '3 free bets left this week',
+      accent: true,
+      muted: false,
+      upgrade: false,
+    });
+
+    const spread = [...survivors, { condition: { type: 'SPREAD' } }];
+    expect(freeBetCount(spread)).toBe(1);
+    expect(
+      weekCardModel({ ...free, betCount: freeBetCount(spread), survivorCount: 2 }).bets.value,
+    ).toBe('2 left');
+
+    const total = [...spread, { condition: { type: 'TOTAL_OVER' } }];
+    expect(freeBetCount(total)).toBe(2);
+    expect(
+      weekCardModel({ ...free, betCount: freeBetCount(total), survivorCount: 2 }).bets.value,
+    ).toBe('1 left');
+
+    const atCap = [...total, { condition: { type: 'MONEYLINE' } }];
+    expect(freeBetCount(atCap)).toBe(3);
+    expect(
+      weekCardModel({ ...free, betCount: freeBetCount(atCap), survivorCount: 2 }).bets,
+    ).toEqual({
+      label: 'Free bets',
+      value: 'No free bets left',
+      strip: 'No free bets left',
+      accent: true,
+      muted: false,
+      upgrade: true,
+    });
+  });
+
   it('shows 2 left with one bet', () => {
     expect(weekCardModel({ ...free, betCount: 1 }).bets).toEqual({
       label: 'Free bets',
