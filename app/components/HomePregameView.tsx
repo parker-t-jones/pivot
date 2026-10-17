@@ -81,6 +81,50 @@ export function HomePregameView({
     </>
   );
 
+  if (tier === 'wide') {
+    return (
+      <View style={styles.wide}>
+        <View style={styles.wideRow}>
+          <View style={styles.wideMain}>
+            <View style={styles.wideKickoff}>
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.modeEyebrow}>
+                {`WEEK ${week} · PRE-GAME`}
+              </Text>
+              {countdownMs === null ? null : (
+                <Text
+                  maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                  numberOfLines={1}
+                  style={[styles.metaLabel, countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
+                >
+                  {`NEXT KICKOFF · ${formatCountdown(countdownMs)}`}
+                </Text>
+              )}
+            </View>
+          </View>
+          <View style={styles.wideSide}>
+            <MyCardList
+              betRefs={betRefs}
+              groups={groups}
+              lineupGroups={lineupGroups}
+              part="header"
+            />
+          </View>
+        </View>
+        <View style={styles.wideRow}>
+          <View style={[styles.wideMain, styles.wideBody]}>{board}</View>
+          <View style={styles.wideSide}>
+            <MyCardList
+              betRefs={betRefs}
+              groups={groups}
+              lineupGroups={lineupGroups}
+              part="cards"
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   if (tier !== 'companion') {
     return (
       <View style={styles.split}>
@@ -214,6 +258,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing.lg,
     width: '100%',
+  },
+  wide: {
+    gap: theme.spacing.lg,
+    width: '100%',
+  },
+  wideBody: {
+    gap: theme.spacing.lg,
+  },
+  wideKickoff: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+  },
+  wideMain: {
+    flex: 1,
+    justifyContent: 'center',
+    minWidth: 0,
+  },
+  wideRow: {
+    alignItems: 'stretch',
+    flexDirection: 'row',
+    gap: theme.spacing.lg,
+  },
+  wideSide: {
+    flexShrink: 0,
+    justifyContent: 'center',
+    width: DESKTOP_RIGHT_COLUMN,
   },
   wrap: {
     gap: theme.spacing.lg,

@@ -31,6 +31,11 @@ interface MyCardListProps {
   liveGames?: LiveGame[];
   /** Bet refs already merged onto the board. Fantasy lines still come from `lineupGroups`. */
   betRefs?: readonly StakeRef[];
+  /**
+   * Wide Home puts the header and the cards in separate grid rows so they line up
+   * with the board column. Other layouts keep both together.
+   */
+  part?: 'all' | 'header' | 'cards';
 }
 
 function formatKickoffTime(kickoff: Date): string {
@@ -43,6 +48,7 @@ export function MyCardList({
   lineupGroups,
   liveGames = [],
   betRefs = [],
+  part = 'all',
 }: MyCardListProps) {
   const myCardGames = useMemo(
     () => buildMyCardGames(flattenRows(groups), lineupGroups, betRefs),
@@ -54,21 +60,30 @@ export function MyCardList({
   );
   const stakeCount = myCardGames.reduce((sum, game) => sum + game.stakes.length, 0);
 
+  const header = (
+    <View style={styles.stakesHeader}>
+      <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.stakesEyebrow}>
+        {`YOUR STAKES · ${stakeCount}`}
+      </Text>
+      <ManageLineupLink />
+    </View>
+  );
+  const cards =
+    myCardGames.length === 0 ? (
+      <Text style={styles.emptyCopy}>No starters this week.</Text>
+    ) : (
+      myCardGames.map((game) => (
+        <MyCardGameBlock key={game.gameId} game={game} live={liveById.get(game.gameId) ?? null} />
+      ))
+    );
+
+  if (part === 'header') return header;
+  if (part === 'cards') return <View style={styles.myCardList}>{cards}</View>;
+
   return (
     <View style={styles.myCardList}>
-      <View style={styles.stakesHeader}>
-        <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.stakesEyebrow}>
-          {`YOUR STAKES · ${stakeCount}`}
-        </Text>
-        <ManageLineupLink />
-      </View>
-      {myCardGames.length === 0 ? (
-        <Text style={styles.emptyCopy}>No starters this week.</Text>
-      ) : (
-        myCardGames.map((game) => (
-          <MyCardGameBlock key={game.gameId} game={game} live={liveById.get(game.gameId) ?? null} />
-        ))
-      )}
+      {header}
+      {cards}
     </View>
   );
 }
