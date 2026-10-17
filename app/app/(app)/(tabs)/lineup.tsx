@@ -27,7 +27,13 @@ import { WatchlistDesktop } from '../../../components/WatchlistDesktop';
 import { WatchlistFilters } from '../../../components/WatchlistFilters';
 import { WeekCard } from '../../../components/WeekCard';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
-import { resolveActiveLeagueId, watchlistChipCue, watchlistLeagueSelection } from '../../../lib/activeLeague';
+import {
+  resolveActiveLeagueId,
+  watchedLeagueIdsForOpen,
+  watchlistChipCue,
+  watchlistLeagueOnOpen,
+  watchlistLeagueSelection,
+} from '../../../lib/activeLeague';
 import { ApiRequestError } from '../../../lib/apiClient';
 import { alertAsync, confirmAsync } from '../../../lib/confirm';
 import { useFeature } from '../../../lib/useFeature';
@@ -147,10 +153,15 @@ export default function LineupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { leagues, leaguesRevision, refreshLeagues, deferConnect } = useLeaguesGate();
-
-  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(
-    () => readRememberedWatchlist()?.selectedLeagueId ?? null,
+  const knownWatchedRef = useRef<readonly string[] | null>(
+    readRememberedWatchlist()?.watchedLeagueIds ?? null,
   );
+
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(() => {
+    const watchedLeagueIds = knownWatchedRef.current;
+    if (watchedLeagueIds == null) return null;
+    return watchlistLeagueOnOpen({ leagues, watchedLeagueIds });
+  });
   const [lineup, setLineup] = useState<LineupResponse | null>(
     () => readRememberedWatchlist()?.lineup ?? null,
   );
@@ -189,20 +200,40 @@ export default function LineupScreen() {
   leaguesRef.current = leagues;
   const hasLineupRef = useRef(lineup != null);
   hasLineupRef.current = lineup != null;
+  /** True once the focus refetch has settled, including a failure. */
+  const openSettledRef = useRef(false);
 
   const activeLeagueId = resolveActiveLeagueId(
     leagues,
-    me?.preferences.watchedLeagueIds ?? [],
+    me?.preferences.watchedLeagueIds ?? knownWatchedRef.current ?? [],
   );
-  // A chip sets `selectedLeagueId` for this visit. Until focus (or a chip), and
-  // while `me` is still loading, fall through to the active league once `me` exists
-  // so we never default to `leagues[0]` ahead of the watched set.
+  // A chip sets `selectedLeagueId` for this visit only. Mount and focus both
+  // assign the active league, so a remembered browse does not survive a return.
   const selectedLeague = useMemo(() => {
     const browsed = leagues.find((league) => league.league_id === selectedLeagueId);
     if (browsed) return browsed;
-    if (me == null) return null;
+    if (me == null && knownWatchedRef.current == null) return null;
     return leagues.find((league) => league.league_id === activeLeagueId) ?? null;
   }, [activeLeagueId, leagues, me, selectedLeagueId]);
+
+  const selectActiveLeague = useCallback((watchedLeagueIds: readonly string[] | null) => {
+    knownWatchedRef.current = watchedLeagueIds;
+    openSettledRef.current = true;
+    setSelectedLeagueId(
+      watchlistLeagueOnOpen({ leagues: leaguesRef.current, watchedLeagueIds }),
+    );
+  }, []);
+
+  useEffect(() => {
+    if (selectedLeagueId != null || leagues.length === 0) return;
+    if (knownWatchedRef.current == null && !openSettledRef.current) return;
+    setSelectedLeagueId(
+      watchlistLeagueOnOpen({
+        leagues,
+        watchedLeagueIds: knownWatchedRef.current,
+      }),
+    );
+  }, [leagues, selectedLeagueId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -211,27 +242,26 @@ export default function LineupScreen() {
         .then((meResponse) => {
           if (cancelled) return;
           setMe(meResponse);
-          const next = watchlistLeagueSelection({
-            type: 'focus',
-            leagues: leaguesRef.current,
-            watchedLeagueIds: meResponse.preferences.watchedLeagueIds,
-          });
-          setSelectedLeagueId(next.selectedLeagueId);
+          selectActiveLeague(
+            watchedLeagueIdsForOpen({
+              known: knownWatchedRef.current,
+              fetched: meResponse.preferences.watchedLeagueIds,
+            }),
+          );
         })
         .catch(() => {
           if (cancelled) return;
-          setMe(null);
-          const next = watchlistLeagueSelection({
-            type: 'focus',
-            leagues: leaguesRef.current,
-            watchedLeagueIds: [],
-          });
-          setSelectedLeagueId(next.selectedLeagueId);
+          selectActiveLeague(
+            watchedLeagueIdsForOpen({
+              known: knownWatchedRef.current,
+              fetched: null,
+            }),
+          );
         });
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [selectActiveLeague]),
   );
 
   const loadLineup = useCallback(async (league: LeagueSummary | null) => {
@@ -599,6 +629,11 @@ export default function LineupScreen() {
 
   useEffect(() => {
     if (!lineup) return;
+    const watchedLeagueIds =
+      me != null
+        ? me.preferences.watchedLeagueIds
+        : (readRememberedWatchlist()?.watchedLeagueIds ?? knownWatchedRef.current);
+    if (me != null) knownWatchedRef.current = me.preferences.watchedLeagueIds;
     rememberWatchlist({
       lineup,
       weekGames,
@@ -607,9 +642,9 @@ export default function LineupScreen() {
       me,
       nflWeek,
       watchedStarterTotal,
-      selectedLeagueId,
+      watchedLeagueIds,
     });
-  }, [bets, lineup, me, nflWeek, selectedLeagueId, stakesKnown, watchedStarterTotal, weekGames]);
+  }, [bets, lineup, me, nflWeek, stakesKnown, watchedStarterTotal, weekGames]);
 
   if (showFullLoading(lineup != null, isLoading)) {
     return (

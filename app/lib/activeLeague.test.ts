@@ -4,7 +4,9 @@ import {
   leagueShowsActiveTag,
   nextWatchedLeagueIds,
   resolveActiveLeagueId,
+  watchedLeagueIdsForOpen,
   watchlistChipCue,
+  watchlistLeagueOnOpen,
   watchlistLeagueSelection,
 } from './activeLeague';
 
@@ -27,6 +29,27 @@ describe('resolveActiveLeagueId', () => {
   it('returns null when there are no leagues', () => {
     expect(resolveActiveLeagueId([], ['espn'])).toBeNull();
     expect(resolveActiveLeagueId([], [])).toBeNull();
+  });
+});
+
+describe('watchlist open league', () => {
+  it('reopens on the active league after a chip browse', () => {
+    expect(watchlistLeagueSelection({ type: 'chip', leagueId: 'espn' })).toEqual({
+      selectedLeagueId: 'espn',
+      preferencePatch: null,
+    });
+    expect(watchlistLeagueOnOpen({ leagues, watchedLeagueIds: ['sleeper'] })).toBe('sleeper');
+  });
+
+  it('keeps the active league when the focus refetch fails', () => {
+    const watched = watchedLeagueIdsForOpen({ known: ['sleeper'], fetched: null });
+    expect(watched).toEqual(['sleeper']);
+    expect(watchlistLeagueOnOpen({ leagues, watchedLeagueIds: watched })).toBe('sleeper');
+  });
+
+  it('uses the default league only when nothing is known', () => {
+    expect(watchedLeagueIdsForOpen({ known: null, fetched: null })).toBeNull();
+    expect(watchlistLeagueOnOpen({ leagues, watchedLeagueIds: null })).toBe('espn');
   });
 });
 

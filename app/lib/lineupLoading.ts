@@ -19,7 +19,8 @@ export function lineupLoadingMessage(watchlist: boolean): string {
 /**
  * Last Watchlist paint. The tab screen remounts on a Home → Watchlist switch, so
  * component state alone cannot keep the previous lineup on screen. The module
- * stays loaded, same as the watchlist filter.
+ * stays loaded, same as the watchlist filter. The browsed league is not part of
+ * this snapshot: reopen uses `watchedLeagueIds`.
  */
 export interface RememberedWatchlist {
   lineup: LineupResponse;
@@ -29,7 +30,11 @@ export interface RememberedWatchlist {
   me: MeResponse | null;
   nflWeek: number | null;
   watchedStarterTotal: number | null;
-  selectedLeagueId: string | null;
+  /**
+   * Last known `me.preferences.watchedLeagueIds`. Null until a `/me` succeeds.
+   * The browsed chip is not stored: Watchlist reopens on the active league.
+   */
+  watchedLeagueIds: readonly string[] | null;
 }
 
 let remembered: RememberedWatchlist | null = null;

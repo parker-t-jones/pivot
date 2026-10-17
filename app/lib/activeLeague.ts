@@ -68,10 +68,11 @@ export function nextWatchedLeagueIds(input: {
 }
 
 export type WatchlistLeagueEvent =
-  | {
+    | {
       type: 'focus';
       leagues: readonly ActiveLeagueRef[];
-      watchedLeagueIds: readonly string[];
+      /** Null when the refetch failed and nothing was known yet. */
+      watchedLeagueIds: readonly string[] | null;
     }
   | { type: 'chip'; leagueId: string }
   | {
@@ -90,12 +91,45 @@ export interface WatchlistLeagueDecision {
   preferencePatch: { watchedLeagueIds: string[] } | null;
 }
 
+/**
+ * Watched ids for a Watchlist open.
+ *
+ * A successful `GET /me` replaces the last known list, including an explicit
+ * empty list. A failed refetch keeps that list and never substitutes `[]`.
+ * `null` means nothing is known yet.
+ */
+export function watchedLeagueIdsForOpen(input: {
+  known: readonly string[] | null;
+  /** Null when the refetch failed. */
+  fetched: readonly string[] | null;
+}): readonly string[] | null {
+  if (input.fetched != null) return [...input.fetched];
+  return input.known == null ? null : [...input.known];
+}
+
+/**
+ * League Watchlist selects on mount and on every focus.
+ *
+ * A browsed chip is visit-local and is not an input, so a Home → Watchlist
+ * return lands on the active league. `watchedLeagueIds === null` (no snapshot,
+ * or after sign-out) falls through to `resolveActiveLeagueId`'s default.
+ */
+export function watchlistLeagueOnOpen(input: {
+  leagues: readonly ActiveLeagueRef[];
+  watchedLeagueIds: readonly string[] | null;
+}): string | null {
+  return resolveActiveLeagueId(input.leagues, input.watchedLeagueIds ?? []);
+}
+
 /** Focus snaps back to the active league. A chip only browses. The watch button is the only write. */
 export function watchlistLeagueSelection(event: WatchlistLeagueEvent): WatchlistLeagueDecision {
   switch (event.type) {
     case 'focus':
       return {
-        selectedLeagueId: resolveActiveLeagueId(event.leagues, event.watchedLeagueIds),
+        selectedLeagueId: watchlistLeagueOnOpen({
+          leagues: event.leagues,
+          watchedLeagueIds: event.watchedLeagueIds,
+        }),
         preferencePatch: null,
       };
     case 'chip':
