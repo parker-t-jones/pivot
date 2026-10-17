@@ -5,6 +5,8 @@ import { navigateAfterConnect, resetToHomeRoot } from './navigateAfterConnect';
 import {
   isHomeRouteLeaf,
   isOnZeroLeaguesAllowlist,
+  leaguesStatusAfterRefreshError,
+  leaguesStatusWhileRefreshing,
   NOTIF_PROMPT_DISMISS_KEY,
   NOTIF_PROMPT_SNOOZE_MS,
   readNotifPromptSnoozed,
@@ -93,6 +95,46 @@ describe('resolveAppGate — zero leagues', () => {
 
   it('checking leagues → wait (no decide-then-redecide)', () => {
     expect(resolveAppGate({ ...base, leaguesStatus: 'checking' })).toEqual({ action: 'wait' });
+  });
+});
+
+describe('leagues refresh keeps a decided gate', () => {
+  const lineup = {
+    leaguesStatus: 'ready' as const,
+    leagueCount: 2,
+    connectDeferred: false,
+    routeLeaf: 'lineup' as string | undefined,
+    pushStatus: 'granted' as const,
+    notificationsOnboarding: false,
+    webPushConfigured: true,
+    notifPromptSnoozed: false,
+  };
+
+  it('a refetch with leagues already loaded stays render on Lineup', () => {
+    const status = leaguesStatusWhileRefreshing('ready', 2);
+    expect(status).toBe('ready');
+    expect(resolveAppGate({ ...lineup, leaguesStatus: status })).toEqual({ action: 'render' });
+  });
+
+  it('a failed refetch keeps the ready gate when the list is still present', () => {
+    const status = leaguesStatusAfterRefreshError('ready', 2);
+    expect(status).toBe('ready');
+    expect(resolveAppGate({ ...lineup, leaguesStatus: status })).toEqual({ action: 'render' });
+  });
+
+  it('first load still waits, and a failed first load is an error', () => {
+    expect(leaguesStatusWhileRefreshing('checking', 0)).toBe('checking');
+    expect(resolveAppGate({ ...lineup, leaguesStatus: 'checking', leagueCount: 0 })).toEqual({
+      action: 'wait',
+    });
+    expect(leaguesStatusAfterRefreshError('checking', 0)).toBe('error');
+    expect(resolveAppGate({ ...lineup, leaguesStatus: 'error', leagueCount: 0 })).toEqual({
+      action: 'leagues_error',
+    });
+  });
+
+  it('a ready empty list still leaves Lineup for connect', () => {
+    expect(resolveAppGate({ ...lineup, leagueCount: 0 })).toEqual({ action: 'redirect_connect' });
   });
 });
 

@@ -11,6 +11,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
@@ -21,7 +22,11 @@ import {
   isConnectDeferredForSession,
 } from '../lib/connectDeferredSession';
 import { fetchLeagues, type LeagueSummary } from '../lib/leagues';
-import type { LeaguesLoadStatus } from '../lib/navigationGates';
+import {
+  leaguesStatusAfterRefreshError,
+  leaguesStatusWhileRefreshing,
+  type LeaguesLoadStatus,
+} from '../lib/navigationGates';
 
 interface LeaguesGateContextValue {
   status: LeaguesLoadStatus;
@@ -36,7 +41,8 @@ interface LeaguesGateContextValue {
   deferConnect: () => void;
   /**
    * Re-fetch `/leagues`, replace list+count together, bump revision.
-   * Sets status to `checking` while in flight so gates wait (no mid-flight redirect).
+   * A list that is already ready stays ready while this runs, so the gate does
+   * not unmount the navigator. First load still reports `checking`.
    * Returns the fresh list so callers can await before navigate / lineup loads.
    */
   refreshLeagues: () => Promise<LeagueSummary[]>;
@@ -50,9 +56,17 @@ export function LeaguesGateProvider({ children }: PropsWithChildren) {
   const [leaguesRevision, setLeaguesRevision] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [deferredEpoch, setDeferredEpoch] = useState(0);
+  const statusRef = useRef(status);
+  const leagueCountRef = useRef(0);
+  statusRef.current = status;
+  leagueCountRef.current = leagues.length;
 
   const refreshLeagues = useCallback(async (): Promise<LeagueSummary[]> => {
-    setStatus('checking');
+    const statusAtStart = statusRef.current;
+    const countAtStart = leagueCountRef.current;
+    if (leaguesStatusWhileRefreshing(statusAtStart, countAtStart) !== 'ready') {
+      setStatus('checking');
+    }
     setErrorMessage(null);
     try {
       const next = await fetchLeagues();
@@ -67,8 +81,10 @@ export function LeaguesGateProvider({ children }: PropsWithChildren) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Could not load your leagues.';
-      setErrorMessage(message);
-      setStatus('error');
+      if (leaguesStatusAfterRefreshError(statusAtStart, countAtStart) === 'error') {
+        setErrorMessage(message);
+        setStatus('error');
+      }
       throw error instanceof Error ? error : new Error(message);
     }
   }, []);

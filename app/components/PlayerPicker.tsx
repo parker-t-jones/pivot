@@ -1,11 +1,22 @@
-import { useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { ErrorState } from './ErrorState';
 import { ListRow } from './ListRow';
 import { PrimaryButton } from './PrimaryButton';
 import { TextButton } from './TextButton';
 import { TextField } from './TextField';
+import { TEXT_BUTTON_HIT_SLOP } from '../lib/controlRecipes';
+import { queryAfterSearchReset, searchClearVisible } from '../lib/playerSearch';
 import { searchPlayers, type PlayerSearchResult } from '../lib/players';
 import { theme } from '../lib/theme';
 
@@ -39,10 +50,17 @@ export function PlayerPicker({
   saveLabel = 'Save lineup',
   maxRosterSize,
 }: PlayerPickerProps) {
+  const inputRef = useRef<TextInput>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PlayerSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const rosteredIds = new Set(roster.map((p) => p.player_id));
+
+  const resetQuery = () => {
+    setQuery(queryAfterSearchReset());
+    setResults([]);
+    inputRef.current?.focus();
+  };
 
   const onSearch = async (text: string) => {
     setQuery(text);
@@ -68,15 +86,45 @@ export function PlayerPicker({
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
 
-      <TextField onChangeText={onSearch} placeholder="Search players" value={query} />
+      <TextField
+        blurOnSubmit={false}
+        onChangeText={onSearch}
+        onSubmitEditing={() => {
+          inputRef.current?.focus();
+        }}
+        placeholder="Search players"
+        ref={inputRef}
+        returnKeyType="search"
+        trailing={
+          <View pointerEvents="box-none" style={styles.clearSlot}>
+            {searchClearVisible(query) ? (
+              <Pressable
+                accessibilityLabel="Clear search"
+                accessibilityRole="button"
+                hitSlop={TEXT_BUTTON_HIT_SLOP}
+                onPress={resetQuery}
+                style={styles.clearHit}
+                {...webKeepFocus}
+              >
+                <Text style={styles.clearMark}>×</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        }
+        value={query}
+      />
       {isSearching ? <ActivityIndicator color={theme.colors.textPrimary} /> : null}
 
       <FlatList
         data={results.filter((p) => !rosteredIds.has(p.player_id))}
+        keyboardShouldPersistTaps="handled"
         keyExtractor={(item) => item.player_id}
         renderItem={({ item }) => (
           <ListRow
-            onPress={() => onAdd(item)}
+            onPress={() => {
+              onAdd(item);
+              resetQuery();
+            }}
             style={styles.resultRow}
             subtitle={`${item.position} · ${item.team?.abbreviation ?? 'FA'}`}
             title={`${item.first_name} ${item.last_name}`}
@@ -88,6 +136,7 @@ export function PlayerPicker({
       <Text style={styles.rosterHeading}>{rosterHeading}</Text>
       <FlatList
         data={roster}
+        keyboardShouldPersistTaps="handled"
         keyExtractor={(item) => item.player_id}
         renderItem={({ item }) => (
           <View style={styles.rosterRow}>
@@ -117,7 +166,35 @@ export function PlayerPicker({
   );
 }
 
+/**
+ * Web blurs an input on mousedown of another control. Cancelling that keeps the
+ * caret in the field when the clear button is pressed. Native has no mouse event.
+ */
+const webKeepFocus =
+  Platform.OS === 'web'
+    ? {
+        onMouseDown: (event: { preventDefault: () => void }) => {
+          event.preventDefault();
+        },
+      }
+    : {};
+
 const styles = StyleSheet.create({
+  clearHit: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
+  clearMark: {
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.button.size,
+    fontWeight: theme.type.button.weight,
+  },
+  clearSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   content: {
     flex: 1,
     gap: theme.spacing.md,

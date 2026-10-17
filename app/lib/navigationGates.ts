@@ -5,6 +5,36 @@
 
 export type LeaguesLoadStatus = 'checking' | 'ready' | 'error';
 
+/**
+ * Status to publish while `GET /leagues` is in flight.
+ *
+ * `checking` makes `resolveAppGate` wait, and `(app)/_layout` then swaps the
+ * navigator for a full-screen loader. When the fetch finishes the stack mounts
+ * again on its default route, Home. A list that is already `ready` with leagues
+ * stays `ready` so a pull-to-refresh cannot do that. First load, and a ready
+ * list that is empty, still report `checking`.
+ */
+export function leaguesStatusWhileRefreshing(
+  status: LeaguesLoadStatus,
+  leagueCount: number,
+): LeaguesLoadStatus {
+  if (status === 'ready' && leagueCount > 0) return 'ready';
+  return 'checking';
+}
+
+/**
+ * Status after a failed refresh. Pass the status and count from before the
+ * request. A list that was already on screen stays `ready`. A failure before
+ * any list is loaded is `error`.
+ */
+export function leaguesStatusAfterRefreshError(
+  status: LeaguesLoadStatus,
+  leagueCount: number,
+): LeaguesLoadStatus {
+  if (leaguesStatusWhileRefreshing(status, leagueCount) === 'ready') return 'ready';
+  return 'error';
+}
+
 /** OS push status from PushPermissionContext, plus its `'checking'` load state. */
 export type PushGateStatus = 'checking' | 'undetermined' | 'denied' | 'granted';
 

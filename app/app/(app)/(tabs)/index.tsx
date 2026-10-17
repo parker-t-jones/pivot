@@ -575,7 +575,7 @@ export default function HomeScreen() {
       const rows = await refreshLeagues();
       await loadHome(rows);
     } catch {
-      // refreshLeagues sets gate error; loadHome may also set loadError
+      // A failed refresh keeps a list that was already loaded. loadHome may set loadError.
     } finally {
       setIsRefreshing(false);
     }
