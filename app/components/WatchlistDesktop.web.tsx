@@ -1,24 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TeamBadge } from './TeamBadge';
 import { FILLED_BUTTON_RECIPE } from '../lib/controlRecipes';
 import {
-  beginRemoval,
-  EMPTY_REMOVAL,
-  expireRemoval,
-  failRemoval,
-  STAKE_UNDO_MS,
-  undoRemoval,
-} from '../lib/deferredStakeRemoval';
+  bindStakeUndoCommit,
+  getStakeUndoState,
+  hideStake,
+  subscribeStakeUndo,
+} from '../lib/stakeUndoStore';
 import { fonts } from '../lib/fonts';
 import { slotLabel } from '../lib/lineupOrder';
 import type { LineupSlot } from '../lib/leagues';
 import type { LiveGame, ScheduleGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { formatStakeLabel, stakeTeams, type ManualStake } from '../lib/stakes';
-import { deleteStakeKeepalive } from '../lib/stakesClient';
-import { supabase } from '../lib/supabase';
 import { webPressState } from '../lib/webPress';
 import {
   watchlistPlayerRow,
@@ -79,88 +75,23 @@ export function WatchlistDesktop({
     for (const stake of [...stakes, ...pools]) byId.set(stake.id, stake);
     return byId;
   }, [pools, stakes]);
-  const [removal, setRemoval] = useState(EMPTY_REMOVAL);
-  const [removeError, setRemoveError] = useState<string | null>(null);
-  const removalRef = useRef(removal);
-  removalRef.current = removal;
-  const sentRef = useRef(new Set<string>());
+  const removal = useSyncExternalStore(subscribeStakeUndo, getStakeUndoState, getStakeUndoState);
   const removableRef = useRef(removable);
   removableRef.current = removable;
   const onRemoveRef = useRef(onRemoveStake);
   onRemoveRef.current = onRemoveStake;
-  const tokenRef = useRef<string | null>(null);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => {
-      tokenRef.current = data.session?.access_token ?? null;
+    // Bind only. Cleanup must not flush: this table remounts on a loading
+    // flash, and that used to send the DELETE and tear down the toast.
+    bindStakeUndoCommit((id) => {
+      const stake = removableRef.current.get(id);
+      if (!stake) return;
+      return onRemoveRef.current(stake);
     });
   }, []);
-
-  const commitRemoval = useRef((id: string) => {
-    if (sentRef.current.has(id)) return;
-    const stake = removableRef.current.get(id);
-    if (!stake) return;
-    sentRef.current.add(id);
-    void Promise.resolve(onRemoveRef.current(stake)).catch(() => {
-      sentRef.current.delete(id);
-      setRemoval((current) => failRemoval(current, id));
-      setRemoveError('Could not remove that bet.');
-    });
-  });
-
-  useEffect(() => {
-    if (removal.pendingId == null) return;
-    const timer = setTimeout(() => {
-      setRemoval((current) => {
-        const step = expireRemoval(current);
-        if (step.commitId) commitRemoval.current(step.commitId);
-        return step.state;
-      });
-    }, STAKE_UNDO_MS);
-    return () => clearTimeout(timer);
-  }, [removal.pendingId]);
-
-  useEffect(() => {
-    const commitPending = () => {
-      const step = expireRemoval(removalRef.current);
-      removalRef.current = step.state;
-      if (step.commitId) commitRemoval.current(step.commitId);
-    };
-    const onUnload = () => {
-      const id = removalRef.current.pendingId;
-      const token = tokenRef.current;
-      if (id == null || token == null || sentRef.current.has(id)) return;
-      sentRef.current.add(id);
-      removalRef.current = { ...removalRef.current, pendingId: null };
-      deleteStakeKeepalive(id, token);
-    };
-    window.addEventListener('beforeunload', onUnload);
-    return () => {
-      window.removeEventListener('beforeunload', onUnload);
-      commitPending();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (removeError == null) return;
-    const timer = setTimeout(() => setRemoveError(null), STAKE_UNDO_MS);
-    return () => clearTimeout(timer);
-  }, [removeError]);
 
   const visibleRows = rows.filter((row) => !removal.hiddenIds.includes(row.id));
-
-  const hideRow = (id: string) => {
-    setRemoveError(null);
-    setRemoval((current) => {
-      const step = beginRemoval(current, id);
-      if (step.commitId) commitRemoval.current(step.commitId);
-      return step.state;
-    });
-  };
-
-  const undo = () => {
-    setRemoval((current) => undoRemoval(current).state);
-  };
 
   const openRow = (row: WatchlistTableRow) => {
     if (!row.live || !row.gameId) return;
@@ -177,108 +108,93 @@ export function WatchlistDesktop({
 
   return (
     <View style={styles.screen}>
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[styles.content, { paddingTop: topInset, paddingBottom: bottomInset }]}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={theme.colors.accent}
-        />
-      }
-    >
-      <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.eyebrow}>
-            {week == null ? 'WEEK' : `WEEK ${week}`}
-          </Text>
-          <Text maxFontSizeMultiplier={theme.fontScaleCaps.title} style={styles.title}>
-            Watchlist
-          </Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: topInset, paddingBottom: bottomInset },
+        ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.accent}
+          />
+        }
+      >
+        <View style={styles.header}>
+          <View style={styles.headerCopy}>
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.eyebrow}>
+              {week == null ? 'WEEK' : `WEEK ${week}`}
+            </Text>
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.title} style={styles.title}>
+              Watchlist
+            </Text>
+          </View>
+          <View style={styles.addWrap}>
+            <PrimaryButton label="Add a stake" onPress={onAddStake} />
+          </View>
         </View>
-        <View style={styles.addWrap}>
-          <PrimaryButton label="Add a stake" onPress={onAddStake} />
-        </View>
-      </View>
-      <View style={styles.stripRow}>
-        <Text style={styles.strip}>Fantasy {weekCard.fantasy.value}</Text>
-        <Text style={styles.strip}>·</Text>
-        <Pressable
-          accessibilityLabel={`Opponent, ${weekCard.opponent.value}`}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: weekCard.opponent.toggleable !== true }}
-          disabled={weekCard.opponent.toggleable !== true}
-          onPress={() => onWatchOpponent(weekCard.opponent.value === 'Off')}
-        >
-          <Text
-            style={[
-              styles.strip,
-              weekCard.opponent.toggleable === true && styles.stripToggle,
-              weekCard.opponent.muted && styles.stripMuted,
-            ]}
+        <View style={styles.stripRow}>
+          <Text style={styles.strip}>Fantasy {weekCard.fantasy.value}</Text>
+          <Text style={styles.strip}>·</Text>
+          <Pressable
+            accessibilityLabel={`Opponent, ${weekCard.opponent.value}`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: weekCard.opponent.toggleable !== true }}
+            disabled={weekCard.opponent.toggleable !== true}
+            onPress={() => onWatchOpponent(weekCard.opponent.value === 'Off')}
           >
-            Opponent {weekCard.opponent.value}
-          </Text>
-        </Pressable>
-        <Text style={styles.strip}>·</Text>
-        <Text style={styles.strip}>
-          {weekCard.bets.strip ?? `${weekCard.bets.label} ${weekCard.bets.value}`}
-        </Text>
-        {weekCard.bets.upgrade ? (
-          <TextButton label="Upgrade" onPress={() => openUpgrade()} size="small" />
-        ) : null}
-        <Text style={styles.strip}>·</Text>
-        <Text style={styles.strip}>Pools {weekCard.pools.value}</Text>
-      </View>
-      <WatchlistFilters onChange={onFilter} value={filter} />
-      {extras}
-      <View style={styles.table}>
-        <View style={styles.head}>
-          <Text style={[styles.headCell, styles.slotCol]}>Slot</Text>
-          <Text style={[styles.headCell, styles.playerCol]}>Stake</Text>
-          <Text style={[styles.headCell, styles.gameCol]}>Game</Text>
-          <Text style={[styles.headCell, styles.networkCol]}>Network</Text>
-          <Text style={[styles.headCell, styles.statusCol]}>Status</Text>
-          <Text style={[styles.headCell, styles.actionCol]}> </Text>
-        </View>
-        {visibleRows.length === 0 && !betPrompt ? (
-          <Text style={styles.empty}>Nothing in this view yet.</Text>
-        ) : visibleRows.length === 0 ? null : (
-          visibleRows.map((row) => (
-            <TableRow
-              key={row.id}
-              onOpen={() => openRow(row)}
-              onRemove={removable.has(row.id) ? () => hideRow(row.id) : null}
-              row={row}
-            />
-          ))
-        )}
-        {betPrompt ? (
-          <Pressable accessibilityRole="button" onPress={onAddStake} style={styles.promptRow}>
-            <Text style={styles.prompt}>{betPrompt}</Text>
+            <Text
+              style={[
+                styles.strip,
+                weekCard.opponent.toggleable === true && styles.stripToggle,
+                weekCard.opponent.muted && styles.stripMuted,
+              ]}
+            >
+              Opponent {weekCard.opponent.value}
+            </Text>
           </Pressable>
-        ) : null}
-      </View>
-    </ScrollView>
-      {removal.pendingId || removeError ? (
-        <View
-          pointerEvents="box-none"
-          style={[styles.toastDock, { bottom: bottomInset + theme.spacing.lg }]}
-        >
-          {removal.pendingId ? (
-            <View style={styles.toast}>
-              <Text style={styles.toastText}>Removed</Text>
-              <TextButton label="Undo" onPress={undo} size="smallStrong" />
-            </View>
+          <Text style={styles.strip}>·</Text>
+          <Text style={styles.strip}>
+            {weekCard.bets.strip ?? `${weekCard.bets.label} ${weekCard.bets.value}`}
+          </Text>
+          {weekCard.bets.upgrade ? (
+            <TextButton label="Upgrade" onPress={() => openUpgrade()} size="small" />
           ) : null}
-          {removeError ? (
-            <View style={styles.toast}>
-              <Text style={styles.toastText}>{removeError}</Text>
-            </View>
+          <Text style={styles.strip}>·</Text>
+          <Text style={styles.strip}>Pools {weekCard.pools.value}</Text>
+        </View>
+        <WatchlistFilters onChange={onFilter} value={filter} />
+        {extras}
+        <View style={styles.table} testID="watchlist-table">
+          <View style={styles.head}>
+            <Text style={[styles.headCell, styles.slotCol]}>Slot</Text>
+            <Text style={[styles.headCell, styles.playerCol]}>Stake</Text>
+            <Text style={[styles.headCell, styles.gameCol]}>Game</Text>
+            <Text style={[styles.headCell, styles.networkCol]}>Network</Text>
+            <Text style={[styles.headCell, styles.statusCol]}>Status</Text>
+            <Text style={[styles.headCell, styles.actionCol]}> </Text>
+          </View>
+          {visibleRows.length === 0 && !betPrompt ? (
+            <Text style={styles.empty}>Nothing in this view yet.</Text>
+          ) : visibleRows.length === 0 ? null : (
+            visibleRows.map((row) => (
+              <TableRow
+                key={row.id}
+                onOpen={() => openRow(row)}
+                onRemove={removable.has(row.id) ? () => hideStake(row.id) : null}
+                row={row}
+              />
+            ))
+          )}
+          {betPrompt ? (
+            <Pressable accessibilityRole="button" onPress={onAddStake} style={styles.promptRow}>
+              <Text style={styles.prompt}>{betPrompt}</Text>
+            </Pressable>
           ) : null}
         </View>
-      ) : null}
+      </ScrollView>
     </View>
   );
 }
@@ -534,26 +450,6 @@ const styles = StyleSheet.create({
   },
   stripToggle: {
     color: theme.colors.textPrimary,
-  },
-  toast: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
-    borderRadius: theme.radii.control,
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-  },
-  toastDock: {
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-  },
-  toastText: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.small.size,
   },
   actionCol: {
     alignItems: 'flex-end',

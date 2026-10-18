@@ -21,6 +21,7 @@ export default defineConfig({
       'shared/src/**/*.test.ts',
       'services/*/src/**/*.test.ts',
       'app/**/*.test.ts',
+      'app/**/*.test.tsx',
       'scripts/**/*.test.ts',
     ],
   },

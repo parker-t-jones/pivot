@@ -4,6 +4,7 @@ import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-nativ
 
 import { ErrorState } from '../../components/ErrorState';
 import { NotificationBannerHost } from '../../components/NotificationBannerHost';
+import { StakeUndoToast } from '../../components/StakeUndoToast';
 import { NotificationResponseHandler } from '../../components/NotificationResponseHandler';
 import { UpgradeSheet } from '../../components/UpgradeSheet';
 import { GameLinksProvider } from '../../contexts/GameLinksContext';
@@ -132,6 +133,7 @@ export default function AppGroupLayout() {
           <SwitchingProvider>
             <UpgradeSheetProvider>
               <AppNavigator />
+              <StakeUndoToast />
               <NotificationBannerHost />
               {Platform.OS === 'web' ? null : <NotificationResponseHandler />}
               <UpgradeSheet />

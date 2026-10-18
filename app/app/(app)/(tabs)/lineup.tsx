@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -79,7 +80,9 @@ import {
   type GameScore,
 } from '../../../lib/stakeCards';
 import { formatStakeLabel, stakeTeams, type ManualStake } from '../../../lib/stakes';
-import { deleteStake, fetchStakes } from '../../../lib/stakesClient';
+import { flushStakeUndo, takePendingStakeUndo } from '../../../lib/stakeUndoStore';
+import { supabase } from '../../../lib/supabase';
+import { deleteStake, deleteStakeKeepalive, fetchStakes } from '../../../lib/stakesClient';
 import { theme } from '../../../lib/theme';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
 import {
@@ -201,6 +204,28 @@ export default function LineupScreen() {
   const [filter, selectFilter] = useWatchlistFilter();
   const desktopTier = useDesktopTier();
   const watchOpponentSave = useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    let token: string | null = null;
+    void supabase.auth.getSession().then(({ data }) => {
+      token = data.session?.access_token ?? null;
+    });
+    const onLeave = () => {
+      if (!token) {
+        flushStakeUndo();
+        return;
+      }
+      const id = takePendingStakeUndo();
+      if (id) deleteStakeKeepalive(id, token);
+    };
+    window.addEventListener('beforeunload', onLeave);
+    return () => {
+      window.removeEventListener('beforeunload', onLeave);
+      // Leaving Watchlist commits. Hiding a row does not unmount this screen.
+      flushStakeUndo();
+    };
+  }, []);
   const betsOn = useFeature('bets');
   const watchlist = lineupScreenMode(betsOn) === 'watchlist';
 
