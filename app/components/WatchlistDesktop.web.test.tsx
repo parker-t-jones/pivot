@@ -167,6 +167,9 @@ describe('desktop watchlist remove', () => {
     const toast = document.querySelector('[data-testid="stake-undo-toast"]');
     expect(toast?.textContent).toContain('Removed');
     expect(toast?.textContent).toContain('Undo');
+    const undo = undoButton() as HTMLElement;
+    expect(undo.tabIndex).toBeGreaterThanOrEqual(0);
+    expect(Number.parseFloat(getComputedStyle(undo).minHeight)).toBeGreaterThanOrEqual(44);
     expect(toast?.parentElement).toBe(document.body);
     expect(table?.contains(toast ?? null)).toBe(false);
     expect(getComputedStyle(toast as Element).position).toBe('fixed');

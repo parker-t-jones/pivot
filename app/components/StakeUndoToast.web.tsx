@@ -21,7 +21,13 @@ export function StakeUndoToast(): ReactPortal | null {
       <View pointerEvents="auto" style={styles.toast}>
         <Text style={styles.toastText}>{undo.error ?? 'Removed'}</Text>
         {undo.pendingId != null ? (
-          <TextButton label="Undo" onPress={undoStake} size="smallStrong" />
+          <TextButton
+            hitArea="padding"
+            label="Undo"
+            labelStyle={styles.undoLabel}
+            onPress={undoStake}
+            size="button"
+          />
         ) : null}
       </View>
     </div>,
@@ -44,14 +50,19 @@ const styles = StyleSheet.create({
   toast: {
     alignItems: 'center',
     backgroundColor: theme.colors.surfaceRaised,
-    borderRadius: theme.radii.control,
+    borderRadius: theme.radii.pill,
     flexDirection: 'row',
     gap: theme.spacing.md,
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: theme.spacing.lg,
   },
   toastText: {
     color: theme.colors.textPrimary,
-    fontSize: theme.type.small.size,
+    fontSize: theme.type.body.size,
+    lineHeight: theme.type.body.lineHeight,
+  },
+  undoLabel: {
+    fontSize: theme.type.body.size,
+    lineHeight: theme.type.body.lineHeight,
   },
 });
