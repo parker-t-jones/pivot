@@ -50,7 +50,7 @@ function Highlighted({ filledKey, children }: { filledKey: string; children: Rea
     return () => clearTimeout(timer);
   }, [filledKey, reduced]);
 
-  return <View style={hot ? styles.highlight : undefined}>{children}</View>;
+  return <View style={[styles.valueSlot, hot ? styles.highlight : undefined]}>{children}</View>;
 }
 
 function Placeholder() {
@@ -74,34 +74,36 @@ export function AddPickSlip({
 }) {
   const gameKey = game ? `${game.away}@${game.home}` : '';
   return (
-    <View style={styles.card}>
-      <Text style={styles.cardEyebrow}>YOUR SLIP</Text>
-      <SlipRow filledKey={typeLabel ?? ''} label="TYPE">
-        {typeLabel ? <Text style={styles.value}>{typeLabel}</Text> : <Placeholder />}
-      </SlipRow>
-      <SlipRow filledKey={gameKey} label="GAME">
-        {game ? (
-          <View style={styles.gameValue}>
-            <TeamBadge abbr={game.away} size="sm" />
-            <Text style={styles.at}>@</Text>
-            <TeamBadge abbr={game.home} size="sm" />
-            {game.detail.length > 0 ? <Text style={styles.detail}>{game.detail}</Text> : null}
-          </View>
-        ) : (
-          <Placeholder />
-        )}
-      </SlipRow>
-      <SlipRow filledKey={pick?.text ?? ''} label={pickLabel}>
-        {pick ? (
-          <View style={styles.pickValue}>
-            {pick.badge ? <TeamBadge abbr={pick.badge} size="sm" /> : null}
-            <Text style={pickLabel === 'PICK' ? styles.pickText : styles.value}>{pick.text}</Text>
-          </View>
-        ) : (
-          <Placeholder />
-        )}
-      </SlipRow>
-      <SlipPerforation />
+    <View style={styles.card} testID="add-pick-slip">
+      <View style={styles.face}>
+        <Text style={styles.cardEyebrow}>YOUR SLIP</Text>
+        <SlipRow filledKey={typeLabel ?? ''} label="TYPE">
+          {typeLabel ? <Text style={styles.value}>{typeLabel}</Text> : <Placeholder />}
+        </SlipRow>
+        <SlipRow filledKey={gameKey} label="GAME">
+          {game ? (
+            <View style={styles.gameValue}>
+              <TeamBadge abbr={game.away} size="sm" />
+              <Text style={styles.at}>@</Text>
+              <TeamBadge abbr={game.home} size="sm" />
+              {game.detail.length > 0 ? <Text style={styles.detail}>{game.detail}</Text> : null}
+            </View>
+          ) : (
+            <Placeholder />
+          )}
+        </SlipRow>
+        <SlipRow filledKey={pick?.text ?? ''} label={pickLabel}>
+          {pick ? (
+            <View style={styles.pickValue}>
+              {pick.badge ? <TeamBadge abbr={pick.badge} size="sm" /> : null}
+              <Text style={pickLabel === 'PICK' ? styles.pickText : styles.value}>{pick.text}</Text>
+            </View>
+          ) : (
+            <Placeholder />
+          )}
+        </SlipRow>
+      </View>
+      <SlipPerforation edge="card" />
     </View>
   );
 }
@@ -129,12 +131,22 @@ const styles = StyleSheet.create({
     fontSize: theme.type.small.size,
   },
   card: {
+    alignSelf: 'stretch',
+    marginBottom: theme.spacing.lg,
+    marginHorizontal: theme.spacing.lg2,
+    overflow: 'visible',
+  },
+  face: {
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
-    borderRadius: theme.radii.md,
-    borderWidth: theme.effects.panelBorderWidth,
+    borderBottomWidth: 0,
+    borderLeftWidth: theme.effects.panelBorderWidth,
+    borderRightWidth: theme.effects.panelBorderWidth,
+    borderTopLeftRadius: theme.radii.md,
+    borderTopRightRadius: theme.radii.md,
+    borderTopWidth: theme.effects.panelBorderWidth,
     gap: theme.spacing.sm,
-    marginHorizontal: theme.spacing.lg2,
+    paddingBottom: theme.spacing.sm,
     paddingTop: theme.spacing.md,
   },
   cardEyebrow: {
@@ -150,12 +162,16 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: theme.type.caption.size,
     lineHeight: theme.type.caption.lineHeight,
+    maxWidth: '100%',
+    minWidth: 0,
   },
   gameValue: {
     alignItems: 'center',
+    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.spacing.sm,
+    minWidth: 0,
   },
   highlight: {
     backgroundColor: theme.colors.accentMuted,
@@ -191,6 +207,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
+  },
+  valueSlot: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   value: {
     color: theme.colors.textPrimary,
