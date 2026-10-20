@@ -74,3 +74,35 @@ export const MNF_FLAGS_CURRENT = {
   flags: [] as [],
   generated_at: '2026-10-20T01:50:00.000Z',
 };
+
+/**
+ * The week's other manual stakes, from `GET /stakes?week=6`. Neither is the Monday game.
+ * SEA moneyline is the away side of SEA @ DEN. The survivor pick is JAX, home against HOU.
+ * Team and user ids are omitted.
+ */
+export const WEEK_OTHER_STAKES = [
+  {
+    gameId: 'cec1df31-6b49-4c10-8ff5-8337bee8928f',
+    scheduledStart: '2026-10-16T00:15:00+00:00',
+    status: 'final' as const,
+    away: 'SEA',
+    home: 'DEN',
+    awayName: 'Seahawks',
+    homeName: 'Broncos',
+    network: 'PRIME',
+    eyebrow: 'BET' as const,
+    label: 'SEA ML',
+  },
+  {
+    gameId: '7d042715-469d-4edf-ae8e-6a343cd9983d',
+    scheduledStart: '2026-10-18T13:30:00+00:00',
+    status: 'final' as const,
+    away: 'HOU',
+    home: 'JAX',
+    awayName: 'Texans',
+    homeName: 'Jaguars',
+    network: 'NFLN',
+    eyebrow: 'POOL' as const,
+    label: 'Survivor · JAX',
+  },
+];

@@ -1,5 +1,14 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type ViewStyle,
+} from 'react-native';
 
 import { GameLinksProvider } from '../contexts/GameLinksContext';
 import {
@@ -8,12 +17,14 @@ import {
   MNF_GAME_ID,
   MNF_HALFTIME_LIVE,
   MNF_STARTERS,
+  WEEK_OTHER_STAKES,
 } from '../fixtures/mnfHalftime';
 import type { BoardWindowGroup } from '../lib/board';
 import { DESKTOP_RIGHT_COLUMN, DESKTOP_WIDE_MIN } from '../lib/desktopLayout';
 import type { LineupGameGroup } from '../lib/homeState';
 import { buildLiveStakeCards } from '../lib/liveStakeCards';
 import type { LiveGame, ScheduleGame } from '../lib/schedule';
+import { getTeamColors } from '../lib/teamColors';
 import { theme } from '../lib/theme';
 import { YourLiveGames } from './LiveStakeGameCard';
 import { MyCardList } from './MyCardList';
@@ -67,21 +78,34 @@ function gameFor(state: LivePreviewState): LiveGame {
 
 export function LiveCardPreview({ initial = 'halftime' }: { initial?: LivePreviewState }) {
   const [state, setState] = useState<LivePreviewState>(initial);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const root = document.documentElement;
+    const body = document.body;
+    const previousRoot = root.style.backgroundColor;
+    const previousBody = body.style.backgroundColor;
+    root.style.backgroundColor = theme.colors.background;
+    body.style.backgroundColor = theme.colors.background;
+    return () => {
+      root.style.backgroundColor = previousRoot;
+      body.style.backgroundColor = previousBody;
+    };
+  }, []);
   const active = state === 'active' || state === 'redzone';
   const cards = buildLiveStakeCards({
     liveGames: [gameFor(state)],
     stakeGameIds: new Set([MNF_GAME_ID]),
-    activeFlags: active ? [{ game_id: MNF_GAME_ID, priority_score: 6 }] : [],
+    activeFlags: active
+      ? [
+          {
+            game_id: MNF_GAME_ID,
+            priority_score: 6,
+            flagged_players: MNF_STARTERS.map((player) => ({ player_id: player.playerId })),
+          },
+        ]
+      : [],
     playersByGameId: new Map([[MNF_GAME_ID, [...MNF_STARTERS]]]),
-    betsByGameId: new Map([
-      [
-        MNF_GAME_ID,
-        [
-          { id: 'ml', eyebrow: 'BET' as const, label: 'SEA ML' },
-          { id: 'pool', eyebrow: 'POOL' as const, label: 'Survivor · JAX' },
-        ],
-      ],
-    ]),
+    betsByGameId: new Map(),
     watchByGameId: new Map([[MNF_GAME_ID, { broadcasts: [MNF_BROADCAST], airings: MNF_AIRINGS }]]),
   });
 
@@ -89,12 +113,18 @@ export function LiveCardPreview({ initial = 'halftime' }: { initial?: LivePrevie
   const stakesWidth = width >= DESKTOP_WIDE_MIN ? DESKTOP_RIGHT_COLUMN : width;
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
+    <ScrollView
+      style={[
+        styles.scroll,
+        Platform.OS === 'web' ? ({ minHeight: '100vh' } as unknown as ViewStyle) : null,
+      ]}
+      contentContainerStyle={styles.page}
+    >
       <Text style={styles.title}>Live card preview</Text>
       <Text style={styles.copy}>
-        Local only. The halftime score is the Monday night capture. The other states reuse that
-        game and change the clock, possession, and whether a stake is active. YOUR STAKES is the
-        desktop column width at 1280 and the full window below that.
+        Local only. Monday night is Commanders D/ST and George Kittle. SEA ML and the JAX pool are
+        final games, so they stay on their own YOUR STAKES cards. Halftime and end of quarter leave
+        every chip SIDELINE. Active and red zone mark both Monday starters on the flag.
       </Text>
       <View style={styles.row}>
         {STATES.map((item) => (
@@ -145,21 +175,21 @@ const PREVIEW_GROUPS: BoardWindowGroup[] = [
         awayTeamColor: MNF_HALFTIME_LIVE.away_team_primary_color,
         homeTeamColor: MNF_HALFTIME_LIVE.home_team_primary_color,
         network: 'ESPN',
-        stakeCount: 2,
+        stakeCount: MNF_STARTERS.length,
         stripeSide: 'away',
       },
-      {
-        gameId: 'final-den',
-        kickoff: new Date('2026-10-18T17:00:00Z'),
-        status: 'final',
-        awayTeamId: 'NYJ',
-        homeTeamId: 'DEN',
-        awayTeamColor: '#125740',
-        homeTeamColor: '#FB4F14',
-        network: 'CBS',
+      ...WEEK_OTHER_STAKES.map((stake) => ({
+        gameId: stake.gameId,
+        kickoff: new Date(stake.scheduledStart),
+        status: stake.status,
+        awayTeamId: stake.away,
+        homeTeamId: stake.home,
+        awayTeamColor: getTeamColors(stake.away).primary,
+        homeTeamColor: getTeamColors(stake.home).primary,
+        network: stake.network,
         stakeCount: 1,
-        stripeSide: 'home',
-      },
+        stripeSide: stake.home === 'JAX' ? ('home' as const) : ('away' as const),
+      })),
     ],
   },
 ];
@@ -167,34 +197,23 @@ const PREVIEW_GROUPS: BoardWindowGroup[] = [
 const PREVIEW_LINEUP: LineupGameGroup[] = [
   {
     game: previewSchedule,
-    players: [
-      {
-        player_id: 'sf-kittle',
-        first_name: 'George',
-        last_name: 'Kittle',
-        position: 'TE',
-        team_abbreviation: 'SF',
-      },
-    ],
+    players: MNF_STARTERS.map((player) => ({
+      player_id: player.playerId,
+      first_name: player.firstName,
+      last_name: player.lastName,
+      position: player.position,
+      team_abbreviation: player.teamAbbreviation,
+    })),
   },
 ];
 
-const PREVIEW_BETS = [
-  {
-    kind: 'bet' as const,
-    gameId: MNF_GAME_ID,
-    teamId: 'SF',
-    eyebrow: 'BET' as const,
-    label: '49ers moneyline stays on one line beside the saved link',
-  },
-  {
-    kind: 'bet' as const,
-    gameId: 'final-den',
-    teamId: 'DEN',
-    eyebrow: 'BET' as const,
-    label: 'DEN ML',
-  },
-];
+const PREVIEW_BETS = WEEK_OTHER_STAKES.map((stake) => ({
+  kind: 'bet' as const,
+  gameId: stake.gameId,
+  teamId: stake.eyebrow === 'POOL' ? stake.home : stake.away,
+  eyebrow: stake.eyebrow,
+  label: stake.label,
+}));
 
 const PREVIEW_LINKS = [
   {
@@ -206,6 +225,10 @@ const PREVIEW_LINKS = [
 ];
 
 const styles = StyleSheet.create({
+  scroll: {
+    backgroundColor: theme.colors.background,
+    flex: 1,
+  },
   copy: {
     color: theme.colors.textSecondary,
     fontSize: theme.type.caption.size,
@@ -213,6 +236,7 @@ const styles = StyleSheet.create({
   },
   page: {
     backgroundColor: theme.colors.background,
+    flexGrow: 1,
     gap: theme.spacing.md,
     padding: theme.spacing.lg,
   },

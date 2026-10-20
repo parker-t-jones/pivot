@@ -37,7 +37,12 @@ function render(node: ReturnType<typeof createElement>): Root {
 }
 
 function modelFor(game: LiveGame, active: boolean) {
-  const chips = liveStakeChips({ game, players: [...MNF_STARTERS], bets: [] });
+  const chips = liveStakeChips({
+    game,
+    players: [...MNF_STARTERS],
+    bets: [],
+    activePlayerIds: active ? new Set(MNF_STARTERS.map((player) => player.playerId)) : undefined,
+  });
   return {
     game,
     eyebrow: active ? ('NOW ACTIVE' as const) : ('LIVE · YOUR GAME' as const),

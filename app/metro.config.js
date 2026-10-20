@@ -14,6 +14,12 @@ const config = getDefaultConfig(__dirname);
 const sharedSrc = path.resolve(__dirname, '../shared/src') + path.sep;
 const upstreamResolveRequest = config.resolver.resolveRequest;
 
+// The live-card preview and its captured payloads stay out of the production graph.
+// `expo export` sets NODE_ENV=production. `expo start` does not, so the dev server still loads them.
+const previewSource = path.resolve(__dirname, 'components/LiveCardPreview.tsx');
+const previewStub = path.resolve(__dirname, 'dev/previewInert.tsx');
+const fixtureSource = path.resolve(__dirname, 'fixtures/mnfHalftime.ts');
+
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   const resolve = upstreamResolveRequest ?? context.resolveRequest;
   if (
@@ -23,7 +29,16 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   ) {
     return resolve(context, moduleName.slice(0, -'.js'.length), platform);
   }
-  return resolve(context, moduleName, platform);
+  const resolved = resolve(context, moduleName, platform);
+  if (process.env.NODE_ENV === 'production' && resolved?.type === 'sourceFile') {
+    if (resolved.filePath === previewSource) {
+      return { type: 'sourceFile', filePath: previewStub };
+    }
+    if (resolved.filePath === fixtureSource) {
+      return { type: 'empty' };
+    }
+  }
+  return resolved;
 };
 
 module.exports = config;

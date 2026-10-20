@@ -103,21 +103,116 @@ describe('MNF halftime fixture', () => {
     expect(chips.every((chip) => chip.tone === 'sideline')).toBe(true);
   });
 
-  it('marks offense and defense on field from possession, and keeps bets neutral', () => {
-    const driving = { ...MNF_HALFTIME_LIVE, possession_team: 'SF', yards_to_endzone: 12 };
-    const { chips } = liveStakeChips({
-      game: driving,
-      players: [...MNF_STARTERS],
-      bets: [
-        { id: 'ml', eyebrow: 'BET', label: 'SEA ML' },
-        { id: 'pool', eyebrow: 'POOL', label: 'Survivor · JAX' },
+  it('marks a fantasy chip ON FIELD only when that player is on the flag', () => {
+    const driving = live({ game_id: MNF_GAME_ID });
+    const [card] = buildLiveStakeCards({
+      liveGames: [driving],
+      stakeGameIds: new Set([MNF_GAME_ID]),
+      activeFlags: [
+        {
+          game_id: MNF_GAME_ID,
+          priority_score: 6,
+          flagged_players: [{ player_id: 'sf-kittle' }],
+        },
       ],
+      playersByGameId: new Map([[MNF_GAME_ID, [...MNF_STARTERS]]]),
+      betsByGameId: new Map([
+        [MNF_GAME_ID, [{ id: 'ml', eyebrow: 'BET' as const, label: 'SF ML' }]],
+      ]),
+      watchByGameId: new Map(),
     });
-    expect(chips.map((chip) => [chip.text, chip.tone])).toEqual([
-      ['Commanders D/ST · ON FIELD', 'on_field'],
+    expect(card?.active).toBe(true);
+    expect(card?.eyebrow).toBe('NOW ACTIVE');
+    expect(card?.chips.map((chip) => [chip.text, chip.tone])).toEqual([
+      ['Commanders D/ST · SIDELINE', 'sideline'],
       ['George Kittle TE · ON FIELD', 'on_field'],
-      ['BET · SEA ML', 'neutral'],
-      ['POOL · JAX', 'neutral'],
+      ['BET · SF ML', 'neutral'],
+    ]);
+  });
+
+  it('keeps a period break sidelined and unlabeled as active even when a flag names the players', () => {
+    const endQ1 = {
+      ...MNF_HALFTIME_LIVE,
+      quarter: 1,
+      time_remaining_sec: 0,
+      possession_team: 'SF',
+      yards_to_endzone: 35,
+    };
+    const [card] = buildLiveStakeCards({
+      liveGames: [endQ1],
+      stakeGameIds: new Set([MNF_GAME_ID]),
+      activeFlags: [
+        {
+          game_id: MNF_GAME_ID,
+          priority_score: 8,
+          flagged_players: MNF_STARTERS.map((player) => ({ player_id: player.playerId })),
+        },
+      ],
+      playersByGameId: new Map([[MNF_GAME_ID, [...MNF_STARTERS]]]),
+      betsByGameId: new Map(),
+      watchByGameId: new Map(),
+    });
+    expect(liveCardClock(endQ1)).toBe('END Q1');
+    expect(card?.eyebrow).toBe('LIVE · YOUR GAME');
+    expect(card?.active).toBe(false);
+    expect(card?.chips.every((chip) => chip.tone === 'sideline')).toBe(true);
+  });
+
+  it('gives each live card only the stakes on that game', () => {
+    const other = live({
+      game_id: 'g-other',
+      scheduled_start: '2026-10-18T17:00:00Z',
+      away_team: 'SEA',
+      home_team: 'DEN',
+      away_team_name: 'Seahawks',
+      home_team_name: 'Broncos',
+    });
+    const cards = buildLiveStakeCards({
+      liveGames: [MNF_HALFTIME_LIVE, other],
+      stakeGameIds: new Set([MNF_GAME_ID, other.game_id]),
+      activeFlags: [
+        {
+          game_id: other.game_id,
+          priority_score: 3,
+          flagged_players: [{ player_id: 'den-sutton' }],
+        },
+      ],
+      playersByGameId: new Map([
+        [MNF_GAME_ID, [...MNF_STARTERS]],
+        [
+          other.game_id,
+          [
+            {
+              playerId: 'den-sutton',
+              firstName: 'Courtland',
+              lastName: 'Sutton',
+              position: 'WR',
+              teamAbbreviation: 'DEN',
+            },
+          ],
+        ],
+      ]),
+      betsByGameId: new Map([
+        [
+          other.game_id,
+          [
+            { id: 'ml', eyebrow: 'BET' as const, label: 'SEA ML' },
+            { id: 'pool', eyebrow: 'POOL' as const, label: 'Survivor · JAX' },
+          ],
+        ],
+      ]),
+      watchByGameId: new Map(),
+    });
+    const mnf = cards.find((card) => card.game.game_id === MNF_GAME_ID);
+    const den = cards.find((card) => card.game.game_id === other.game_id);
+    expect(mnf?.chips.map((chip) => chip.text)).toEqual([
+      'Commanders D/ST · SIDELINE',
+      'George Kittle TE · SIDELINE',
+    ]);
+    expect(den?.chips.map((chip) => chip.text)).toEqual([
+      'Courtland Sutton WR · ON FIELD',
+      'BET · SEA ML',
+      'POOL · JAX',
     ]);
   });
 

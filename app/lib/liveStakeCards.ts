@@ -1,6 +1,7 @@
 import type { StakeRef } from './board';
 import {
   liveClockLabel,
+  periodBreakLabel,
   serviceLabel,
   watchCta,
   type CurrentFlag,
@@ -105,8 +106,8 @@ export function watchButtonLabel(
 function fantasyChipText(
   player: FantasyChipPlayer,
   game: LiveGame,
+  onField: boolean,
 ): { text: string; tone: 'on_field' | 'sideline' } {
-  const possession = game.possession_team;
   const defense = isDefensePosition(player.position);
   const nickname =
     player.teamAbbreviation === game.home_team
@@ -117,15 +118,6 @@ function fantasyChipText(
   const name = defense
     ? `${nickname} D/ST`
     : `${player.firstName} ${player.lastName} ${player.position}`.trim();
-  const opponent =
-    player.teamAbbreviation === game.home_team
-      ? game.away_team
-      : player.teamAbbreviation === game.away_team
-        ? game.home_team
-        : null;
-  const onField =
-    possession !== null &&
-    (defense ? opponent !== null && possession === opponent : possession === player.teamAbbreviation);
   return {
     text: `${name} · ${onField ? 'ON FIELD' : 'SIDELINE'}`,
     tone: onField ? 'on_field' : 'sideline',
@@ -140,13 +132,25 @@ function betChipText(bet: BetChipSource): string {
   return `BET · ${bet.label}`;
 }
 
+/** Halftime and end of quarter. The card stays LIVE · YOUR GAME and every chip is SIDELINE. */
+export function isPeriodBreak(game: LiveGame): boolean {
+  return periodBreakLabel(game.quarter, game.time_remaining_sec, game.possession_team) !== null;
+}
+
 export function liveStakeChips(input: {
   game: LiveGame;
   players: readonly FantasyChipPlayer[];
   bets: readonly BetChipSource[];
+  /**
+   * `flagged_players` on this game's `/flags/current` row. A fantasy chip is ON FIELD only when
+   * that player is in the set. Ignored during a period break. Bets stay neutral either way.
+   */
+  activePlayerIds?: ReadonlySet<string>;
 }): { chips: LiveStakeChip[]; extraChips: number } {
+  const periodBreak = isPeriodBreak(input.game);
   const fantasy = input.players.map((player) => {
-    const chip = fantasyChipText(player, input.game);
+    const onField = !periodBreak && (input.activePlayerIds?.has(player.playerId) ?? false);
+    const chip = fantasyChipText(player, input.game, onField);
     return { key: `fantasy:${player.playerId}`, text: chip.text, tone: chip.tone };
   });
   const bets = input.bets.map((bet) => ({
@@ -177,10 +181,18 @@ export function liveCardClock(game: LiveGame): string {
   return liveClockLabel(game.quarter, game.time_remaining_sec, game.possession_team);
 }
 
+export interface LiveStakeFlag {
+  game_id: string;
+  priority_score: number;
+  opponent_label?: string;
+  /** Triggering fantasy stakes. Absent on older callers; an empty list marks no fantasy chip. */
+  flagged_players?: readonly Pick<CurrentFlag['flagged_players'][number], 'player_id'>[];
+}
+
 export function buildLiveStakeCards(input: {
   liveGames: readonly LiveGame[];
   stakeGameIds: ReadonlySet<string>;
-  activeFlags: readonly Pick<CurrentFlag, 'game_id' | 'priority_score' | 'opponent_label'>[];
+  activeFlags: readonly LiveStakeFlag[];
   playersByGameId: ReadonlyMap<string, readonly FantasyChipPlayer[]>;
   betsByGameId: ReadonlyMap<string, readonly BetChipSource[]>;
   watchByGameId: ReadonlyMap<
@@ -188,7 +200,12 @@ export function buildLiveStakeCards(input: {
     { broadcasts: readonly GameBroadcast[]; airings: readonly { network: string }[] }
   >;
 }): LiveStakeCardModel[] {
-  const ownActive = input.activeFlags.filter((flag) => flag.opponent_label === undefined);
+  const breakIds = new Set(
+    input.liveGames.filter((game) => isPeriodBreak(game)).map((game) => game.game_id),
+  );
+  const ownActive = input.activeFlags.filter(
+    (flag) => flag.opponent_label === undefined && !breakIds.has(flag.game_id),
+  );
   const ranked = rankLiveStakeCards({
     liveGames: input.liveGames,
     stakeGameIds: input.stakeGameIds,
@@ -197,12 +214,19 @@ export function buildLiveStakeCards(input: {
       priorityScore: flag.priority_score,
     })),
   });
+  const playersByFlag = new Map(
+    ownActive.map((flag) => [
+      flag.game_id,
+      new Set((flag.flagged_players ?? []).map((player) => player.player_id)),
+    ]),
+  );
   return ranked.map((row, index) => {
     const watch = input.watchByGameId.get(row.game.game_id);
     const chips = liveStakeChips({
       game: row.game,
       players: input.playersByGameId.get(row.game.game_id) ?? [],
       bets: input.betsByGameId.get(row.game.game_id) ?? [],
+      activePlayerIds: playersByFlag.get(row.game.game_id),
     });
     const eyebrow: LiveStakeEyebrow | null =
       index === 0 ? (row.active ? 'NOW ACTIVE' : 'LIVE · YOUR GAME') : null;

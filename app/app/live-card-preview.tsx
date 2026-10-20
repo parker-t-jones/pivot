@@ -5,8 +5,9 @@ import { LiveCardPreview, type LivePreviewState } from '../components/LiveCardPr
 const STATES = new Set<LivePreviewState>(['halftime', 'active', 'redzone', 'endq']);
 
 /**
- * Dev-only viewer for the captured Monday-night live card. Production builds redirect home.
- * Open `/live-card-preview?state=halftime` from a local `expo start --web`. No session required.
+ * Dev-only viewer. In a production bundle Metro substitutes an empty module for
+ * `LiveCardPreview` and the Monday-night fixture (app/metro.config.js), and this screen
+ * redirects home before that module is used. Open `/live-card-preview` from `expo start --web`.
  */
 export default function LiveCardPreviewScreen() {
   const params = useLocalSearchParams<{ state?: string }>();
