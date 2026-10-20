@@ -35,9 +35,21 @@ export function changePasswordAfterLock(input: {
   return 'cancelled';
 }
 
-export type PasswordChangeFailure = 'wrong-current' | 'weak' | 'network' | 'reauth' | 'other';
+export type PasswordChangeFailure =
+  | 'wrong-current'
+  | 'same'
+  | 'weak'
+  | 'network'
+  | 'reauth'
+  | 'other';
 
-export function classifyPasswordChangeError(message: string): PasswordChangeFailure {
+/**
+ * `code` is the GoTrue `error_code` when the client provides it (`same_password`).
+ * Same-password is checked before the weak-password phrases: GoTrue says
+ * "New password should be different from the old password.", and "should be"
+ * is also how it phrases the length rule.
+ */
+export function classifyPasswordChangeError(message: string, code?: string): PasswordChangeFailure {
   const lower = message.toLowerCase();
   if (
     lower.includes('network') ||
@@ -55,6 +67,9 @@ export function classifyPasswordChangeError(message: string): PasswordChangeFail
   ) {
     return 'wrong-current';
   }
+  if (code === 'same_password' || lower.includes('different from the old password')) {
+    return 'same';
+  }
   if (
     lower.includes('at least') ||
     lower.includes('weak') ||
@@ -68,6 +83,7 @@ export function classifyPasswordChangeError(message: string): PasswordChangeFail
 
 export function passwordChangeErrorMessage(failure: PasswordChangeFailure, raw: string): string {
   if (failure === 'wrong-current') return 'Current password is incorrect.';
+  if (failure === 'same') return 'New password must be different from your current password.';
   if (failure === 'weak') return 'Password must be at least 6 characters.';
   if (failure === 'network')
     return 'Could not reach the server. Check your connection and try again.';

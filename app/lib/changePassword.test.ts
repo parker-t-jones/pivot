@@ -53,6 +53,13 @@ describe('change password', () => {
     expect(passwordChangeErrorMessage('weak', 'Password should be at least 6 characters.')).toBe(
       'Password must be at least 6 characters.',
     );
+    expect(
+      classifyPasswordChangeError('New password should be different from the old password.'),
+    ).toBe('same');
+    expect(classifyPasswordChangeError('anything', 'same_password')).toBe('same');
+    expect(
+      passwordChangeErrorMessage('same', 'New password should be different from the old password.'),
+    ).toBe('New password must be different from your current password.');
     expect(classifyPasswordChangeError('Network request failed')).toBe('network');
     expect(passwordChangeErrorMessage('network', 'Network request failed')).toBe(
       'Could not reach the server. Check your connection and try again.',

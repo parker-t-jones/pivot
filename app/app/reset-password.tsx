@@ -7,6 +7,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { TextField } from '../components/TextField';
 import { useSession } from '../contexts/SessionContext';
 import { PASSWORD_FIELD_AUTOFILL } from '../lib/passwordAutofill';
+import { classifyPasswordChangeError, passwordChangeErrorMessage } from '../lib/changePassword';
 import {
   newPasswordIssue,
   newPasswordIssueMessage,
@@ -94,20 +95,8 @@ export default function ResetPasswordScreen() {
     const { error } = await supabase.auth.updateUser({ password });
     setIsSubmitting(false);
     if (error) {
-      const message = error.message.toLowerCase();
-      if (
-        message.includes('at least') ||
-        message.includes('weak') ||
-        message.includes('password should')
-      ) {
-        setErrorMessage(newPasswordIssueMessage('weak'));
-        return;
-      }
-      if (message.includes('network') || message.includes('fetch')) {
-        setErrorMessage('Could not reach the server. Check your connection and try again.');
-        return;
-      }
-      setErrorMessage(error.message);
+      const failure = classifyPasswordChangeError(error.message, error.code);
+      setErrorMessage(passwordChangeErrorMessage(failure, error.message));
       return;
     }
     const storage = browserStorage();

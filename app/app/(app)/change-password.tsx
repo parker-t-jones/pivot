@@ -74,8 +74,8 @@ export default function ChangePasswordScreen() {
     };
   }, []);
 
-  const fail = (message: string) => {
-    const failure = classifyPasswordChangeError(message);
+  const fail = (message: string, code?: string) => {
+    const failure = classifyPasswordChangeError(message, code);
     setErrorMessage(passwordChangeErrorMessage(failure, message));
   };
 
@@ -120,7 +120,7 @@ export default function ChangePasswordScreen() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
-        fail(error.message);
+        fail(error.message, error.code);
         return;
       }
       setPassword('');
