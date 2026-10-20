@@ -13,7 +13,9 @@ import { compactScoreLabel, liveClockLabel } from '../lib/gameDisplay';
 import type { LineupGameGroup } from '../lib/homeState';
 import type { LiveGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
+import { useOpenAddPick } from '../lib/useOpenAddPick';
 import { ManageLineupLink } from './HomeSegmentRow';
+import { TextButton } from './TextButton';
 import { StreamLinkControl } from './StreamLinkControl';
 
 /** Same 3pt stake stripe BoardRow uses — kept local so MY CARD doesn't import BoardRow styles. */
@@ -59,13 +61,17 @@ export function MyCardList({
     [liveGames],
   );
   const stakeCount = myCardGames.reduce((sum, game) => sum + game.stakes.length, 0);
+  const openAddPick = useOpenAddPick();
 
   const header = (
     <View style={styles.stakesHeader}>
       <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.stakesEyebrow}>
         {`YOUR STAKES · ${stakeCount}`}
       </Text>
-      <ManageLineupLink />
+      <View style={styles.headerActions}>
+        <TextButton label="Add a pick" onPress={openAddPick} size="smallStrong" />
+        <ManageLineupLink />
+      </View>
     </View>
   );
   const cards =
@@ -259,6 +265,11 @@ const styles = StyleSheet.create({
     fontSize: theme.type.eyebrow.size,
     fontWeight: theme.type.eyebrow.weight,
     letterSpacing: theme.type.eyebrow.letterSpacing,
+  },
+  headerActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.md,
   },
   stakesHeader: {
     alignItems: 'center',

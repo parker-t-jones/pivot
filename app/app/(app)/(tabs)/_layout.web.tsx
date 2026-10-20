@@ -1,8 +1,11 @@
 import { Tabs } from 'expo-router';
+import { useEffect, useSyncExternalStore } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { AddPickDrawer } from '../../../components/AddPickDrawer';
 import { AppTabBar } from '../../../components/AppTabBar';
 import { DesktopNav } from '../../../components/DesktopNav';
+import { closeAddPick, getAddPickOpen, subscribeAddPick } from '../../../lib/addPickDrawer';
 import { DESKTOP_MAX_WIDTH } from '../../../lib/desktopLayout';
 import { theme } from '../../../lib/theme';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
@@ -19,6 +22,11 @@ export default function TabsLayout() {
   const tier = useDesktopTier();
   const desktop = tier !== 'companion';
   const lineupTitle = lineupScreenMode(betsOn) === 'watchlist' ? 'Watchlist' : 'Lineup';
+  const addPickOpen = useSyncExternalStore(subscribeAddPick, getAddPickOpen, getAddPickOpen);
+
+  useEffect(() => {
+    if (tier !== 'wide' && addPickOpen) closeAddPick();
+  }, [addPickOpen, tier]);
 
   return (
     <View style={styles.stage}>
@@ -33,6 +41,7 @@ export default function TabsLayout() {
             <Tabs.Screen name="lineup" options={{ title: lineupTitle }} />
             <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
           </Tabs>
+          {tier === 'wide' && addPickOpen ? <AddPickDrawer /> : null}
         </View>
       </View>
     </View>

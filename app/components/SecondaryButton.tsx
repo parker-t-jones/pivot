@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -31,16 +32,19 @@ export function SecondaryButton({
   style,
 }: SecondaryButtonProps) {
   const isDisabled = disabled || loading;
+  const inactive = disabled && !loading;
 
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel ?? (caption ? `${label}, ${caption}` : label)}
       accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled }}
       disabled={isDisabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        isDisabled && styles.disabled,
+        inactive && styles.disabled,
+        inactive && Platform.OS === 'web' && styles.disabledCursor,
         pressed && !isDisabled && styles.pressed,
         style,
       ]}
@@ -49,8 +53,10 @@ export function SecondaryButton({
         <ActivityIndicator color={theme.colors.textPrimary} />
       ) : (
         <>
-          <Text style={styles.label}>{label}</Text>
-          {caption ? <Text style={styles.caption}>{caption}</Text> : null}
+          <Text style={[styles.label, inactive && styles.disabledLabel]}>{label}</Text>
+          {caption ? (
+            <Text style={[styles.caption, inactive && styles.disabledLabel]}>{caption}</Text>
+          ) : null}
         </>
       )}
     </Pressable>
@@ -72,7 +78,14 @@ const styles = StyleSheet.create({
     lineHeight: theme.type.caption.lineHeight,
   },
   disabled: {
-    opacity: theme.opacity.disabled,
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+  },
+  disabledCursor: {
+    cursor: 'not-allowed' as 'auto',
+  },
+  disabledLabel: {
+    color: theme.colors.textTertiary,
   },
   label: {
     color: theme.colors.textPrimary,

@@ -80,10 +80,12 @@ import {
   type GameScore,
 } from '../../../lib/stakeCards';
 import { formatStakeLabel, stakeTeams, type ManualStake } from '../../../lib/stakes';
+import { subscribeAddPickSaved } from '../../../lib/addPickDrawer';
 import { flushStakeUndo, takePendingStakeUndo } from '../../../lib/stakeUndoStore';
 import { supabase } from '../../../lib/supabase';
 import { deleteStake, deleteStakeKeepalive, fetchStakes } from '../../../lib/stakesClient';
 import { theme } from '../../../lib/theme';
+import { useOpenAddPick } from '../../../lib/useOpenAddPick';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
 import {
   browsedStarterCount,
@@ -203,6 +205,7 @@ export default function LineupScreen() {
   );
   const [filter, selectFilter] = useWatchlistFilter();
   const desktopTier = useDesktopTier();
+  const openAddPick = useOpenAddPick();
   const watchOpponentSave = useRef(false);
 
   useEffect(() => {
@@ -423,6 +426,22 @@ export default function LineupScreen() {
         .catch(() => setLiveGames([]));
     }, [betsOn, lineup?.week, nflWeek]),
   );
+
+  useEffect(() => {
+    return subscribeAddPickSaved(() => {
+      const week = lineup?.week ?? nflWeek;
+      if (!betsOn || week == null) return;
+      void fetchStakes(week)
+        .then((response) => {
+          setBets(response.stakes);
+          setStakesKnown(true);
+        })
+        .catch(() => {
+          setBets([]);
+          setStakesKnown(false);
+        });
+    });
+  }, [betsOn, lineup?.week, nflWeek]);
 
   const commitStakeRemoval = async (stake: ManualStake) => {
     await deleteStake(stake.id);
@@ -790,7 +809,7 @@ export default function LineupScreen() {
         liveGames={liveGames}
         now={now}
         onAddStake={() => {
-          router.push('/(app)/add-stake');
+          openAddPick();
         }}
         onFilter={selectFilter}
         onRefresh={() => {
@@ -859,7 +878,7 @@ export default function LineupScreen() {
           <WeekCard
             model={weekCard}
             onAddStake={() => {
-              router.push('/(app)/add-stake');
+              openAddPick();
             }}
             onOpponentToggle={() => {
               void onWatchOpponent(opponentStatus !== 'on');
@@ -1037,7 +1056,7 @@ export default function LineupScreen() {
             onAdd={
               betPrompt
                 ? () => {
-                    router.push('/(app)/add-stake');
+                    openAddPick();
                   }
                 : undefined
             }
@@ -1065,9 +1084,9 @@ export default function LineupScreen() {
               BETS
             </Text>
             <TextButton
-              label="Add a stake"
+              label="Add a pick"
               onPress={() => {
-                router.push('/(app)/add-stake');
+                openAddPick();
               }}
             />
             {bets.length === 0 ? (

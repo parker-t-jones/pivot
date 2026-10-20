@@ -132,7 +132,7 @@ export function WatchlistDesktop({
             </Text>
           </View>
           <View style={styles.addWrap}>
-            <PrimaryButton label="Add a stake" onPress={onAddStake} />
+            <PrimaryButton label="Add a pick" onPress={onAddStake} />
           </View>
         </View>
         <View style={styles.stripRow}>

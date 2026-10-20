@@ -15,7 +15,7 @@ interface WeekCardProps {
 }
 
 /**
- * Watchlist week card (PIVOT-STAKES-PLAN.md §11.4): a 2×2 grid, perforation, then Add a stake.
+ * Watchlist week card (PIVOT-STAKES-PLAN.md §11.4): a 2×2 grid, perforation, then Add a pick.
  */
 export function WeekCard({ model, onAddStake, onOpponentToggle }: WeekCardProps) {
   const { openUpgrade } = useUpgradeSheet();
@@ -32,7 +32,7 @@ export function WeekCard({ model, onAddStake, onOpponentToggle }: WeekCardProps)
       </View>
       <SlipPerforation style={styles.perforation} />
       <View style={styles.footer}>
-        <PrimaryButton label="Add a stake" onPress={onAddStake} />
+        <PrimaryButton label="Add a pick" onPress={onAddStake} />
       </View>
     </Slip>
   );

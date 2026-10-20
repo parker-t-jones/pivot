@@ -17,6 +17,7 @@ import { LoadingState } from '../../../components/LoadingState';
 import { NowActiveCard } from '../../../components/NowActiveCard';
 import { useSwitching } from '../../../contexts/SwitchingContext';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
+import { subscribeAddPickSaved } from '../../../lib/addPickDrawer';
 import { ApiRequestError, apiClient } from '../../../lib/apiClient';
 import {
   boardStakeRefs,
@@ -710,6 +711,14 @@ export default function HomeScreen() {
       void loadManualStakes(stakesWeek);
     }, [loadManualStakes, stakesBranch, stakesWeek]),
   );
+
+  useEffect(() => {
+    return subscribeAddPickSaved(() => {
+      if (stakesWeek === null) return;
+      if (stakesBranch === 'no_leagues' || stakesBranch === 'season_idle') return;
+      void loadManualStakes(stakesWeek);
+    });
+  }, [loadManualStakes, stakesBranch, stakesWeek]);
 
   const liveBets = useMemo<LiveBetEntry[]>(() => {
     const flags = [homeData?.flag, ...(homeData?.otherFlags ?? [])].filter(

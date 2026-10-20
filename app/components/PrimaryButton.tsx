@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -32,16 +33,19 @@ export function PrimaryButton({
   labelStyle,
 }: PrimaryButtonProps) {
   const isDisabled = disabled || loading;
+  const inactive = disabled && !loading;
 
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled }}
       disabled={isDisabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        isDisabled && styles.disabled,
+        inactive && styles.disabled,
+        inactive && Platform.OS === 'web' && styles.disabledCursor,
         pressed && !isDisabled && styles.pressed,
         style,
       ]}
@@ -53,7 +57,7 @@ export function PrimaryButton({
           adjustsFontSizeToFit
           minimumFontScale={0.85}
           numberOfLines={2}
-          style={[styles.label, labelStyle]}
+          style={[styles.label, labelStyle, inactive && styles.disabledLabel]}
         >
           {label}
         </Text>
@@ -70,7 +74,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   disabled: {
-    opacity: theme.opacity.disabled,
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderWidth: theme.effects.panelBorderWidth,
+  },
+  disabledCursor: {
+    cursor: 'not-allowed' as 'auto',
+  },
+  disabledLabel: {
+    color: theme.colors.textTertiary,
   },
   label: {
     color: theme.colors.onAccent,

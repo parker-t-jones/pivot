@@ -85,7 +85,7 @@ function removeButton(): Element {
 }
 
 function undoButton(): Element {
-  const button = [...document.querySelectorAll('[role="button"]')].find((node) =>
+  const button = Array.from(document.querySelectorAll('[role="button"]')).find((node) =>
     node.textContent?.includes('Undo'),
   );
   if (!button) throw new Error('Undo is not on the page');
