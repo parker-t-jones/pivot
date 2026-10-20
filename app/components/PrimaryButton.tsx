@@ -21,6 +21,8 @@ interface PrimaryButtonProps {
   style?: StyleProp<ViewStyle>;
   /** Optional label override (e.g. type-trial face on Now Active CTA). */
   labelStyle?: StyleProp<TextStyle>;
+  /** Filled amber, or dark fill with an amber border when no stake in the game is active. */
+  variant?: 'filled' | 'outlined';
 }
 
 export function PrimaryButton({
@@ -31,9 +33,11 @@ export function PrimaryButton({
   accessibilityLabel,
   style,
   labelStyle,
+  variant = 'filled',
 }: PrimaryButtonProps) {
   const isDisabled = disabled || loading;
   const inactive = disabled && !loading;
+  const outlined = variant === 'outlined';
 
   return (
     <Pressable
@@ -44,20 +48,26 @@ export function PrimaryButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
+        outlined && styles.outlined,
         inactive && styles.disabled,
         inactive && Platform.OS === 'web' && styles.disabledCursor,
-        pressed && !isDisabled && styles.pressed,
+        pressed && !isDisabled && (outlined ? styles.outlinedPressed : styles.pressed),
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={theme.colors.onAccent} />
+        <ActivityIndicator color={outlined ? theme.colors.accent : theme.colors.onAccent} />
       ) : (
         <Text
           adjustsFontSizeToFit
           minimumFontScale={0.85}
           numberOfLines={2}
-          style={[styles.label, labelStyle, inactive && styles.disabledLabel]}
+          style={[
+            styles.label,
+            outlined && styles.outlinedLabel,
+            labelStyle,
+            inactive && styles.disabledLabel,
+          ]}
         >
           {label}
         </Text>
@@ -83,6 +93,17 @@ const styles = StyleSheet.create({
   },
   disabledLabel: {
     color: theme.colors.textTertiary,
+  },
+  outlined: {
+    backgroundColor: theme.colors.background,
+    borderColor: theme.colors.accent,
+    borderWidth: 1,
+  },
+  outlinedLabel: {
+    color: theme.colors.accent,
+  },
+  outlinedPressed: {
+    backgroundColor: theme.colors.accentMuted,
   },
   label: {
     color: theme.colors.onAccent,

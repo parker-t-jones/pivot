@@ -6,9 +6,10 @@
  * Hex values are published team colors (nflverse `team_color` / `team_color2`).
  * Initials and colors only — no logos, wordmarks, or other artwork.
  *
- * The Now Active card does not read this module. Its score washes come from
- * `game_summary` `*_team_primary_color`, which the API fills from `teams.primary_color`.
+ * Live-card score washes read `scoreBlockWash` from this module. `game_summary`
+ * `*_team_primary_color` (filled from `teams.primary_color`) is not used for those blocks.
  */
+import { hexWithAlpha } from './gameDisplay';
 import { theme } from './theme';
 
 export const NFL_TEAM_ABBREVIATIONS = [
@@ -254,6 +255,32 @@ export function resolveBadgeColors(colors: TeamColors): BadgeColors {
 /** `resolveBadgeColors` for an abbreviation, including the neutral fallback. */
 export function badgeColors(abbr: string): BadgeColors {
   return resolveBadgeColors(getTeamColors(abbr));
+}
+
+/** Score-block wash on the live card. Same 32% treatment as the old Now Active blocks. */
+export const SCORE_WASH_ALPHA = 0.32;
+
+function blendHex(underlay: string, tint: string, alpha: number): string | null {
+  const base = parseHex(underlay);
+  const over = parseHex(tint);
+  if (base === null || over === null) return null;
+  const mix = (from: number, to: number) => Math.round(from * (1 - alpha) + to * alpha);
+  const channels = [mix(base[0], over[0]), mix(base[1], over[1]), mix(base[2], over[2])];
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * Team-color wash for a live-card score block, keyed by abbreviation (`teamColors`), not
+ * `teams.primary_color`. Returns the 32% wash when white text still clears 4.5:1 on the
+ * opaque equivalent over `underlay`. Otherwise returns `underlay` itself.
+ */
+export function scoreBlockWash(abbreviation: string, underlay: string): string {
+  const primary = getTeamColors(abbreviation).primary;
+  const blended = blendHex(underlay, primary, SCORE_WASH_ALPHA);
+  if (blended === null || contrastRatio(theme.colors.textPrimary, blended) < MIN_CONTRAST) {
+    return underlay;
+  }
+  return hexWithAlpha(primary, SCORE_WASH_ALPHA) ?? underlay;
 }
 
 /**

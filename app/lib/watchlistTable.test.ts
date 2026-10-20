@@ -141,7 +141,7 @@ describe('watchlistStatusLabel', () => {
         now,
         live: { game_id: 'g', score: { away: 3, home: 10 }, quarter: 2, time_remaining_sec: 0 },
       }).text,
-    ).toBe('3–10 · HALF');
+    ).toBe('3–10 · HALFTIME');
     expect(
       watchlistStatusLabel({
         bye: false,

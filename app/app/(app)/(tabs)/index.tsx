@@ -9,12 +9,11 @@ import { EmptyState } from '../../../components/EmptyState';
 import { ErrorState } from '../../../components/ErrorState';
 import type { FeaturedBetChip } from '../../../components/FeaturedStakeCard';
 import { HomeDashboard } from '../../../components/HomeDashboard';
-import { HomeLiveIdleCard } from '../../../components/HomeLiveIdleCard';
 import { HomeLiveView, LiveModeEyebrow } from '../../../components/HomeLiveView';
 import { HomePregameView, type PregameHero } from '../../../components/HomePregameView';
 import { IdleHomeCard } from '../../../components/IdleHomeCard';
 import { LoadingState } from '../../../components/LoadingState';
-import { NowActiveCard } from '../../../components/NowActiveCard';
+import { YourLiveGames } from '../../../components/LiveStakeGameCard';
 import { useSwitching } from '../../../contexts/SwitchingContext';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
 import { subscribeAddPickSaved } from '../../../lib/addPickDrawer';
@@ -39,6 +38,12 @@ import {
   type GameBroadcast,
   type GameBroadcastsResponse,
 } from '../../../lib/gameDisplay';
+import {
+  betChipsFromRefs,
+  buildLiveStakeCards,
+  playersFromLineupGroup,
+  type LiveStakeCardModel,
+} from '../../../lib/liveStakeCards';
 import {
   applyFlagEventToHome,
   applyGameStateToHome,
@@ -582,26 +587,33 @@ export default function HomeScreen() {
     }
   }, [refreshLeagues, loadHome]);
 
-  const onSwitch = useCallback(
-    (broadcast: GameBroadcast) => {
-      if (!homeData?.flag) return;
-      const { flag } = homeData;
-      const flaggedTeam = resolveFlaggedTeamDisplay(
-        flag.game,
-        flag.flagged_players,
-        homeData.playerTeamMap,
-      );
+  const onSwitchLive = useCallback(
+    (game: LiveGame) => {
+      const week = homeData?.weekGames.find((row) => row.game_id === game.game_id);
+      const cta = week ? watchCta(week.broadcasts, week.airings) : null;
+      const broadcast = cta?.kind === 'watch' ? cta.broadcast : null;
       switchToGame({
-        gameId: flag.game_id,
+        gameId: game.game_id,
+        deepLinkUrl: broadcast?.deep_link_url ?? null,
+        label: `${game.away_team} @ ${game.home_team}`,
+        awayNickname: game.away_team_name,
+        homeNickname: game.home_team_name,
+        broadcasts: week?.broadcasts,
+      });
+    },
+    [homeData, switchToGame],
+  );
+
+  const onSwitchBroadcast = useCallback(
+    (game: LiveGame, broadcast: GameBroadcast) => {
+      const week = homeData?.weekGames.find((row) => row.game_id === game.game_id);
+      switchToGame({
+        gameId: game.game_id,
         deepLinkUrl: broadcast.deep_link_url,
-        label: `${flag.game.away_team} @ ${flag.game.home_team}`,
-        awayNickname: flag.game.away_team_name,
-        homeNickname: flag.game.home_team_name,
-        teamName: flaggedTeam?.name,
-        teamColors: flaggedTeam
-          ? { primary: flaggedTeam.primaryColor, secondary: flaggedTeam.secondaryColor }
-          : null,
-        broadcasts: homeData.broadcasts,
+        label: `${game.away_team} @ ${game.home_team}`,
+        awayNickname: game.away_team_name,
+        homeNickname: game.home_team_name,
+        broadcasts: week?.broadcasts,
       });
     },
     [homeData, switchToGame],
@@ -767,14 +779,56 @@ export default function HomeScreen() {
   const branchKey = homeData?.branch.branch ?? null;
   const isLive = branchKey === 'state1' || branchKey === 'state2';
 
+  const liveStakeCardModels = useMemo((): LiveStakeCardModel[] => {
+    if (!homeData || !isLive) return [];
+    const ownFlags = [homeData.flag, ...homeData.otherFlags].filter(
+      (flag): flag is CurrentFlag => flag !== null && flag.opponent_label === undefined,
+    );
+    const liveById = new Map(homeData.liveGames.map((game) => [game.game_id, game]));
+    const liveGames = [...homeData.liveGames];
+    for (const flag of ownFlags) {
+      if (liveById.has(flag.game_id)) continue;
+      const week = homeData.weekGames.find((game) => game.game_id === flag.game_id);
+      liveGames.push({
+        game_id: flag.game_id,
+        status: 'in_progress',
+        scheduled_start: week?.scheduled_start ?? '',
+        ...flag.game,
+      });
+    }
+    const stakeGameIds = new Set<string>([
+      ...homeData.liveStakeGames.map((game) => game.game_id),
+      ...manualStakes.map((stake) => stake.game_id),
+      ...ownFlags.map((flag) => flag.game_id),
+    ]);
+    const playersByGameId = new Map(
+      homeData.lineupGroups.map((group) => [group.game.game_id, playersFromLineupGroup(group)]),
+    );
+    return buildLiveStakeCards({
+      liveGames,
+      stakeGameIds,
+      activeFlags: ownFlags,
+      playersByGameId,
+      betsByGameId: betChipsFromRefs(stakeRefs),
+      watchByGameId: new Map(
+        homeData.weekGames.map((game) => [
+          game.game_id,
+          { broadcasts: game.broadcasts, airings: game.airings },
+        ]),
+      ),
+    });
+  }, [homeData, isLive, manualStakes, stakeRefs]);
+
   const liveBoardSections = useMemo(() => {
     if (!homeData || !isLive) return [];
     const heroGameIds =
-      branchKey === 'state1'
-        ? homeData.flag
-          ? [homeData.flag.game_id]
-          : []
-        : homeData.liveStakeGames.map((game) => game.game_id);
+      liveStakeCardModels.length > 0
+        ? liveStakeCardModels.map((card) => card.game.game_id)
+        : branchKey === 'state1'
+          ? homeData.flag
+            ? [homeData.flag.game_id]
+            : []
+          : homeData.liveStakeGames.map((game) => game.game_id);
     return buildLiveBoard({
       weekGames: homeData.weekGames,
       liveGames: homeData.liveGames,
@@ -782,7 +836,7 @@ export default function HomeScreen() {
       heroGameIds,
       stakeRefs,
     });
-  }, [homeData, isLive, branchKey, stakeRefs]);
+  }, [homeData, isLive, branchKey, stakeRefs, liveStakeCardModels]);
 
   const { hero: pregameHero, countdownMs: pregameCountdownMs, nextKickoffAt } = useMemo(() => {
     const rows = flattenRows(boardGroups);
@@ -848,31 +902,26 @@ export default function HomeScreen() {
         return (
           <HomeLiveView
             hero={
-              homeData.branch.branch === 'state1' ? (
-                homeData.flag ? (
-                  <View style={[styles.state1, { opacity: flaggedCardsOpacity(homeData.liveFeedOk) }]}>
-                    <View style={styles.flareHero}>
-                      <NowActiveCard
-                        flag={homeData.flag}
-                        cta={watchCta(
-                          homeData.broadcasts,
-                          weekGameById.get(homeData.flag.game_id)?.airings ?? [],
-                        )}
-                        localRoute={localRouteOption(homeData.broadcasts)}
-                        playerTeamMap={homeData.playerTeamMap}
-                        onSwitch={onSwitch}
-                      />
-                    </View>
-                    <AlsoFlaggedRow
-                      flags={homeData.otherFlags}
-                      onSwitch={onSwitchOther}
-                      ctaFor={alsoFlaggedCta}
-                    />
-                  </View>
-                ) : null
-              ) : (
-                <HomeLiveIdleCard liveGames={homeData.liveStakeGames} />
-              )
+              <View style={{ opacity: flaggedCardsOpacity(homeData.liveFeedOk) }}>
+                <YourLiveGames
+                  cards={liveStakeCardModels}
+                  localRouteFor={(game) =>
+                    localRouteOption(weekGameById.get(game.game_id)?.broadcasts ?? [])
+                  }
+                  onSwitch={onSwitchLive}
+                  onSwitchLocal={onSwitchBroadcast}
+                />
+                {homeData.branch.branch === 'state1' ? (
+                  <AlsoFlaggedRow
+                    flags={homeData.otherFlags.filter(
+                      (flag) =>
+                        !liveStakeCardModels.some((card) => card.game.game_id === flag.game_id),
+                    )}
+                    onSwitch={onSwitchOther}
+                    ctaFor={alsoFlaggedCta}
+                  />
+                ) : null}
+              </View>
             }
             sections={liveBoardSections}
             betRefs={betRefs}

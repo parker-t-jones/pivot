@@ -10,6 +10,7 @@ import {
   badgeColors,
   contrastRatio,
   getTeamColors,
+  scoreBlockWash,
   initialsInk,
   resolveBadgeColors,
   teamName,
@@ -147,5 +148,13 @@ describe('teamName', () => {
     const abbreviation: NflTeamAbbreviation = 'JAX';
     expect(teamName(abbreviation)).toBe('Jaguars');
     expect(teamName('wsh')).toBeNull();
+  });
+});
+
+describe('scoreBlockWash', () => {
+  it('washes the catalog primary at 32% and ignores a different database color', () => {
+    const wash = scoreBlockWash('WAS', theme.colors.background);
+    expect(wash).toBe('rgba(90, 20, 20, 0.32)');
+    expect(wash).not.toContain('17, 17, 17');
   });
 });

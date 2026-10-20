@@ -4,6 +4,7 @@ import {
   compactScoreLabel,
   formatClock,
   liveClockLabel,
+  periodBreakLabel,
   pickPreferredBroadcast,
   quarterLabel,
   reasonLabel,
@@ -83,9 +84,19 @@ describe('liveClockLabel', () => {
     expect(liveClockLabel(4, 0)).toBe('Q4 0:00');
   });
 
-  it('reads the end of Q2 as HALF', () => {
-    expect(liveClockLabel(2, 0)).toBe('HALF');
+  it('reads a cleared Q2 clock as HALFTIME and a held ball as END Q2', () => {
+    expect(liveClockLabel(2, 0)).toBe('HALFTIME');
+    expect(liveClockLabel(2, 0, null)).toBe('HALFTIME');
+    expect(liveClockLabel(2, 0, 'SF')).toBe('END Q2');
     expect(liveClockLabel(2, 1)).toBe('Q2 0:01');
+  });
+
+  it('labels the end of Q1 and Q3, and leaves Q4 and OT on the clock', () => {
+    expect(periodBreakLabel(1, 0, 'SF')).toBe('END Q1');
+    expect(periodBreakLabel(3, 0, null)).toBe('END Q3');
+    expect(periodBreakLabel(4, 0, null)).toBeNull();
+    expect(liveClockLabel(4, 0)).toBe('Q4 0:00');
+    expect(liveClockLabel(5, 0)).toBe('OT 0:00');
   });
 
   it('labels overtime as OT', () => {
@@ -404,6 +415,12 @@ describe('gameClockLine', () => {
 
   it('appends down and distance when both are present', () => {
     expect(gameClockLine(2, 434, 1, 10)).toBe('Q2 · 7:14 · 1st & 10');
+  });
+
+  it('uses the same period labels as the stakes clock', () => {
+    expect(gameClockLine(2, 0, null, null, null)).toBe('HALFTIME');
+    expect(gameClockLine(1, 0, 1, 10, 'SF')).toBe('END Q1');
+    expect(gameClockLine(3, 156, 2, 5, 'SF')).toBe('Q3 · 2:36 · 2nd & 5');
   });
 });
 

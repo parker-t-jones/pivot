@@ -28,8 +28,21 @@ interface GameLinksContextValue {
 
 const GameLinksContext = createContext<GameLinksContextValue | undefined>(undefined);
 
-/** This week's saved stream URLs. Loads on mount and whenever the app comes to the foreground. */
-export function GameLinksProvider({ children }: PropsWithChildren) {
+/**
+ * This week's saved stream URLs. Loads on mount and whenever the app comes to the foreground.
+ * `fixtureLinks` is a dev-only stand-in for the live-card preview. Production ignores it.
+ */
+export function GameLinksProvider({
+  children,
+  fixtureLinks,
+}: PropsWithChildren<{ fixtureLinks?: readonly GameLink[] }>) {
+  if (__DEV__ && fixtureLinks) {
+    return <FixtureGameLinks links={fixtureLinks}>{children}</FixtureGameLinks>;
+  }
+  return <LiveGameLinksProvider>{children}</LiveGameLinksProvider>;
+}
+
+function LiveGameLinksProvider({ children }: PropsWithChildren) {
   const store = useMemo(
     () =>
       createGameLinksStore({
@@ -72,6 +85,26 @@ export function GameLinksProvider({ children }: PropsWithChildren) {
     [snapshot, store],
   );
 
+  return <GameLinksContext.Provider value={value}>{children}</GameLinksContext.Provider>;
+}
+
+function FixtureGameLinks({
+  children,
+  links,
+}: PropsWithChildren<{ links: readonly GameLink[] }>) {
+  const byId = useMemo(() => new Map(links.map((link) => [link.game_id, link])), [links]);
+  const value = useMemo<GameLinksContextValue>(
+    () => ({
+      available: true,
+      get: (gameId: string) => byId.get(gameId) ?? null,
+      save: async () => {
+        throw new Error('Preview links are read-only.');
+      },
+      remove: async () => undefined,
+      refetch: async () => undefined,
+    }),
+    [byId],
+  );
   return <GameLinksContext.Provider value={value}>{children}</GameLinksContext.Provider>;
 }
 

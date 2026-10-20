@@ -25,8 +25,10 @@ function RootNavigator() {
   const segments = useSegments();
   const router = useRouter();
   const inAuthGroup = segments[0] === '(auth)';
+  // The fixture preview has no session and no leagues. Production builds never take this branch.
+  const devPreview = __DEV__ && segments[0] === 'live-card-preview';
 
-  const shouldRedirectToAuth = !isLoading && !session && !inAuthGroup;
+  const shouldRedirectToAuth = !isLoading && !session && !inAuthGroup && !devPreview;
   const shouldRedirectToApp = !isLoading && !!session && inAuthGroup;
 
   useEffect(() => {
@@ -56,6 +58,7 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(app)" />
+      <Stack.Screen name="live-card-preview" />
     </Stack>
   );
 }

@@ -81,7 +81,9 @@ export function buildLiveBoard(input: {
       return {
         ...row,
         status: 'in_progress',
-        clock: live ? liveClockLabel(live.quarter, live.time_remaining_sec) : 'LIVE',
+        clock: live
+          ? liveClockLabel(live.quarter, live.time_remaining_sec, live.possession_team)
+          : 'LIVE',
         score: live ? compactScoreLabel(live.score) : null,
       };
     })

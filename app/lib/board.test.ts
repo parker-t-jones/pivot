@@ -434,7 +434,7 @@ describe('buildMyCardGames', () => {
       lineupGroup(night, [starter('p2', 'Bijan', 'Robinson', 'RB', 'ATL')]),
     ];
     const card = buildMyCardGames(rows, groups);
-    expect(card.map((g) => g.gameId)).toEqual(['g1', 'g2']);
+    expect(card.map((g) => g.gameId)).toEqual(['g2', 'g1']);
     expect(card.find((g) => g.gameId === 'g9')).toBeUndefined();
     expect(card.find((g) => g.gameId === 'g10')).toBeUndefined();
   });
@@ -446,7 +446,22 @@ describe('buildMyCardGames', () => {
       lineupGroup(early, [starter('p1', 'Rashee', 'Rice', 'WR', 'KC')]),
       lineupGroup(night, [starter('p2', 'Bijan', 'Robinson', 'RB', 'ATL')]),
     ];
-    expect(buildMyCardGames(rows, groups).map((g) => g.gameId)).toEqual(['g1', 'g2', 'g10']);
+    expect(buildMyCardGames(rows, groups).map((g) => g.gameId)).toEqual(['g2', 'g10', 'g1']);
+  });
+
+  it('puts a live game ahead of an earlier final and a later kickoff', () => {
+    const live = game('g3', '2026-09-22T00:15:00Z', {
+      status: 'in_progress',
+      home_team: 'SF',
+      away_team: 'WAS',
+    });
+    const groups = [
+      lineupGroup(night, [starter('p2', 'Bijan', 'Robinson', 'RB', 'ATL')]),
+      lineupGroup(early, [starter('p1', 'Rashee', 'Rice', 'WR', 'KC')]),
+      lineupGroup(live, [starter('p5', 'George', 'Kittle', 'TE', 'SF')]),
+    ];
+    const liveRows = flattenRows(buildBoardRows([early, night, live], stakeRefs));
+    expect(buildMyCardGames(liveRows, groups).map((g) => g.gameId)).toEqual(['g3', 'g2', 'g1']);
   });
 
   it('keeps a final game so MY CARD still lists games already played this week', () => {

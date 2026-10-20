@@ -297,8 +297,9 @@ function stakeLineLabel(
 }
 
 /**
- * The week's games the user has at least one rostered starter in, kickoff-ascending
- * (game-id tie-break). Includes finals so MY CARD keeps a record of games already played.
+ * The week's games the user has at least one rostered starter in. Live games first, then
+ * upcoming by kickoff, then finals. Game id breaks a kickoff tie. Includes finals so MY CARD
+ * keeps a record of games already played.
  *
  * Player lines come from `lineupGroups` as-is. That helper already dedupes by `player_id` across
  * leagues (`groupLineupByGame` / `listStakePlayersInGame`), so a player on two rosters appears
@@ -355,8 +356,19 @@ export function buildMyCardGames(
     });
   }
 
-  return games.sort((a, b) => {
-    const byKickoff = a.kickoff.getTime() - b.kickoff.getTime();
-    return byKickoff !== 0 ? byKickoff : compareGameIds(a.gameId, b.gameId);
-  });
+  return games.sort((a, b) => compareMyCardGames(a, b));
+}
+
+/** Live first, then games still to kick off, then finals. Kickoff, then game id, inside a group. */
+function myCardGroupRank(status: MyCardGame['status']): number {
+  if (status === 'in_progress') return 0;
+  if (status === 'final') return 2;
+  return 1;
+}
+
+export function compareMyCardGames(a: MyCardGame, b: MyCardGame): number {
+  const byGroup = myCardGroupRank(a.status) - myCardGroupRank(b.status);
+  if (byGroup !== 0) return byGroup;
+  const byKickoff = a.kickoff.getTime() - b.kickoff.getTime();
+  return byKickoff !== 0 ? byKickoff : compareGameIds(a.gameId, b.gameId);
 }

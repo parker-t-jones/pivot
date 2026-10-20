@@ -29,8 +29,10 @@ export interface FieldGaugeProps {
  * appends down/distance when present. When `yardsToEndzone` is null (kickoff / timeout) the
  * stick is omitted but the clock stays.
  *
- * When the ball is inside the red zone, the "RED ZONE" caption is omitted so it doesn't collide
- * with the field-position label sitting under the marker (the red fill itself is the geography cue).
+ * The "RED ZONE" label shows only when the ball is inside the opponent's 20
+ * (`fieldGaugeShowsRedZone`). It sits on the left of the caption row so it doesn't cover the
+ * field-position label under the marker. Otherwise the label is hidden. The red fill on the
+ * right of the stick stays as field geography.
  *
  * Border lives on the clipped `bar` (solid fill + overflow:hidden). Absolute children are nested
  * inside that bar so they can't paint over the stroke — RN absolute fills cover parent borders
@@ -45,14 +47,14 @@ export function FieldGauge({
   quarter,
   timeRemainingSec,
 }: FieldGaugeProps) {
-  const clock = gameClockLine(quarter, timeRemainingSec, down, distance);
+  const clock = gameClockLine(quarter, timeRemainingSec, down, distance, possessionTeam);
   const showStick = yardsToEndzone !== null;
   const markerPercent = showStick ? fieldGaugeMarkerPercent(yardsToEndzone) : 0;
   const position = showStick
     ? fieldPositionLabel(yardsToEndzone, possessionTeam, opponentTeam)
     : null;
   const showRedZoneCaption =
-    showStick && yardsToEndzone !== null && !fieldGaugeShowsRedZone(yardsToEndzone);
+    showStick && yardsToEndzone !== null && fieldGaugeShowsRedZone(yardsToEndzone);
 
   return (
     <View style={styles.wrap}>
@@ -193,11 +195,10 @@ const styles = StyleSheet.create({
     fontFamily: theme.type.ticker.fontFamily,
     fontSize: theme.type.ticker.size,
     fontWeight: theme.type.smallStrong.weight,
+    left: 0,
     letterSpacing: theme.type.ticker.letterSpacing,
     position: 'absolute',
-    right: 0,
-    textAlign: 'right',
-    width: `${FIELD_GAUGE_RED_ZONE_PERCENT}%`,
+    textAlign: 'left',
   },
   stick: {
     height: STICK_HEIGHT,

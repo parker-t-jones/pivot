@@ -130,15 +130,47 @@ export function quarterLabel(quarter: number): string {
 }
 
 /**
- * Live board clock, e.g. `"Q3 2:36"`, `"OT 7:12"`, `"HALF"`. `game_state` has no halftime status,
- * so the end of Q2 reads as HALF. No quarter yet → `"LIVE"`; no clock → the quarter alone.
+ * Halftime and end-of-quarter, from the fields `game_state` actually stores.
+ *
+ * There is no period-status field. ESPN's end of Q2 is play type 65 (`end_half`): quarter 2,
+ * clock 0, possession cleared. That is HALFTIME. An `end_period` play (end of Q1 or Q3, and Q2
+ * only before the half clears the ball) keeps possession and a 0:00 clock, which is `END Qn`.
+ * Pass `possessionTeam` when the caller has it. Omit it and quarter 2 at 0:00 stays HALFTIME.
+ * Overtime is not a break label — callers keep the `OT` clock.
  */
-export function liveClockLabel(quarter: number, timeRemainingSec: number | null): string {
+export function periodBreakLabel(
+  quarter: number,
+  timeRemainingSec: number | null,
+  possessionTeam?: string | null,
+): string | null {
+  if (!Number.isFinite(quarter) || quarter < 1 || quarter > 4) return null;
+  if (timeRemainingSec === null || !Number.isFinite(timeRemainingSec) || timeRemainingSec > 0) {
+    return null;
+  }
+  if (quarter === 2 && (possessionTeam === undefined || possessionTeam === null)) {
+    return 'HALFTIME';
+  }
+  if (quarter === 1 || quarter === 2 || quarter === 3) {
+    return `END Q${quarter}`;
+  }
+  return null;
+}
+
+/**
+ * Live board clock, e.g. `"Q3 2:36"`, `"OT 7:12"`, `"HALFTIME"`, `"END Q1"`.
+ * No quarter yet → `"LIVE"`; no clock → the quarter alone.
+ */
+export function liveClockLabel(
+  quarter: number,
+  timeRemainingSec: number | null,
+  possessionTeam?: string | null,
+): string {
+  const period = periodBreakLabel(quarter, timeRemainingSec, possessionTeam);
+  if (period) return period;
   if (!Number.isFinite(quarter) || quarter < 1) return 'LIVE';
   if (timeRemainingSec === null || !Number.isFinite(timeRemainingSec)) {
     return quarterLabel(quarter);
   }
-  if (quarter === 2 && timeRemainingSec <= 0) return 'HALF';
   return `${quarterLabel(quarter)} ${formatClock(timeRemainingSec)}`;
 }
 
@@ -296,13 +328,19 @@ export function opponentAbbreviation(
   return possessionTeam === homeTeam ? awayTeam : homeTeam;
 }
 
-/** Clock ticker, appending down/distance when both are present (`Q2 · 7:14 · 1st & 10`). */
+/**
+ * Clock ticker, appending down/distance when both are present (`Q2 · 7:14 · 1st & 10`).
+ * A period break replaces the line (`HALFTIME`, `END Q1`) so it matches `liveClockLabel`.
+ */
 export function gameClockLine(
   quarter: number,
   timeRemainingSec: number,
   down: number | null,
   distance: number | null,
+  possessionTeam?: string | null,
 ): string {
+  const period = periodBreakLabel(quarter, timeRemainingSec, possessionTeam);
+  if (period) return period;
   const clock = `${quarterLabel(quarter)} · ${formatClock(timeRemainingSec)}`;
   const downDistance = downDistanceLabel(down, distance);
   return downDistance ? `${clock} · ${downDistance}` : clock;

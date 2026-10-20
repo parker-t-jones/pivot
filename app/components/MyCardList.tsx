@@ -108,14 +108,14 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
     ? 'FINAL'
     : inProgress
       ? live
-        ? liveClockLabel(live.quarter, live.time_remaining_sec)
+        ? liveClockLabel(live.quarter, live.time_remaining_sec, live.possession_team)
         : 'LIVE'
       : formatKickoffTime(game.kickoff);
   const score = inProgress && live ? compactScoreLabel(live.score) : null;
   const matchup = `${game.awayTeamId} @ ${game.homeTeamId}`;
 
   return (
-    <View style={styles.cardBlock}>
+    <View style={[styles.cardBlock, isFinal && styles.cardBlockFinal]}>
       <View style={styles.cardHeader}>
         <View
           style={[
@@ -127,7 +127,6 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
         />
         <Text
           maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-          numberOfLines={1}
           style={[
             styles.cardTime,
             inProgress ? styles.cardTimeLive : null,
@@ -136,30 +135,23 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
         >
           {time}
         </Text>
-        <Text
-          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-          numberOfLines={1}
-          style={styles.cardMatchup}
-        >
+        <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.cardMatchup}>
           {matchup}
         </Text>
-        <Text
-          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-          numberOfLines={1}
-          style={styles.cardNetwork}
-        >
-          {game.network ?? ''}
-        </Text>
-        <StreamLinkControl away={game.awayTeamId} gameId={game.gameId} home={game.homeTeamId} />
         {score !== null ? (
           <Text
             maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-            numberOfLines={1}
             style={styles.cardScore}
           >
             {score}
           </Text>
         ) : null}
+      </View>
+      <View style={styles.linkRow}>
+        <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.cardNetwork}>
+          {game.network ?? ''}
+        </Text>
+        <StreamLinkControl away={game.awayTeamId} gameId={game.gameId} home={game.homeTeamId} />
       </View>
       {game.stakes.map((stake, index) => (
         <View
@@ -173,15 +165,9 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
           >
             {stake.tag}
           </Text>
-          <Text numberOfLines={1} style={styles.stakeLabel}>
-            {stake.label}
-          </Text>
+          <Text style={styles.stakeLabel}>{stake.label}</Text>
           {stake.value.length > 0 ? (
-            <Text
-              maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-              numberOfLines={1}
-              style={styles.stakeValue}
-            >
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.stakeValue}>
               {stake.value}
             </Text>
           ) : null}
@@ -200,26 +186,38 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingBottom: theme.spacing.sm,
   },
+  cardBlockFinal: {
+    opacity: theme.opacity.disabled,
+  },
   cardHeader: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     minHeight: 40,
     paddingTop: theme.spacing.sm,
   },
   cardMatchup: {
     color: theme.colors.textPrimary,
-    flexShrink: 1,
+    flexGrow: 1,
+    flexShrink: 0,
     fontFamily: fonts.monoMedium,
     fontSize: theme.type.ticker.size,
     letterSpacing: theme.type.ticker.letterSpacing,
   },
   cardNetwork: {
     color: theme.colors.textTertiary,
+    flexShrink: 0,
     fontFamily: fonts.monoMedium,
     fontSize: theme.type.eyebrow.size,
-    marginLeft: theme.spacing.md,
     marginRight: theme.spacing.md,
     width: NETWORK_COLUMN_WIDTH,
+  },
+  linkRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    minWidth: 0,
+    paddingLeft: STRIPE_WIDTH + theme.spacing.md,
+    paddingRight: theme.spacing.md,
   },
   cardScore: {
     color: theme.colors.textPrimary,
@@ -255,9 +253,11 @@ const styles = StyleSheet.create({
   },
   stakeLabel: {
     color: theme.colors.textPrimary,
+    flexGrow: 1,
     flexShrink: 1,
     fontSize: theme.type.body.size,
     lineHeight: theme.type.body.lineHeight,
+    minWidth: 0,
   },
   stakesEyebrow: {
     color: theme.colors.brass,
@@ -283,6 +283,7 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.rowDivider,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
