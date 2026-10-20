@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   axisPercent,
+  coverOutcomeLabel,
   rosterStripInputs,
   rosterStripModel,
   spreadLineModel,
@@ -41,7 +42,7 @@ describe('spreadLineModel', () => {
     expect(low.marker).toEqual({ position: -14, clamped: true, arrow: 'low' });
   });
 
-  it('grades a final as covered, pushed, or lost', () => {
+  it('grades a final as covered, a tie, or lost', () => {
     expect(
       spreadLineModel({
         line: -3.5,
@@ -66,6 +67,9 @@ describe('spreadLineModel', () => {
         score: { home: 17, away: 20 },
       }).outcome,
     ).toBe('lost');
+    expect(coverOutcomeLabel('covered')).toBe('Covered');
+    expect(coverOutcomeLabel('pushed')).toBe('Tie');
+    expect(coverOutcomeLabel('lost')).toBe('Lost');
   });
 
   it('stays on the line when there is no live score', () => {

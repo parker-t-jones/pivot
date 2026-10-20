@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import {
   axisPercent,
+  coverOutcomeLabel,
   type CoverOutcome,
   type LineScaleModel,
   type RosterStripSegment,
@@ -149,7 +150,7 @@ function LineScale({ model, axisLabel }: { model: LineScaleModel; axisLabel: str
 }
 
 function OutcomeTag({ outcome }: { outcome: CoverOutcome }) {
-  const label = outcome === 'covered' ? 'Covered' : outcome === 'pushed' ? 'Pushed' : 'Lost';
+  const label = coverOutcomeLabel(outcome);
   return (
     <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} numberOfLines={1} style={styles.tag}>
       {label}

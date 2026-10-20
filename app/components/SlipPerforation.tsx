@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,24 +9,25 @@ import {
 
 import { theme } from '../lib/theme';
 
-/** Enough dashes to fill a phone-width ticket; the row clips the extras. */
-const DASH_COUNT = 48;
 const DASH_WIDTH = 6;
 const DASH_GAP = 4;
 const NOTCH = 14;
+/** Covers a wide window before the row has been measured. Extras clip. */
+const FALLBACK_WIDTH = 1920;
 
 /** How many dashes cover `width`, including a clip at the far end. */
 export function dashCountForWidth(width: number): number {
-  if (width <= 0) return DASH_COUNT;
-  return Math.max(1, Math.ceil((width + DASH_GAP) / (DASH_WIDTH + DASH_GAP)));
+  const target = width > 0 ? width : FALLBACK_WIDTH;
+  return Math.max(1, Math.ceil((target + DASH_GAP) / (DASH_WIDTH + DASH_GAP)));
 }
 
 interface SlipPerforationProps {
   style?: StyleProp<ViewStyle>;
   /**
-   * `ticket` is the full-width WeekCard cut (notches hang off the ends).
-   * `card` is the bottom edge of a bounded card: no negative offsets, notches
-   * stay inside the card, and the dashes replace a bottom border.
+   * `ticket` is the WeekCard cut: dashes fill the card, and the notches are
+   * side cut-outs centered on that line.
+   * `card` is the bottom edge of a bounded card: notches stay inside, and the
+   * dashes replace a bottom border.
    */
   edge?: 'ticket' | 'card';
 }
@@ -35,15 +36,38 @@ function dashes(count: number): ReactElement[] {
   return Array.from({ length: count }, (_, index) => <View key={index} style={styles.dash} />);
 }
 
-/** Card-edge dashes. The row is the full middle width; the count follows that width. */
-function CardDashRule() {
-  const [count, setCount] = useState(DASH_COUNT);
-  const onLayout = (event: LayoutChangeEvent) => {
-    const next = dashCountForWidth(event.nativeEvent.layout.width);
+/** Dashes that follow the measured width of this row. */
+function DashRule({ testID, style }: { testID: string; style?: StyleProp<ViewStyle> }) {
+  const ref = useRef<View>(null);
+  const [count, setCount] = useState(() => dashCountForWidth(FALLBACK_WIDTH));
+  const sync = (width: number) => {
+    const next = dashCountForWidth(width);
     setCount((current) => (current === next ? current : next));
   };
+  const onLayout = (event: LayoutChangeEvent) => {
+    sync(event.nativeEvent.layout.width);
+  };
+  useLayoutEffect(() => {
+    const node = ref.current as unknown as HTMLElement | null;
+    if (node == null || typeof node.offsetWidth !== 'number') return;
+    const update = () => sync(node.offsetWidth);
+    update();
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => update());
+    observer?.observe(node);
+    const onResize = () => update();
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', onResize);
+    }
+    return () => {
+      observer?.disconnect();
+      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('resize', onResize);
+      }
+    };
+  }, []);
   return (
-    <View onLayout={onLayout} style={cardStyles.rule} testID="slip-perforation-dashes">
+    <View ref={ref} onLayout={onLayout} style={[styles.rule, style]} testID={testID}>
       {dashes(count)}
     </View>
   );
@@ -58,22 +82,22 @@ export function SlipPerforation({ style, edge = 'ticket' }: SlipPerforationProps
   if (edge === 'card') {
     return (
       <View style={[cardStyles.row, style]} testID="slip-perforation-card">
-        <View style={[cardStyles.notch, cardStyles.notchLeft]} />
+        <View style={[styles.notch, styles.notchLeft]} />
         <View style={cardStyles.middle}>
           <View style={cardStyles.above} />
-          <CardDashRule />
+          <DashRule style={cardStyles.rule} testID="slip-perforation-dashes" />
           <View style={cardStyles.below} />
         </View>
-        <View style={[cardStyles.notch, cardStyles.notchRight]} />
+        <View style={[styles.notch, styles.notchRight]} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.row, style]}>
-      <View style={[styles.notch, styles.notchStart]} />
-      <View style={styles.rule}>{dashes(DASH_COUNT)}</View>
-      <View style={[styles.notch, styles.notchEnd]} />
+    <View style={[styles.row, style]} testID="slip-perforation">
+      <View style={[styles.notch, styles.notchLeft]} />
+      <DashRule testID="slip-perforation-dashes" />
+      <View style={[styles.notch, styles.notchRight]} />
     </View>
   );
 }
@@ -83,48 +107,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.border,
     height: StyleSheet.hairlineWidth,
     width: DASH_WIDTH,
-  },
-  notch: {
-    backgroundColor: theme.colors.background,
-    borderRadius: NOTCH / 2,
-    height: NOTCH,
-    position: 'absolute',
-    width: NOTCH,
-  },
-  notchEnd: {
-    right: -NOTCH / 2,
-  },
-  notchStart: {
-    left: -NOTCH / 2,
-  },
-  row: {
-    alignItems: 'center',
-    height: NOTCH,
-    justifyContent: 'center',
-    overflow: 'visible',
-  },
-  rule: {
-    alignItems: 'center',
-    flex: 1,
-    flexDirection: 'row',
-    gap: DASH_GAP,
-    overflow: 'hidden',
-  },
-});
-
-const cardStyles = StyleSheet.create({
-  above: {
-    backgroundColor: theme.colors.surface,
-    flex: 1,
-  },
-  below: {
-    backgroundColor: theme.colors.background,
-    flex: 1,
-  },
-  middle: {
-    flex: 1,
-    flexDirection: 'column',
-    minWidth: 0,
   },
   notch: {
     backgroundColor: theme.colors.background,
@@ -147,6 +129,7 @@ const cardStyles = StyleSheet.create({
     borderTopWidth: theme.effects.panelBorderWidth,
   },
   row: {
+    alignItems: 'center',
     alignSelf: 'stretch',
     flexDirection: 'row',
     height: NOTCH,
@@ -155,11 +138,38 @@ const cardStyles = StyleSheet.create({
   },
   rule: {
     alignItems: 'center',
-    alignSelf: 'stretch',
+    flex: 1,
     flexDirection: 'row',
     gap: DASH_GAP,
     height: StyleSheet.hairlineWidth,
+    minWidth: 0,
     overflow: 'hidden',
+  },
+});
+
+const cardStyles = StyleSheet.create({
+  above: {
+    backgroundColor: theme.colors.surface,
+    flex: 1,
+  },
+  below: {
+    backgroundColor: theme.colors.background,
+    flex: 1,
+  },
+  middle: {
+    flex: 1,
+    flexDirection: 'column',
+    minWidth: 0,
+  },
+  row: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    height: NOTCH,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  rule: {
+    flex: 0,
     width: '100%',
   },
 });

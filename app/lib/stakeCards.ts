@@ -14,6 +14,13 @@ export interface GameScore {
 
 export type CardPhase = 'line-only' | 'live' | 'final';
 export type CoverOutcome = 'covered' | 'pushed' | 'lost';
+
+/** Settled-card label. A tie is not called a push, which is a notification. */
+export function coverOutcomeLabel(outcome: CoverOutcome): string {
+  if (outcome === 'covered') return 'Covered';
+  if (outcome === 'pushed') return 'Tie';
+  return 'Lost';
+}
 export type MarkerArrow = 'low' | 'high' | null;
 
 export interface AxisMarker {

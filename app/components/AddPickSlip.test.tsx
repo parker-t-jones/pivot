@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { theme } from '../lib/theme';
 import { AddPickSlip } from './AddPickSlip';
-import { dashCountForWidth } from './SlipPerforation';
+import { SlipPerforation, dashCountForWidth } from './SlipPerforation';
 
 vi.mock('react-native', () => import('react-native-web'));
 
@@ -117,6 +117,42 @@ describe('add pick slip edge', () => {
     const marks = rule.children.length;
     const span = marks * 6 + Math.max(0, marks - 1) * 4;
     expect(span).toBeGreaterThanOrEqual(900);
+  });
+
+  it('stretches the ticket dash row to the container width', () => {
+    host.style.width = '1500px';
+    act(() => {
+      root.render(<SlipPerforation />);
+    });
+
+    const container = host.querySelector('[data-testid="slip-perforation"]');
+    const rule = host.querySelector('[data-testid="slip-perforation-dashes"]');
+    if (!(container instanceof HTMLElement) || !(rule instanceof HTMLElement)) {
+      throw new Error('ticket dash row missing');
+    }
+
+    expect(getComputedStyle(container).width).toBe('100%');
+    expect(
+      getComputedStyle(container).overflowX === 'hidden' ||
+        getComputedStyle(container).overflow === 'hidden',
+    ).toBe(true);
+    for (const node of [container, ...Array.from(container.querySelectorAll<HTMLElement>('*'))]) {
+      const style = getComputedStyle(node);
+      expect(notNegative(style.marginLeft)).toBe(true);
+      expect(notNegative(style.marginRight)).toBe(true);
+      expect(notNegative(style.left)).toBe(true);
+      expect(notNegative(style.right)).toBe(true);
+    }
+
+    const handler = (rule as HTMLElement & { __reactLayoutHandler?: (event: unknown) => void })
+      .__reactLayoutHandler;
+    expect(typeof handler).toBe('function');
+    act(() => {
+      handler?.({ nativeEvent: { layout: { x: 0, y: 0, width: 1500, height: 1 } } });
+    });
+    const marks = rule.children.length;
+    const span = marks * 6 + Math.max(0, marks - 1) * 4;
+    expect(span).toBeGreaterThanOrEqual(1500);
   });
 });
 
