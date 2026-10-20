@@ -1,7 +1,7 @@
 import type { ManualStakeType } from './stakes';
 
 export type PickKind = 'SPREAD' | 'TOTAL' | 'MONEYLINE' | 'SURVIVOR';
-export type PickStep = 'type' | 'game' | 'team' | 'line' | 'confirm';
+export type PickStep = 'type' | 'game' | 'line' | 'confirm';
 
 export const PICK_KIND_COPY: readonly {
   kind: PickKind;
@@ -47,11 +47,13 @@ export function pickNeedsLine(kind: PickKind): boolean {
   return kind === 'SPREAD' || kind === 'TOTAL';
 }
 
-/** Spread is the long path. Before a type is chosen the eyebrow does not show a total. */
+/**
+ * The side is chosen on the game row, so there is no team step.
+ * Spread is the long path. Before a type is chosen the eyebrow does not show a total.
+ */
 export function pickSteps(kind: PickKind | null): readonly PickStep[] {
-  if (kind === 'TOTAL') return ['type', 'game', 'line', 'confirm'];
-  if (kind === 'MONEYLINE' || kind === 'SURVIVOR') return ['type', 'game', 'team', 'confirm'];
-  return ['type', 'game', 'team', 'line', 'confirm'];
+  if (kind === 'MONEYLINE' || kind === 'SURVIVOR') return ['type', 'game', 'confirm'];
+  return ['type', 'game', 'line', 'confirm'];
 }
 
 export function addPickEyebrow(kind: PickKind | null, step: PickStep): string {

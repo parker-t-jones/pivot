@@ -1,8 +1,9 @@
 import { networkLabelFromAirings } from '@pivot/shared/broadcast';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
 import {
   PICK_KIND_COPY,
   addPickEyebrow,
@@ -15,23 +16,42 @@ import {
   type PickStep,
 } from '../lib/addPickFlow';
 import { notifyAddPickSaved } from '../lib/addPickDrawer';
-import { AddPickSlip } from './AddPickSlip';
-import { AddPickTypeStep } from './AddPickTypeStep';
-import { ErrorState } from './ErrorState';
-import { ListRow } from './ListRow';
-import { LoadingState } from './LoadingState';
-import { PrimaryButton } from './PrimaryButton';
-import { TextButton } from './TextButton';
-import { TextField } from './TextField';
-import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
+import {
+  gameTracksKind,
+  groupPickGames,
+  pickGameAvailability,
+  pickGameContextLine,
+  starterCountsByGame,
+} from '../lib/addPickGames';
+import {
+  addPickReviewNote,
+  lineBounds,
+  spreadLineInput,
+  spreadReadout,
+  stepMagnitude,
+  totalReadout,
+  type SpreadRole,
+  type TotalRole,
+} from '../lib/addPickLine';
+import { resolveActiveLeagueId } from '../lib/activeLeague';
+import { fetchLeagues, fetchLineup, type LineupSlot } from '../lib/leagues';
+import { fetchMe } from '../lib/me';
 import { fetchNflState } from '../lib/nflState';
 import { fetchGamesWeek, type ScheduleGame } from '../lib/schedule';
-import { buildStakeRequest, formatStakeLabel, validateLine } from '../lib/stakes';
+import { buildStakeRequest, validateLine, type ManualStake } from '../lib/stakes';
 import { createStake, fetchStakes, stakeRequestError } from '../lib/stakesClient';
+import { teamName } from '../lib/teamColors';
 import { theme } from '../lib/theme';
 import { promptUpgradeForCapError } from '../lib/upgradePrompt';
 import { FREE_BET_ALLOWANCE, freeBetCount } from '../lib/weekCardModel';
-import { fetchMe } from '../lib/me';
+import { AddPickGameList, type AddPickGameGroupModel } from './AddPickGameList';
+import { AddPickLineEntry } from './AddPickLineEntry';
+import { AddPickReview } from './AddPickReview';
+import { AddPickSlip } from './AddPickSlip';
+import { AddPickTypeStep } from './AddPickTypeStep';
+import { ErrorState } from './ErrorState';
+import { LoadingState } from './LoadingState';
+import { TextButton } from './TextButton';
 
 interface Allowance {
   isPro: boolean;
@@ -42,6 +62,9 @@ interface Allowance {
 /**
  * The add-a-pick steps. Phone renders this full screen. The wide desktop drawer
  * renders the same tree over the current tab.
+ *
+ * Favorite and underdog start unset, so Continue stays off until both the
+ * segment and a valid number are set.
  */
 export function AddPickFlow({
   onDismiss,
@@ -55,17 +78,19 @@ export function AddPickFlow({
   const { openUpgrade } = useUpgradeSheet();
   const [step, setStep] = useState<PickStep>('type');
   const [kind, setKind] = useState<PickKind | null>(null);
-  const [totalSide, setTotalSide] = useState<'TOTAL_OVER' | 'TOTAL_UNDER'>('TOTAL_OVER');
+  const [spreadRole, setSpreadRole] = useState<SpreadRole | null>(null);
+  const [totalRole, setTotalRole] = useState<TotalRole | null>(null);
   const [games, setGames] = useState<ScheduleGame[]>([]);
   const [gamesError, setGamesError] = useState<string | null>(null);
   const [loadingGames, setLoadingGames] = useState(true);
   const [game, setGame] = useState<ScheduleGame | null>(null);
   const [teamId, setTeamId] = useState<string | null>(null);
   const [lineText, setLineText] = useState('');
-  const [spreadNegative, setSpreadNegative] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
+  const [stakes, setStakes] = useState<ManualStake[]>([]);
+  const [slots, setSlots] = useState<LineupSlot[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +100,7 @@ export function AddPickFlow({
       try {
         const nfl = await fetchNflState();
         const slate = await fetchGamesWeek(nfl.week);
-        if (!cancelled) setGames(slate.games.filter((row) => row.status !== 'final'));
+        if (!cancelled) setGames(slate.games);
       } catch {
         if (!cancelled) setGamesError('Could not load this week’s games.');
       } finally {
@@ -92,13 +117,22 @@ export function AddPickFlow({
     void (async () => {
       try {
         const [me, nfl] = await Promise.all([fetchMe(), fetchNflState()]);
-        const stakes = await fetchStakes(nfl.week);
+        const [stakePage, leagues] = await Promise.all([fetchStakes(nfl.week), fetchLeagues()]);
         if (cancelled) return;
         const isPro = me.subscription_tier === 'pro';
+        setStakes(stakePage.stakes);
         setAllowance({
           isPro,
-          freeLeft: isPro ? null : Math.max(0, FREE_BET_ALLOWANCE - freeBetCount(stakes.stakes)),
+          freeLeft: isPro ? null : Math.max(0, FREE_BET_ALLOWANCE - freeBetCount(stakePage.stakes)),
         });
+        const leagueId = resolveActiveLeagueId(leagues, me.preferences.watchedLeagueIds);
+        if (leagueId == null) return;
+        try {
+          const lineup = await fetchLineup(leagueId, nfl.week);
+          if (!cancelled) setSlots(lineup.slots);
+        } catch {
+          if (!cancelled) setSlots([]);
+        }
       } catch {
         if (!cancelled) setAllowance({ isPro: false, freeLeft: null });
       }
@@ -115,7 +149,7 @@ export function AddPickFlow({
       try {
         const nfl = await fetchNflState();
         const slate = await fetchGamesWeek(nfl.week);
-        setGames(slate.games.filter((row) => row.status !== 'final'));
+        setGames(slate.games);
       } catch {
         setGamesError('Could not load this week’s games.');
       } finally {
@@ -124,29 +158,28 @@ export function AddPickFlow({
     })();
   };
 
+  const starterCounts = useMemo(() => starterCountsByGame(slots, games), [slots, games]);
+
+  const totalSide = totalRole === 'under' ? 'TOTAL_UNDER' : 'TOTAL_OVER';
   const type = kind === null ? null : stakeTypeForKind(kind, totalSide);
+  const lineReady =
+    kind === 'SPREAD' ? spreadRole != null : kind === 'TOTAL' ? totalRole != null : false;
   const lineInput =
-    kind === 'SPREAD' ? `${spreadNegative ? '-' : '+'}${lineText.trim()}` : lineText.trim();
+    kind === 'SPREAD' && spreadRole != null
+      ? spreadLineInput(spreadRole, lineText)
+      : lineText.trim();
   const lineCheck =
-    type !== null && kind !== null && pickNeedsLine(kind) ? validateLine(type, lineInput) : null;
+    type !== null && kind !== null && pickNeedsLine(kind) && lineReady
+      ? validateLine(type, lineInput)
+      : null;
 
   const goBack = () => {
     setFormError(null);
     if (step === 'confirm') {
-      setStep(
-        kind !== null && pickNeedsLine(kind)
-          ? 'line'
-          : kind !== null && pickNeedsTeam(kind)
-            ? 'team'
-            : 'game',
-      );
+      setStep(kind !== null && pickNeedsLine(kind) ? 'line' : 'game');
       return;
     }
     if (step === 'line') {
-      setStep(kind !== null && pickNeedsTeam(kind) ? 'team' : 'game');
-      return;
-    }
-    if (step === 'team') {
       setStep('game');
       return;
     }
@@ -157,28 +190,41 @@ export function AddPickFlow({
     onDismiss();
   };
 
+  const resetLine = () => {
+    setLineText('');
+    setSpreadRole(null);
+    setTotalRole(null);
+  };
+
   const chooseKind = (next: PickKind) => {
     setKind(next);
     setGame(null);
     setTeamId(null);
-    setLineText('');
+    resetLine();
     setFormError(null);
     setStep('game');
   };
 
-  const chooseGame = (next: ScheduleGame) => {
+  const chooseSide = (gameId: string, nextTeamId: string) => {
+    const next = games.find((row) => row.game_id === gameId);
+    if (!next || pickGameAvailability(next.status) !== 'open') return;
+    const same = game?.game_id === next.game_id && teamId === nextTeamId;
     setGame(next);
-    setTeamId(null);
-    setFormError(null);
-    if (kind !== null && pickNeedsTeam(kind)) setStep('team');
-    else if (kind !== null && pickNeedsLine(kind)) setStep('line');
-    else setStep('confirm');
-  };
-
-  const chooseTeam = (id: string) => {
-    setTeamId(id);
+    setTeamId(nextTeamId);
+    if (!same) resetLine();
     setFormError(null);
     setStep(kind !== null && pickNeedsLine(kind) ? 'line' : 'confirm');
+  };
+
+  const chooseGame = (gameId: string) => {
+    const next = games.find((row) => row.game_id === gameId);
+    if (!next || pickGameAvailability(next.status) !== 'open') return;
+    const same = game?.game_id === next.game_id;
+    setGame(next);
+    setTeamId(null);
+    if (!same) resetLine();
+    setFormError(null);
+    setStep('line');
   };
 
   const abbreviation =
@@ -190,21 +236,22 @@ export function AddPickFlow({
           ? game.away_team
           : '';
 
-  const confirmLabel =
-    type === null
-      ? ''
-      : formatStakeLabel(
-          {
-            subject: { type: kind !== null && pickNeedsTeam(kind) ? 'TEAM' : 'GAME', teamId },
-            condition: {
-              type,
-              ...(lineCheck && lineCheck.ok && lineCheck.line !== undefined
-                ? { line: lineCheck.line }
-                : {}),
-            },
-          },
-          teamId && abbreviation ? [{ teamId, abbreviation }] : [],
-        );
+  const nickname =
+    teamName(abbreviation) ??
+    (game && teamId === game.home_team_id
+      ? game.home_team_name
+      : game && teamId === game.away_team_id
+        ? game.away_team_name
+        : abbreviation);
+
+  const readout =
+    lineCheck?.ok === true && lineCheck.line !== undefined
+      ? kind === 'SPREAD' && spreadRole != null && nickname.length > 0
+        ? spreadReadout(nickname, spreadRole, Math.abs(lineCheck.line))
+        : kind === 'TOTAL' && totalRole != null
+          ? totalReadout(totalRole, lineCheck.line)
+          : null
+      : null;
 
   const kindLabel = PICK_KIND_COPY.find((option) => option.kind === kind)?.label ?? null;
   const pickText = addPickSlipPickText({
@@ -224,6 +271,27 @@ export function AddPickFlow({
           .join(' · '),
       }
     : null;
+
+  const groups: AddPickGameGroupModel[] =
+    kind == null
+      ? []
+      : groupPickGames(games).map((group) => ({
+          label: group.label,
+          rows: group.games.map((row) => ({
+            gameId: row.game_id,
+            away: row.away_team,
+            home: row.home_team,
+            awayTeamId: row.away_team_id ?? null,
+            homeTeamId: row.home_team_id ?? null,
+            detail: gameSubtitle(row),
+            availability: pickGameAvailability(row.status),
+            context: pickGameContextLine(
+              starterCounts.get(row.game_id) ?? 0,
+              gameTracksKind(stakes, row.game_id, kind),
+              kind,
+            ),
+          })),
+        }));
 
   const submit = async () => {
     if (type === null || game === null || kind === null) return;
@@ -260,6 +328,8 @@ export function AddPickFlow({
       setSaving(false);
     }
   };
+
+  const canContinue = lineCheck?.ok === true && lineCheck.line !== undefined;
 
   return (
     <View style={styles.screen}>
@@ -313,91 +383,51 @@ export function AddPickFlow({
             <LoadingState message="Loading games…" />
           ) : gamesError ? (
             <ErrorState message={gamesError} onRetry={reloadGames} />
-          ) : games.length === 0 ? (
-            <Text style={styles.muted}>No open games this week.</Text>
+          ) : groups.length === 0 ? (
+            <Text style={styles.muted}>No games this week.</Text>
           ) : (
-            <View style={styles.stack}>
-              {games.map((row) => (
-                <ListRow
-                  key={row.game_id}
-                  onPress={() => chooseGame(row)}
-                  subtitle={gameSubtitle(row)}
-                  title={`${row.away_team} @ ${row.home_team}`}
-                />
-              ))}
-            </View>
+            <AddPickGameList
+              groups={groups}
+              mode={kind === 'TOTAL' ? 'game' : 'side'}
+              onPickGame={chooseGame}
+              onPickSide={chooseSide}
+            />
           )
         ) : null}
 
-        {step === 'team' && game ? (
-          <View style={styles.stack}>
-            {game.away_team_id ? (
-              <ListRow onPress={() => chooseTeam(game.away_team_id ?? '')} title={game.away_team} />
-            ) : null}
-            {game.home_team_id ? (
-              <ListRow onPress={() => chooseTeam(game.home_team_id ?? '')} title={game.home_team} />
-            ) : null}
-            {!game.away_team_id || !game.home_team_id ? (
-              <Text style={styles.error}>This game is missing its teams.</Text>
-            ) : null}
-          </View>
+        {step === 'line' && (kind === 'SPREAD' || kind === 'TOTAL') ? (
+          <AddPickLineEntry
+            canContinue={canContinue}
+            error={
+              lineText.trim().length > 0 && lineCheck && !lineCheck.ok ? lineCheck.message : null
+            }
+            kind={kind}
+            magnitude={lineText}
+            onContinue={() => {
+              setFormError(null);
+              setStep('confirm');
+            }}
+            onMagnitude={(value) => setLineText(value.replace(/[+\u2212-]/g, ''))}
+            onRole={(next) => {
+              if (kind === 'SPREAD') setSpreadRole(next as SpreadRole);
+              else setTotalRole(next as TotalRole);
+            }}
+            onStep={(direction) =>
+              setLineText((current) => stepMagnitude(current, direction, lineBounds(kind)))
+            }
+            readout={readout}
+            role={kind === 'SPREAD' ? spreadRole : totalRole}
+          />
         ) : null}
 
-        {step === 'line' && kind ? (
-          <View style={styles.stack}>
-            {kind === 'TOTAL' ? (
-              <View style={styles.signRow}>
-                <TextButton
-                  label="Over"
-                  onPress={() => setTotalSide('TOTAL_OVER')}
-                  tone={totalSide === 'TOTAL_OVER' ? 'accent' : 'muted'}
-                />
-                <TextButton
-                  label="Under"
-                  onPress={() => setTotalSide('TOTAL_UNDER')}
-                  tone={totalSide === 'TOTAL_UNDER' ? 'accent' : 'muted'}
-                />
-              </View>
-            ) : (
-              <TextButton
-                hitArea="padding"
-                label={spreadNegative ? '\u2212' : '+'}
-                onPress={() => setSpreadNegative((current) => !current)}
-              />
-            )}
-            <TextField
-              keyboardType="decimal-pad"
-              onChangeText={setLineText}
-              placeholder={kind === 'SPREAD' ? '3.5' : '47.5'}
-              value={lineText}
-            />
-            {lineText.trim().length > 0 && lineCheck && !lineCheck.ok ? (
-              <Text style={styles.error}>{lineCheck.message}</Text>
-            ) : null}
-            <PrimaryButton
-              disabled={lineCheck === null || !lineCheck.ok}
-              label="Continue"
-              onPress={() => {
-                setFormError(null);
-                setStep('confirm');
-              }}
-            />
-          </View>
-        ) : null}
-
-        {step === 'confirm' ? (
-          <View style={styles.stack}>
-            <Text maxFontSizeMultiplier={theme.fontScaleCaps.title} style={styles.confirm}>
-              {confirmLabel}
-            </Text>
-            {game ? (
-              <Text style={styles.muted}>
-                {`${game.away_team} @ ${game.home_team}${gameSubtitle(game) ? ` · ${gameSubtitle(game)}` : ''}`}
-              </Text>
-            ) : null}
-            {formError ? <Text style={styles.error}>{formError}</Text> : null}
-            <PrimaryButton label="Add a pick" loading={saving} onPress={() => void submit()} />
-          </View>
+        {step === 'confirm' && kind ? (
+          <AddPickReview
+            error={formError}
+            note={allowance ? addPickReviewNote(kind, allowance) : null}
+            onSubmit={() => void submit()}
+            readout={readout}
+            saving={saving}
+          />
         ) : null}
       </ScrollView>
     </View>
@@ -423,27 +453,6 @@ function gameSubtitle(game: ScheduleGame): string {
 }
 
 const styles = StyleSheet.create({
-  confirm: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.type.title.fontFamily,
-    fontSize: theme.type.title.size,
-    fontWeight: theme.type.title.weight,
-  },
-  content: {
-    gap: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.lg2,
-  },
-  error: {
-    color: theme.colors.danger,
-    fontSize: theme.type.body.size,
-  },
-  eyebrow: {
-    color: theme.colors.brass,
-    fontFamily: theme.type.eyebrow.fontFamily,
-    fontSize: theme.type.eyebrow.size,
-    fontWeight: theme.type.eyebrow.weight,
-    letterSpacing: theme.type.eyebrow.letterSpacing,
-  },
   close: {
     alignItems: 'center',
     alignSelf: 'flex-end',
@@ -455,6 +464,17 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     fontSize: theme.type.title.size,
     lineHeight: theme.type.title.lineHeight,
+  },
+  content: {
+    gap: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg2,
+  },
+  eyebrow: {
+    color: theme.colors.brass,
+    fontFamily: theme.type.eyebrow.fontFamily,
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
   },
   header: {
     gap: theme.spacing.sm,
@@ -471,13 +491,5 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flex: 1,
-  },
-  signRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.lg,
-  },
-  stack: {
-    gap: theme.spacing.sm,
   },
 });

@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { theme } from '../lib/theme';
 import { AddPickSlip } from './AddPickSlip';
 
 vi.mock('react-native', () => import('react-native-web'));
@@ -76,5 +77,96 @@ describe('add pick slip edge', () => {
       expect(edgeBox.left).toBeGreaterThanOrEqual(slipBox.left - 0.5);
       expect(edgeBox.right).toBeLessThanOrEqual(slipBox.right + 0.5);
     }
+  });
+});
+
+describe('add pick slip rows', () => {
+  let root: Root;
+  let host: HTMLDivElement;
+
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it('shows three dashes before anything is chosen', () => {
+    act(() => {
+      root.render(<AddPickSlip game={null} pick={null} pickLabel="PICK" typeLabel={null} />);
+    });
+    expect(host.textContent?.match(/\u2014/g)).toHaveLength(3);
+  });
+
+  it('shows both team badges on the game row', () => {
+    act(() => {
+      root.render(
+        <AddPickSlip
+          game={{ away: 'WAS', home: 'SF', detail: 'Mon 8:15 PM · ESPN' }}
+          pick={null}
+          pickLabel="PICK"
+          typeLabel="Spread"
+        />,
+      );
+    });
+    expect(host.textContent).toContain('WAS');
+    expect(host.textContent).toContain('SF');
+    expect(host.textContent).toContain('@');
+  });
+
+  it('shows the pick badge and an accent line', () => {
+    act(() => {
+      root.render(
+        <AddPickSlip
+          game={{ away: 'SEA', home: 'DEN', detail: '' }}
+          pick={{ badge: 'SEA', text: 'SEA \u22123.5' }}
+          pickLabel="PICK"
+          typeLabel="Spread"
+        />,
+      );
+    });
+    const line = Array.from(host.querySelectorAll('div')).find(
+      (node) => node.textContent === 'SEA \u22123.5',
+    );
+    expect(line).toBeTruthy();
+    expect(getComputedStyle(line as Element).color.replace(/\s/g, '')).toBe(
+      'rgba(245,160,24,1.00)',
+    );
+    expect(theme.colors.accent).toBe('#F5A018');
+  });
+
+  it('labels a survivor pick TEAM', () => {
+    act(() => {
+      root.render(
+        <AddPickSlip
+          game={{ away: 'JAX', home: 'HOU', detail: '' }}
+          pick={{ badge: 'JAX', text: 'JAX' }}
+          pickLabel="TEAM"
+          typeLabel="Survivor"
+        />,
+      );
+    });
+    expect(host.textContent).toContain('TEAM');
+    expect(host.textContent).not.toContain('PICK');
+  });
+
+  it('shows a total as Over plus the number and no pick badge', () => {
+    act(() => {
+      root.render(
+        <AddPickSlip
+          game={{ away: 'SEA', home: 'DEN', detail: '' }}
+          pick={{ badge: null, text: 'Over 47.5' }}
+          pickLabel="PICK"
+          typeLabel="Total"
+        />,
+      );
+    });
+    expect(host.textContent).toContain('Over 47.5');
+    const badges = host.textContent?.match(/SEA/g) ?? [];
+    expect(badges).toHaveLength(1);
   });
 });

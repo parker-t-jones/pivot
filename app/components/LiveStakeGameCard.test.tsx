@@ -108,7 +108,7 @@ describe('LiveStakeGameCard', () => {
     expect(document.body.textContent).toContain('RED ZONE');
     expect(document.body.textContent).toContain('George Kittle TE · ON FIELD');
     expect(document.body.textContent).toContain('Q3 · 7:00');
-    const button = [...document.querySelectorAll('[role="button"]')].find((node) =>
+    const button = Array.from(document.querySelectorAll('[role="button"]')).find((node) =>
       node.textContent?.includes('Watch on YouTube TV'),
     );
     const style = button?.getAttribute('style') ?? '';

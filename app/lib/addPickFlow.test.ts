@@ -22,14 +22,14 @@ describe('add a pick explainers', () => {
 describe('add a pick eyebrow', () => {
   it('names the step before a type is chosen', () => {
     expect(addPickEyebrow(null, 'type')).toBe('ADD A PICK · STEP 1');
-    expect(pickSteps(null)).toHaveLength(5);
+    expect(pickSteps(null)).toHaveLength(4);
   });
 
   it('uses the chosen type’s step count', () => {
-    expect(addPickEyebrow('SPREAD', 'game')).toBe('ADD A PICK · SPREAD · STEP 2 OF 5');
+    expect(addPickEyebrow('SPREAD', 'game')).toBe('ADD A PICK · SPREAD · STEP 2 OF 4');
     expect(addPickEyebrow('TOTAL', 'line')).toBe('ADD A PICK · TOTAL · STEP 3 OF 4');
-    expect(addPickEyebrow('MONEYLINE', 'confirm')).toBe('ADD A PICK · MONEYLINE · STEP 4 OF 4');
-    expect(addPickEyebrow('SURVIVOR', 'team')).toBe('ADD A PICK · SURVIVOR · STEP 3 OF 4');
+    expect(addPickEyebrow('MONEYLINE', 'confirm')).toBe('ADD A PICK · MONEYLINE · STEP 3 OF 3');
+    expect(addPickEyebrow('SURVIVOR', 'confirm')).toBe('ADD A PICK · SURVIVOR · STEP 3 OF 3');
   });
 });
 
