@@ -2,9 +2,11 @@ import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 
+import { AuthForm } from '../../components/AuthForm';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
 import { isValidEmail } from '../../lib/email';
+import { PASSWORD_FIELD_AUTOFILL } from '../../lib/passwordAutofill';
 import { supabase } from '../../lib/supabase';
 import { theme } from '../../lib/theme';
 
@@ -47,39 +49,51 @@ export default function SignInScreen() {
       behavior={Platform.select({ ios: 'padding', default: undefined })}
       style={styles.container}
     >
-      <View style={styles.card}>
-        <Text style={styles.title}>Sign in</Text>
-        <Text style={styles.subtitle}>Access your Pivot account.</Text>
+      <AuthForm
+        onSubmit={() => {
+          void onSignIn();
+        }}
+      >
+        <View style={styles.card}>
+          <Text style={styles.title}>Sign in</Text>
+          <Text style={styles.subtitle}>Access your Pivot account.</Text>
 
-        <TextField
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          onChangeText={setEmail}
-          placeholder="Email"
-          value={email}
-        />
+          <TextField
+            {...PASSWORD_FIELD_AUTOFILL.signIn.email}
+            onChangeText={setEmail}
+            placeholder="Email"
+            value={email}
+          />
 
-        <TextField
-          autoCapitalize="none"
-          autoComplete="password"
-          onChangeText={setPassword}
-          placeholder="Password"
-          secureTextEntry
-          value={password}
-        />
+          <TextField
+            {...PASSWORD_FIELD_AUTOFILL.signIn.password}
+            onChangeText={setPassword}
+            placeholder="Password"
+            value={password}
+          />
 
-        {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
-
-        <PrimaryButton label="Sign in" loading={isSubmitting} onPress={onSignIn} />
-
-        <Text style={styles.footerText}>
-          Need an account?{' '}
-          <Link href="/(auth)/sign-up" style={styles.link}>
-            Sign up
+          <Link href="/(auth)/forgot-password" style={styles.link}>
+            Forgot password?
           </Link>
-        </Text>
-      </View>
+
+          {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+
+          <PrimaryButton
+            label="Sign in"
+            loading={isSubmitting}
+            onPress={() => {
+              void onSignIn();
+            }}
+          />
+
+          <Text style={styles.footerText}>
+            Need an account?{' '}
+            <Link href="/(auth)/sign-up" style={styles.link}>
+              Sign up
+            </Link>
+          </Text>
+        </View>
+      </AuthForm>
     </KeyboardAvoidingView>
   );
 }

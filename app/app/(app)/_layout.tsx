@@ -113,6 +113,7 @@ function AppNavigator() {
       <Stack.Screen name="add-stake" />
       <Stack.Screen name="onboarding-streaming" />
       <Stack.Screen name="onboarding-all-set" />
+      <Stack.Screen name="change-password" />
     </Stack>
   );
 }

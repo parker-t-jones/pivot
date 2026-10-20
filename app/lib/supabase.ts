@@ -18,6 +18,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: authStorage,
     autoRefreshToken: true,
     persistSession: true,
+    // Library default is implicit, so a reset email redirects with
+    // `#access_token&type=recovery` (not `?code=`). That hash works in any
+    // browser, including a reset requested on the phone and opened on the web.
+    // PKCE would store the code verifier on the device that requested the email
+    // and the web page could not exchange it. Detection stays off so only
+    // `/reset-password` reads the hash.
+    flowType: 'implicit',
     detectSessionInUrl: false,
   },
 });

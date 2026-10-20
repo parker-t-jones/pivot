@@ -9,6 +9,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.fantasyfocus.app",
+      "associatedDomains": ["webcredentials:app.pivot-sports.app"],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSApplicationQueriesSchemes": ["sportscenter"]
@@ -17,7 +18,13 @@
     "plugins": [
       "expo-router",
       "expo-notifications",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Confirm it's you before changing your password."
+        }
+      ]
     ],
     "extra": {
       "router": {},

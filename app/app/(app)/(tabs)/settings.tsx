@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Linking,
@@ -86,6 +87,7 @@ function openExternalUrl(url: string, failedMessage: string): void {
  */
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useSession();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -176,6 +178,9 @@ export default function SettingsScreen() {
       subscriptionTier={me.subscription_tier}
       isSigningOut={isSigningOut}
       isDeletingAccount={isDeletingAccount}
+      onChangePassword={() => {
+        router.push('/(app)/change-password');
+      }}
       onSignOut={onSignOut}
       onDeleteAccount={onDeleteAccount}
     />
@@ -238,7 +243,9 @@ export default function SettingsScreen() {
                   ];
                 }}
               >
-                <Text style={[styles.sectionLinkLabel, selected && styles.sectionLinkLabelSelected]}>
+                <Text
+                  style={[styles.sectionLinkLabel, selected && styles.sectionLinkLabelSelected]}
+                >
                   {item.label}
                 </Text>
               </Pressable>
@@ -293,6 +300,7 @@ function AccountSection({
   subscriptionTier,
   isSigningOut,
   isDeletingAccount,
+  onChangePassword,
   onSignOut,
   onDeleteAccount,
 }: {
@@ -300,6 +308,7 @@ function AccountSection({
   subscriptionTier: string;
   isSigningOut: boolean;
   isDeletingAccount: boolean;
+  onChangePassword: () => void;
   onSignOut: () => void;
   onDeleteAccount: () => void;
 }) {
@@ -310,6 +319,12 @@ function AccountSection({
     <SectionCard title="Account">
       <Text style={styles.rowLabel}>{email}</Text>
       <Text style={styles.rowSubtext}>{isPro ? 'Pro' : 'Free'} plan</Text>
+
+      <SecondaryButton
+        label="Change password"
+        onPress={onChangePassword}
+        style={styles.accountButton}
+      />
 
       {isPro ? (
         <TextButton
@@ -495,9 +510,7 @@ function StreamingServicesSection({
             />
           </View>
           {service === 'youtube_tv' && showTicketHint ? (
-            <Text style={styles.ticketHint}>
-              Also have NFL Sunday Ticket? Turn it on below.
-            </Text>
+            <Text style={styles.ticketHint}>Also have NFL Sunday Ticket? Turn it on below.</Text>
           ) : null}
         </View>
       ))}

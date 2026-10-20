@@ -9,6 +9,7 @@ import { WebPhoneColumn } from '../components/WebPhoneColumn';
 import { SessionProvider, useSession } from '../contexts/SessionContext';
 import { getOrCreateDeviceId } from '../lib/deviceId';
 import { displayFontMap } from '../lib/fonts';
+import { resolveRootAuthRedirect } from '../lib/navigationGates';
 import { registerServiceWorker } from '../lib/webPush';
 
 function RootNavigator() {
@@ -18,30 +19,29 @@ function RootNavigator() {
   const inAuthGroup = segments[0] === '(auth)';
   // The fixture preview has no session and no leagues. Production builds never take this branch.
   const devPreview = __DEV__ && segments[0] === 'live-card-preview';
-
-  const shouldRedirectToAuth = !isLoading && !session && !inAuthGroup && !devPreview;
-  const shouldRedirectToApp = !isLoading && !!session && inAuthGroup;
+  const redirect = resolveRootAuthRedirect({
+    isLoading,
+    hasSession: !!session,
+    inAuthGroup,
+    devPreview,
+    topSegment: segments[0],
+  });
 
   useEffect(() => {
-    if (isLoading) {
-      return;
-    }
-
-    if (shouldRedirectToAuth) {
+    if (redirect === 'redirect_auth') {
       router.replace('/(auth)/welcome');
       return;
     }
-
-    if (shouldRedirectToApp) {
+    if (redirect === 'redirect_app') {
       router.replace('/(app)');
     }
-  }, [isLoading, router, shouldRedirectToApp, shouldRedirectToAuth]);
+  }, [redirect, router]);
 
-  if (isLoading) {
+  if (redirect === 'wait') {
     return <LoadingState message="Loading session..." />;
   }
 
-  if (shouldRedirectToAuth || shouldRedirectToApp) {
+  if (redirect === 'redirect_auth' || redirect === 'redirect_app') {
     return <LoadingState message="Redirecting..." />;
   }
 
@@ -49,6 +49,7 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(app)" />
+      <Stack.Screen name="reset-password" />
       <Stack.Screen name="live-card-preview" />
     </Stack>
   );

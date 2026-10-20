@@ -6,20 +6,47 @@ import { theme } from '../lib/theme';
 
 type TextFieldProps = TextInputProps & {
   ref?: Ref<TextInput>;
+  /**
+   * HTML `name` on web. react-native-web does not forward `name`, so the ref
+   * callback sets it on the DOM input. Ignored on iOS.
+   */
+  name?: string;
   /** Sits inside the field on the trailing edge. Omitted → the input is unchanged. */
   trailing?: ReactNode;
 };
+
+function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
+  if (typeof ref === 'function') {
+    ref(value);
+    return;
+  }
+  if (ref && typeof ref === 'object') {
+    (ref as { current: T | null }).current = value;
+  }
+}
+
+function applyDomName(node: TextInput | null, name: string | undefined) {
+  if (!name || node == null) return;
+  const element = node as unknown as { setAttribute?: (key: string, value: string) => void };
+  if (typeof element.setAttribute === 'function') {
+    element.setAttribute('name', name);
+  }
+}
 
 export function TextField({
   style,
   placeholderTextColor,
   trailing,
   ref,
+  name,
   ...props
 }: TextFieldProps) {
   const input = (
     <TextInput
-      ref={ref}
+      ref={(node) => {
+        assignRef(ref, node);
+        applyDomName(node, name);
+      }}
       {...props}
       placeholderTextColor={placeholderTextColor ?? theme.colors.textTertiary}
       style={[styles.field, trailing != null && styles.fieldWithTrailing, style]}

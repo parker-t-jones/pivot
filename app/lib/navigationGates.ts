@@ -44,7 +44,15 @@ export const ZERO_LEAGUES_ALLOWLIST = new Set([
   'onboarding-streaming',
   'notifications-permission',
   'onboarding-all-set',
+  'change-password',
 ]);
+
+/**
+ * Recovery lives outside `(app)` and `(auth)`. A recovery link creates a session;
+ * `resolveAppGate` would then send a zero-league user to connect-team. The root
+ * layout must stay on this segment instead.
+ */
+export const PASSWORD_RESET_SEGMENT = 'reset-password';
 
 export function isHomeRouteLeaf(routeLeaf: string | undefined): boolean {
   return (
@@ -140,6 +148,26 @@ export function resolveAppGate(input: {
   }
 
   return { action: 'render' };
+}
+
+export type RootAuthRedirect = 'wait' | 'redirect_auth' | 'redirect_app' | 'stay';
+
+/**
+ * Root stack decision. `/reset-password` stays put with or without a session so
+ * the recovery form is not replaced by welcome or by `(app)` onboarding.
+ */
+export function resolveRootAuthRedirect(input: {
+  isLoading: boolean;
+  hasSession: boolean;
+  inAuthGroup: boolean;
+  devPreview: boolean;
+  topSegment: string | undefined;
+}): RootAuthRedirect {
+  if (input.isLoading) return 'wait';
+  if (input.topSegment === PASSWORD_RESET_SEGMENT) return 'stay';
+  if (!input.hasSession && !input.inAuthGroup && !input.devPreview) return 'redirect_auth';
+  if (input.hasSession && input.inAuthGroup) return 'redirect_app';
+  return 'stay';
 }
 
 /** localStorage key written by "Not now" on the web alerts screen. */

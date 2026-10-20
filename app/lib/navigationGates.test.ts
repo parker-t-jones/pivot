@@ -12,6 +12,7 @@ import {
   readNotifPromptSnoozed,
   resetNotifPromptSessionForTests,
   resolveAppGate,
+  resolveRootAuthRedirect,
   webPushConfigured,
   writeNotifPromptDismissed,
 } from './navigationGates';
@@ -374,5 +375,59 @@ describe('navigateAfterConnect', () => {
     };
     resetToHomeRoot(router);
     expect(router.dismissTo).toHaveBeenCalledWith('/(app)');
+  });
+});
+
+describe('password recovery stays off the app gate', () => {
+  const signedOut = {
+    isLoading: false,
+    hasSession: false,
+    inAuthGroup: false,
+    devPreview: false,
+    topSegment: 'reset-password' as string | undefined,
+  };
+
+  it('would send a recovering session into onboarding if the route were inside (app)', () => {
+    expect(
+      resolveAppGate({
+        leaguesStatus: 'ready',
+        leagueCount: 0,
+        connectDeferred: false,
+        routeLeaf: 'reset-password',
+        pushStatus: 'granted',
+        notificationsOnboarding: false,
+      }),
+    ).toEqual({ action: 'redirect_connect' });
+  });
+
+  it('keeps /reset-password on screen before and after the recovery session exists', () => {
+    expect(resolveRootAuthRedirect(signedOut)).toBe('stay');
+    expect(resolveRootAuthRedirect({ ...signedOut, hasSession: true })).toBe('stay');
+  });
+
+  it('still sends other signed-out routes to welcome, and a session in (auth) into the app', () => {
+    expect(resolveRootAuthRedirect({ ...signedOut, topSegment: undefined })).toBe('redirect_auth');
+    expect(
+      resolveRootAuthRedirect({
+        ...signedOut,
+        hasSession: true,
+        inAuthGroup: true,
+        topSegment: '(auth)',
+      }),
+    ).toBe('redirect_app');
+  });
+
+  it('does not pull change-password back to connect-team', () => {
+    expect(isOnZeroLeaguesAllowlist('change-password')).toBe(true);
+    expect(
+      resolveAppGate({
+        leaguesStatus: 'ready',
+        leagueCount: 0,
+        connectDeferred: false,
+        routeLeaf: 'change-password',
+        pushStatus: 'granted',
+        notificationsOnboarding: false,
+      }),
+    ).toEqual({ action: 'render' });
   });
 });

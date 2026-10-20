@@ -105,6 +105,9 @@ importers:
       expo-linking:
         specifier: ~56.0.14
         version: 56.0.14(expo@56.0.12)(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      expo-local-authentication:
+        specifier: ~56.0.5
+        version: 56.0.5(expo@56.0.12)
       expo-notifications:
         specifier: ~56.0.20
         version: 56.0.20(expo@56.0.12)(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
@@ -2660,6 +2663,11 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
+
+  expo-local-authentication@56.0.5:
+    resolution: {integrity: sha512-VZOt20da5wIzOU3WgCrbFPvCFICsQnI5fWuQnpDZ7xzY75nnrRxDIcPdfMc7ryqOnxQmjTZx+eRWDA8Y+gDpNA==}
+    peerDependencies:
+      expo: '*'
 
   expo-manifests@56.0.4:
     resolution: {integrity: sha512-Fokawl2UkiExIF0bqGoblRFA8lYpROVD+EpvDwSW4LgqQyPwNua1gLSgHZjdl5GsVugfRMMWE3LHaibDyX93hw==}
@@ -6076,9 +6084,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -7196,6 +7202,11 @@ snapshots:
     transitivePeerDependencies:
       - expo
       - supports-color
+
+  expo-local-authentication@56.0.5(expo@56.0.12):
+    dependencies:
+      expo: 56.0.12(@babel/core@7.29.0)(@expo/dom-webview@55.0.6)(@expo/metro-runtime@56.0.15)(expo-router@56.2.11)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.9.2(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      invariant: 2.2.4
 
   expo-manifests@56.0.4(expo@56.0.12):
     dependencies:

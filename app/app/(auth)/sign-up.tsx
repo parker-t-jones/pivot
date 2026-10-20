@@ -2,9 +2,16 @@ import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 
+import { AuthForm } from '../../components/AuthForm';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
 import { isValidEmail } from '../../lib/email';
+import { PASSWORD_FIELD_AUTOFILL } from '../../lib/passwordAutofill';
+import {
+  newPasswordIssue,
+  newPasswordIssueMessage,
+  PASSWORD_POLICY_HINT,
+} from '../../lib/passwordPolicy';
 import { supabase } from '../../lib/supabase';
 import { theme } from '../../lib/theme';
 
@@ -23,13 +30,9 @@ export default function SignUpScreen() {
       return;
     }
 
-    if (password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters.');
-      return;
-    }
-
-    if (password !== passwordConfirmation) {
-      setErrorMessage('Passwords do not match.');
+    const issue = newPasswordIssue(password, passwordConfirmation);
+    if (issue) {
+      setErrorMessage(newPasswordIssueMessage(issue));
       return;
     }
 
@@ -64,48 +67,55 @@ export default function SignUpScreen() {
       behavior={Platform.select({ ios: 'padding', default: undefined })}
       style={styles.container}
     >
-      <View style={styles.card}>
-        <Text style={styles.title}>Create account</Text>
-        <Text style={styles.subtitle}>Sign up with email and password.</Text>
+      <AuthForm
+        onSubmit={() => {
+          void onSignUp();
+        }}
+      >
+        <View style={styles.card}>
+          <Text style={styles.title}>Create account</Text>
+          <Text style={styles.subtitle}>Sign up with email and password.</Text>
 
-        <TextField
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          onChangeText={setEmail}
-          placeholder="Email"
-          value={email}
-        />
+          <TextField
+            {...PASSWORD_FIELD_AUTOFILL.signUp.email}
+            onChangeText={setEmail}
+            placeholder="Email"
+            value={email}
+          />
 
-        <TextField
-          autoCapitalize="none"
-          autoComplete="password-new"
-          onChangeText={setPassword}
-          placeholder="Password"
-          secureTextEntry
-          value={password}
-        />
+          <TextField
+            {...PASSWORD_FIELD_AUTOFILL.signUp.password}
+            onChangeText={setPassword}
+            placeholder="Password"
+            value={password}
+          />
+          <Text style={styles.hint}>{PASSWORD_POLICY_HINT}</Text>
 
-        <TextField
-          autoCapitalize="none"
-          autoComplete="password-new"
-          onChangeText={setPasswordConfirmation}
-          placeholder="Confirm password"
-          secureTextEntry
-          value={passwordConfirmation}
-        />
+          <TextField
+            {...PASSWORD_FIELD_AUTOFILL.signUp.confirm}
+            onChangeText={setPasswordConfirmation}
+            placeholder="Confirm password"
+            value={passwordConfirmation}
+          />
 
-        {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+          {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
 
-        <PrimaryButton label="Sign up" loading={isSubmitting} onPress={onSignUp} />
+          <PrimaryButton
+            label="Sign up"
+            loading={isSubmitting}
+            onPress={() => {
+              void onSignUp();
+            }}
+          />
 
-        <Text style={styles.footerText}>
-          Already have an account?{' '}
-          <Link href="/(auth)/sign-in" style={styles.link}>
-            Sign in
-          </Link>
-        </Text>
-      </View>
+          <Text style={styles.footerText}>
+            Already have an account?{' '}
+            <Link href="/(auth)/sign-in" style={styles.link}>
+              Sign in
+            </Link>
+          </Text>
+        </View>
+      </AuthForm>
     </KeyboardAvoidingView>
   );
 }
@@ -125,6 +135,11 @@ const styles = StyleSheet.create({
   error: {
     color: theme.colors.danger,
     fontSize: theme.type.small.size,
+  },
+  hint: {
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.small.size,
+    marginTop: -theme.spacing.xs,
   },
   footerText: {
     color: theme.colors.textTertiary,
