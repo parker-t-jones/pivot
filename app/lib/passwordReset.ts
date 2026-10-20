@@ -109,6 +109,15 @@ function firstParam(source: URLSearchParams, key: string): string | null {
 }
 
 /**
+ * Address to leave in the bar after a recovery link is handled.
+ * Drops `#access_token…` on success and `#error=…` when the link is expired.
+ */
+export function recoveryUrlWithoutHash(href: string): string {
+  const url = new URL(href);
+  return `${url.pathname}${url.search}`;
+}
+
+/**
  * Implicit-flow recovery links land as `#access_token&refresh_token&type=recovery`.
  * The app client leaves `flowType` at the library default (`implicit`) and
  * `detectSessionInUrl: false`, so this parser — not the client — reads the hash.

@@ -49,9 +49,9 @@ describe('change password', () => {
     expect(passwordChangeErrorMessage('wrong-current', 'Invalid login credentials')).toBe(
       'Current password is incorrect.',
     );
-    expect(classifyPasswordChangeError('Password should be at least 6 characters.')).toBe('weak');
-    expect(passwordChangeErrorMessage('weak', 'Password should be at least 6 characters.')).toBe(
-      'Password must be at least 6 characters.',
+    expect(classifyPasswordChangeError('Password should be at least 8 characters.')).toBe('weak');
+    expect(passwordChangeErrorMessage('weak', 'Password should be at least 8 characters.')).toBe(
+      'Password must be at least 8 characters.',
     );
     expect(
       classifyPasswordChangeError('New password should be different from the old password.'),

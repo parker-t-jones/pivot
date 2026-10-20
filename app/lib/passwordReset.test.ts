@@ -8,6 +8,7 @@ import {
   passwordResetRedirectTo,
   PRODUCTION_RESET_URL,
   readRecoveryAttempt,
+  recoveryUrlWithoutHash,
   resendCooldownRemaining,
   RESET_EMAIL_SENT,
   RESET_RATE_LIMIT_MESSAGE,
@@ -116,12 +117,27 @@ describe('reset page states', () => {
     );
   });
 
+  it('drops the recovery hash on a valid link and on an expired link', () => {
+    expect(
+      recoveryUrlWithoutHash(
+        'https://app.pivot-sports.app/reset-password#access_token=atk&refresh_token=rtk&type=recovery',
+      ),
+    ).toBe('/reset-password');
+    expect(
+      recoveryUrlWithoutHash(
+        'https://app.pivot-sports.app/reset-password?from=email#error=access_denied&error_code=otp_expired&error_description=expired',
+      ),
+    ).toBe('/reset-password?from=email');
+  });
+
   it('rejects a mismatch and a short password before calling updateUser', () => {
     expect(newPasswordIssue('short', 'short')).toBe('weak');
-    expect(newPasswordIssueMessage('weak')).toBe('Password must be at least 6 characters.');
+    expect(newPasswordIssue('1234567', '1234567')).toBe('weak');
+    expect(newPasswordIssueMessage('weak')).toBe('Password must be at least 8 characters.');
     expect(newPasswordIssue('longenough', 'different')).toBe('mismatch');
     expect(newPasswordIssueMessage('mismatch')).toBe('Passwords do not match.');
     expect(newPasswordIssue('longenough', 'longenough')).toBeNull();
+    expect(newPasswordIssue('12345678', '12345678')).toBeNull();
   });
 
   it('exchanges the recovery session once', async () => {

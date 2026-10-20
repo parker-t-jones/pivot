@@ -76,6 +76,25 @@ describe('Apple associated domains', () => {
   });
 });
 
+describe('reset page drops the recovery hash', () => {
+  it('calls replaceState after setSession succeeds and when the link is expired', () => {
+    const reset = read('app/app/reset-password.tsx');
+    const invalid = reset.indexOf("attempt.phase === 'invalid'");
+    const failed = reset.indexOf('if (!ok)');
+    const ready = reset.indexOf('markRecoveryReady(storage)');
+    expect(invalid).toBeGreaterThan(0);
+    expect(failed).toBeGreaterThan(invalid);
+    expect(ready).toBeGreaterThan(failed);
+    expect(reset.indexOf('stripRecoveryHash()', invalid)).toBeGreaterThan(invalid);
+    expect(reset.indexOf('stripRecoveryHash()', invalid)).toBeLessThan(failed);
+    expect(reset.indexOf('stripRecoveryHash()', failed)).toBeGreaterThan(failed);
+    expect(reset.indexOf('stripRecoveryHash()', failed)).toBeLessThan(ready);
+    expect(reset.indexOf('stripRecoveryHash()', ready)).toBeGreaterThan(ready);
+    expect(reset).toContain('window.history.replaceState');
+    expect(reset).not.toContain('url.hash');
+  });
+});
+
 describe('local auth config', () => {
   const toml = read('supabase/config.toml');
 
@@ -83,6 +102,7 @@ describe('local auth config', () => {
     expect(toml).toContain('[local_smtp]');
     expect(toml).not.toMatch(/^\[inbucket\]/m);
     expect(toml).toContain('port = 54324');
+    expect(toml).toContain('minimum_password_length = 8');
     for (const origin of [
       'http://localhost:8084',
       'http://127.0.0.1:8084',

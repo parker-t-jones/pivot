@@ -20,6 +20,7 @@ import {
   PASSWORD_UPDATED,
   PASSWORD_UPDATED_OTHER_DEVICE,
   readRecoveryAttempt,
+  recoveryUrlWithoutHash,
   RESET_LINK_INVALID,
   type RecoveryStorage,
 } from '../lib/passwordReset';
@@ -35,6 +36,16 @@ function browserStorage(): RecoveryStorage | null {
   } catch {
     return null;
   }
+}
+
+/** Recovery tokens and error fragments must not stay in the address bar. */
+function stripRecoveryHash(): void {
+  if (typeof window === 'undefined' || window.location.hash.length === 0) return;
+  window.history.replaceState(
+    window.history.state,
+    '',
+    recoveryUrlWithoutHash(window.location.href),
+  );
 }
 
 export default function ResetPasswordScreen() {
@@ -55,6 +66,7 @@ export default function ResetPasswordScreen() {
     }
     const attempt = readRecoveryAttempt(window.location.href, storage);
     if (attempt.phase === 'invalid') {
+      stripRecoveryHash();
       setPhase('invalid');
       return;
     }
@@ -69,13 +81,12 @@ export default function ResetPasswordScreen() {
         if (cancelled) return;
         if (!ok) {
           clearRecoveryAttempt(storage);
+          stripRecoveryHash();
           setPhase('invalid');
           return;
         }
         markRecoveryReady(storage);
-        const url = new URL(window.location.href);
-        url.hash = '';
-        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
+        stripRecoveryHash();
         setPhase('form');
       },
     );

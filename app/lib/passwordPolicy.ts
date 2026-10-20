@@ -1,16 +1,16 @@
 /**
  * Hosted auth config (project taucqrptzfyzhfzpinzo, read via the management API)
- * and local `supabase/config.toml` agree: minimum length 6, no character-class
+ * and local `supabase/config.toml` agree: minimum length 8, no character-class
  * requirements, HaveIBeenPwned off. Secure password change is off, so
  * `updateUser({ password })` does not need a reauthentication nonce.
  */
-export const PASSWORD_MIN_LENGTH = 6;
+export const PASSWORD_MIN_LENGTH = 8;
 
 /** Shown under new-password fields. */
-export const PASSWORD_POLICY_HINT = 'At least 6 characters.';
+export const PASSWORD_POLICY_HINT = 'At least 8 characters.';
 
 /** iOS Password AutoFill rule. Matches the length-only policy. */
-export const PASSWORD_RULES = 'minlength: 6;';
+export const PASSWORD_RULES = 'minlength: 8;';
 
 export function passwordPolicyError(password: string): string | null {
   if (password.length < PASSWORD_MIN_LENGTH) {

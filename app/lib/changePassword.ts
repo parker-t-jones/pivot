@@ -1,3 +1,5 @@
+import { newPasswordIssueMessage } from './passwordPolicy';
+
 export type DeviceLockLevel = 'none' | 'passcode' | 'biometric';
 
 export type BiometricOutcome = 'success' | 'cancel' | 'unavailable';
@@ -84,7 +86,7 @@ export function classifyPasswordChangeError(message: string, code?: string): Pas
 export function passwordChangeErrorMessage(failure: PasswordChangeFailure, raw: string): string {
   if (failure === 'wrong-current') return 'Current password is incorrect.';
   if (failure === 'same') return 'New password must be different from your current password.';
-  if (failure === 'weak') return 'Password must be at least 6 characters.';
+  if (failure === 'weak') return newPasswordIssueMessage('weak');
   if (failure === 'network')
     return 'Could not reach the server. Check your connection and try again.';
   if (failure === 'reauth') return 'Sign in again, then change your password.';
