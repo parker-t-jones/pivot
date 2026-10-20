@@ -1,6 +1,7 @@
 import { Redirect } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { YardLineLoader } from '../components/YardLineLoader';
 import { useSession } from '../contexts/SessionContext';
 import { theme } from '../lib/theme';
 
@@ -10,7 +11,7 @@ export default function IndexScreen() {
   if (isLoading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={theme.colors.accent} size="large" />
+        <YardLineLoader size="screen" />
       </View>
     );
   }

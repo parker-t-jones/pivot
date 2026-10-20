@@ -7,18 +7,10 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import {
-  ActivityIndicator,
-  Animated,
-  Linking,
-  Modal,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, Linking, Modal, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { ListRow } from '../components/ListRow';
+import { YardLineLoader } from '../components/YardLineLoader';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SecondaryButton } from '../components/SecondaryButton';
 import { useGameLinks } from './GameLinksContext';
@@ -396,7 +388,7 @@ function SwitchingOverlay({
             <Text style={styles.errorMessage}>{phase.message}</Text>
 
             {phase.isLoadingBroadcasts ? (
-              <ActivityIndicator color={theme.colors.textPrimary} style={styles.broadcastLoading} />
+              <YardLineLoader size="section" />
             ) : phase.broadcasts && phase.broadcasts.length > 0 ? (
               <View style={styles.broadcastList}>
                 {phase.broadcasts
@@ -416,7 +408,7 @@ function SwitchingOverlay({
         ) : (
           <View style={styles.switchingCard}>
             {phase.teamColors ? <TeamColorFlash colors={phase.teamColors} /> : null}
-            <ActivityIndicator color={theme.colors.textPrimary} size="large" />
+            <YardLineLoader size="screen" />
             <Text style={styles.switchingText}>Switching to {phase.label}…</Text>
           </View>
         )}
@@ -457,9 +449,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     marginTop: theme.spacing.lg,
     width: '100%',
-  },
-  broadcastLoading: {
-    marginTop: theme.spacing.lg,
   },
   closeButton: {
     marginTop: theme.spacing.lg2,

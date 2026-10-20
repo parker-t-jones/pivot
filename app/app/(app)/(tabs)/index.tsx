@@ -24,7 +24,7 @@ import {
   flattenRows,
   isPregameBranch,
   nextKickoff,
-  pickFeaturedGame,
+  pickPregameHero,
   type LiveBetEntry,
   type StakeRef,
 } from '../../../lib/board';
@@ -66,6 +66,7 @@ import {
   type LeagueSummary,
   type LineupResponse,
 } from '../../../lib/leagues';
+import { kickoffLabel } from '../../../lib/kickoffLabel';
 import { flaggedCardsOpacity, liveFeedBanner } from '../../../lib/liveFeed';
 import { buildLiveBoard, countLiveGames } from '../../../lib/liveBoard';
 import { fetchMe, type MeResponse } from '../../../lib/me';
@@ -842,27 +843,29 @@ export default function HomeScreen() {
     const rows = flattenRows(boardGroups);
     const now = new Date(pregameNowMs);
     const next = nextKickoff(rows, now);
-    const featured = pickFeaturedGame(rows, now);
-    const target = featured ?? next;
+    const choice = pickPregameHero(rows, now);
     const countdownMs = next ? Math.max(0, next.kickoff.getTime() - pregameNowMs) : null;
     const nextKickoffAt = next?.kickoff ?? null;
 
-    if (!target) return { hero: null, countdownMs, nextKickoffAt };
+    if (!choice) return { hero: null, countdownMs, nextKickoffAt };
 
-    const game = homeData?.weekGames.find((row) => row.game_id === target.gameId) ?? null;
+    const game = homeData?.weekGames.find((row) => row.game_id === choice.row.gameId) ?? null;
     if (!game) return { hero: null, countdownMs, nextKickoffAt };
 
-    // Falling back to `nextKickoff` means the user has nothing riding on this game, so it gets
-    // the NEXT KICKOFF eyebrow and no player chips.
+    // No stake on the next kickoff: NEXT KICKOFF and no player chips. A stake inside 12h is
+    // UP NEXT. Anything later stays BIGGEST STAKE. Live branches never render this hero.
     const hero: PregameHero =
-      featured === null
+      choice.kind === 'next_kickoff'
         ? { game, players: [], eyebrow: 'NEXT KICKOFF' }
         : {
             game,
             players:
-              homeData?.lineupGroups.find((group) => group.game.game_id === target.gameId)
+              homeData?.lineupGroups.find((group) => group.game.game_id === choice.row.gameId)
                 ?.players ?? [],
-            bets: heroBetChips(stakeRefs, target.gameId),
+            bets: heroBetChips(stakeRefs, choice.row.gameId),
+            ...(choice.kind === 'up_next'
+              ? { eyebrow: 'UP NEXT', when: kickoffLabel(choice.row.kickoff, now) }
+              : {}),
           };
     return { hero, countdownMs, nextKickoffAt };
   }, [boardGroups, pregameNowMs, homeData?.weekGames, homeData?.lineupGroups, stakeRefs]);

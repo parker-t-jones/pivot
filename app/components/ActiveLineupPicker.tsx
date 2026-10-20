@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { TextButton } from './TextButton';
 import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
@@ -10,6 +10,14 @@ import type { LeagueSummary } from '../lib/leagues';
 import { fetchMe, patchPreferences, type MeResponse } from '../lib/me';
 import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
+import { useDesktopTier } from '../lib/useDesktopTier';
+
+function platformLabel(platform: string): string {
+  if (platform === 'sleeper') return 'Sleeper';
+  if (platform === 'espn') return 'ESPN';
+  if (platform === 'manual') return 'Manual';
+  return platform;
+}
 
 interface ActiveLineupPickerProps {
   leagues: LeagueSummary[];
@@ -22,6 +30,9 @@ interface ActiveLineupPickerProps {
  */
 export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPickerProps) {
   const { openUpgrade } = useUpgradeSheet();
+  const desktop = useDesktopTier() !== 'companion';
+  const triggerRef = useRef<View>(null);
+  const [anchor, setAnchor] = useState({ top: 72, right: theme.spacing.lg2 });
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string[]>(me.preferences.watchedLeagueIds);
   const [saving, setSaving] = useState(false);
@@ -68,8 +79,39 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
           ? [activeLeague.league_id]
           : [],
     );
+    triggerRef.current?.measureInWindow((_x, y, _width, height) => {
+      setAnchor({ top: y + height + theme.spacing.xs, right: theme.spacing.lg2 });
+    });
     setOpen(true);
   };
+
+  useEffect(() => {
+    if (!open || Platform.OS !== 'web') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        return;
+      }
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      const options = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-testid="active-lineup-option"]'),
+      );
+      if (options.length === 0) return;
+      const current = options.indexOf(document.activeElement as HTMLElement);
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      const next = options[Math.max(0, Math.min(options.length - 1, current + step))] ?? options[0];
+      next?.focus();
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    const focusTimer = window.setTimeout(() => {
+      document.querySelector<HTMLElement>('[data-testid="active-lineup-option"]')?.focus();
+    }, 0);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   /**
    * Persists `next` immediately — every tap below takes effect right away, no separate Save
@@ -123,35 +165,49 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
 
   if (leagues.length === 0) return null;
 
-  // Nothing explicitly chosen yet (fresh account, or user never opened the picker) — the box
-  // itself prompts "ACTIVE LINEUP" rather than silently defaulting to whichever league Home
-  // happens to fall back to for its card data. Once the user picks, this shows their choice.
+  // Nothing explicitly chosen yet (fresh account, or user never opened the picker). The
+  // eyebrow stays "Active lineup"; the value prompts instead of a league name. Once the
+  // user picks, this shows that league. Pro with several watched leagues keeps the count.
   const isPlaceholder = watched.length === 0;
-  const label = isPlaceholder
-    ? 'ACTIVE LINEUP'
+  const value = isPlaceholder
+    ? 'Choose a lineup'
     : isPro && watched.length > 1
       ? `${watched.length} lineups`
-      : (activeLeague?.name ?? 'ACTIVE LINEUP');
+      : (activeLeague?.name ?? 'Choose a lineup');
+  const platform =
+    !isPlaceholder && !(isPro && watched.length > 1) && activeLeague
+      ? platformLabel(activeLeague.platform)
+      : null;
 
   return (
     <>
-      <Pressable
-        accessibilityLabel="Active Lineup"
-        accessibilityRole="button"
-        onPress={openSheet}
-        style={({ pressed }) => [styles.trigger, pressed && styles.triggerPressed]}
-      >
-        <Text
-          numberOfLines={1}
-          style={isPlaceholder ? styles.triggerPlaceholder : styles.triggerLabel}
+      <View ref={triggerRef} collapsable={false}>
+        <Pressable
+          accessibilityLabel="Active lineup"
+          accessibilityRole="button"
+          onPress={openSheet}
+          style={({ pressed }) => [styles.trigger, pressed && styles.triggerPressed]}
+          testID="active-lineup-trigger"
         >
-          {label}
-        </Text>
-        <Text style={styles.triggerChevron}>▾</Text>
-      </Pressable>
+          <View style={styles.triggerCopy}>
+            <Text style={styles.triggerEyebrow}>Active lineup</Text>
+            <View style={styles.triggerValueRow}>
+              <Text numberOfLines={1} style={styles.triggerLabel}>
+                {value}
+              </Text>
+              {platform ? (
+                <Text numberOfLines={1} style={styles.triggerPlatform}>
+                  {platform}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+          <Text style={styles.triggerChevron}>▾</Text>
+        </Pressable>
+      </View>
 
       <Modal
-        animationType="slide"
+        animationType={desktop ? 'none' : 'slide'}
         transparent
         visible={open}
         onRequestClose={() => setOpen(false)}
@@ -163,10 +219,12 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
         }}
       >
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
-        <View style={styles.sheet}>
-          <Text style={styles.sheetTitle}>
-            {isPro ? 'Watch leagues' : 'Active Lineup'}
-          </Text>
+        <View
+          accessibilityRole="menu"
+          style={desktop ? [styles.dropdown, { top: anchor.top, right: anchor.right }] : styles.sheet}
+          testID={desktop ? 'active-lineup-dropdown' : 'active-lineup-sheet'}
+        >
+          <Text style={styles.sheetTitle}>{isPro ? 'Watch leagues' : 'Active lineup'}</Text>
           <Text style={styles.sheetHint}>
             {isPro
               ? 'Home and flags use every league you select.'
@@ -177,6 +235,7 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
             const selected = draft.includes(league.league_id);
             return (
               <Pressable
+                accessibilityRole="menuitem"
                 disabled={saving}
                 key={league.league_id}
                 onPress={() => toggle(league.league_id)}
@@ -185,8 +244,10 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
                   selected && styles.rowSelected,
                   saving && styles.rowDisabled,
                 ]}
+                testID="active-lineup-option"
               >
                 <Text style={styles.rowLabel}>{league.name}</Text>
+                <Text style={styles.rowPlatform}>{platformLabel(league.platform)}</Text>
                 <Text style={styles.rowCheck}>{selected ? '✓' : ''}</Text>
               </Pressable>
             );
@@ -218,6 +279,18 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
 }
 
 const styles = StyleSheet.create({
+  dropdown: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.control,
+    borderWidth: theme.effects.panelBorderWidth,
+    paddingBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+    position: 'absolute',
+    width: 280,
+    ...theme.effects.panelGlow,
+  },
   backdrop: {
     bottom: 0,
     left: 0,
@@ -255,6 +328,11 @@ const styles = StyleSheet.create({
     fontSize: theme.type.body.size,
     fontWeight: theme.type.bodyStrong.weight,
   },
+  rowPlatform: {
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.caption.size,
+    marginLeft: theme.spacing.sm,
+  },
   rowSelected: {
     backgroundColor: theme.colors.accentMuted,
     borderColor: theme.colors.accentBorder,
@@ -287,38 +365,45 @@ const styles = StyleSheet.create({
   trigger: {
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.accentBorder,
+    borderColor: theme.colors.border,
     borderRadius: theme.radii.control,
     borderWidth: theme.effects.panelBorderWidth,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    maxWidth: 180,
-    minWidth: 132,
+    maxWidth: 280,
+    minWidth: 160,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
-    ...theme.effects.panelGlow,
+  },
+  triggerCopy: {
+    flex: 1,
+    marginRight: theme.spacing.sm,
+  },
+  triggerEyebrow: {
+    color: theme.colors.accent,
+    fontFamily: theme.type.eyebrow.fontFamily,
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
   },
   triggerPressed: {
     opacity: theme.opacity.disabled,
   },
-  /** Placeholder state — nothing watched yet, so the box itself reads "ACTIVE LINEUP". */
-  triggerPlaceholder: {
-    color: theme.colors.accent,
-    flex: 1,
-    fontFamily: fonts.monoBold,
-    fontSize: theme.type.eyebrow.size,
-    letterSpacing: theme.type.eyebrow.letterSpacing,
-    marginRight: theme.spacing.sm,
-  },
-  /** Selected state — smaller/secondary than the placeholder above so the box doesn't shout once
-   *  a real league name is filling it. */
   triggerLabel: {
     color: theme.colors.textPrimary,
-    flex: 1,
+    flexShrink: 1,
     fontFamily: fonts.sansSemiBold,
-    fontSize: theme.type.eyebrow.size - 2,
-    fontWeight: '400',
-    marginRight: theme.spacing.sm,
+    fontSize: theme.type.caption.size,
+  },
+  triggerPlatform: {
+    color: theme.colors.textTertiary,
+    fontSize: theme.type.caption.size,
+    marginLeft: theme.spacing.sm,
+  },
+  triggerValueRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    marginTop: 2,
   },
   triggerChevron: {
     color: theme.colors.accent,

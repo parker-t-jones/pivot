@@ -132,7 +132,25 @@ function NavMark({ active, icon }: { active: boolean; icon: 'home' | 'watch' | '
       </View>
     );
   }
-  return <View style={[styles.ring, { borderColor: color }]} />;
+  return <GearMark color={color} />;
+}
+
+/** Same 16px box as the home grid and the watch bars. Teeth plus a hub, no icon font. */
+function GearMark({ color }: { color: string }) {
+  return (
+    <View style={styles.gear} testID="nav-settings-gear">
+      {[0, 45, 90, 135].map((degrees) => (
+        <View
+          key={degrees}
+          style={[
+            styles.gearTooth,
+            { backgroundColor: color, transform: [{ rotate: `${degrees}deg` }] },
+          ]}
+        />
+      ))}
+      <View style={[styles.gearHub, { borderColor: color }]} />
+    </View>
+  );
 }
 
 function ProCard({ onPress }: { onPress: () => void }) {
@@ -275,11 +293,27 @@ const styles = StyleSheet.create({
   rail: {
     width: DESKTOP_RAIL_WIDTH,
   },
-  ring: {
+  gear: {
+    height: 16,
+    width: 16,
+  },
+  gearHub: {
+    backgroundColor: theme.colors.background,
     borderRadius: theme.radii.pill,
     borderWidth: 2,
-    height: 14,
-    width: 14,
+    height: 8,
+    left: 4,
+    position: 'absolute',
+    top: 4,
+    width: 8,
+  },
+  gearTooth: {
+    borderRadius: 1,
+    height: 16,
+    left: 6.5,
+    position: 'absolute',
+    top: 0,
+    width: 3,
   },
   spacer: {
     flex: 1,

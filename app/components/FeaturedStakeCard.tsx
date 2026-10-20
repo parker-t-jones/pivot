@@ -30,6 +30,8 @@ interface FeaturedStakeCardProps {
   bets?: FeaturedBetChip[];
   /** `NEXT KICKOFF` when Home is falling back to a game with no stake in it. */
   eyebrow?: string;
+  /** Kickoff text. Up next passes `kickoffLabel`; otherwise the weekday and clock. */
+  when?: string;
 }
 
 /**
@@ -41,10 +43,11 @@ export function FeaturedStakeCard({
   players = [],
   bets = [],
   eyebrow = 'BIGGEST STAKE',
+  when,
 }: FeaturedStakeCardProps) {
   const network = networkLabelFromAirings(game.airings);
   const cta = watchCta(game.broadcasts, game.airings);
-  const when = formatNextGameWhen(game.scheduled_start);
+  const kickoff = when ?? formatNextGameWhen(game.scheduled_start);
 
   return (
     <Slip style={styles.card}>
@@ -59,7 +62,7 @@ export function FeaturedStakeCard({
             {eyebrow}
           </Text>
           <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.meta}>
-            {network === null ? when : `${when} · ${network}`}
+            {network === null ? kickoff : `${kickoff} · ${network}`}
           </Text>
         </View>
 

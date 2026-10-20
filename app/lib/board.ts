@@ -214,10 +214,15 @@ export function buildBoardRows(
     .sort((a, b) => a.earliestKickoff.getTime() - b.earliestKickoff.getTime());
 }
 
-/** Flattens grouped rows back to slate order — for `pickFeaturedGame` / `nextKickoff`. */
+/** Flattens grouped rows back to slate order — for the pre-game hero / `nextKickoff`. */
 export function flattenRows(groups: BoardWindowGroup[]): BoardRowData[] {
   return groups.flatMap((group) => group.rows);
 }
+
+/** A staked kickoff inside this window leads the pre-game hero as "Up next". */
+export const UP_NEXT_WINDOW_MS = 12 * 60 * 60 * 1000;
+
+export type PregameHeroKind = 'up_next' | 'biggest_stake' | 'next_kickoff';
 
 /**
  * The hero card's game: the upcoming game the user has most riding on.
@@ -236,6 +241,42 @@ export function pickFeaturedGame(rows: BoardRowData[], now: Date): BoardRowData 
     });
 
   return ranked[0] ?? null;
+}
+
+/**
+ * Pre-game hero. A staked game inside {@link UP_NEXT_WINDOW_MS} is "Up next": the soonest
+ * such kickoff, then the same order as `pickFeaturedGame` (more stakes, then game id).
+ * Otherwise the biggest upcoming stake, then the next kickoff with no stake.
+ *
+ * A game that has already kicked off is not a candidate. Live Home does not call this; the
+ * live section leads while staked games are in progress.
+ */
+export function pickPregameHero(
+  rows: BoardRowData[],
+  now: Date,
+): { row: BoardRowData; kind: PregameHeroKind } | null {
+  const nowMs = now.getTime();
+  const upcoming = rows.filter((row) => row.kickoff.getTime() > nowMs && row.stakeCount >= 1);
+  const soon = upcoming
+    .filter((row) => row.kickoff.getTime() - nowMs <= UP_NEXT_WINDOW_MS)
+    .sort(compareUpNext);
+  const nextUp = soon[0];
+  if (nextUp) return { row: nextUp, kind: 'up_next' };
+
+  const featured = pickFeaturedGame(rows, now);
+  if (featured) return { row: featured, kind: 'biggest_stake' };
+
+  const next = nextKickoff(rows, now);
+  if (next) return { row: next, kind: 'next_kickoff' };
+  return null;
+}
+
+/** Soonest kickoff, then more stakes, then game id. */
+function compareUpNext(a: BoardRowData, b: BoardRowData): number {
+  const byKickoff = a.kickoff.getTime() - b.kickoff.getTime();
+  if (byKickoff !== 0) return byKickoff;
+  if (a.stakeCount !== b.stakeCount) return b.stakeCount - a.stakeCount;
+  return compareGameIds(a.gameId, b.gameId);
 }
 
 /**

@@ -1,24 +1,15 @@
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { LoadingState } from '../components/LoadingState';
 import { WebPhoneColumn } from '../components/WebPhoneColumn';
 import { SessionProvider, useSession } from '../contexts/SessionContext';
 import { getOrCreateDeviceId } from '../lib/deviceId';
 import { displayFontMap } from '../lib/fonts';
 import { registerServiceWorker } from '../lib/webPush';
-import { theme } from '../lib/theme';
-
-function LoadingState({ message }: { message: string }) {
-  return (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator color={theme.colors.accent} size="large" />
-      <Text style={styles.loadingText}>{message}</Text>
-    </View>
-  );
-}
 
 function RootNavigator() {
   const { isLoading, session } = useSession();
@@ -96,18 +87,3 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.background,
-    flex: 1,
-    gap: theme.spacing.md,
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.xl,
-  },
-  loadingText: {
-    color: theme.colors.textTertiary,
-    fontSize: theme.type.button.size,
-  },
-});

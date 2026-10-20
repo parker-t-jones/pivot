@@ -1,8 +1,9 @@
 import { Stack, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { ErrorState } from '../../components/ErrorState';
+import { LoadingState } from '../../components/LoadingState';
 import { NotificationBannerHost } from '../../components/NotificationBannerHost';
 import { StakeUndoToast } from '../../components/StakeUndoToast';
 import { NotificationResponseHandler } from '../../components/NotificationResponseHandler';
@@ -21,15 +22,6 @@ import {
 } from '../../lib/navigationGates';
 import { resetToHomeRoot } from '../../lib/navigateAfterConnect';
 import { theme } from '../../lib/theme';
-
-function LoadingState({ message }: { message: string }) {
-  return (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator color={theme.colors.accent} size="large" />
-      <Text style={styles.loadingText}>{message}</Text>
-    </View>
-  );
-}
 
 /**
  * Sprint 10 Phase 4 — leagues gate then push catch-all. Tabs live under `(tabs)`; connect /
@@ -153,9 +145,5 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.xl,
-  },
-  loadingText: {
-    color: theme.colors.textTertiary,
-    fontSize: theme.type.button.size,
   },
 });

@@ -1,16 +1,8 @@
 import { useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ErrorState } from './ErrorState';
+import { YardLineLoader } from './YardLineLoader';
 import { ListRow } from './ListRow';
 import { PrimaryButton } from './PrimaryButton';
 import { TextButton } from './TextButton';
@@ -113,7 +105,7 @@ export function PlayerPicker({
         }
         value={query}
       />
-      {isSearching ? <ActivityIndicator color={theme.colors.textPrimary} /> : null}
+      {isSearching ? <YardLineLoader size="section" /> : null}
 
       <FlatList
         data={results.filter((p) => !rosteredIds.has(p.player_id))}

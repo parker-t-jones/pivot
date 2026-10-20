@@ -8,6 +8,8 @@ import {
   isPregameBranch,
   nextKickoff,
   pickFeaturedGame,
+  pickPregameHero,
+  UP_NEXT_WINDOW_MS,
   type StakeRef,
 } from './board';
 import type { GameAiring, GameBroadcast } from './gameDisplay';
@@ -308,6 +310,87 @@ describe('pickFeaturedGame', () => {
   it('returns null once every staked game has kicked off', () => {
     const refs: StakeRef[] = [{ gameId: 'g1', teamId: 'KC' }];
     expect(pickFeaturedGame(rowsFor(refs), new Date('2026-09-23T00:00:00Z'))).toBeNull();
+  });
+});
+
+describe('pickPregameHero', () => {
+  const slate: ScheduleGame[] = [
+    game('g1', '2026-09-20T17:00:00Z'),
+    game('g2', '2026-09-20T17:00:00Z'),
+    game('g3', '2026-09-20T20:25:00Z'),
+    game('g4', '2026-09-22T00:15:00Z'),
+  ];
+
+  function rowsFor(refs: StakeRef[]) {
+    return flattenRows(buildBoardRows(slate, refs));
+  }
+
+  it('picks the soonest staked game inside 12 hours, ahead of a bigger later stake', () => {
+    const now = new Date('2026-09-20T12:00:00Z');
+    expect(slate[0] && now.getTime()).toBeLessThan(
+      new Date(slate[2]?.scheduled_start ?? 0).getTime(),
+    );
+    const choice = pickPregameHero(
+      rowsFor([
+        { gameId: 'g1', teamId: 'KC' },
+        { gameId: 'g3', teamId: 'KC' },
+        { gameId: 'g3', teamId: 'BUF' },
+      ]),
+      now,
+    );
+    expect(choice).toEqual({ row: expect.objectContaining({ gameId: 'g1' }), kind: 'up_next' });
+    expect(
+      new Date(slate[0]?.scheduled_start ?? 0).getTime() - now.getTime(),
+    ).toBeLessThanOrEqual(UP_NEXT_WINDOW_MS);
+  });
+
+  it('keeps the biggest stake when every staked kickoff is beyond 12 hours', () => {
+    const now = new Date('2026-09-19T12:00:00Z');
+    const choice = pickPregameHero(
+      rowsFor([
+        { gameId: 'g1', teamId: 'KC' },
+        { gameId: 'g3', teamId: 'KC' },
+        { gameId: 'g3', teamId: 'BUF' },
+      ]),
+      now,
+    );
+    expect(choice?.kind).toBe('biggest_stake');
+    expect(choice?.row.gameId).toBe('g3');
+  });
+
+  it('breaks an up-next kickoff tie by stake count, then game id', () => {
+    const now = new Date('2026-09-20T12:00:00Z');
+    const moreStakes = pickPregameHero(
+      rowsFor([
+        { gameId: 'g1', teamId: 'KC' },
+        { gameId: 'g2', teamId: 'KC' },
+        { gameId: 'g2', teamId: 'BUF' },
+      ]),
+      now,
+    );
+    expect(moreStakes?.row.gameId).toBe('g2');
+    const sameStake = pickPregameHero(
+      rowsFor([
+        { gameId: 'g2', teamId: 'BUF' },
+        { gameId: 'g1', teamId: 'KC' },
+      ]),
+      now,
+    );
+    expect(sameStake?.row.gameId).toBe('g1');
+  });
+
+  it('leaves a kicked-off stake out so a live game is not the pre-game hero', () => {
+    const now = new Date('2026-09-20T18:00:00Z');
+    const choice = pickPregameHero(
+      rowsFor([
+        { gameId: 'g1', teamId: 'KC' },
+        { gameId: 'g1', teamId: 'BUF' },
+        { gameId: 'g3', teamId: 'KC' },
+      ]),
+      now,
+    );
+    expect(choice?.kind).toBe('up_next');
+    expect(choice?.row.gameId).toBe('g3');
   });
 });
 

@@ -24,6 +24,8 @@ export interface PregameHero {
   /** Bet chips for the featured game. Absent on the NEXT KICKOFF fallback. */
   bets?: FeaturedBetChip[];
   eyebrow?: string;
+  /** Up next shows `kickoffLabel`. Biggest stake keeps the card's own clock. */
+  when?: string;
 }
 
 interface HomePregameViewProps {
@@ -72,6 +74,7 @@ export function HomePregameView({
           players={hero.players}
           bets={hero.bets ?? []}
           {...(hero.eyebrow === undefined ? {} : { eyebrow: hero.eyebrow })}
+          {...(hero.when === undefined ? {} : { when: hero.when })}
         />
       )}
       {groups.length > 0 ? (

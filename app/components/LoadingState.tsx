@@ -1,6 +1,7 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '../lib/theme';
+import { YardLineLoader } from './YardLineLoader';
 
 interface LoadingStateProps {
   message?: string;
@@ -14,7 +15,7 @@ interface LoadingStateProps {
 export function LoadingState({ message = 'Loading…', inline = false }: LoadingStateProps) {
   return (
     <View style={inline ? styles.inline : styles.fill}>
-      <ActivityIndicator color={theme.colors.textPrimary} size={inline ? 'small' : 'large'} />
+      <YardLineLoader size={inline ? 'section' : 'screen'} />
       <Text style={styles.text}>{message}</Text>
     </View>
   );
@@ -23,6 +24,7 @@ export function LoadingState({ message = 'Loading…', inline = false }: Loading
 const styles = StyleSheet.create({
   fill: {
     alignItems: 'center',
+    backgroundColor: theme.colors.background,
     flex: 1,
     gap: theme.spacing.md,
     justifyContent: 'center',
