@@ -47,7 +47,12 @@ describe('validateLine', () => {
     expect(validateLine('SPREAD', '7')).toEqual({ ok: true, line: 7 });
     expect(validateLine('SPREAD', '50')).toEqual({ ok: true, line: 50 });
     expect(validateLine('SPREAD', '-50')).toEqual({ ok: true, line: -50 });
-    expect(validateLine('SPREAD', '0')).toEqual({ ok: true, line: 0 });
+    expect(validateLine('SPREAD', '0.5')).toEqual({ ok: true, line: 0.5 });
+    expect(validateLine('SPREAD', '0')).toEqual({
+      ok: false,
+      message: 'Spread must be at least 0.5.',
+    });
+    expect(validateLine('SPREAD', '-0').ok).toBe(false);
     expect(validateLine('SPREAD', '0.25').ok).toBe(false);
     expect(validateLine('SPREAD', '50.5').ok).toBe(false);
     expect(validateLine('SPREAD', '-50.5').ok).toBe(false);

@@ -7,13 +7,22 @@ export type TotalRole = 'over' | 'under';
 /**
  * Spread magnitude the stepper will stop at. The field is the absolute value;
  * favorite sends it negative and underdog sends it positive, matching the old
- * minus / plus toggle. 0 is a pick'em. Totals stay inside the API's 10–100 range.
+ * minus / plus toggle. A zero spread is a moneyline, so the floor is a half
+ * point. Totals stay inside the API's 10–100 range.
  */
-export const SPREAD_LINE_BOUNDS = { min: 0, max: 50 } as const;
+export const SPREAD_LINE_BOUNDS = { min: 0.5, max: 50 } as const;
 export const TOTAL_LINE_BOUNDS = { min: 10, max: 100 } as const;
+
+/** Shown as a placeholder, and the number an untouched field steps from. */
+export const SPREAD_LINE_BASELINE = 3.5;
+export const TOTAL_LINE_BASELINE = 44.5;
 
 export function lineBounds(kind: 'SPREAD' | 'TOTAL'): { min: number; max: number } {
   return kind === 'SPREAD' ? SPREAD_LINE_BOUNDS : TOTAL_LINE_BOUNDS;
+}
+
+export function lineBaseline(kind: 'SPREAD' | 'TOTAL'): number {
+  return kind === 'SPREAD' ? SPREAD_LINE_BASELINE : TOTAL_LINE_BASELINE;
 }
 
 /** What `validateLine` received from the old sign toggle, for the same bet. */
@@ -30,21 +39,18 @@ export function formatMagnitude(value: number): string {
 
 /**
  * Move the magnitude by half a point and keep it inside the type's range.
- * An empty field steps up to the first legal positive value and ignores a step down.
+ * An empty field is still the placeholder, so the first tap steps from `baseline`.
  */
 export function stepMagnitude(
   current: string,
   direction: 1 | -1,
   bounds: { min: number; max: number },
+  baseline: number,
 ): string {
   const parsed = Number(current);
   const hasValue = current.trim().length > 0 && Number.isFinite(parsed);
-  if (!hasValue) {
-    if (direction < 0) return current;
-    const first = bounds.min > 0 ? bounds.min : 0.5;
-    return formatMagnitude(first);
-  }
-  const next = Math.round((parsed + direction * 0.5) * 2) / 2;
+  const start = hasValue ? parsed : baseline;
+  const next = Math.round((start + direction * 0.5) * 2) / 2;
   const clamped = Math.min(bounds.max, Math.max(bounds.min, next));
   return formatMagnitude(clamped);
 }

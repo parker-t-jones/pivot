@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { buildStakeRequest, validateLine, type ManualStakeType } from './stakes';
 import {
+  SPREAD_LINE_BASELINE,
   SPREAD_LINE_BOUNDS,
+  TOTAL_LINE_BASELINE,
   TOTAL_LINE_BOUNDS,
   addPickReviewNote,
   spreadLineInput,
@@ -74,17 +76,18 @@ describe('add a pick readout', () => {
 });
 
 describe('add a pick stepper', () => {
-  it('stays inside the spread and total ranges', () => {
-    expect(stepMagnitude('', 1, SPREAD_LINE_BOUNDS)).toBe('0.5');
-    expect(stepMagnitude('', -1, SPREAD_LINE_BOUNDS)).toBe('');
-    expect(stepMagnitude('0.5', -1, SPREAD_LINE_BOUNDS)).toBe('0');
-    expect(stepMagnitude('0', -1, SPREAD_LINE_BOUNDS)).toBe('0');
-    expect(stepMagnitude('50', 1, SPREAD_LINE_BOUNDS)).toBe('50');
-    expect(stepMagnitude('49.5', 1, SPREAD_LINE_BOUNDS)).toBe('50');
-    expect(stepMagnitude('', 1, TOTAL_LINE_BOUNDS)).toBe('10');
-    expect(stepMagnitude('10', -1, TOTAL_LINE_BOUNDS)).toBe('10');
-    expect(stepMagnitude('100', 1, TOTAL_LINE_BOUNDS)).toBe('100');
-    expect(stepMagnitude('9.5', 1, TOTAL_LINE_BOUNDS)).toBe('10');
+  it('steps an empty field from the placeholder and stays inside the range', () => {
+    expect(stepMagnitude('', 1, SPREAD_LINE_BOUNDS, SPREAD_LINE_BASELINE)).toBe('4');
+    expect(stepMagnitude('', -1, SPREAD_LINE_BOUNDS, SPREAD_LINE_BASELINE)).toBe('3');
+    expect(stepMagnitude('0.5', -1, SPREAD_LINE_BOUNDS, SPREAD_LINE_BASELINE)).toBe('0.5');
+    expect(stepMagnitude('0', 1, SPREAD_LINE_BOUNDS, SPREAD_LINE_BASELINE)).toBe('0.5');
+    expect(stepMagnitude('50', 1, SPREAD_LINE_BOUNDS, SPREAD_LINE_BASELINE)).toBe('50');
+    expect(stepMagnitude('49.5', 1, SPREAD_LINE_BOUNDS, SPREAD_LINE_BASELINE)).toBe('50');
+    expect(stepMagnitude('', 1, TOTAL_LINE_BOUNDS, TOTAL_LINE_BASELINE)).toBe('45');
+    expect(stepMagnitude('', -1, TOTAL_LINE_BOUNDS, TOTAL_LINE_BASELINE)).toBe('44');
+    expect(stepMagnitude('10', -1, TOTAL_LINE_BOUNDS, TOTAL_LINE_BASELINE)).toBe('10');
+    expect(stepMagnitude('100', 1, TOTAL_LINE_BOUNDS, TOTAL_LINE_BASELINE)).toBe('100');
+    expect(stepMagnitude('9.5', 1, TOTAL_LINE_BOUNDS, TOTAL_LINE_BASELINE)).toBe('10');
   });
 });
 

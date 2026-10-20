@@ -25,6 +25,7 @@ import {
 } from '../lib/addPickGames';
 import {
   addPickReviewNote,
+  lineBaseline,
   lineBounds,
   spreadLineInput,
   spreadReadout,
@@ -413,7 +414,9 @@ export function AddPickFlow({
               else setTotalRole(next as TotalRole);
             }}
             onStep={(direction) =>
-              setLineText((current) => stepMagnitude(current, direction, lineBounds(kind)))
+              setLineText((current) =>
+                stepMagnitude(current, direction, lineBounds(kind), lineBaseline(kind)),
+              )
             }
             readout={readout}
             role={kind === 'SPREAD' ? spreadRole : totalRole}

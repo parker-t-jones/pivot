@@ -1,6 +1,13 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { SpreadRole, TotalRole } from '../lib/addPickLine';
+import {
+  formatMagnitude,
+  lineBaseline,
+  lineBounds,
+  type SpreadRole,
+  type TotalRole,
+} from '../lib/addPickLine';
 import { theme } from '../lib/theme';
 import { PrimaryButton } from './PrimaryButton';
 import { SegmentedControl } from './SegmentedControl';
@@ -29,6 +36,12 @@ export function AddPickLineEntry({
   onStep: (direction: 1 | -1) => void;
   onContinue: () => void;
 }) {
+  const [focused, setFocused] = useState(false);
+  const bounds = lineBounds(kind);
+  const parsed = Number(magnitude);
+  const hasValue = magnitude.trim().length > 0 && Number.isFinite(parsed);
+  const atMin = hasValue && parsed <= bounds.min;
+  const atMax = hasValue && parsed >= bounds.max;
   const segments =
     kind === 'SPREAD'
       ? [
@@ -51,16 +64,20 @@ export function AddPickLineEntry({
         <Pressable
           accessibilityLabel="Decrease line by 0.5"
           accessibilityRole="button"
+          accessibilityState={{ disabled: atMin }}
+          disabled={atMin}
           onPress={() => onStep(-1)}
-          style={styles.step}
+          style={[styles.step, atMin && styles.stepDisabled]}
           testID="add-pick-step-down"
         >
           <Text style={styles.stepLabel}>−0.5</Text>
         </Pressable>
         <TextField
           keyboardType="decimal-pad"
+          onBlur={() => setFocused(false)}
           onChangeText={onMagnitude}
-          placeholder={kind === 'SPREAD' ? '3.5' : '47.5'}
+          onFocus={() => setFocused(true)}
+          placeholder={focused ? '' : formatMagnitude(lineBaseline(kind))}
           style={styles.field}
           testID="add-pick-line-field"
           value={magnitude}
@@ -68,8 +85,10 @@ export function AddPickLineEntry({
         <Pressable
           accessibilityLabel="Increase line by 0.5"
           accessibilityRole="button"
+          accessibilityState={{ disabled: atMax }}
+          disabled={atMax}
           onPress={() => onStep(1)}
-          style={styles.step}
+          style={[styles.step, atMax && styles.stepDisabled]}
           testID="add-pick-step-up"
         >
           <Text style={styles.stepLabel}>+0.5</Text>
@@ -112,6 +131,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     minWidth: 44,
     paddingHorizontal: theme.spacing.sm,
+  },
+  stepDisabled: {
+    opacity: theme.opacity.disabled,
   },
   stepper: {
     alignItems: 'center',

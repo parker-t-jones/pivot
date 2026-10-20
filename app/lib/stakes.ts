@@ -81,7 +81,11 @@ export function validateLine(
     return { ok: false, message: 'Use steps of 0.5.' };
   }
   if (type === 'SPREAD') {
-    if (Math.abs(signed) > 50) {
+    const magnitude = Math.abs(signed);
+    if (magnitude < 0.5) {
+      return { ok: false, message: 'Spread must be at least 0.5.' };
+    }
+    if (magnitude > 50) {
       return { ok: false, message: 'Spread must be between −50 and +50.' };
     }
     return { ok: true, line: signed };
