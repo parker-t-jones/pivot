@@ -214,25 +214,47 @@ function TableRow({
       : row.gameId
         ? matchupTeams(row.switchLabel)
         : null;
-  const [hot, setHot] = useState(false);
+  const rowRef = useRef<View>(null);
+  const [pointerInside, setPointerInside] = useState(false);
+  const [rowFocused, setRowFocused] = useState(false);
   const [removeFocused, setRemoveFocused] = useState(false);
-  const showRemove = hot || removeFocused;
+  const showRemove = pointerInside || rowFocused || removeFocused;
+  const rowHot = pointerInside || rowFocused;
+
+  useEffect(() => {
+    const node = rowRef.current as unknown as HTMLElement | null;
+    node?.setAttribute('data-hovered', pointerInside ? '1' : '0');
+  }, [pointerInside]);
+
+  // mouseenter / mouseleave ignore children. Pressable hover does not: a nested
+  // Pressable locks the parent hover, which used to hide Remove and start again.
+  const rowPointer = {
+    onMouseEnter: () => setPointerInside(true),
+    onMouseLeave: () => setPointerInside(false),
+  };
+
   return (
     <Pressable
-      onBlur={() => setHot(false)}
-      onFocus={() => setHot(true)}
-      onHoverIn={() => setHot(true)}
-      onHoverOut={() => setHot(false)}
+      {...rowPointer}
+      onBlur={(event) => {
+        const next = (event.nativeEvent as { relatedTarget?: EventTarget | null }).relatedTarget;
+        const host = rowRef.current as unknown as Node | null;
+        if (host != null && next instanceof Node && host.contains(next)) return;
+        setRowFocused(false);
+      }}
+      onFocus={() => setRowFocused(true)}
       onPress={row.live ? onOpen : undefined}
+      ref={rowRef}
       style={(state) => {
-        const { pressed, hovered, focused } = webPressState(state);
+        const { pressed, focused } = webPressState(state);
         return [
           styles.row,
-          hovered && styles.rowHover,
+          (rowHot || focused) && styles.rowHover,
           pressed && row.live && styles.rowPressed,
           focused && row.live && styles.rowFocused,
         ];
       }}
+      testID="watchlist-row"
     >
       <Text numberOfLines={1} style={[styles.slot, styles.slotCol]}>
         {row.slot}

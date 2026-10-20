@@ -47,7 +47,7 @@ export function pickNeedsLine(kind: PickKind): boolean {
   return kind === 'SPREAD' || kind === 'TOTAL';
 }
 
-/** Spread is the long path, used before a type is chosen so the eyebrow still has a count. */
+/** Spread is the long path. Before a type is chosen the eyebrow does not show a total. */
 export function pickSteps(kind: PickKind | null): readonly PickStep[] {
   if (kind === 'TOTAL') return ['type', 'game', 'line', 'confirm'];
   if (kind === 'MONEYLINE' || kind === 'SURVIVOR') return ['type', 'game', 'team', 'confirm'];
@@ -55,19 +55,38 @@ export function pickSteps(kind: PickKind | null): readonly PickStep[] {
 }
 
 export function addPickEyebrow(kind: PickKind | null, step: PickStep): string {
+  if (kind == null) return 'ADD A PICK · STEP 1';
   const steps = pickSteps(kind);
   const index = Math.max(1, steps.indexOf(step) + 1);
-  const progress = `STEP ${index} OF ${steps.length}`;
-  if (kind == null) return `ADD A PICK · ${progress}`;
-  return `ADD A PICK · ${kind} · ${progress}`;
+  return `ADD A PICK · ${kind} · STEP ${index} OF ${steps.length}`;
 }
 
-export function addPickSlipLines(input: {
-  kindLabel: string | null;
-  gameLabel: string | null;
-  sideLabel: string | null;
-}): string[] {
-  return [input.kindLabel, input.gameLabel, input.sideLabel].filter(
-    (line): line is string => line != null && line.length > 0,
-  );
+export function addPickSlipPickLabel(kind: PickKind | null): 'PICK' | 'TEAM' {
+  return kind === 'SURVIVOR' ? 'TEAM' : 'PICK';
+}
+
+/** The PICK or TEAM value, once that step has something to show. Null stays a placeholder. */
+export function addPickSlipPickText(input: {
+  kind: PickKind | null;
+  team: string;
+  totalSide: 'TOTAL_OVER' | 'TOTAL_UNDER';
+  lineOk: boolean;
+  lineText: string;
+  lineInput: string;
+}): string | null {
+  if (input.kind === 'TOTAL') {
+    if (!input.lineOk || input.lineText.trim().length === 0) return null;
+    const side = input.totalSide === 'TOTAL_OVER' ? 'Over' : 'Under';
+    return `${side} ${input.lineInput}`;
+  }
+  if (input.team.length === 0) return null;
+  if (input.kind === 'SPREAD') {
+    if (!input.lineOk || input.lineText.trim().length === 0) return null;
+    const signed = input.lineInput.startsWith('-')
+      ? `\u2212${input.lineInput.slice(1)}`
+      : input.lineInput;
+    return `${input.team} ${signed}`;
+  }
+  if (input.kind === 'MONEYLINE' || input.kind === 'SURVIVOR') return input.team;
+  return null;
 }

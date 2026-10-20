@@ -1,12 +1,13 @@
 import { networkLabelFromAirings } from '@pivot/shared/broadcast';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   PICK_KIND_COPY,
   addPickEyebrow,
-  addPickSlipLines,
+  addPickSlipPickLabel,
+  addPickSlipPickText,
   pickNeedsLine,
   pickNeedsTeam,
   stakeTypeForKind,
@@ -14,12 +15,12 @@ import {
   type PickStep,
 } from '../lib/addPickFlow';
 import { notifyAddPickSaved } from '../lib/addPickDrawer';
+import { AddPickSlip } from './AddPickSlip';
 import { AddPickTypeStep } from './AddPickTypeStep';
 import { ErrorState } from './ErrorState';
 import { ListRow } from './ListRow';
 import { LoadingState } from './LoadingState';
 import { PrimaryButton } from './PrimaryButton';
-import { SlipPerforation } from './SlipPerforation';
 import { TextButton } from './TextButton';
 import { TextField } from './TextField';
 import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
@@ -38,24 +39,18 @@ interface Allowance {
   freeLeft: number | null;
 }
 
-function AddPickSlip({ lines }: { lines: readonly string[] }) {
-  return (
-    <View style={styles.slip}>
-      {lines.map((line) => (
-        <Text key={line} style={styles.slipLine}>
-          {line}
-        </Text>
-      ))}
-      <SlipPerforation />
-    </View>
-  );
-}
-
 /**
  * The add-a-pick steps. Phone renders this full screen. The wide desktop drawer
  * renders the same tree over the current tab.
  */
-export function AddPickFlow({ onDismiss }: { onDismiss: () => void }) {
+export function AddPickFlow({
+  onDismiss,
+  closeAffordance = 'header',
+}: {
+  onDismiss: () => void;
+  /** The drawer already draws ×. The phone header draws one once Back is hidden. */
+  closeAffordance?: 'header' | 'parent';
+}) {
   const insets = useSafeAreaInsets();
   const { openUpgrade } = useUpgradeSheet();
   const [step, setStep] = useState<PickStep>('type');
@@ -212,19 +207,23 @@ export function AddPickFlow({ onDismiss }: { onDismiss: () => void }) {
         );
 
   const kindLabel = PICK_KIND_COPY.find((option) => option.kind === kind)?.label ?? null;
-  const sideLabel = slipSideLabel({
+  const pickText = addPickSlipPickText({
     kind,
-    abbreviation,
-    lineText,
-    lineOk: lineCheck?.ok === true,
-    lineInput,
+    team: abbreviation,
     totalSide,
+    lineOk: lineCheck?.ok === true,
+    lineText,
+    lineInput,
   });
-  const slipLines = addPickSlipLines({
-    kindLabel,
-    gameLabel: game ? `${game.away_team} @ ${game.home_team}` : null,
-    sideLabel,
-  });
+  const slipGame = game
+    ? {
+        away: game.away_team,
+        home: game.home_team,
+        detail: [kickoffLabel(game.scheduled_start), networkLabelFromAirings(game.airings)]
+          .filter((part): part is string => part != null && part.length > 0)
+          .join(' · '),
+      }
+    : null;
 
   const submit = async () => {
     if (type === null || game === null || kind === null) return;
@@ -265,12 +264,34 @@ export function AddPickFlow({ onDismiss }: { onDismiss: () => void }) {
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
-        <TextButton label="Back" onPress={goBack} />
+        {step === 'type' ? (
+          closeAffordance === 'header' ? (
+            <Pressable
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+              onPress={onDismiss}
+              style={styles.close}
+            >
+              <Text style={styles.closeLabel}>×</Text>
+            </Pressable>
+          ) : null
+        ) : (
+          <TextButton label="Back" onPress={goBack} />
+        )}
         <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.eyebrow}>
           {addPickEyebrow(kind, step)}
         </Text>
       </View>
-      <AddPickSlip lines={slipLines} />
+      <AddPickSlip
+        game={slipGame}
+        pick={
+          pickText == null
+            ? null
+            : { badge: kind === 'TOTAL' ? null : abbreviation || null, text: pickText }
+        }
+        pickLabel={addPickSlipPickLabel(kind)}
+        typeLabel={kindLabel}
+      />
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -383,25 +404,6 @@ export function AddPickFlow({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
-function slipSideLabel(input: {
-  kind: PickKind | null;
-  abbreviation: string;
-  lineText: string;
-  lineOk: boolean;
-  lineInput: string;
-  totalSide: 'TOTAL_OVER' | 'TOTAL_UNDER';
-}): string | null {
-  if (input.kind === 'TOTAL') {
-    const side = input.totalSide === 'TOTAL_OVER' ? 'Over' : 'Under';
-    return input.lineText.trim().length > 0 && input.lineOk ? `${side} ${input.lineInput}` : side;
-  }
-  if (input.abbreviation.length === 0) return null;
-  if (input.kind === 'SPREAD' && input.lineText.trim().length > 0 && input.lineOk) {
-    return `${input.abbreviation} ${input.lineInput}`;
-  }
-  return input.abbreviation;
-}
-
 function kickoffLabel(iso: string): string {
   const when = new Date(iso);
   if (Number.isNaN(when.getTime())) return '';
@@ -442,6 +444,18 @@ const styles = StyleSheet.create({
     fontWeight: theme.type.eyebrow.weight,
     letterSpacing: theme.type.eyebrow.letterSpacing,
   },
+  close: {
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
+  closeLabel: {
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.title.size,
+    lineHeight: theme.type.title.lineHeight,
+  },
   header: {
     gap: theme.spacing.sm,
     paddingBottom: theme.spacing.md,
@@ -462,15 +476,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.spacing.lg,
-  },
-  slip: {
-    gap: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.lg2,
-  },
-  slipLine: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.body.size,
-    lineHeight: theme.type.body.lineHeight,
   },
   stack: {
     gap: theme.spacing.sm,

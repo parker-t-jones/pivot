@@ -72,7 +72,7 @@ export function AddPickDrawer(): ReactElement {
             <Text style={styles.closeLabel}>×</Text>
           </Pressable>
         </View>
-        <AddPickFlow onDismiss={closeAddPick} />
+        <AddPickFlow closeAffordance="parent" onDismiss={closeAddPick} />
       </View>
     </View>
   );

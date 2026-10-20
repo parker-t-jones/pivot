@@ -197,6 +197,39 @@ describe('desktop watchlist remove', () => {
     expect(document.querySelector('[data-testid="stake-undo-toast"]')).toBeNull();
   });
 
+  it('keeps Remove visible when the pointer moves from the row onto the button', () => {
+    renderTable(() => undefined);
+    const button = removeButton() as HTMLElement;
+    const row = button.closest('[data-testid="watchlist-row"]');
+    if (!(row instanceof HTMLElement)) throw new Error('Remove is not inside a row');
+
+    const heightBefore = button.getBoundingClientRect().height;
+    expect(getComputedStyle(button).opacity).toBe('0');
+    expect(row.getAttribute('data-hovered')).toBe('0');
+
+    act(() => {
+      row.dispatchEvent(
+        new MouseEvent('mouseover', { bubbles: true, relatedTarget: document.body }),
+      );
+    });
+
+    expect(row.getAttribute('data-hovered')).toBe('1');
+    expect(getComputedStyle(button).opacity).not.toBe('0');
+    expect(button.getBoundingClientRect().height).toBe(heightBefore);
+
+    act(() => {
+      button.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      button.dispatchEvent(
+        new PointerEvent('pointerenter', { bubbles: true, pointerType: 'mouse' }),
+      );
+    });
+
+    expect(row.getAttribute('data-hovered')).toBe('1');
+    expect(getComputedStyle(button).opacity).not.toBe('0');
+    expect(getComputedStyle(button).pointerEvents).not.toBe('none');
+    expect(button.isConnected).toBe(true);
+  });
+
   it('keeps the undo toast and does not delete when the table unmounts', () => {
     const deleteStake = vi.fn();
     renderTable(deleteStake);

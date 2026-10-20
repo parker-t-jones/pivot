@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PICK_KIND_COPY,
   addPickEyebrow,
-  addPickSlipLines,
+  addPickSlipPickText,
   pickKindAccess,
   pickSteps,
 } from './addPickFlow';
@@ -21,7 +21,7 @@ describe('add a pick explainers', () => {
 
 describe('add a pick eyebrow', () => {
   it('names the step before a type is chosen', () => {
-    expect(addPickEyebrow(null, 'type')).toBe('ADD A PICK · STEP 1 OF 5');
+    expect(addPickEyebrow(null, 'type')).toBe('ADD A PICK · STEP 1');
     expect(pickSteps(null)).toHaveLength(5);
   });
 
@@ -34,15 +34,47 @@ describe('add a pick eyebrow', () => {
 });
 
 describe('add a pick slip', () => {
-  it('lists the choices made so far', () => {
-    expect(addPickSlipLines({ kindLabel: null, gameLabel: null, sideLabel: null })).toEqual([]);
+  it('fills the pick line once the side is chosen', () => {
     expect(
-      addPickSlipLines({
-        kindLabel: 'Spread',
-        gameLabel: 'BAL @ CLE',
-        sideLabel: 'BAL -3.5',
+      addPickSlipPickText({
+        kind: null,
+        team: '',
+        totalSide: 'TOTAL_OVER',
+        lineOk: false,
+        lineText: '',
+        lineInput: '',
       }),
-    ).toEqual(['Spread', 'BAL @ CLE', 'BAL -3.5']);
+    ).toBeNull();
+    expect(
+      addPickSlipPickText({
+        kind: 'SPREAD',
+        team: 'SEA',
+        totalSide: 'TOTAL_OVER',
+        lineOk: true,
+        lineText: '3.5',
+        lineInput: '-3.5',
+      }),
+    ).toBe('SEA \u22123.5');
+    expect(
+      addPickSlipPickText({
+        kind: 'TOTAL',
+        team: '',
+        totalSide: 'TOTAL_UNDER',
+        lineOk: true,
+        lineText: '47.5',
+        lineInput: '47.5',
+      }),
+    ).toBe('Under 47.5');
+    expect(
+      addPickSlipPickText({
+        kind: 'SURVIVOR',
+        team: 'JAX',
+        totalSide: 'TOTAL_OVER',
+        lineOk: false,
+        lineText: '',
+        lineInput: '',
+      }),
+    ).toBe('JAX');
   });
 });
 
