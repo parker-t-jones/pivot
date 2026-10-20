@@ -57,21 +57,33 @@ describe('add a pick line payload', () => {
 });
 
 describe('add a pick readout', () => {
-  it('names the cover and the push', () => {
-    expect(spreadReadout('Seahawks', 'favorite', 3.5)).toBe('Seahawks must win by 4+');
+  it('states the cover, and a refunded tie on a whole number', () => {
+    expect(spreadReadout('Seahawks', 'favorite', 3.5)).toBe('Seahawks must win by 4 or more');
     expect(spreadReadout('Seahawks', 'favorite', 3)).toBe(
-      'Seahawks must win by 4+ (push if they win by 3)',
+      'Seahawks must win by 4 or more. Winning by exactly 3 is a tie, and the pick is refunded.',
     );
     expect(spreadReadout('Seahawks', 'underdog', 3.5)).toBe(
-      'Seahawks can lose by 3 or less, or win',
+      'Seahawks must lose by 3 or less, or win',
     );
     expect(spreadReadout('Seahawks', 'underdog', 3)).toBe(
-      'Seahawks can lose by 2 or less, or win (push at 3)',
+      'Seahawks must lose by 2 or less, or win. Losing by exactly 3 is a tie, and the pick is refunded.',
     );
-    expect(totalReadout('over', 47.5)).toBe('Combined score must be 48+');
-    expect(totalReadout('under', 47.5)).toBe('47 or fewer');
-    expect(totalReadout('over', 47)).toBe('Combined score must be 48+ (push at 47)');
-    expect(totalReadout('under', 47)).toBe('46 or fewer (push at 47)');
+    expect(totalReadout('over', 47.5)).toBe('Combined score must be 48 or more');
+    expect(totalReadout('over', 45)).toBe(
+      'Combined score must be 46 or more. Exactly 45 is a tie, and the pick is refunded.',
+    );
+    expect(totalReadout('under', 47.5)).toBe('Combined score must be 47 or fewer');
+    expect(totalReadout('under', 45)).toBe(
+      'Combined score must be 44 or fewer. Exactly 45 is a tie, and the pick is refunded.',
+    );
+    for (const sentence of [
+      spreadReadout('Seahawks', 'favorite', 3),
+      spreadReadout('Seahawks', 'underdog', 3.5),
+      totalReadout('over', 47.5),
+      totalReadout('under', 45),
+    ]) {
+      expect(sentence.toLowerCase()).not.toContain('push');
+    }
   });
 });
 

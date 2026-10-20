@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { theme } from '../lib/theme';
 import { AddPickSlip } from './AddPickSlip';
+import { dashCountForWidth } from './SlipPerforation';
 
 vi.mock('react-native', () => import('react-native-web'));
 
@@ -77,6 +78,45 @@ describe('add pick slip edge', () => {
       expect(edgeBox.left).toBeGreaterThanOrEqual(slipBox.left - 0.5);
       expect(edgeBox.right).toBeLessThanOrEqual(slipBox.right + 0.5);
     }
+  });
+
+  it('stretches the card dash row to the container width', () => {
+    host.style.width = '900px';
+    act(() => {
+      root.render(
+        <AddPickSlip
+          game={{ away: 'WAS', home: 'SF', detail: 'Mon 8:15 PM' }}
+          pick={null}
+          pickLabel="PICK"
+          typeLabel="Spread"
+        />,
+      );
+    });
+
+    const container = host.querySelector('[data-testid="slip-perforation-card"]');
+    const rule = host.querySelector('[data-testid="slip-perforation-dashes"]');
+    if (!(container instanceof HTMLElement) || !(rule instanceof HTMLElement)) {
+      throw new Error('dash row missing');
+    }
+
+    expect(getComputedStyle(rule).width).toBe('100%');
+    expect(getComputedStyle(container).width).toBe('100%');
+
+    for (const width of [390, 900, 1279, 1440]) {
+      const count = dashCountForWidth(width);
+      const span = count * 6 + Math.max(0, count - 1) * 4;
+      expect(span).toBeGreaterThanOrEqual(width);
+    }
+
+    const handler = (rule as HTMLElement & { __reactLayoutHandler?: (event: unknown) => void })
+      .__reactLayoutHandler;
+    expect(typeof handler).toBe('function');
+    act(() => {
+      handler?.({ nativeEvent: { layout: { x: 0, y: 0, width: 900, height: 1 } } });
+    });
+    const marks = rule.children.length;
+    const span = marks * 6 + Math.max(0, marks - 1) * 4;
+    expect(span).toBeGreaterThanOrEqual(900);
   });
 });
 

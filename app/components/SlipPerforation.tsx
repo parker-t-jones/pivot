@@ -1,11 +1,25 @@
-import { type ReactElement } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useState, type ReactElement } from 'react';
+import {
+  StyleSheet,
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 
 import { theme } from '../lib/theme';
 
-/** Enough dashes to fill a phone-width slip; the row clips the extras. */
+/** Enough dashes to fill a phone-width ticket; the row clips the extras. */
 const DASH_COUNT = 48;
+const DASH_WIDTH = 6;
+const DASH_GAP = 4;
 const NOTCH = 14;
+
+/** How many dashes cover `width`, including a clip at the far end. */
+export function dashCountForWidth(width: number): number {
+  if (width <= 0) return DASH_COUNT;
+  return Math.max(1, Math.ceil((width + DASH_GAP) / (DASH_WIDTH + DASH_GAP)));
+}
 
 interface SlipPerforationProps {
   style?: StyleProp<ViewStyle>;
@@ -17,8 +31,22 @@ interface SlipPerforationProps {
   edge?: 'ticket' | 'card';
 }
 
-function dashes(): ReactElement[] {
-  return Array.from({ length: DASH_COUNT }, (_, index) => <View key={index} style={styles.dash} />);
+function dashes(count: number): ReactElement[] {
+  return Array.from({ length: count }, (_, index) => <View key={index} style={styles.dash} />);
+}
+
+/** Card-edge dashes. The row is the full middle width; the count follows that width. */
+function CardDashRule() {
+  const [count, setCount] = useState(DASH_COUNT);
+  const onLayout = (event: LayoutChangeEvent) => {
+    const next = dashCountForWidth(event.nativeEvent.layout.width);
+    setCount((current) => (current === next ? current : next));
+  };
+  return (
+    <View onLayout={onLayout} style={cardStyles.rule} testID="slip-perforation-dashes">
+      {dashes(count)}
+    </View>
+  );
 }
 
 /**
@@ -33,7 +61,7 @@ export function SlipPerforation({ style, edge = 'ticket' }: SlipPerforationProps
         <View style={[cardStyles.notch, cardStyles.notchLeft]} />
         <View style={cardStyles.middle}>
           <View style={cardStyles.above} />
-          <View style={cardStyles.rule}>{dashes()}</View>
+          <CardDashRule />
           <View style={cardStyles.below} />
         </View>
         <View style={[cardStyles.notch, cardStyles.notchRight]} />
@@ -44,7 +72,7 @@ export function SlipPerforation({ style, edge = 'ticket' }: SlipPerforationProps
   return (
     <View style={[styles.row, style]}>
       <View style={[styles.notch, styles.notchStart]} />
-      <View style={styles.rule}>{dashes()}</View>
+      <View style={styles.rule}>{dashes(DASH_COUNT)}</View>
       <View style={[styles.notch, styles.notchEnd]} />
     </View>
   );
@@ -54,7 +82,7 @@ const styles = StyleSheet.create({
   dash: {
     backgroundColor: theme.colors.border,
     height: StyleSheet.hairlineWidth,
-    width: 6,
+    width: DASH_WIDTH,
   },
   notch: {
     backgroundColor: theme.colors.background,
@@ -79,7 +107,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     flexDirection: 'row',
-    gap: 4,
+    gap: DASH_GAP,
     overflow: 'hidden',
   },
 });
@@ -127,9 +155,11 @@ const cardStyles = StyleSheet.create({
   },
   rule: {
     alignItems: 'center',
+    alignSelf: 'stretch',
     flexDirection: 'row',
-    gap: 4,
+    gap: DASH_GAP,
     height: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+    width: '100%',
   },
 });

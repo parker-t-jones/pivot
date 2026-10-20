@@ -59,33 +59,49 @@ function whole(value: number): boolean {
   return Number.isInteger(value);
 }
 
-/** Plain-English spread. Half points have no push; whole points name it. */
+function withTie(base: string, tie: string, magnitude: number): string {
+  return whole(magnitude) ? `${base}. ${tie}` : base;
+}
+
+/** Plain-English spread. A whole number names the refunded tie; a half point does not. */
 export function spreadReadout(nickname: string, role: SpreadRole, magnitude: number): string {
   if (magnitude === 0) {
     return role === 'favorite'
-      ? `${nickname} must win (push on a tie)`
-      : `${nickname} can tie or win`;
+      ? `${nickname} must win. A tie refunds the pick.`
+      : `${nickname} can tie or win.`;
   }
   if (role === 'favorite') {
     const winBy = Math.floor(magnitude) + 1;
-    const base = `${nickname} must win by ${winBy}+`;
-    return whole(magnitude) ? `${base} (push if they win by ${magnitude})` : base;
+    return withTie(
+      `${nickname} must win by ${winBy} or more`,
+      `Winning by exactly ${magnitude} is a tie, and the pick is refunded.`,
+      magnitude,
+    );
   }
   const loseBy = Math.ceil(magnitude) - 1;
-  const base = `${nickname} can lose by ${loseBy} or less, or win`;
-  return whole(magnitude) ? `${base} (push at ${magnitude})` : base;
+  return withTie(
+    `${nickname} must lose by ${loseBy} or less, or win`,
+    `Losing by exactly ${magnitude} is a tie, and the pick is refunded.`,
+    magnitude,
+  );
 }
 
-/** Plain-English total. Half points have no push; whole points name it. */
+/** Plain-English total. A whole number names the refunded tie; a half point does not. */
 export function totalReadout(role: TotalRole, magnitude: number): string {
   if (role === 'over') {
     const need = Math.floor(magnitude) + 1;
-    const base = `Combined score must be ${need}+`;
-    return whole(magnitude) ? `${base} (push at ${magnitude})` : base;
+    return withTie(
+      `Combined score must be ${need} or more`,
+      `Exactly ${magnitude} is a tie, and the pick is refunded.`,
+      magnitude,
+    );
   }
   const fewer = Math.ceil(magnitude) - 1;
-  const base = `${fewer} or fewer`;
-  return whole(magnitude) ? `${base} (push at ${magnitude})` : base;
+  return withTie(
+    `Combined score must be ${fewer} or fewer`,
+    `Exactly ${magnitude} is a tie, and the pick is refunded.`,
+    magnitude,
+  );
 }
 
 /** Free accounts only. Pro and an unknown count stay quiet. */
