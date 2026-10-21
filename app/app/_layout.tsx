@@ -67,7 +67,7 @@ export default function RootLayout() {
     return (
       <SafeAreaProvider>
         <WebPhoneColumn>
-          <LoadingState message="Loading..." />
+          <LoadingState message="Loading" />
         </WebPhoneColumn>
       </SafeAreaProvider>
     );

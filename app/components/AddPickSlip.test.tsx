@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { theme } from '../lib/theme';
 import { AddPickSlip } from './AddPickSlip';
+import { TEAM_BADGE_SIZE } from './TeamBadge';
 import { SlipPerforation, dashCountForWidth } from './SlipPerforation';
 
 vi.mock('react-native', () => import('react-native-web'));
@@ -66,6 +67,26 @@ describe('add pick slip edge', () => {
       expect(notNegative(style.left)).toBe(true);
       expect(notNegative(style.right)).toBe(true);
     }
+
+    const leftNotch = host.querySelector('[data-testid="slip-notch-left"]');
+    const rightNotch = host.querySelector('[data-testid="slip-notch-right"]');
+    const disc = leftNotch?.firstElementChild;
+    if (
+      !(leftNotch instanceof HTMLElement) ||
+      !(rightNotch instanceof HTMLElement) ||
+      !(disc instanceof HTMLElement)
+    ) {
+      throw new Error('card notches missing');
+    }
+    const inset = Number.parseFloat(perforationStyle.paddingLeft);
+    const overhang =
+      Number.parseFloat(getComputedStyle(disc).width) -
+      Number.parseFloat(getComputedStyle(leftNotch).width);
+    expect(inset).toBeGreaterThan(0);
+    expect(inset - overhang).toBeGreaterThan(0);
+    expect(getComputedStyle(leftNotch).height).toBe(perforationStyle.height);
+    expect(getComputedStyle(rightNotch).height).toBe(perforationStyle.height);
+    expect(perforationStyle.alignItems).toBe('center');
 
     expect(perforationStyle.width).toBe('100%');
     expect(getComputedStyle(slip).overflow).not.toBe('hidden');
@@ -245,4 +266,135 @@ describe('add pick slip rows', () => {
     const badges = host.textContent?.match(/SEA/g) ?? [];
     expect(badges).toHaveLength(1);
   });
+
+  it('puts kickoff on its own line under the badges', () => {
+    act(() => {
+      root.render(
+        <AddPickSlip
+          game={{ away: 'WAS', home: 'SF', detail: 'Mon 8:15 PM · ESPN' }}
+          pick={{ badge: 'WAS', text: 'WAS −3.5' }}
+          pickLabel="PICK"
+          typeLabel="Spread"
+        />,
+      );
+    });
+    const line = host.querySelector('[data-testid="add-pick-slip-game-line"]');
+    const detail = host.querySelector('[data-testid="add-pick-slip-game-detail"]');
+    if (!(line instanceof HTMLElement) || !(detail instanceof HTMLElement)) {
+      throw new Error('game lines missing');
+    }
+    expect(line.textContent).toContain('WAS');
+    expect(line.textContent).toContain('@');
+    expect(line.textContent).toContain('SF');
+    expect(line.textContent).not.toContain('ESPN');
+    expect(line.contains(detail)).toBe(false);
+    expect(detail.textContent).toBe('Mon 8:15 PM · ESPN');
+    expect(getComputedStyle(line.parentElement as Element).flexDirection).toBe('column');
+    expect(
+      getComputedStyle(host.querySelector('[data-testid="add-pick-slip-pick"]') as Element)
+        .alignItems,
+    ).toBe('center');
+  });
+
+  it('keeps rows at least as tall as a small badge, in flow, at large text sizes', () => {
+    host.style.width = '320px';
+    act(() => {
+      root.render(
+        <AddPickSlip
+          game={{ away: 'WAS', home: 'SF', detail: 'Monday 8:15 PM · Prime Video nationwide' }}
+          pick={{ badge: 'WAS', text: 'WAS −3.5' }}
+          pickLabel="PICK"
+          typeLabel="Spread"
+        />,
+      );
+    });
+
+    const rows = Array.from(
+      host.querySelectorAll<HTMLElement>('[data-testid="add-pick-slip-row"]'),
+    );
+    expect(rows).toHaveLength(3);
+    const rowGap = Number.parseFloat(
+      getComputedStyle(host.querySelector('[data-testid="add-pick-slip-rows"]') as Element)
+        .rowGap ||
+        getComputedStyle(host.querySelector('[data-testid="add-pick-slip-rows"]') as Element).gap,
+    );
+    expect(rowGap).toBeGreaterThanOrEqual(theme.spacing.sm);
+
+    const badges = Array.from(host.querySelectorAll('[role="img"]'));
+    expect(badges.length).toBeGreaterThanOrEqual(3);
+    for (const badge of badges) {
+      expect(getComputedStyle(badge).height).toBe(`${TEAM_BADGE_SIZE.sm}px`);
+      expect(getComputedStyle(badge).width).toBe(`${TEAM_BADGE_SIZE.sm}px`);
+    }
+
+    const framesAt = (scale: number) => {
+      const frames: { top: number; bottom: number; height: number }[] = [];
+      let cursor = 0;
+      rows.forEach((row, index) => {
+        assertInFlow(row);
+        const height = rowHeight(row, scale);
+        expect(height).toBeGreaterThanOrEqual(TEAM_BADGE_SIZE.sm);
+        if (index > 0) cursor += rowGap;
+        const top = cursor;
+        cursor += height;
+        frames.push({ top, bottom: cursor, height });
+      });
+      return frames;
+    };
+
+    // 1.35 is xxxLarge, the largest non-accessibility size. 1.79 is an accessibility size.
+    for (const scale of [1, 1.35, 1.79]) {
+      const frames = framesAt(scale);
+      for (let index = 0; index < frames.length - 1; index += 1) {
+        const current = frames[index];
+        const next = frames[index + 1];
+        if (current == null || next == null) continue;
+        expect(current.bottom).toBeLessThanOrEqual(next.top);
+      }
+    }
+  });
 });
+
+function px(value: string): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function lineBox(node: Element, scale: number): number {
+  if (!(node instanceof HTMLElement)) return 0;
+  const raw = getComputedStyle(node).lineHeight;
+  return raw.endsWith('px') ? px(raw) * scale : 0;
+}
+
+function tallestLine(root: Element, scale: number): number {
+  let max = lineBox(root, scale);
+  for (const node of Array.from(root.querySelectorAll('*'))) {
+    max = Math.max(max, lineBox(node, scale));
+  }
+  return max;
+}
+
+function assertInFlow(row: HTMLElement): void {
+  const style = getComputedStyle(row);
+  expect(style.position).not.toBe('absolute');
+  expect(px(style.marginTop)).toBeGreaterThanOrEqual(0);
+  expect(px(style.marginBottom)).toBeGreaterThanOrEqual(0);
+  expect(px(style.minHeight)).toBeGreaterThanOrEqual(TEAM_BADGE_SIZE.sm);
+  for (const node of Array.from(row.querySelectorAll<HTMLElement>('*'))) {
+    const child = getComputedStyle(node);
+    expect(child.position).not.toBe('absolute');
+    expect(px(child.marginTop)).toBeGreaterThanOrEqual(0);
+    expect(px(child.marginLeft)).toBeGreaterThanOrEqual(0);
+  }
+}
+
+function rowHeight(row: HTMLElement, scale: number): number {
+  const minHeight = px(getComputedStyle(row).minHeight);
+  const detail = row.querySelector('[data-testid="add-pick-slip-game-detail"]');
+  const gameLine = row.querySelector('[data-testid="add-pick-slip-game-line"]');
+  if (detail instanceof HTMLElement && gameLine instanceof HTMLElement) {
+    const firstLine = Math.max(TEAM_BADGE_SIZE.sm, tallestLine(gameLine, scale));
+    return firstLine + theme.spacing.xs + lineBox(detail, scale);
+  }
+  return Math.max(minHeight, tallestLine(row, scale));
+}

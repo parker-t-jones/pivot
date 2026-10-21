@@ -3,6 +3,8 @@ import { act, type ComponentProps } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { theme } from '../lib/theme';
+import { spreadReadout } from '../lib/addPickLine';
 import { AddPickLineEntry } from './AddPickLineEntry';
 
 vi.mock('react-native', () => import('react-native-web'));
@@ -17,10 +19,7 @@ vi.mock('../lib/fonts', () => ({
   },
 }));
 
-function renderEntry(
-  root: Root,
-  props: Partial<ComponentProps<typeof AddPickLineEntry>> = {},
-) {
+function renderEntry(root: Root, props: Partial<ComponentProps<typeof AddPickLineEntry>> = {}) {
   act(() => {
     root.render(
       <AddPickLineEntry
@@ -94,5 +93,21 @@ describe('add a pick line entry', () => {
       (open as HTMLElement).click();
     });
     expect(onStep).toHaveBeenCalledWith(-1);
+  });
+
+  it('shows the readout as a full sentence in secondary text', () => {
+    const sentence = spreadReadout('Seahawks', 'favorite', 3);
+    renderEntry(root, { magnitude: '3', readout: sentence, role: 'favorite' });
+    const readout = host.querySelector('[data-testid="add-pick-line-readout"]');
+    const stack = host.querySelector('[data-testid="add-pick-line"]');
+    expect(sentence).toBe(
+      'Seahawks must win by 4 or more. Winning by exactly 3 is a tie, and the pick is refunded.',
+    );
+    expect(readout?.textContent).toBe(sentence);
+    expect(theme.colors.textSecondary).toBe('#9A9AA3');
+    expect(getComputedStyle(readout as Element).color.replace(/\s/g, '')).toBe(
+      'rgba(154,154,163,1.00)',
+    );
+    expect(getComputedStyle(stack as Element).gap).toBe(`${theme.spacing.lg}px`);
   });
 });

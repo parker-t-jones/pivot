@@ -12,6 +12,7 @@ describe('theme', () => {
     expect(theme.colors.textTertiary).toBe('#6E6E78');
     expect(theme.colors.accent).toBe('#F5A018');
     expect(theme.colors.accentPressed).toBe('#D68C10');
+    expect(theme.colors.pylon).toBe('#FF6A00');
     expect(theme.colors.accentMuted).toBe('rgba(245, 160, 24, 0.18)');
     expect(theme.colors.onAccent).toBe('#412402');
     expect(theme.colors.danger).toBe('#FF5A5A');

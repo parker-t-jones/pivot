@@ -59,7 +59,7 @@ describe('YardLineLoader', () => {
     expect(host.querySelector('[data-testid="yard-line-sweep"]')).toBeNull();
   });
 
-  it('renders the compact strip with the same label', () => {
+  it('renders the compact strip with the same label and no field markings', () => {
     matchMedia(false);
     act(() => {
       root.render(<YardLineLoader size="compact" />);
@@ -67,6 +67,37 @@ describe('YardLineLoader', () => {
     expect(host.querySelector('[data-testid="yard-line-loader"]')?.getAttribute('aria-label')).toBe(
       'Loading',
     );
+    expect(host.textContent).not.toContain('…');
+    expect(host.textContent).not.toContain('...');
+    expect(host.querySelectorAll('[data-testid="yard-line-end-zone"]')).toHaveLength(0);
+    expect(host.querySelectorAll('[data-testid="yard-line-pylon"]')).toHaveLength(0);
+    expect(host.querySelectorAll('[data-testid="yard-line-goalpost"]')).toHaveLength(0);
+  });
+
+  it('paints both end zones, eight pylons, and two goalposts on the large sizes', () => {
+    matchMedia(false);
+    for (const size of ['screen', 'section'] as const) {
+      act(() => {
+        root.render(<YardLineLoader size={size} />);
+      });
+      expect(
+        host.querySelector('[data-testid="yard-line-loader"]')?.getAttribute('aria-label'),
+      ).toBe('Loading');
+      expect(host.querySelectorAll('[data-testid="yard-line-end-zone"]')).toHaveLength(2);
+      expect(host.querySelectorAll('[data-testid="yard-line-pylon"]')).toHaveLength(8);
+      expect(host.querySelectorAll('[data-testid="yard-line-goalpost"]')).toHaveLength(2);
+    }
+  });
+
+  it('keeps the end-zone markings when reduced motion holds the sweep', () => {
+    matchMedia(true);
+    act(() => {
+      root.render(<YardLineLoader size="section" />);
+    });
+    expect(host.querySelector('[data-testid="yard-line-static"]')).toBeTruthy();
+    expect(host.querySelector('[data-testid="yard-line-sweep"]')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="yard-line-pylon"]')).toHaveLength(8);
+    expect(host.querySelectorAll('[data-testid="yard-line-goalpost"]')).toHaveLength(2);
   });
 });
 
@@ -98,5 +129,18 @@ describe('LoadingState', () => {
     expect(host.querySelectorAll('[data-testid="yard-line-loader"]')).toHaveLength(2);
     expect(host.textContent).toContain('Loading settings…');
     expect(host.textContent).toContain('Loading games…');
+  });
+
+  it('says Loading, with no ellipsis, matching the field label', () => {
+    act(() => {
+      root.render(<LoadingState />);
+    });
+    expect(host.textContent).toContain('Loading');
+    expect(host.textContent).not.toContain('Loading…');
+    expect(host.textContent).not.toContain('Loading...');
+    expect(host.querySelector('[data-testid="yard-line-loader"]')?.getAttribute('aria-label')).toBe(
+      'Loading',
+    );
+    expect(host.querySelectorAll('[data-testid="yard-line-pylon"]').length).toBeGreaterThan(0);
   });
 });

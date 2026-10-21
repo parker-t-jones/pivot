@@ -14,7 +14,7 @@ const BAND_HEIGHT = 4;
 export interface FeaturedBetChip {
   stakeId: string;
   label: string;
-  /** Same eyebrow as the YOUR STAKES line. Survivor is POOL. */
+  /** Same eyebrow as the YOUR PICKS line. Survivor is POOL. */
   eyebrow?: 'BET' | 'POOL';
 }
 
@@ -42,7 +42,7 @@ export function FeaturedStakeCard({
   game,
   players = [],
   bets = [],
-  eyebrow = 'BIGGEST STAKE',
+  eyebrow = 'TOP GAME',
   when,
 }: FeaturedStakeCardProps) {
   const network = networkLabelFromAirings(game.airings);

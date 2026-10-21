@@ -8,7 +8,12 @@ import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
 import { fonts } from '../lib/fonts';
 import { fetchMe } from '../lib/me';
 import { theme } from '../lib/theme';
-import { PRO_PERKS, UPGRADE_CARD_WIDTH, UPGRADE_SUBTITLE } from '../lib/upgradeCopy';
+import {
+  PRO_PERKS,
+  UPGRADE_CARD_WIDTH,
+  UPGRADE_HEADLINE,
+  UPGRADE_SUBTITLE,
+} from '../lib/upgradeCopy';
 import { upgradeContextLine } from '../lib/upgradeCap';
 import { useDesktopTier } from '../lib/useDesktopTier';
 import { webUpgradeStatus } from '../lib/webUpgradeStatus';
@@ -80,7 +85,6 @@ export function UpgradeSheet() {
         >
           <View style={styles.cardHeader}>
             <Text style={styles.eyebrow}>PIVOT PRO</Text>
-            <TextButton hitArea="padding" label="Close" onPress={closeUpgrade} size="smallStrong" />
           </View>
 
           <ScrollView
@@ -89,7 +93,7 @@ export function UpgradeSheet() {
             showsVerticalScrollIndicator={false}
           >
             {contextLine ? <Text style={styles.contextLine}>{contextLine}</Text> : null}
-            <Text style={styles.title}>Watch every league that matters</Text>
+            <Text style={styles.title}>{UPGRADE_HEADLINE}</Text>
             <Text style={styles.subtitle}>{UPGRADE_SUBTITLE}</Text>
 
             <View style={styles.perkList}>
@@ -102,6 +106,10 @@ export function UpgradeSheet() {
             </View>
 
             {isPro === null ? null : <Text style={styles.status}>{webUpgradeStatus(isPro)}</Text>}
+
+            <View style={styles.footerRow}>
+              <TextButton label="Not now" onPress={closeUpgrade} tone="muted" />
+            </View>
           </ScrollView>
         </Slip>
       </View>
@@ -140,6 +148,12 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  footerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: theme.spacing.xs,
   },
   eyebrow: {
     color: theme.colors.accent,

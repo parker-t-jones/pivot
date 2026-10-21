@@ -66,7 +66,7 @@ export function MyCardList({
   const header = (
     <View style={styles.stakesHeader}>
       <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.stakesEyebrow}>
-        {`YOUR STAKES · ${stakeCount}`}
+        {`YOUR PICKS · ${stakeCount}`}
       </Text>
       <View style={styles.headerActions}>
         <TextButton label="Add a pick" onPress={openAddPick} size="smallStrong" />

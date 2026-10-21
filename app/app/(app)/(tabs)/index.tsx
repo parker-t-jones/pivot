@@ -853,7 +853,7 @@ export default function HomeScreen() {
     if (!game) return { hero: null, countdownMs, nextKickoffAt };
 
     // No stake on the next kickoff: NEXT KICKOFF and no player chips. A stake inside 12h is
-    // UP NEXT. Anything later stays BIGGEST STAKE. Live branches never render this hero.
+    // UP NEXT. Anything later stays TOP GAME. Live branches never render this hero.
     const hero: PregameHero =
       choice.kind === 'next_kickoff'
         ? { game, players: [], eyebrow: 'NEXT KICKOFF' }
@@ -981,7 +981,7 @@ export default function HomeScreen() {
       }
     >
       {isLoading ? (
-        <LoadingState message="Loading…" />
+        <LoadingState message="Loading" />
       ) : loadError ? (
         <ErrorState message={loadError} onRetry={onRefresh} />
       ) : (

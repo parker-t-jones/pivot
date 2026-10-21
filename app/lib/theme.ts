@@ -13,6 +13,8 @@ export const theme = {
     textTertiary: '#6E6E78',
     accent: '#F5A018',
     accentPressed: '#D68C10',
+    /** Traffic-pylon orange. Accent amber is too gold to read as a pylon on the field. */
+    pylon: '#FF6A00',
     /** Accent at 18% opacity — reason-chip fill and secondary-button press wash. */
     accentMuted: 'rgba(245, 160, 24, 0.18)',
     onAccent: '#412402',

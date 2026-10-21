@@ -155,6 +155,8 @@ describe('desktop watchlist remove', () => {
     renderTable(deleteStake);
 
     const table = document.querySelector('[data-testid="watchlist-table"]');
+    expect(table?.textContent).toContain('Pick');
+    expect(table?.textContent).not.toContain('Stake');
     expect(table?.textContent).toContain(STAKE_NAME);
     expect(table).not.toBeNull();
 

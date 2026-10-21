@@ -20,7 +20,13 @@ import {
   restorePurchases,
 } from '../lib/purchases';
 import { theme } from '../lib/theme';
-import { PRO_PERKS, UPGRADE_SUBTITLE } from '../lib/upgradeCopy';
+import {
+  PRO_PERKS,
+  UPGRADE_HEADLINE,
+  UPGRADE_PRICE_FALLBACK,
+  UPGRADE_SUBTITLE,
+  upgradePurchaseLabel,
+} from '../lib/upgradeCopy';
 import { upgradeContextLine } from '../lib/upgradeCap';
 
 const MANAGE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
@@ -47,7 +53,7 @@ export function UpgradeSheet() {
   const { user } = useSession();
   const insets = useSafeAreaInsets();
 
-  const [priceLabel, setPriceLabel] = useState('$9.99/month');
+  const [priceLabel, setPriceLabel] = useState(UPGRADE_PRICE_FALLBACK);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isPro, setIsPro] = useState(false);
@@ -168,7 +174,6 @@ export function UpgradeSheet() {
         >
           <View style={styles.cardHeader}>
             <Text style={styles.eyebrow}>PIVOT PRO</Text>
-            <TextButton hitArea="padding" label="Close" onPress={closeUpgrade} size="smallStrong" />
           </View>
 
           <ScrollView
@@ -177,7 +182,7 @@ export function UpgradeSheet() {
             showsVerticalScrollIndicator={false}
           >
             {contextLine ? <Text style={styles.contextLine}>{contextLine}</Text> : null}
-            <Text style={styles.title}>Watch every league that matters</Text>
+            <Text style={styles.title}>{UPGRADE_HEADLINE}</Text>
             <Text style={styles.subtitle}>{UPGRADE_SUBTITLE}</Text>
 
             <View style={styles.perkList}>
@@ -188,8 +193,6 @@ export function UpgradeSheet() {
                 </View>
               ))}
             </View>
-
-            <Text style={styles.price}>{priceLabel}</Text>
 
             {isPro ? (
               <>
@@ -208,7 +211,7 @@ export function UpgradeSheet() {
               </>
             ) : (
               <PrimaryButton
-                label={`Upgrade — ${priceLabel}`}
+                label={upgradePurchaseLabel(priceLabel)}
                 loading={isPurchasing}
                 onPress={() => void onPurchase()}
               />
@@ -220,7 +223,7 @@ export function UpgradeSheet() {
                 label={isRestoring ? 'Restoring…' : 'Restore purchases'}
                 onPress={() => void onRestore()}
               />
-              {!isPro ? <TextButton label="Not now" onPress={closeUpgrade} tone="muted" /> : null}
+              <TextButton label="Not now" onPress={closeUpgrade} tone="muted" />
             </View>
           </ScrollView>
         </Slip>
@@ -299,11 +302,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing.sm,
     paddingVertical: theme.spacing.xs,
-  },
-  price: {
-    color: theme.colors.textSecondary,
-    fontFamily: fonts.monoMedium,
-    fontSize: theme.type.small.size,
   },
   subtitle: {
     color: theme.colors.textSecondary,

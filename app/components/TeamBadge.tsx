@@ -11,11 +11,13 @@ interface TeamBadgeProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const SIZE_BOX = {
+export const TEAM_BADGE_SIZE = {
   sm: theme.spacing.xxl,
   md: theme.spacing.xxxl,
   lg: theme.spacing.huge,
 } as const;
+
+const SIZE_BOX = TEAM_BADGE_SIZE;
 
 const styles = StyleSheet.create({
   badge: {
@@ -80,6 +82,7 @@ export function TeamBadge({ abbr, size, style }: TeamBadgeProps) {
         accessibilityElementsHidden
         adjustsFontSizeToFit
         importantForAccessibility="no-hide-descendants"
+        maxFontSizeMultiplier={1}
         numberOfLines={1}
         style={[styles.initials, TYPE[size], { color: colors.textColor }]}
       >

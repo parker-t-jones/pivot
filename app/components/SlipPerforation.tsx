@@ -82,13 +82,13 @@ export function SlipPerforation({ style, edge = 'ticket' }: SlipPerforationProps
   if (edge === 'card') {
     return (
       <View style={[cardStyles.row, style]} testID="slip-perforation-card">
-        <View style={[styles.notch, styles.notchLeft]} />
+        <CardNotch side="left" />
         <View style={cardStyles.middle}>
           <View style={cardStyles.above} />
           <DashRule style={cardStyles.rule} testID="slip-perforation-dashes" />
           <View style={cardStyles.below} />
         </View>
-        <View style={[styles.notch, styles.notchRight]} />
+        <CardNotch side="right" />
       </View>
     );
   }
@@ -98,6 +98,23 @@ export function SlipPerforation({ style, edge = 'ticket' }: SlipPerforationProps
       <View style={[styles.notch, styles.notchLeft]} />
       <DashRule testID="slip-perforation-dashes" />
       <View style={[styles.notch, styles.notchRight]} />
+    </View>
+  );
+}
+
+/**
+ * Card-edge notch. The disc is a full circle aligned to the inner side of a
+ * half-width port, so the bite faces inward. The port is inset by a spacing
+ * step wider than the overhang, so the disc stays inside the card even when
+ * iOS paints the circle outside the port.
+ */
+function CardNotch({ side }: { side: 'left' | 'right' }) {
+  return (
+    <View
+      style={side === 'left' ? cardStyles.portLeft : cardStyles.portRight}
+      testID={side === 'left' ? 'slip-notch-left' : 'slip-notch-right'}
+    >
+      <View style={cardStyles.disc} />
     </View>
   );
 }
@@ -156,16 +173,41 @@ const cardStyles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     flex: 1,
   },
+  disc: {
+    backgroundColor: theme.colors.background,
+    borderColor: theme.colors.border,
+    borderRadius: NOTCH / 2,
+    borderWidth: theme.effects.panelBorderWidth,
+    height: NOTCH,
+    width: NOTCH,
+  },
   middle: {
+    alignSelf: 'stretch',
     flex: 1,
     flexDirection: 'column',
     minWidth: 0,
   },
+  portLeft: {
+    alignItems: 'flex-end',
+    height: NOTCH,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: NOTCH / 2,
+  },
+  portRight: {
+    alignItems: 'flex-start',
+    height: NOTCH,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: NOTCH / 2,
+  },
   row: {
+    alignItems: 'center',
     alignSelf: 'stretch',
     flexDirection: 'row',
     height: NOTCH,
     overflow: 'hidden',
+    paddingHorizontal: theme.spacing.sm,
     width: '100%',
   },
   rule: {

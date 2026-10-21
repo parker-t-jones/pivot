@@ -43,7 +43,7 @@ vi.mock('../contexts/GameLinksContext', () => ({
   }),
 }));
 
-const STAKE_LINE = 'George Kittle needs a very long stake line that stays whole';
+const STAKE_LINE = 'George Kittle needs a very long pick line that stays whole';
 
 const schedule: ScheduleGame = {
   game_id: 'mnf',
@@ -128,7 +128,7 @@ describe('MyCardList saved link', () => {
     document.body.innerHTML = '';
   });
 
-  it('keeps the matchup and the stake line whole beside a long saved link', () => {
+  it('keeps the matchup and the pick line whole beside a long saved link', () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -147,11 +147,13 @@ describe('MyCardList saved link', () => {
           groups,
           lineupGroups,
           liveGames: [live],
-          part: 'cards',
+          part: 'all',
         }),
       );
     });
     const text = document.body.textContent ?? '';
+    expect(text).toContain('YOUR PICKS · 2');
+    expect(text).not.toContain('STAKE');
     expect(text).toContain('WAS @ SF');
     expect(text).toContain(STAKE_LINE);
     expect(text).toContain('HALFTIME');

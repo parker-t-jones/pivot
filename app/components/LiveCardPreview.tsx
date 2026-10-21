@@ -123,7 +123,7 @@ export function LiveCardPreview({ initial = 'halftime' }: { initial?: LivePrevie
       <Text style={styles.title}>Live card preview</Text>
       <Text style={styles.copy}>
         Local only. Monday night is Commanders D/ST and George Kittle. SEA ML and the JAX pool are
-        final games, so they stay on their own YOUR STAKES cards. Halftime and end of quarter leave
+        final games, so they stay on their own YOUR PICKS cards. Halftime and end of quarter leave
         every chip SIDELINE. Active and red zone mark both Monday starters on the flag.
       </Text>
       <View style={styles.row}>
@@ -140,7 +140,7 @@ export function LiveCardPreview({ initial = 'halftime' }: { initial?: LivePrevie
       </View>
       <YourLiveGames cards={cards} onSwitch={() => undefined} />
       <View style={{ width: stakesWidth, maxWidth: '100%' }}>
-        <Text style={styles.title}>YOUR STAKES</Text>
+        <Text style={styles.title}>YOUR PICKS</Text>
         <GameLinksProvider fixtureLinks={PREVIEW_LINKS}>
           <MyCardList
             betRefs={PREVIEW_BETS}

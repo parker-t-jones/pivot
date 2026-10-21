@@ -80,7 +80,7 @@ function AppNavigator() {
   }, [decisionKey, decision, router]);
 
   if (decision.action === 'wait') {
-    return <LoadingState message="Loading..." />;
+    return <LoadingState message="Loading" />;
   }
 
   if (decision.action === 'leagues_error') {
@@ -101,7 +101,7 @@ function AppNavigator() {
     decision.action === 'redirect_notifications' ||
     decision.action === 'leave_notifications'
   ) {
-    return <LoadingState message="Loading..." />;
+    return <LoadingState message="Loading" />;
   }
 
   return (

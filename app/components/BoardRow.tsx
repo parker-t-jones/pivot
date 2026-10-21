@@ -51,8 +51,8 @@ function timeColumnLabel(
 }
 
 function stakeCountPhrase(stakeCount: number): string {
-  if (stakeCount === 0) return 'no stakes';
-  return stakeCount === 1 ? '1 stake' : `${stakeCount} stakes`;
+  if (stakeCount === 0) return 'no picks';
+  return stakeCount === 1 ? '1 pick' : `${stakeCount} picks`;
 }
 
 /**

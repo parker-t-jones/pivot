@@ -170,7 +170,7 @@ export function WatchlistDesktop({
         <View style={styles.table} testID="watchlist-table">
           <View style={styles.head}>
             <Text style={[styles.headCell, styles.slotCol]}>Slot</Text>
-            <Text style={[styles.headCell, styles.playerCol]}>Stake</Text>
+            <Text style={[styles.headCell, styles.playerCol]}>Pick</Text>
             <Text style={[styles.headCell, styles.gameCol]}>Game</Text>
             <Text style={[styles.headCell, styles.networkCol]}>Network</Text>
             <Text style={[styles.headCell, styles.statusCol]}>Status</Text>

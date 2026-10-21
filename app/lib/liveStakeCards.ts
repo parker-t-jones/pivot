@@ -176,7 +176,7 @@ export function fieldSideAbbreviations(game: LiveGame): { left: string; right: s
   return { left: game.away_team, right: game.home_team };
 }
 
-/** Clock line shared by the live card gauge and the YOUR STAKES header. */
+/** Clock line shared by the live card gauge and the YOUR PICKS header. */
 export function liveCardClock(game: LiveGame): string {
   return liveClockLabel(game.quarter, game.time_remaining_sec, game.possession_team);
 }

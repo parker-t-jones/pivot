@@ -12,7 +12,7 @@ interface LoadingStateProps {
 
 /** Sprint 9 Phase 2 shared loading block — see `EmptyState.tsx`'s docstring for why this exists as
  *  its own component now instead of every screen's own `ActivityIndicator` + `Text` pair. */
-export function LoadingState({ message = 'Loading…', inline = false }: LoadingStateProps) {
+export function LoadingState({ message = 'Loading', inline = false }: LoadingStateProps) {
   return (
     <View style={inline ? styles.inline : styles.fill}>
       <YardLineLoader size={inline ? 'section' : 'screen'} />

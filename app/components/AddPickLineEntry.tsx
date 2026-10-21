@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     lineHeight: theme.type.body.lineHeight,
   },
   stack: {
-    gap: theme.spacing.md,
+    gap: theme.spacing.lg,
   },
   step: {
     alignItems: 'center',
