@@ -32,7 +32,7 @@ export type EspnFetchResult<T> = { ok: true; data: T } | EspnFetchFailure;
  * condition against an undocumented API that the caller (`EspnPlaySource`) needs to distinguish: a
  * shape mismatch is
  * worth reporting to `@pivot/shared`'s `ErrorReporter`, while a transient network/HTTP failure is
- * just worth logging and retrying next poll — mirroring how `experiments/espn-latency-probe.ts`'s
+ * just worth logging and retrying next poll — mirroring how the original latency probe's
  * poll loop already treated a failed fetch as "log and keep going", never as fatal.
  *
  * This is a deliberate departure from `sleeperClient`'s throw-on-`!response.ok` style: Sleeper is a

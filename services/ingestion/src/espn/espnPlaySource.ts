@@ -49,7 +49,7 @@ interface FlattenedPlay {
 }
 
 /** Flattens completed drives + the in-progress drive into one chronological play list, lifted from
- *  `experiments/espn-latency-probe.ts`'s `flattenPlays`. */
+ *  the original latency probe's `flattenPlays` (since removed from the repo). */
 function flattenPlays(summary: EspnSummary): FlattenedPlay[] {
   const flattened: FlattenedPlay[] = [];
   for (const drive of summary.drives?.previous ?? []) {

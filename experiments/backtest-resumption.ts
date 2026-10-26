@@ -3,7 +3,7 @@
  *
  * Backtests the "wait for first real play after a possession change" idea against the
  * already-captured Colts @ Lions game log (experiments/game-latency-log.txt, produced by
- * experiments/espn-latency-probe.ts). Purely offline — reads a log file, touches no live
+ * the original latency probe, since removed from the repo). Purely offline — reads a log file, touches no live
  * pipeline, no network calls.
  *
  * The classifier and resumption watcher below are written as small, pure functions,
@@ -20,8 +20,8 @@
  * Usage:
  *   npx tsx experiments/backtest-resumption.ts
  *
- * Requires experiments/game-latency-log.txt to already exist (run the probe first, or use
- * a previously captured log — see espn-latency-probe.ts).
+ * Requires experiments/game-latency-log.txt to already exist (a previously captured
+ * log; the probe that produced it is no longer in the repo).
  */
 
 import { readFile } from 'node:fs/promises';
@@ -164,8 +164,8 @@ async function readLoggedPlays(): Promise<LoggedPlay[]> {
     raw = await readFile(LOG_PATH, 'utf8');
   } catch (err) {
     throw new Error(
-      `Could not read ${LOG_PATH}. Run experiments/espn-latency-probe.ts first to produce a ` +
-        `log to backtest against.\n(${String(err)})`,
+      `Could not read ${LOG_PATH}. This backtest needs a previously ` +
+        `captured game log.\n(${String(err)})`,
     );
   }
 
