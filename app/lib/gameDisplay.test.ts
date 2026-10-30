@@ -293,6 +293,55 @@ describe('watchCta', () => {
     expect(watchCta([], [])).toEqual({ kind: 'none' });
     expect(watchCta([], [{ network: 'dumont' }])).toEqual({ kind: 'none' });
   });
+
+  it('keeps the ranked option when the destination is legacy', () => {
+    const yttv = option('youtube_tv', true);
+    expect(watchCta([yttv], fox, { kind: 'legacy' })).toEqual({ kind: 'watch', broadcast: yttv });
+  });
+
+  it('uses the network link when it differs from the ranked search URL', () => {
+    const directv = option('directv', true, {
+      deep_link_url: 'https://stream.directv.com/search?q=Bears%20vs%20Falcons',
+    });
+    const cta = watchCta([directv], fox, {
+      kind: 'destinations',
+      primary: {
+        url: 'https://www.fox.com/search?q=Bears%20at%20Falcons',
+        verified: true,
+        note: 'FOX LIVE tile, then Watch live. Away at Home nicknames.',
+      },
+      alternates: [
+        {
+          url: 'https://www.fox.com/live/channels',
+          verified: true,
+          note: 'FOX channel guide, one tap.',
+        },
+      ],
+    });
+    expect(cta).toMatchObject({
+      kind: 'watch',
+      broadcast: {
+        deep_link_url: 'https://www.fox.com/search?q=Bears%20at%20Falcons',
+        label: 'FOX LIVE tile, then Watch live. Away at Home nicknames.',
+      },
+    });
+    if (cta.kind !== 'watch') throw new Error('expected a watch cta');
+    expect(cta.alternates?.[0]?.deep_link_url).toBe('https://www.fox.com/live/channels');
+  });
+
+  it('says the game is not on the user services', () => {
+    expect(watchCta([], fox, { kind: 'unavailable', reason: 'not_on_your_services' })).toEqual({
+      kind: 'airing',
+      text: 'Not on your services',
+    });
+  });
+
+  it('names an unmapped airing and does not link it', () => {
+    expect(watchCta([], [], { kind: 'unknown_network', raw: 'Peacock' })).toEqual({
+      kind: 'airing',
+      text: 'On Peacock',
+    });
+  });
 });
 
 describe('watchOptionParts', () => {

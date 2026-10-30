@@ -1,4 +1,6 @@
 import {
+  isRegionalSlate,
+  toSlateGame,
   watchOptionsForGame,
   type ParsedAiring,
   type WatchOption,
@@ -35,6 +37,10 @@ export interface LikelyBroadcast {
   airings: readonly ParsedAiring[];
   /** Kickoff of the target game, for per-game watch URLs. Null when the game is unknown. */
   kickoff: Date | null;
+  /** Subscribed service keys, including ones the old ranker does not carry. */
+  services: readonly string[];
+  /** Same regional Sunday CBS/FOX flag `rankWatchOptions` uses. */
+  outOfMarketSunday: boolean;
 }
 
 /** Section 8's `resolveLikelyBroadcastSource(gameId, user)`, split into ids. */
@@ -52,6 +58,8 @@ export async function resolveLikelyBroadcastSource(
     source: pickBroadcastSource(gameId, week, services),
     airings: game?.airings ?? [],
     kickoff: game?.kickoff ?? null,
+    services: [...services],
+    outOfMarketSunday: game ? isRegionalSlate(toSlateGame(game), week.map(toSlateGame)) : false,
   };
 }
 

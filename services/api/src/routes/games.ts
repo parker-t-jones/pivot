@@ -32,13 +32,22 @@ function subscribedServicesFrom(rows: { service: string; has_subscription: boole
   return new Set((rows ?? []).filter((row) => row.has_subscription).map((row) => row.service));
 }
 
+function urlsByGame(rows: readonly { game_id: string; url: string }[] | null): Map<string, string> {
+  const urls = new Map<string, string>();
+  for (const row of rows ?? []) {
+    if (row.url.length > 0) urls.set(row.game_id, row.url);
+  }
+  return urls;
+}
+
 const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate);
 
   /**
    * PLAN.md Section 9 `GET /games?week={w}` (Sprint 10) — week's schedule with per-game watch
    * options and airings (`buildWeekWatch`, docs/B1-BROADCAST-DESIGN.md §1.6). Home supplies `week`
-   * from `GET /state/nfl`. One `user_app_presence` load is reused across the whole slate.
+   * from `GET /state/nfl`. One `user_app_presence` load and one `user_game_links` load
+   * are reused across the whole slate.
    */
   fastify.get(
     '/games',
@@ -80,7 +89,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const teamIds = [...new Set(games.flatMap((g) => [g.home_team_id, g.away_team_id]))];
       const gameIds = games.map((g) => g.id);
 
-      const [teamsResult, airingsResult, presenceResult] = await Promise.all([
+      const [teamsResult, airingsResult, presenceResult, savedUrls] = await Promise.all([
         fastify.supabase
           .from('teams')
           .select('id, abbreviation, name, primary_color, secondary_color')
@@ -91,10 +100,16 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
           .from('user_app_presence')
           .select('service, has_subscription')
           .eq('user_id', user.id),
+        fastify.supabase
+          .from('user_game_links')
+          .select('game_id, url')
+          .eq('user_id', user.id)
+          .in('game_id', gameIds),
       ]);
       if (teamsResult.error) throw teamsResult.error;
       if (airingsResult.error) throw airingsResult.error;
       if (presenceResult.error) throw presenceResult.error;
+      if (savedUrls.error) throw savedUrls.error;
 
       const teamById = new Map((teamsResult.data ?? []).map((t) => [t.id, t]));
       const watchByGameId = buildWeekWatch(
@@ -106,6 +121,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         })),
         airingsResult.data ?? [],
         subscribedServicesFrom(presenceResult.data),
+        urlsByGame(savedUrls.data),
       );
 
       return {
@@ -123,6 +139,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
             ...teamFields(home, away),
             broadcasts: watch?.broadcasts ?? [],
             airings: watch?.airings ?? [],
+            destination: watch?.destination ?? { kind: 'legacy' },
           };
         }),
       };
@@ -246,23 +263,24 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const slate = weekGames ?? [];
       const teamIds = [...new Set(slate.flatMap((g) => [g.home_team_id, g.away_team_id]))];
 
-      const [airingsResult, presenceResult, teamsResult] = await Promise.all([
-        fastify.supabase
-          .from('game_airings')
-          .select(AIRING_COLUMNS)
-          .in(
-            'game_id',
-            slate.map((g) => g.id),
-          ),
+      const slateIds = slate.map((g) => g.id);
+      const [airingsResult, presenceResult, teamsResult, savedUrls] = await Promise.all([
+        fastify.supabase.from('game_airings').select(AIRING_COLUMNS).in('game_id', slateIds),
         fastify.supabase
           .from('user_app_presence')
           .select('service, has_subscription')
           .eq('user_id', user.id),
         fastify.supabase.from('teams').select('id, name').in('id', teamIds),
+        fastify.supabase
+          .from('user_game_links')
+          .select('game_id, url')
+          .eq('user_id', user.id)
+          .in('game_id', slateIds),
       ]);
       if (airingsResult.error) throw airingsResult.error;
       if (presenceResult.error) throw presenceResult.error;
       if (teamsResult.error) throw teamsResult.error;
+      if (savedUrls.error) throw savedUrls.error;
       const teamNameById = new Map((teamsResult.data ?? []).map((team) => [team.id, team.name]));
 
       const watch = buildWeekWatch(
@@ -274,11 +292,13 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         })),
         airingsResult.data ?? [],
         subscribedServicesFrom(presenceResult.data),
+        urlsByGame(savedUrls.data),
       ).get(gameId);
 
       return {
         game_id: gameId,
         broadcasts: watch?.broadcasts ?? [],
+        destination: watch?.destination ?? { kind: 'legacy' },
       };
     },
   );

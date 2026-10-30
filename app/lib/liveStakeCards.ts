@@ -1,8 +1,10 @@
+import type { DestinationResolution } from '@pivot/shared/broadcast';
+
 import type { StakeRef } from './board';
 import {
   liveClockLabel,
   periodBreakLabel,
-  serviceLabel,
+  watchBroadcastLabel,
   watchCta,
   type CurrentFlag,
   type GameBroadcast,
@@ -45,6 +47,9 @@ export interface LiveStakeCardModel {
   chips: LiveStakeChip[];
   extraChips: number;
   buttonLabel: string;
+  /** False for "Not on your services" and "On {raw}", which are text, not a button. */
+  opensLink?: boolean;
+  alternates?: readonly GameBroadcast[];
 }
 
 /**
@@ -83,8 +88,7 @@ export function rankLiveStakeCards(input: {
         return b.priorityScore - a.priorityScore;
       }
       if (a.active && b.active) return compareGameIds(a.game.game_id, b.game.game_id);
-      const byKickoff =
-        Date.parse(a.game.scheduled_start) - Date.parse(b.game.scheduled_start);
+      const byKickoff = Date.parse(a.game.scheduled_start) - Date.parse(b.game.scheduled_start);
       return byKickoff !== 0 ? byKickoff : compareGameIds(a.game.game_id, b.game.game_id);
     });
 }
@@ -96,10 +100,17 @@ function compareGameIds(a: string, b: string): number {
 export function watchButtonLabel(
   broadcasts: readonly GameBroadcast[],
   airings: readonly { network: string }[],
+  destination?: DestinationResolution,
 ): string {
-  const cta = watchCta(broadcasts, airings);
-  if (cta.kind === 'watch') return `Watch on ${serviceLabel(cta.broadcast.service)}`;
-  if (cta.kind === 'airing') return `Watch on ${cta.text.replace(/^On /, '')}`;
+  const cta = watchCta(broadcasts, airings, destination);
+  if (cta.kind === 'watch') return watchBroadcastLabel(cta.broadcast);
+  if (cta.kind === 'airing') {
+    if (destination?.kind === 'unavailable' || destination?.kind === 'unknown_network') {
+      return cta.text;
+    }
+    if (cta.text.startsWith('On ')) return `Watch on ${cta.text.slice(3)}`;
+    return cta.text;
+  }
   return 'Watch';
 }
 
@@ -197,7 +208,11 @@ export function buildLiveStakeCards(input: {
   betsByGameId: ReadonlyMap<string, readonly BetChipSource[]>;
   watchByGameId: ReadonlyMap<
     string,
-    { broadcasts: readonly GameBroadcast[]; airings: readonly { network: string }[] }
+    {
+      broadcasts: readonly GameBroadcast[];
+      airings: readonly { network: string }[];
+      destination?: DestinationResolution;
+    }
   >;
 }): LiveStakeCardModel[] {
   const breakIds = new Set(
@@ -222,6 +237,8 @@ export function buildLiveStakeCards(input: {
   );
   return ranked.map((row, index) => {
     const watch = input.watchByGameId.get(row.game.game_id);
+    const destination = watch?.destination;
+    const cta = watchCta(watch?.broadcasts ?? [], watch?.airings ?? [], destination);
     const chips = liveStakeChips({
       game: row.game,
       players: input.playersByGameId.get(row.game.game_id) ?? [],
@@ -236,7 +253,12 @@ export function buildLiveStakeCards(input: {
       active: row.active,
       chips: chips.chips,
       extraChips: chips.extraChips,
-      buttonLabel: watchButtonLabel(watch?.broadcasts ?? [], watch?.airings ?? []),
+      buttonLabel: watchButtonLabel(watch?.broadcasts ?? [], watch?.airings ?? [], destination),
+      opensLink:
+        destination?.kind === 'unavailable' || destination?.kind === 'unknown_network'
+          ? false
+          : true,
+      alternates: cta.kind === 'watch' ? (cta.alternates ?? []) : [],
     };
   });
 }

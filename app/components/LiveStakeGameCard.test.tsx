@@ -3,10 +3,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  MNF_HALFTIME_LIVE,
-  MNF_STARTERS,
-} from '../fixtures/mnfHalftime';
+import { MNF_HALFTIME_LIVE, MNF_STARTERS } from '../fixtures/mnfHalftime';
 import { liveStakeChips } from '../lib/liveStakeCards';
 import type { LiveGame } from '../lib/schedule';
 import { scoreBlockWash } from '../lib/teamColors';
@@ -70,7 +67,11 @@ describe('LiveStakeGameCard', () => {
     root = render(
       createElement(LiveStakeGameCard, {
         model: modelFor(
-          { ...MNF_HALFTIME_LIVE, away_team_primary_color: '#111111', home_team_primary_color: '#111111' },
+          {
+            ...MNF_HALFTIME_LIVE,
+            away_team_primary_color: '#111111',
+            home_team_primary_color: '#111111',
+          },
           false,
         ),
         onSwitch,
@@ -103,7 +104,9 @@ describe('LiveStakeGameCard', () => {
       time_remaining_sec: 420,
       in_red_zone: true,
     };
-    root = render(createElement(LiveStakeGameCard, { model: modelFor(game, true), onSwitch: vi.fn() }));
+    root = render(
+      createElement(LiveStakeGameCard, { model: modelFor(game, true), onSwitch: vi.fn() }),
+    );
     expect(document.body.textContent).toContain('NOW ACTIVE');
     expect(document.body.textContent).toContain('RED ZONE');
     expect(document.body.textContent).toContain('George Kittle TE · ON FIELD');
@@ -112,9 +115,62 @@ describe('LiveStakeGameCard', () => {
       node.textContent?.includes('Watch on YouTube TV'),
     );
     const style = button?.getAttribute('style') ?? '';
-    const classStyle = button?.className
-      ? getComputedStyle(button).backgroundColor
-      : '';
+    const classStyle = button?.className ? getComputedStyle(button).backgroundColor : '';
     expect(`${style} ${classStyle}`).toMatch(/245,\s*160,\s*24|#F5A018|rgb\(245,\s*160,\s*24\)/);
+  });
+
+  it('shows text and no button when the game is not on the user services', () => {
+    root = render(
+      createElement(LiveStakeGameCard, {
+        model: {
+          ...modelFor(MNF_HALFTIME_LIVE, false),
+          buttonLabel: 'Not on your services',
+          opensLink: false,
+        },
+        onSwitch: vi.fn(),
+      }),
+    );
+    expect(document.body.textContent).toContain('Not on your services');
+    expect(document.body.textContent).not.toContain('Watch on');
+  });
+
+  it('lists other ways to watch under the primary button', () => {
+    const onSwitchLocal = vi.fn();
+    root = render(
+      createElement(LiveStakeGameCard, {
+        model: {
+          ...modelFor(MNF_HALFTIME_LIVE, false),
+          alternates: [
+            {
+              service: '',
+              deep_link_url: 'https://www.fox.com/live/channels',
+              requires_subscription: true,
+              user_has_subscription: true,
+              typical_lag_seconds: 0,
+              preferred: false,
+              network: 'fox',
+              market_confidence: 'national',
+              label: 'FOX channel guide, one tap.',
+            },
+          ],
+        },
+        onSwitch: vi.fn(),
+        onSwitchLocal,
+      }),
+    );
+    const other = Array.from(document.querySelectorAll('[role="button"]')).find((node) =>
+      node.textContent?.includes('Other ways to watch'),
+    );
+    expect(other).toBeTruthy();
+    act(() => {
+      other?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const channel = Array.from(document.querySelectorAll('[role="button"]')).find((node) =>
+      node.textContent?.includes('FOX channel guide, one tap.'),
+    );
+    act(() => {
+      channel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSwitchLocal).toHaveBeenCalledOnce();
   });
 });

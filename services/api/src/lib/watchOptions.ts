@@ -2,9 +2,11 @@ import {
   AIRING_NETWORKS,
   isRegionalSlate,
   networkRank,
+  resolveStoredDestination,
   toSlateGame,
   serviceWatchUrl,
   watchOptionsForGame,
+  type DestinationResolution,
   type AiringMarket,
   type AiringNetwork,
   type MarketConfidence,
@@ -51,6 +53,8 @@ export interface WireAiring {
 export interface GameWatch {
   broadcasts: WireWatchOption[];
   airings: WireAiring[];
+  /** Resolver result. `legacy` leaves `broadcasts` on today's links. */
+  destination: DestinationResolution;
 }
 
 export const AIRING_COLUMNS = 'game_id, network, market, espn_media_name, espn_type';
@@ -99,6 +103,7 @@ export function buildWeekWatch(
   games: readonly SlateGameRow[],
   airingRows: readonly AiringRow[],
   subscribedServices: ReadonlySet<string>,
+  savedUrls: ReadonlyMap<string, string> = new Map(),
 ): Map<string, GameWatch> {
   const week = weekGameAirings(games, airingRows);
   const slate = week.map(toSlateGame);
@@ -135,18 +140,34 @@ export function buildWeekWatch(
     );
 
     const wireAirings = game.airings
-      .map((airing): WireAiring => ({
-        network: airing.network,
-        market: airing.market,
-        market_confidence: regional && REGIONAL_NETWORKS.has(airing.network) ? 'unknown' : 'national',
-      }))
+      .map(
+        (airing): WireAiring => ({
+          network: airing.network,
+          market: airing.market,
+          market_confidence:
+            regional && REGIONAL_NETWORKS.has(airing.network) ? 'unknown' : 'national',
+        }),
+      )
       .sort(
         (a, b) =>
           (networkRank(a.network) ?? Number.MAX_SAFE_INTEGER) -
           (networkRank(b.network) ?? Number.MAX_SAFE_INTEGER),
       );
 
-    result.set(game.id, { broadcasts, airings: wireAirings });
+    const destination = resolveStoredDestination({
+      awayNickname: names?.away ?? '',
+      homeNickname: names?.home ?? '',
+      kickoff: game.kickoff,
+      airings: game.airings.map((airing) => ({
+        network: airing.network,
+        espnMediaName: airing.espnMediaName,
+      })),
+      services: [...subscribedServices],
+      savedUrl: savedUrls.get(game.id) ?? null,
+      outOfMarketSunday: regional,
+    });
+
+    result.set(game.id, { broadcasts, airings: wireAirings, destination });
   }
   return result;
 }

@@ -31,7 +31,6 @@ import {
 import type { FlagEventPayload } from '../../../lib/flagEventPayload';
 import {
   localRouteOption,
-  pickPreferredBroadcast,
   watchCta,
   type CurrentFlag,
   type FlagsCurrentResponse,
@@ -228,7 +227,8 @@ export default function HomeScreen() {
     try {
       const response = await apiClient.get<GameBroadcastsResponse>(`/games/${gameId}/broadcasts`);
       const broadcasts = response.broadcasts;
-      const broadcast = pickPreferredBroadcast(broadcasts);
+      const resolved = watchCta(broadcasts, [], response.destination);
+      const broadcast = resolved.kind === 'watch' ? resolved.broadcast : null;
       setHomeData((prev) => {
         if (!prev || prev.flag?.game_id !== gameId) return prev;
         return { ...prev, broadcast, broadcasts };
@@ -459,7 +459,8 @@ export default function HomeScreen() {
               `/games/${topFlag.game_id}/broadcasts`,
             );
             broadcasts = response.broadcasts;
-            broadcast = pickPreferredBroadcast(broadcasts);
+            const resolved = watchCta(broadcasts, [], response.destination);
+            broadcast = resolved.kind === 'watch' ? resolved.broadcast : null;
           } catch (error) {
             console.warn('[home] failed to load broadcasts', error);
           }
@@ -591,7 +592,7 @@ export default function HomeScreen() {
   const onSwitchLive = useCallback(
     (game: LiveGame) => {
       const week = homeData?.weekGames.find((row) => row.game_id === game.game_id);
-      const cta = week ? watchCta(week.broadcasts, week.airings) : null;
+      const cta = week ? watchCta(week.broadcasts, week.airings, week.destination) : null;
       const broadcast = cta?.kind === 'watch' ? cta.broadcast : null;
       switchToGame({
         gameId: game.game_id,
@@ -630,7 +631,7 @@ export default function HomeScreen() {
       // The week slate often already has the https URL. Open it in this click, before the fetch.
       if (Platform.OS === 'web') {
         const game = homeData?.weekGames.find((row) => row.game_id === flag.game_id);
-        const cta = game ? watchCta(game.broadcasts, game.airings) : null;
+        const cta = game ? watchCta(game.broadcasts, game.airings, game.destination) : null;
         if (cta?.kind === 'watch') {
           const flaggedTeam = resolveFlaggedTeamDisplay(
             flag.game,
@@ -654,15 +655,18 @@ export default function HomeScreen() {
       }
 
       let broadcasts: GameBroadcast[] = [];
+      let destination: GameBroadcastsResponse['destination'];
       try {
         const response = await apiClient.get<GameBroadcastsResponse>(
           `/games/${flag.game_id}/broadcasts`,
         );
         broadcasts = response.broadcasts;
+        destination = response.destination;
       } catch (error) {
         console.warn('[home] failed to load broadcasts for also-flagged switch', error);
       }
-      const broadcast = pickPreferredBroadcast(broadcasts);
+      const fetched = watchCta(broadcasts, [], destination);
+      const broadcast = fetched.kind === 'watch' ? fetched.broadcast : null;
       const flaggedTeam = resolveFlaggedTeamDisplay(
         flag.game,
         flag.flagged_players,
@@ -695,7 +699,7 @@ export default function HomeScreen() {
   const alsoFlaggedCta = useCallback(
     (flag: CurrentFlag) => {
       const game = weekGameById.get(flag.game_id);
-      return game ? watchCta(game.broadcasts, game.airings) : null;
+      return game ? watchCta(game.broadcasts, game.airings, game.destination) : null;
     },
     [weekGameById],
   );
@@ -814,7 +818,11 @@ export default function HomeScreen() {
       watchByGameId: new Map(
         homeData.weekGames.map((game) => [
           game.game_id,
-          { broadcasts: game.broadcasts, airings: game.airings },
+          {
+            broadcasts: game.broadcasts,
+            airings: game.airings,
+            ...(game.destination ? { destination: game.destination } : {}),
+          },
         ]),
       ),
     });
@@ -839,7 +847,11 @@ export default function HomeScreen() {
     });
   }, [homeData, isLive, branchKey, stakeRefs, liveStakeCardModels]);
 
-  const { hero: pregameHero, countdownMs: pregameCountdownMs, nextKickoffAt } = useMemo(() => {
+  const {
+    hero: pregameHero,
+    countdownMs: pregameCountdownMs,
+    nextKickoffAt,
+  } = useMemo(() => {
     const rows = flattenRows(boardGroups);
     const now = new Date(pregameNowMs);
     const next = nextKickoff(rows, now);
@@ -908,9 +920,11 @@ export default function HomeScreen() {
               <View style={{ opacity: flaggedCardsOpacity(homeData.liveFeedOk) }}>
                 <YourLiveGames
                   cards={liveStakeCardModels}
-                  localRouteFor={(game) =>
-                    localRouteOption(weekGameById.get(game.game_id)?.broadcasts ?? [])
-                  }
+                  localRouteFor={(game) => {
+                    const week = weekGameById.get(game.game_id);
+                    if (week?.destination?.kind === 'destinations') return null;
+                    return localRouteOption(week?.broadcasts ?? []);
+                  }}
                   onSwitch={onSwitchLive}
                   onSwitchLocal={onSwitchBroadcast}
                 />
@@ -922,6 +936,29 @@ export default function HomeScreen() {
                     )}
                     onSwitch={onSwitchOther}
                     ctaFor={alsoFlaggedCta}
+                    onOpenAlternate={(flag, alternate) => {
+                      const game = weekGameById.get(flag.game_id);
+                      const flaggedTeam = resolveFlaggedTeamDisplay(
+                        flag.game,
+                        flag.flagged_players,
+                        homeData?.playerTeamMap ?? EMPTY_TEAM_MAP,
+                      );
+                      switchToGame({
+                        gameId: flag.game_id,
+                        deepLinkUrl: alternate.deep_link_url,
+                        label: `${flag.game.away_team} @ ${flag.game.home_team}`,
+                        awayNickname: flag.game.away_team_name,
+                        homeNickname: flag.game.home_team_name,
+                        teamName: flaggedTeam?.name,
+                        teamColors: flaggedTeam
+                          ? {
+                              primary: flaggedTeam.primaryColor,
+                              secondary: flaggedTeam.secondaryColor,
+                            }
+                          : null,
+                        broadcasts: game?.broadcasts,
+                      });
+                    }}
                   />
                 ) : null}
               </View>

@@ -3,18 +3,54 @@ import { buildWeekWatch, type AiringRow, type SlateGameRow } from './watchOption
 
 /** Week 3 shape: TNF on Prime, a 1pm FOX/CBS regional split, SNF on NBC, MNF on ESPN + ABC. */
 const GAMES: SlateGameRow[] = [
-  { id: 'tnf', scheduled_start: '2026-09-25T00:15:00Z', away_team_name: 'Packers', home_team_name: 'Lions' },
-  { id: 'fox1', scheduled_start: '2026-09-27T17:00:00Z', away_team_name: 'Bears', home_team_name: 'Packers' },
-  { id: 'fox2', scheduled_start: '2026-09-27T17:00:00Z', away_team_name: 'Cowboys', home_team_name: 'Giants' },
-  { id: 'cbs1', scheduled_start: '2026-09-27T17:00:00Z', away_team_name: 'Bills', home_team_name: 'Dolphins' },
-  { id: 'snf', scheduled_start: '2026-09-28T00:20:00Z', away_team_name: 'Chiefs', home_team_name: 'Ravens' },
-  { id: 'mnf', scheduled_start: '2026-09-29T00:15:00Z', away_team_name: 'Eagles', home_team_name: 'Buccaneers' },
+  {
+    id: 'tnf',
+    scheduled_start: '2026-09-25T00:15:00Z',
+    away_team_name: 'Packers',
+    home_team_name: 'Lions',
+  },
+  {
+    id: 'fox1',
+    scheduled_start: '2026-09-27T17:00:00Z',
+    away_team_name: 'Bears',
+    home_team_name: 'Packers',
+  },
+  {
+    id: 'fox2',
+    scheduled_start: '2026-09-27T17:00:00Z',
+    away_team_name: 'Cowboys',
+    home_team_name: 'Giants',
+  },
+  {
+    id: 'cbs1',
+    scheduled_start: '2026-09-27T17:00:00Z',
+    away_team_name: 'Bills',
+    home_team_name: 'Dolphins',
+  },
+  {
+    id: 'snf',
+    scheduled_start: '2026-09-28T00:20:00Z',
+    away_team_name: 'Chiefs',
+    home_team_name: 'Ravens',
+  },
+  {
+    id: 'mnf',
+    scheduled_start: '2026-09-29T00:15:00Z',
+    away_team_name: 'Eagles',
+    home_team_name: 'Buccaneers',
+  },
 ];
 
 const FOX1_SEARCH = 'https://tv.youtube.com/search/Bears%20vs%20Packers%20today';
 
 function row(gameId: string, network: string, market = 'national'): AiringRow {
-  return { game_id: gameId, network, market, espn_media_name: network.toUpperCase(), espn_type: 'TV' };
+  return {
+    game_id: gameId,
+    network,
+    market,
+    espn_media_name: network.toUpperCase(),
+    espn_type: 'TV',
+  };
 }
 
 const AIRINGS: AiringRow[] = [
@@ -45,8 +81,17 @@ describe('buildWeekWatch', () => {
       },
     ]);
     expect(watch.get('mnf')?.broadcasts).toEqual([
-      expect.objectContaining({ service: 'youtube_tv', network: 'espn', market_confidence: 'national', preferred: true }),
+      expect.objectContaining({
+        service: 'youtube_tv',
+        network: 'espn',
+        market_confidence: 'national',
+        preferred: true,
+      }),
     ]);
+    expect(watch.get('tnf')?.destination).toEqual({
+      kind: 'unavailable',
+      reason: 'not_on_your_services',
+    });
   });
 
   it('lists every airing per game in board-label order, regional CBS/FOX as unknown market', () => {
@@ -67,6 +112,40 @@ describe('buildWeekWatch', () => {
   it('gives a user with no services no options, not a free network row', () => {
     const watch = buildWeekWatch(GAMES, AIRINGS, new Set());
     for (const game of GAMES) expect(watch.get(game.id)?.broadcasts).toEqual([]);
+    expect(watch.get('fox1')?.destination).toEqual({ kind: 'legacy' });
+  });
+
+  it('opens DIRECTV on the FOX network link and keeps the old search URL on broadcasts', () => {
+    const watch = buildWeekWatch(GAMES, AIRINGS, new Set(['directv']));
+    expect(watch.get('fox1')?.broadcasts[0]?.deep_link_url).toContain('stream.directv.com');
+    expect(watch.get('fox1')?.destination).toEqual({
+      kind: 'destinations',
+      primary: {
+        url: 'https://www.fox.com/search?q=Bears%20at%20Packers',
+        verified: true,
+        note: 'FOX LIVE tile, then Watch live. Away at Home nicknames.',
+      },
+      alternates: [
+        {
+          url: 'https://www.fox.com/live/channels',
+          verified: true,
+          note: 'FOX channel guide, one tap.',
+        },
+      ],
+    });
+  });
+
+  it('puts a saved link ahead of the network link', () => {
+    const watch = buildWeekWatch(
+      GAMES,
+      AIRINGS,
+      new Set(['directv']),
+      new Map([['fox1', 'https://example.com/bears']]),
+    );
+    expect(watch.get('fox1')?.destination).toMatchObject({
+      kind: 'destinations',
+      primary: { url: 'https://example.com/bears', note: 'Saved stream link' },
+    });
   });
 
   it('ranks Ticket first and YouTube TV second with the in-market hint on a regional FOX game', () => {
@@ -101,12 +180,21 @@ describe('buildWeekWatch', () => {
 
   it('treats a lone game in its CBS/FOX window as national', () => {
     const watch = buildWeekWatch(
-      [{ id: 'solo', scheduled_start: '2026-09-27T17:00:00Z', away_team_name: 'Bears', home_team_name: 'Packers' }],
+      [
+        {
+          id: 'solo',
+          scheduled_start: '2026-09-27T17:00:00Z',
+          away_team_name: 'Bears',
+          home_team_name: 'Packers',
+        },
+      ],
       [row('solo', 'fox')],
       new Set(['youtube_tv', 'sunday_ticket']),
     );
     const solo = watch.get('solo');
-    expect(solo?.airings).toEqual([{ network: 'fox', market: 'national', market_confidence: 'national' }]);
+    expect(solo?.airings).toEqual([
+      { network: 'fox', market: 'national', market_confidence: 'national' },
+    ]);
     expect(solo?.broadcasts.every((o) => o.market_confidence === 'national')).toBe(true);
     expect(solo?.broadcasts.some((o) => o.route_hint !== undefined)).toBe(false);
   });
@@ -139,7 +227,15 @@ describe('buildWeekWatch', () => {
   });
 
   it('ignores airing rows with a network outside the catalog', () => {
-    const watch = buildWeekWatch([GAMES[0] as SlateGameRow], [row('tnf', 'dumont')], new Set(['youtube_tv']));
-    expect(watch.get('tnf')).toEqual({ broadcasts: [], airings: [] });
+    const watch = buildWeekWatch(
+      [GAMES[0] as SlateGameRow],
+      [row('tnf', 'dumont')],
+      new Set(['youtube_tv']),
+    );
+    expect(watch.get('tnf')).toEqual({
+      broadcasts: [],
+      airings: [],
+      destination: { kind: 'unavailable', reason: 'not_on_your_services' },
+    });
   });
 });

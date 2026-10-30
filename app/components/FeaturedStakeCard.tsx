@@ -46,7 +46,7 @@ export function FeaturedStakeCard({
   when,
 }: FeaturedStakeCardProps) {
   const network = networkLabelFromAirings(game.airings);
-  const cta = watchCta(game.broadcasts, game.airings);
+  const cta = watchCta(game.broadcasts, game.airings, game.destination);
   const kickoff = when ?? formatNextGameWhen(game.scheduled_start);
 
   return (

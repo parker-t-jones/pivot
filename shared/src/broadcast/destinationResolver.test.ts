@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { mapMediaName } from './mapMediaName.js';
 import {
   resolveDestinations,
+  resolveStoredDestination,
   type DestinationGame,
   type ResolverService,
 } from './destinationResolver.js';
@@ -275,5 +276,35 @@ describe('resolveDestinations legacy and unknown', () => {
       kind: 'destinations',
       primary: { url: CBS },
     });
+  });
+});
+
+describe('resolveStoredDestination', () => {
+  it('uses a stored Prime media name the mapper does not know', () => {
+    const result = resolveStoredDestination({
+      awayNickname: 'Bears',
+      homeNickname: 'Falcons',
+      kickoff: KICKOFF,
+      airings: [{ network: 'amazon_prime', espnMediaName: 'AMAZON_PRIME' }],
+      services: ['amazon_prime'],
+      savedUrl: null,
+      outOfMarketSunday: false,
+    });
+    expect(mapMediaName('AMAZON_PRIME')).toBeNull();
+    expect(result).toMatchObject({ kind: 'destinations', primary: { url: PRIME } });
+  });
+
+  it('keeps a stored Peacock airing as unknown_network', () => {
+    expect(
+      resolveStoredDestination({
+        awayNickname: 'Bears',
+        homeNickname: 'Falcons',
+        kickoff: KICKOFF,
+        airings: [{ network: 'peacock', espnMediaName: 'Peacock' }],
+        services: ['peacock', 'youtube_tv', 'directv'],
+        savedUrl: null,
+        outOfMarketSunday: false,
+      }),
+    ).toEqual({ kind: 'unknown_network', raw: 'Peacock' });
   });
 });

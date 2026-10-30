@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { watchlistPlayerRow, watchlistStatusLabel, type WatchlistTableGame } from './watchlistTable';
+import {
+  watchlistPlayerRow,
+  watchlistStatusLabel,
+  type WatchlistTableGame,
+} from './watchlistTable';
 
 const NOW = new Date('2026-10-11T17:00:00.000Z');
 
@@ -63,6 +67,33 @@ describe('watchlistPlayerRow', () => {
     expect(row.status).toBe('10–21 · Q3 7:35');
     expect(row.statusMuted).toBe(false);
     expect(row.deepLinkUrl).toBe('https://tv.youtube.com/watch/abc');
+  });
+
+  it('opens the resolver primary instead of the ranked search URL', () => {
+    const row = watchlistPlayerRow({
+      id: 'slot-1',
+      slot: 'WR',
+      name: 'Davante Adams',
+      meta: 'LAR · WR',
+      teamAbbr: 'SF',
+      weekGames: [
+        game({
+          destination: {
+            kind: 'destinations',
+            primary: {
+              url: 'https://www.cbs.com/live-tv/stream/',
+              verified: true,
+              note: 'Local CBS, then one Live Local tap.',
+            },
+            alternates: [],
+          },
+        }),
+      ],
+      liveGames: [],
+      now: NOW,
+      timeZone: 'America/New_York',
+    });
+    expect(row.deepLinkUrl).toBe('https://www.cbs.com/live-tv/stream/');
   });
 
   it('drops a custom-scheme watch URL', () => {

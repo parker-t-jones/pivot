@@ -37,6 +37,7 @@ export {
 export {
   DESTINATION_TABLE,
   resolveDestinations,
+  resolveStoredDestination,
   type DestinationGame,
   type DestinationResolution,
   type ResolverService,

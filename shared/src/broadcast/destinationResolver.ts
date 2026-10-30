@@ -1,5 +1,5 @@
 import { mapMediaName } from './mapMediaName.js';
-import type { AiringNetwork, UserService } from './types.js';
+import { USER_SERVICES, type AiringNetwork, type UserService } from './types.js';
 import { serviceWatchUrl } from './watchLinks.js';
 
 /** Picker values. `espn` is the ESPN app (`espn.com/watch`), not `espn_plus`. */
@@ -300,4 +300,61 @@ export function resolveDestinations(
   }
 
   return toResolution(rankDestinations(candidates));
+}
+
+/**
+ * ESPN media names already stored on `game_airings`. A name `mapMediaName` accepts is used
+ * as-is. A name it rejects falls back to the canonical string for that network column, so a
+ * fixture like `AMAZON_PRIME` still resolves. An unmapped name with no canonical string
+ * stays raw (`unknown_network`).
+ */
+const STORED_NETWORK_RAW: Partial<Record<AiringNetwork, string>> = {
+  cbs: 'CBS',
+  fox: 'FOX',
+  nbc: 'NBC',
+  abc: 'ABC',
+  espn: 'ESPN',
+  amazon_prime: 'Prime Video',
+  nfl_network: 'NFL Net',
+};
+
+const USER_SERVICE_SET = new Set<string>(USER_SERVICES);
+
+function storedRawName(airing: { network: string; espnMediaName: string }): string | null {
+  const media = airing.espnMediaName.trim();
+  if (media.length > 0 && mapMediaName(media) !== null) return media;
+  const canonical = STORED_NETWORK_RAW[airing.network as AiringNetwork];
+  if (canonical !== undefined) return canonical;
+  return media.length > 0 ? media : null;
+}
+
+/** `resolveDestinations` for rows already stored as network + ESPN media name. */
+export function resolveStoredDestination(input: {
+  awayNickname: string;
+  homeNickname: string;
+  kickoff: Date | null;
+  airings: readonly { network: string; espnMediaName: string }[];
+  services: readonly string[];
+  savedUrl: string | null;
+  outOfMarketSunday: boolean;
+}): DestinationResolution {
+  const airings: { rawName: string }[] = [];
+  for (const airing of input.airings) {
+    const rawName = storedRawName(airing);
+    if (rawName !== null) airings.push({ rawName });
+  }
+  const services = input.services.filter((service): service is UserService =>
+    USER_SERVICE_SET.has(service),
+  );
+  return resolveDestinations(
+    {
+      awayNickname: input.awayNickname,
+      homeNickname: input.homeNickname,
+      kickoff: input.kickoff,
+      airings,
+      savedUrl: input.savedUrl,
+      outOfMarketSunday: input.outOfMarketSunday,
+    },
+    services,
+  );
 }
