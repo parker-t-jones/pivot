@@ -82,7 +82,10 @@ const SERVICE_LABELS: Record<string, string> = {
   fubo: 'Fubo',
   directv: 'DIRECTV',
   sling: 'Sling TV',
+  espn: 'ESPN',
   espn_plus: 'ESPN+',
+  fox_one: 'FOX One',
+  cable_other: 'Other cable',
   paramount_plus: 'Paramount+',
   peacock: 'Peacock',
   amazon_prime: 'Prime Video',
@@ -93,7 +96,6 @@ const SERVICE_LABELS: Record<string, string> = {
   cbs: 'CBS',
   nbc: 'NBC',
   abc: 'ABC',
-  espn: 'ESPN',
 };
 
 export function serviceLabel(service: string): string {

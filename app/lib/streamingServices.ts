@@ -35,6 +35,7 @@ export const USER_SERVICE_INFO: Record<UserService, UserServiceInfo> = {
   fubo: { service: 'fubo', label: 'Fubo', appStoreUrl: searchUrl('Fubo') },
   directv: { service: 'directv', label: 'DIRECTV', appStoreUrl: searchUrl('DIRECTV') },
   sling: { service: 'sling', label: 'Sling TV', appStoreUrl: searchUrl('Sling TV') },
+  cable_other: { service: 'cable_other', label: 'Other cable', appStoreUrl: '' },
   amazon_prime: {
     service: 'amazon_prime',
     label: 'Prime Video',
@@ -46,6 +47,8 @@ export const USER_SERVICE_INFO: Record<UserService, UserServiceInfo> = {
     label: 'Paramount+',
     appStoreUrl: searchUrl('Paramount+'),
   },
+  fox_one: { service: 'fox_one', label: 'FOX One', appStoreUrl: searchUrl('FOX One') },
+  espn: { service: 'espn', label: 'ESPN', appStoreUrl: searchUrl('ESPN') },
   espn_plus: { service: 'espn_plus', label: 'ESPN+', appStoreUrl: searchUrl('ESPN') },
   nfl_plus: { service: 'nfl_plus', label: 'NFL+', appStoreUrl: searchUrl('NFL') },
 };
@@ -57,10 +60,26 @@ export function userServiceLabel(service: string): string {
 }
 
 export function userServiceAppStoreUrl(service: string): string | null {
-  return USER_SERVICE_INFO[service as UserService]?.appStoreUrl ?? null;
+  const url = USER_SERVICE_INFO[service as UserService]?.appStoreUrl;
+  return url ? url : null;
 }
 
 /** Settings' one-line nudge (§2.2): YouTube TV on, Sunday Ticket off. Copy only, no stored flag. */
 export function showsSundayTicketHint(presence: ReadonlyMap<string, boolean>): boolean {
   return presence.get('youtube_tv') === true && presence.get('sunday_ticket') !== true;
+}
+
+/** Shown for pay-TV picks. Of FOX One, other cable, and the ESPN app, only other cable. */
+export const PAY_TV_SIGN_IN_COPY = "You'll sign in with your provider once on each network's site.";
+
+const PAY_TV_SIGN_IN_SERVICES = new Set<UserService>([
+  'youtube_tv',
+  'hulu_live',
+  'fubo',
+  'directv',
+  'cable_other',
+]);
+
+export function showsPayTvSignInCopy(service: string): boolean {
+  return PAY_TV_SIGN_IN_SERVICES.has(service as UserService);
 }

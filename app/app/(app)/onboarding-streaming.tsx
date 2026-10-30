@@ -9,7 +9,12 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextButton } from '../../components/TextButton';
 import { ApiRequestError } from '../../lib/apiClient';
 import { setAppPresence } from '../../lib/me';
-import { USER_SERVICE_OPTIONS, userServiceLabel } from '../../lib/streamingServices';
+import {
+  PAY_TV_SIGN_IN_COPY,
+  showsPayTvSignInCopy,
+  USER_SERVICE_OPTIONS,
+  userServiceLabel,
+} from '../../lib/streamingServices';
 import { theme } from '../../lib/theme';
 
 /** PLAN.md Section 10 onboarding step 4 ("Streaming services — multi-select grid, persists to
@@ -83,6 +88,12 @@ export default function OnboardingStreamingScreen() {
           );
         })}
       </View>
+
+      {USER_SERVICE_OPTIONS.some(
+        (service) => selected.has(service) && showsPayTvSignInCopy(service),
+      ) ? (
+        <Text style={styles.subtitle}>{PAY_TV_SIGN_IN_COPY}</Text>
+      ) : null}
 
       {errorMessage ? <ErrorState message={errorMessage} /> : null}
 

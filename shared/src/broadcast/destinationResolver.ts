@@ -2,11 +2,8 @@ import { mapMediaName } from './mapMediaName.js';
 import type { AiringNetwork, UserService } from './types.js';
 import { serviceWatchUrl } from './watchLinks.js';
 
-/**
- * Services this resolver accepts. `fox_one` and `cable_other` are stored in gate 3.
- * `espn` is the ESPN app (`espn.com/watch`), not `espn_plus`.
- */
-export type ResolverService = UserService | 'fox_one' | 'cable_other' | 'espn';
+/** Picker values. `espn` is the ESPN app (`espn.com/watch`), not `espn_plus`. */
+export type ResolverService = UserService;
 
 /** One https destination. `verified` is the manual-check flag from the network table. */
 export interface WatchDestination {

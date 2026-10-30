@@ -36,6 +36,8 @@ describe('serviceLabel', () => {
     expect(serviceLabel('sunday_ticket')).toBe('NFL Sunday Ticket');
     expect(serviceLabel('espn_plus')).toBe('ESPN+');
     expect(serviceLabel('espn')).toBe('ESPN');
+    expect(serviceLabel('fox_one')).toBe('FOX One');
+    expect(serviceLabel('cable_other')).toBe('Other cable');
     expect(serviceLabel('fox')).toBe('FOX');
     expect(serviceLabel('hulu_live')).toBe('Hulu + Live TV');
     expect(serviceLabel('fubo')).toBe('Fubo');
