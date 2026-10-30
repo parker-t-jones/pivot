@@ -1,6 +1,8 @@
 /**
  * Client types + fetch for PLAN.md Section 9 `GET /games?week=` and `GET /games/live` (Sprint 10).
  */
+import type { DestinationResolution } from '@pivot/shared/broadcast';
+
 import { apiClient } from './apiClient';
 import type { GameAiring, GameBroadcast } from './gameDisplay';
 
@@ -22,6 +24,8 @@ export interface ScheduleGame {
   /** The user's watch options, ranked; empty when they have none of the carrying services. */
   broadcasts: GameBroadcast[];
   airings: GameAiring[];
+  /** Present once the API returns the resolver result. Older payloads omit it. */
+  destination?: DestinationResolution;
 }
 
 export interface GamesWeekResponse {

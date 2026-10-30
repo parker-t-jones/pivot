@@ -5,7 +5,7 @@ import {
   hexWithAlpha,
   opponentAbbreviation,
   reasonLabel,
-  serviceLabel,
+  watchBroadcastLabel,
   watchOptionParts,
   type CurrentFlag,
   type GameBroadcast,
@@ -16,6 +16,7 @@ import { reasonChipParts, resolveFlaggedTeamDisplay, type PlayerTeamMap } from '
 import { betChipLabel } from '../lib/homeBets';
 import { theme } from '../lib/theme';
 import { FieldGauge } from './FieldGauge';
+import { OtherWaysToWatch } from './OtherWaysToWatch';
 import { PrimaryButton } from './PrimaryButton';
 import { SecondaryButton } from './SecondaryButton';
 
@@ -123,11 +124,13 @@ export function NowActiveCard({
       {cta.kind === 'watch' ? (
         <View style={styles.cta}>
           <PrimaryButton
-            label={`Watch on ${serviceLabel(cta.broadcast.service)}`}
+            label={watchBroadcastLabel(cta.broadcast)}
             onPress={() => onSwitch(cta.broadcast)}
             labelStyle={styles.ctaLabel}
           />
-          {localRoute && localParts && localRoute !== cta.broadcast ? (
+          {cta.alternates && cta.alternates.length > 0 ? (
+            <OtherWaysToWatch alternates={cta.alternates} onOpen={onSwitch} />
+          ) : localRoute && localParts && localRoute !== cta.broadcast ? (
             <SecondaryButton
               label={localParts.title}
               caption={localParts.caption}

@@ -1,4 +1,4 @@
-import { networkLabelFromAirings } from '@pivot/shared/broadcast';
+import { networkLabelFromAirings, type DestinationResolution } from '@pivot/shared/broadcast';
 
 import { compactScoreLabel, liveClockLabel } from './gameDisplay';
 import { kickoffLabel } from './kickoffLabel';
@@ -13,6 +13,7 @@ export interface WatchlistTableGame {
   away_team: string;
   airings: readonly { network: string }[];
   broadcasts: readonly { preferred: boolean; deep_link_url: string }[];
+  destination?: DestinationResolution;
 }
 
 export interface WatchlistTableLive {
@@ -186,8 +187,10 @@ function rowFromGame(input: {
     };
   }
 
-  const live = input.liveGames.find((candidate) => candidate.game_id === input.game?.game_id) ?? null;
-  const inProgress = input.game.status === 'in_progress' || (live !== null && input.game.status !== 'final');
+  const live =
+    input.liveGames.find((candidate) => candidate.game_id === input.game?.game_id) ?? null;
+  const inProgress =
+    input.game.status === 'in_progress' || (live !== null && input.game.status !== 'final');
   const isFinal = input.game.status === 'final';
   const kickoff = new Date(input.game.scheduled_start);
   const label = watchlistStatusLabel({
@@ -245,6 +248,14 @@ function networkOrDash(game: WatchlistTableGame): string {
 
 function preferredHttps(game: WatchlistTableGame | null): string | null {
   if (!game) return null;
+  if (
+    game.destination?.kind === 'unavailable' ||
+    game.destination?.kind === 'unknown_network' ||
+    game.destination?.kind === 'no_broadcast_info'
+  ) {
+    return null;
+  }
+  if (game.destination?.kind === 'destinations') return httpsWatchUrl(game.destination.primary.url);
   const preferred = game.broadcasts.find((broadcast) => broadcast.preferred) ?? game.broadcasts[0];
   return httpsWatchUrl(preferred?.deep_link_url);
 }

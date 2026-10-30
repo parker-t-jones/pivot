@@ -234,6 +234,56 @@ describe('deliverFlagEvent', () => {
     expect(envelope.payload.action.deep_link_url).toBeNull();
   });
 
+  it('opens DIRECTV on the FOX network link', async () => {
+    const broadcastCatalog = weekCatalog(['directv']);
+    const bus = new InMemoryRealtimeBus();
+    const gameCatalog = new InMemoryGameCatalog();
+    gameCatalog.setGame('g1', {
+      homeTeamAbbreviation: 'GB',
+      awayTeamAbbreviation: 'ATL',
+      homeTeamName: 'Packers',
+      awayTeamName: 'Falcons',
+      homeTeamPrimaryColor: '#203731',
+      homeTeamSecondaryColor: '#FFB612',
+      awayTeamPrimaryColor: '#A71930',
+      awayTeamSecondaryColor: '#000000',
+    });
+    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus, gameCatalog });
+
+    await deliverFlagEvent(deps, makeEvent(), freeUser);
+
+    const envelope = bus.published[0]?.message as FlagEventEnvelope;
+    expect(envelope.payload.action.recommended_source).toBe('directv');
+    expect(envelope.payload.action.deep_link_url).toBe(
+      'https://www.fox.com/search?q=Falcons%20at%20Packers',
+    );
+  });
+
+  it('opens FOX One on the FOX search link when the old ranker has no option', async () => {
+    const broadcastCatalog = weekCatalog(['fox_one']);
+    const bus = new InMemoryRealtimeBus();
+    const gameCatalog = new InMemoryGameCatalog();
+    gameCatalog.setGame('g1', {
+      homeTeamAbbreviation: 'GB',
+      awayTeamAbbreviation: 'ATL',
+      homeTeamName: 'Packers',
+      awayTeamName: 'Falcons',
+      homeTeamPrimaryColor: '#203731',
+      homeTeamSecondaryColor: '#FFB612',
+      awayTeamPrimaryColor: '#A71930',
+      awayTeamSecondaryColor: '#000000',
+    });
+    const deps = buildDeps({ broadcastCatalog, realtimeBus: bus, gameCatalog });
+
+    await deliverFlagEvent(deps, makeEvent(), freeUser);
+
+    const envelope = bus.published[0]?.message as FlagEventEnvelope;
+    expect(envelope.payload.action.recommended_source).toBeNull();
+    expect(envelope.payload.action.deep_link_url).toBe(
+      'https://www.fox.com/search?q=Falcons%20at%20Packers',
+    );
+  });
+
   it('leaves recommended_source/deep_link_url null when the game has no airings', async () => {
     const bus = new InMemoryRealtimeBus();
     const deps = buildDeps({ realtimeBus: bus });
@@ -1412,7 +1462,7 @@ describe('web push saved_url', () => {
     return { pushNotifier, web, bus };
   }
 
-  it('puts the saved url on every web payload and leaves the Expo payload unchanged', async () => {
+  it('puts the saved url on web and on both payloads as the resolved link', async () => {
     const calls: string[] = [];
     const sent = await deliver(makeEvent(), {
       urlFor: async (userId, gameId) => {
@@ -1425,7 +1475,11 @@ describe('web push saved_url', () => {
     expect(sent.web.calls).toHaveLength(2);
     expect(webAction(sent.web.calls[0]?.data)['saved_url']).toBe(SAVED);
     expect(webAction(sent.web.calls[1]?.data)['saved_url']).toBe(SAVED);
-    expect(iosPayload(sent.pushNotifier.calls[0])).toEqual(FLAG_ADDED_IOS_PAYLOAD);
+    expect(webAction(sent.web.calls[0]?.data)['deep_link_url']).toBe(SAVED);
+    expect(iosPayload(sent.pushNotifier.calls[0])).toEqual({
+      ...FLAG_ADDED_IOS_PAYLOAD,
+      action: { ...FLAG_ADDED_IOS_PAYLOAD.action, deep_link_url: SAVED },
+    });
     expect(sent.pushNotifier.calls[0]?.data).not.toHaveProperty('action.saved_url');
     expect((sent.pushNotifier.calls[0]?.data as { action: object }).action).not.toHaveProperty(
       'saved_url',
@@ -1472,7 +1526,10 @@ describe('web push saved_url', () => {
     expect(iosPayload((plain.pushNotifier as CapturingPushNotifier).calls[0])).toEqual(
       BET_IN_PLAY_IOS_PAYLOAD,
     );
-    expect(iosPayload(withLink.pushNotifier.calls[0])).toEqual(BET_IN_PLAY_IOS_PAYLOAD);
+    expect(iosPayload(withLink.pushNotifier.calls[0])).toEqual({
+      ...BET_IN_PLAY_IOS_PAYLOAD,
+      action: { ...BET_IN_PLAY_IOS_PAYLOAD.action, deep_link_url: SAVED },
+    });
     expect(webAction(withLink.web.calls[0]?.data)['saved_url']).toBe(SAVED);
   });
 });

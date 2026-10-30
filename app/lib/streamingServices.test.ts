@@ -1,6 +1,7 @@
 import { USER_SERVICES } from '@pivot/shared/broadcast';
 import { describe, expect, it } from 'vitest';
 import {
+  showsPayTvSignInCopy,
   showsSundayTicketHint,
   USER_SERVICE_OPTIONS,
   userServiceAppStoreUrl,
@@ -16,17 +17,20 @@ describe('USER_SERVICE_OPTIONS', () => {
       'fubo',
       'directv',
       'sling',
+      'cable_other',
       'amazon_prime',
       'peacock',
       'paramount_plus',
+      'fox_one',
+      'espn',
       'espn_plus',
       'nfl_plus',
     ]);
     expect([...USER_SERVICE_OPTIONS].sort()).toEqual([...USER_SERVICES].sort());
   });
 
-  it('offers no networks and no antenna option', () => {
-    for (const key of ['cbs', 'fox', 'nbc', 'abc', 'espn', 'nfl_network', 'hulu', 'antenna']) {
+  it('offers no OTA network keys and no antenna option', () => {
+    for (const key of ['cbs', 'fox', 'nbc', 'abc', 'nfl_network', 'hulu', 'antenna']) {
       expect(USER_SERVICE_OPTIONS as readonly string[]).not.toContain(key);
     }
   });
@@ -41,9 +45,12 @@ describe('userServiceLabel', () => {
       'Fubo',
       'DIRECTV',
       'Sling TV',
+      'Other cable',
       'Prime Video',
       'Peacock',
       'Paramount+',
+      'FOX One',
+      'ESPN',
       'ESPN+',
       'NFL+',
     ]);
@@ -60,6 +67,21 @@ describe('userServiceAppStoreUrl', () => {
       'https://apps.apple.com/us/search?term=YouTube%20TV',
     );
     expect(userServiceAppStoreUrl('fox')).toBeNull();
+    expect(userServiceAppStoreUrl('cable_other')).toBeNull();
+  });
+});
+
+describe('showsPayTvSignInCopy', () => {
+  it('is the pay-TV picks, and only other cable of FOX One, other cable, and the ESPN app', () => {
+    expect(showsPayTvSignInCopy('youtube_tv')).toBe(false);
+    expect(showsPayTvSignInCopy('hulu_live')).toBe(true);
+    expect(showsPayTvSignInCopy('fubo')).toBe(true);
+    expect(showsPayTvSignInCopy('directv')).toBe(true);
+    expect(showsPayTvSignInCopy('cable_other')).toBe(true);
+    expect(showsPayTvSignInCopy('fox_one')).toBe(false);
+    expect(showsPayTvSignInCopy('espn')).toBe(false);
+    expect(showsPayTvSignInCopy('espn_plus')).toBe(false);
+    expect(showsPayTvSignInCopy('sling')).toBe(false);
   });
 });
 

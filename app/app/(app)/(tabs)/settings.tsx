@@ -37,9 +37,12 @@ import {
   setAppPresence,
   type MeResponse,
 } from '../../../lib/me';
+import { requestWeekGamesRefresh } from '../../../lib/weekGamesRefresh';
 import { unregisterPushNotificationsAsync } from '../../../lib/pushNotifications';
 import { revokeDesktopAlerts } from '../../../lib/webPush';
 import {
+  PAY_TV_SIGN_IN_COPY,
+  showsPayTvSignInCopy,
   showsSundayTicketHint,
   USER_SERVICE_OPTIONS,
   userServiceLabel,
@@ -202,6 +205,7 @@ export default function SettingsScreen() {
           { service, has_subscription: hasSubscription },
         ]);
         setMe((current) => (current ? { ...current, app_presence } : current));
+        requestWeekGamesRefresh();
       }}
     />
   );
@@ -482,6 +486,9 @@ function StreamingServicesSection({
     [appPresence],
   );
   const showTicketHint = showsSundayTicketHint(presenceByService);
+  const showPayTvSignIn = USER_SERVICE_OPTIONS.some(
+    (service) => showsPayTvSignInCopy(service) && presenceByService.get(service) === true,
+  );
 
   return (
     <SectionCard title="Streaming services">
@@ -514,6 +521,7 @@ function StreamingServicesSection({
           ) : null}
         </View>
       ))}
+      {showPayTvSignIn ? <Text style={styles.ticketHint}>{PAY_TV_SIGN_IN_COPY}</Text> : null}
     </SectionCard>
   );
 }

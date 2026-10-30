@@ -1,9 +1,17 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { alsoFlaggedSituationLines, type CurrentFlag, type WatchCta } from '../lib/gameDisplay';
+import {
+  alsoFlaggedSituationLines,
+  showsWatchButton,
+  type CurrentFlag,
+  type GameBroadcast,
+  type WatchCta,
+} from '../lib/gameDisplay';
+import { GameAnchor } from '../lib/gameAnchor';
 import { betChipLabel } from '../lib/homeBets';
 import { FlagChip } from './NowActiveCard';
+import { OtherWaysToWatch } from './OtherWaysToWatch';
 import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
 
@@ -17,9 +25,11 @@ interface AlsoFlaggedRowProps {
   onSwitch: (flag: CurrentFlag) => Promise<void>;
   /**
    * `watchCta` for a flagged game from the week slate, or null when the slate doesn't have it (the
-   * Switch button then resolves on tap). An `airing` result replaces the button with "On FOX".
+   * button is hidden. An `airing` result is the text ("Not on your services" / "On FOX").
    */
   ctaFor: (flag: CurrentFlag) => WatchCta | null;
+  /** Opens an alternate from "Other ways to watch". Absent when the row has no alternates. */
+  onOpenAlternate?: (flag: CurrentFlag, broadcast: GameBroadcast) => void;
 }
 
 function teamDotColor(hex: string): string {
@@ -34,7 +44,7 @@ function teamDotColor(hex: string): string {
  * (UI-SPEC.md §3.3). NFL team logos are a non-goal (no logo field on `GameSummary`).
  * Renders nothing when there's nothing to show.
  */
-export function AlsoFlaggedRow({ flags, onSwitch, ctaFor }: AlsoFlaggedRowProps) {
+export function AlsoFlaggedRow({ flags, onSwitch, ctaFor, onOpenAlternate }: AlsoFlaggedRowProps) {
   const [switchingGameId, setSwitchingGameId] = useState<string | null>(null);
 
   if (flags.length === 0) return null;
@@ -54,7 +64,7 @@ export function AlsoFlaggedRow({ flags, onSwitch, ctaFor }: AlsoFlaggedRowProps)
           const cta = ctaFor(flag);
           const betLabel = betChipLabel((flag.bets ?? []).map((bet) => bet.label));
           return (
-            <View key={flag.game_id} style={styles.card}>
+            <GameAnchor key={flag.game_id} gameId={flag.game_id} style={styles.card}>
               <View style={styles.teams}>
                 <TeamRow
                   color={teamDotColor(flag.game.away_team_primary_color)}
@@ -80,7 +90,7 @@ export function AlsoFlaggedRow({ flags, onSwitch, ctaFor }: AlsoFlaggedRowProps)
                 ))}
                 {cta?.kind === 'airing' ? (
                   <Text style={styles.airing}>{cta.text}</Text>
-                ) : cta?.kind === 'none' ? null : (
+                ) : showsWatchButton(cta) && cta?.kind === 'watch' ? (
                   <Pressable
                     accessibilityLabel={`Switch to ${flag.game.away_team} at ${flag.game.home_team}`}
                     accessibilityRole="button"
@@ -97,9 +107,18 @@ export function AlsoFlaggedRow({ flags, onSwitch, ctaFor }: AlsoFlaggedRowProps)
                       <Text style={styles.switchLabel}>Switch</Text>
                     )}
                   </Pressable>
-                )}
+                ) : null}
+                {cta?.kind === 'watch' &&
+                cta.alternates &&
+                cta.alternates.length > 0 &&
+                onOpenAlternate ? (
+                  <OtherWaysToWatch
+                    alternates={cta.alternates}
+                    onOpen={(broadcast) => onOpenAlternate(flag, broadcast)}
+                  />
+                ) : null}
               </View>
-            </View>
+            </GameAnchor>
           );
         })}
       </View>

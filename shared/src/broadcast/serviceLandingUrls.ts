@@ -20,11 +20,17 @@ export const USER_SERVICE_LANDING_URLS: Record<UserService, string> = {
   // Fallback when nicknames are missing. A real game uses stream.directv.com/search.
   directv: 'https://www.directv.com/',
   sling: '', // no confirmed carriage, so never emitted
+  // No single provider page. The destination resolver builds the network link.
+  cable_other: '',
   // Fallback when nicknames or kickoff are missing. A real game uses the app.primevideo.com search.
   amazon_prime: 'https://www.primevideo.com/',
   peacock: 'https://www.peacocktv.com/watch/sports',
   // Device-tested Oct 2 2026: opens the app. Landing inside the app was unverified (no account).
   paramount_plus: 'https://www.paramountplus.com/live-tv/',
+  // Static fallback. A game with nicknames uses the FOX search link in the destination resolver.
+  fox_one: 'https://www.fox.com/live/channels',
+  // ESPN app. Not ESPN+ (`espn_plus`).
+  espn: 'https://www.espn.com/watch/',
   // `/watch/*` is claimed only by ESPN's dogfood/QA builds; production `com.espn.ScoreCenter` claims `/nfl/team`.
   espn_plus: 'https://www.espn.com/nfl/team',
   nfl_plus: 'https://www.nfl.com/scores',

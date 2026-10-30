@@ -94,7 +94,7 @@ export function WatchlistDesktop({
   const visibleRows = rows.filter((row) => !removal.hiddenIds.includes(row.id));
 
   const openRow = (row: WatchlistTableRow) => {
-    if (!row.live || !row.gameId) return;
+    if (!row.live || !row.gameId || !row.deepLinkUrl) return;
     const source = games.find((game) => game.game_id === row.gameId);
     switchToGame({
       gameId: row.gameId,
@@ -243,15 +243,15 @@ function TableRow({
         setRowFocused(false);
       }}
       onFocus={() => setRowFocused(true)}
-      onPress={row.live ? onOpen : undefined}
+      onPress={row.live && row.deepLinkUrl ? onOpen : undefined}
       ref={rowRef}
       style={(state) => {
         const { pressed, focused } = webPressState(state);
         return [
           styles.row,
           (rowHot || focused) && styles.rowHover,
-          pressed && row.live && styles.rowPressed,
-          focused && row.live && styles.rowFocused,
+          pressed && row.live && row.deepLinkUrl && styles.rowPressed,
+          focused && row.live && row.deepLinkUrl && styles.rowFocused,
         ];
       }}
       testID="watchlist-row"
@@ -300,7 +300,7 @@ function TableRow({
         {row.status}
       </Text>
       <View style={styles.actionCol}>
-        {row.live ? (
+        {row.live && row.deepLinkUrl ? (
           <Pressable
             accessibilityRole="button"
             onPress={onOpen}

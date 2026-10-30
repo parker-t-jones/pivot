@@ -21,7 +21,10 @@ export const AIRING_NETWORKS = [
 
 export type AiringNetwork = (typeof AIRING_NETWORKS)[number];
 
-/** Keys that may appear on user_app_presence. Picker values. */
+/**
+ * Keys that may appear on user_app_presence. Picker values.
+ * `espn` is the ESPN app, distinct from the airing network of the same name and from `espn_plus`.
+ */
 export const USER_SERVICES = [
   'youtube_tv',
   'sunday_ticket',
@@ -29,9 +32,12 @@ export const USER_SERVICES = [
   'fubo',
   'directv',
   'sling',
+  'cable_other',
   'amazon_prime',
   'peacock',
   'paramount_plus',
+  'fox_one',
+  'espn',
   'espn_plus',
   'nfl_plus',
 ] as const;

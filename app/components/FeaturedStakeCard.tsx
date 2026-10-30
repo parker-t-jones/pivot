@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { networkLabelFromAirings } from '@pivot/shared/broadcast';
 import { fonts } from '../lib/fonts';
 import { watchCta } from '../lib/gameDisplay';
+import { GameAnchor } from '../lib/gameAnchor';
 import { formatNextGameWhen, type LineupGameGroup } from '../lib/homeState';
 import type { ScheduleGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
@@ -46,68 +47,76 @@ export function FeaturedStakeCard({
   when,
 }: FeaturedStakeCardProps) {
   const network = networkLabelFromAirings(game.airings);
-  const cta = watchCta(game.broadcasts, game.airings);
+  const cta = watchCta(game.broadcasts, game.airings, game.destination);
   const kickoff = when ?? formatNextGameWhen(game.scheduled_start);
 
   return (
-    <Slip style={styles.card}>
-      <View style={styles.band}>
-        <View style={[styles.bandHalf, { backgroundColor: game.away_team_primary_color }]} />
-        <View style={[styles.bandHalf, { backgroundColor: game.home_team_primary_color }]} />
-      </View>
-
-      <View style={styles.body}>
-        <View style={styles.headerRow}>
-          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.eyebrow}>
-            {eyebrow}
-          </Text>
-          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.meta}>
-            {network === null ? kickoff : `${kickoff} · ${network}`}
-          </Text>
+    <GameAnchor gameId={game.game_id}>
+      <Slip style={styles.card}>
+        <View style={styles.band}>
+          <View style={[styles.bandHalf, { backgroundColor: game.away_team_primary_color }]} />
+          <View style={[styles.bandHalf, { backgroundColor: game.home_team_primary_color }]} />
         </View>
 
-        <Text
-          adjustsFontSizeToFit
-          maxFontSizeMultiplier={theme.fontScaleCaps.title}
-          minimumFontScale={0.7}
-          numberOfLines={1}
-          style={styles.nickname}
-        >
-          {game.away_team_name.toUpperCase()}
-          <Text maxFontSizeMultiplier={theme.fontScaleCaps.title} style={styles.at}>
-            {' @ '}
-          </Text>
-          {game.home_team_name.toUpperCase()}
-        </Text>
-
-        {players.length > 0 || bets.length > 0 ? (
-          <View style={styles.chips}>
-            {players.map((player) => (
-              <View key={player.player_id} style={styles.chip}>
-                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipName}>
-                  {`${player.first_name} ${player.last_name}`.trim()}
-                </Text>
-                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipPosition}>
-                  {player.position}
-                </Text>
-              </View>
-            ))}
-            {bets.map((bet) => (
-              <View key={bet.stakeId} style={styles.chip}>
-                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipName}>
-                  {bet.label}
-                </Text>
-                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipPosition}>
-                  {bet.eyebrow ?? 'BET'}
-                </Text>
-              </View>
-            ))}
+        <View style={styles.body}>
+          <View style={styles.headerRow}>
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.eyebrow}>
+              {eyebrow}
+            </Text>
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.meta}>
+              {network === null ? kickoff : `${kickoff} · ${network}`}
+            </Text>
           </View>
-        ) : null}
 
-        {cta.kind === 'airing' ? <Text style={styles.airing}>{cta.text}</Text> : null}
-      </View>
-    </Slip>
+          <Text
+            adjustsFontSizeToFit
+            maxFontSizeMultiplier={theme.fontScaleCaps.title}
+            minimumFontScale={0.7}
+            numberOfLines={1}
+            style={styles.nickname}
+          >
+            {game.away_team_name.toUpperCase()}
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.title} style={styles.at}>
+              {' @ '}
+            </Text>
+            {game.home_team_name.toUpperCase()}
+          </Text>
+
+          {players.length > 0 || bets.length > 0 ? (
+            <View style={styles.chips}>
+              {players.map((player) => (
+                <View key={player.player_id} style={styles.chip}>
+                  <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipName}>
+                    {`${player.first_name} ${player.last_name}`.trim()}
+                  </Text>
+                  <Text
+                    maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                    style={styles.chipPosition}
+                  >
+                    {player.position}
+                  </Text>
+                </View>
+              ))}
+              {bets.map((bet) => (
+                <View key={bet.stakeId} style={styles.chip}>
+                  <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.chipName}>
+                    {bet.label}
+                  </Text>
+                  <Text
+                    maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                    style={styles.chipPosition}
+                  >
+                    {bet.eyebrow ?? 'BET'}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {cta.kind === 'airing' ? <Text style={styles.airing}>{cta.text}</Text> : null}
+        </View>
+      </Slip>
+    </GameAnchor>
   );
 }
 

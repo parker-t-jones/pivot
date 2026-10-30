@@ -1,9 +1,11 @@
 import * as Notifications from 'expo-notifications';
+import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 
 import { useSwitching } from '../contexts/SwitchingContext';
 import { recordNotificationAction } from '../lib/notificationActions';
+import { homeGameHref } from '../lib/notificationOpenTarget';
 import { applyNotificationResponse } from '../lib/notificationResponse';
 
 /**
@@ -33,6 +35,7 @@ export function NotificationResponseHandler() {
 
 function NativeNotificationResponseHandler() {
   const { switchToGame } = useSwitching();
+  const router = useRouter();
   const lastResponse = Notifications.useLastNotificationResponse();
   /** Guards React Strict Mode's double-effect and any remount before clear settles. */
   const handledIdentifierRef = useRef<string | null>(null);
@@ -44,12 +47,16 @@ function NativeNotificationResponseHandler() {
     const identifier = lastResponse.notification.request.identifier;
     if (handledIdentifierRef.current === identifier) return;
 
-    applyNotificationResponse(lastResponse, { switchToGame, recordNotificationAction });
+    applyNotificationResponse(lastResponse, {
+      switchToGame,
+      openGame: (gameId) => router.dismissTo(homeGameHref(gameId)),
+      recordNotificationAction,
+    });
     handledIdentifierRef.current = identifier;
     // Clear whether or not it was a flag_event — a stuck non-flag response would otherwise keep
     // re-entering this effect on every remount of the handler.
     Notifications.clearLastNotificationResponse();
-  }, [lastResponse, switchToGame]);
+  }, [lastResponse, router, switchToGame]);
 
   return null;
 }

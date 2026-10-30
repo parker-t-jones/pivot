@@ -382,11 +382,11 @@ describe('watchOptionsForGame', () => {
 });
 
 describe('USER_SERVICE_LANDING_URLS', () => {
-  it('only omits a landing URL for Sling, which has no confirmed carriage', () => {
+  it('only omits a landing URL when there is no provider page', () => {
     const missing = Object.entries(USER_SERVICE_LANDING_URLS)
       .filter(([, url]) => url === '')
       .map(([service]) => service);
-    expect(missing).toEqual(['sling']);
+    expect(missing).toEqual(['sling', 'cable_other']);
   });
 });
 

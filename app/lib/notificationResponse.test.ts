@@ -89,6 +89,7 @@ describe('applyNotificationResponse', () => {
 
     const result = applyNotificationResponse(response({ hello: 'world' }), {
       switchToGame,
+      openGame: vi.fn(),
       recordNotificationAction,
     });
 
@@ -104,6 +105,7 @@ describe('applyNotificationResponse', () => {
 
     const result = applyNotificationResponse(response(payload), {
       switchToGame,
+      openGame: vi.fn(),
       recordNotificationAction,
     });
 
@@ -132,6 +134,7 @@ describe('applyNotificationResponse', () => {
 
     const result = applyNotificationResponse(response(payload, 'dismiss'), {
       switchToGame,
+      openGame: vi.fn(),
       recordNotificationAction,
     });
 
@@ -159,7 +162,11 @@ describe('applyNotificationResponse', () => {
       },
     });
 
-    applyNotificationResponse(response(payload), { switchToGame, recordNotificationAction });
+    applyNotificationResponse(response(payload), {
+      switchToGame,
+      openGame: vi.fn(),
+      recordNotificationAction,
+    });
 
     expect(switchToGame).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -167,5 +174,34 @@ describe('applyNotificationResponse', () => {
         teamColors: null,
       }),
     );
+  });
+
+  it('opens the game in Pivot when the push has no watch link', () => {
+    const switchToGame = vi.fn();
+    const openGame = vi.fn();
+    const recordNotificationAction = vi.fn(async () => undefined);
+    const payload = flagPayload({
+      action: {
+        type: 'prompt',
+        cta: 'Watch',
+        recommended_source: null,
+        deep_link_url: null,
+      },
+    });
+
+    const result = applyNotificationResponse(response(payload), {
+      switchToGame,
+      openGame,
+      recordNotificationAction,
+    });
+
+    expect(result).toEqual({
+      handled: true,
+      action: 'switched',
+      eventId: 'evt-1',
+      switched: false,
+    });
+    expect(openGame).toHaveBeenCalledWith('game-1');
+    expect(switchToGame).not.toHaveBeenCalled();
   });
 });
