@@ -34,5 +34,13 @@ export {
   serviceWatchUrl,
   type ServiceWatchUrlInput,
 } from './watchLinks.js';
+export {
+  DESTINATION_TABLE,
+  resolveDestinations,
+  type DestinationGame,
+  type DestinationResolution,
+  type ResolverService,
+  type WatchDestination,
+} from './destinationResolver.js';
 export { networkLabelFromAirings, networkRank } from './networkLabelFromAirings.js';
 export { DEFAULT_LAG_SECONDS, lagSecondsFor, USER_SERVICE_LAG_SECONDS } from './lag.js';
