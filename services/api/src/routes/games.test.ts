@@ -510,7 +510,7 @@ describe('GET /games?week=', () => {
       broadcasts: [
         {
           service: 'amazon_prime',
-          deep_link_url: 'https://app.primevideo.com/search?phrase=Thursday%20Night%20Football',
+          deep_link_url: 'https://app.primevideo.com/detail?gti=%7BGTI%7D',
           requires_subscription: true,
           user_has_subscription: true,
           typical_lag_seconds: 40,

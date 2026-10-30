@@ -1,6 +1,24 @@
 /* Pivot web push. Scope is the origin. A visible Pivot tab gets the event
  * instead of a system notification, because the in-tab banner already covers it.
+ *
+ * Prime Video: keep in step with `browserPrimeWatchUrl` in shared/src/broadcast/watchLinks.ts.
+ * `app.primevideo.com` and the get-the-app splash open the storefront.
  */
+const PRIME_VIDEO_WEB_STOREFRONT = 'https://www.primevideo.com/storefront';
+
+function browserPrimeWatchUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return url;
+    if (parsed.hostname === 'app.primevideo.com') return PRIME_VIDEO_WEB_STOREFRONT;
+    if (parsed.hostname === 'www.primevideo.com' && parsed.pathname.indexOf('/splash/') === 0) {
+      return PRIME_VIDEO_WEB_STOREFRONT;
+    }
+  } catch (e) {
+    return url;
+  }
+  return url;
+}
 self.addEventListener('push', (event) => {
   let message = {};
   try {
@@ -52,10 +70,11 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   const payload = data.payload || {};
   const watchUrl = watchUrlForNotificationClick(payload);
+  const openUrl = typeof watchUrl === 'string' ? browserPrimeWatchUrl(watchUrl) : watchUrl;
 
   event.waitUntil((async () => {
-    if (watchUrl) {
-      await self.clients.openWindow(watchUrl);
+    if (openUrl) {
+      await self.clients.openWindow(openUrl);
       return;
     }
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

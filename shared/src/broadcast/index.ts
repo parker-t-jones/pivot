@@ -25,8 +25,11 @@ export { rankWatchOptions } from './rankWatchOptions.js';
 export { toSlateGame, watchOptionsForGame, type WeekGameAirings } from './watchOptionsForGame.js';
 export { USER_SERVICE_LANDING_URLS } from './serviceLandingUrls.js';
 export {
+  browserPrimeWatchUrl,
   isThursdayEt,
   matchupSearchQuery,
+  PRIME_VIDEO_IOS_DETAIL_URL,
+  PRIME_VIDEO_WEB_STOREFRONT,
   sundayTicketSearchQuery,
   serviceWatchUrl,
   type ServiceWatchUrlInput,

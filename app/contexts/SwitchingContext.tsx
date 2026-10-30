@@ -17,7 +17,7 @@ import { useGameLinks } from './GameLinksContext';
 import { apiClient } from '../lib/apiClient';
 import type { GameBroadcast, GameBroadcastsResponse } from '../lib/gameDisplay';
 import { watchOptionLabel } from '../lib/gameDisplay';
-import { webWatchUrl } from '../lib/primeWatchUrl';
+import { iosWatchUrl, webWatchUrl } from '../lib/primeWatchUrl';
 import { userServiceAppStoreUrl } from '../lib/streamingServices';
 import { resolveSwitch } from '../lib/switching';
 import { theme } from '../lib/theme';
@@ -82,9 +82,10 @@ function delay(ms: number): Promise<void> {
  * `Linking.canOpenURL` first and falls back to the https link (`selectWatchLink`).
  * ESPN https links also try `sportscenter://watch` first. That scheme is in
  * `LSApplicationQueriesSchemes`, which a native build has to pick up.
+ * Prime searches open the detail URL.
  */
 async function openDeepLink(url: string): Promise<boolean> {
-  const chosen = await selectWatchLink(watchLinkInputFor(url), (candidate) =>
+  const chosen = await selectWatchLink(watchLinkInputFor(iosWatchUrl(url)), (candidate) =>
     Linking.canOpenURL(candidate),
   );
   if (!chosen) return false;

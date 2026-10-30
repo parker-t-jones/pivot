@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isThursdayEt, matchupSearchQuery, serviceWatchUrl } from './watchLinks.js';
+import {
+  browserPrimeWatchUrl,
+  isThursdayEt,
+  matchupSearchQuery,
+  PRIME_VIDEO_IOS_DETAIL_URL,
+  PRIME_VIDEO_WEB_STOREFRONT,
+  serviceWatchUrl,
+} from './watchLinks.js';
 
 const THURSDAY_ET = new Date('2026-10-02T00:15:00Z');
 const SUNDAY_ET = new Date('2026-09-27T17:00:00Z');
@@ -85,13 +92,12 @@ describe('serviceWatchUrl', () => {
         kickoff: SUNDAY_ET,
         network: 'amazon_prime',
       }),
-    ).toBe(
-      `https://app.primevideo.com/search?phrase=${encodeURIComponent(matchupSearchQuery('49ers', 'St. Louis'))}`,
-    );
+    ).toBe(PRIME_VIDEO_IOS_DETAIL_URL);
   });
 
-  it('searches Thursday Night Football for a Thursday Prime game', () => {
+  it('opens the Prime detail page for a Thursday Prime game', () => {
     expect(isThursdayEt(THURSDAY_ET)).toBe(true);
+    expect(PRIME_VIDEO_IOS_DETAIL_URL).toBe('https://app.primevideo.com/detail?gti=%7BGTI%7D');
     expect(
       serviceWatchUrl({
         service: 'amazon_prime',
@@ -100,7 +106,18 @@ describe('serviceWatchUrl', () => {
         kickoff: THURSDAY_ET,
         network: 'amazon_prime',
       }),
-    ).toBe('https://app.primevideo.com/search?phrase=Thursday%20Night%20Football');
+    ).toBe(PRIME_VIDEO_IOS_DETAIL_URL);
+  });
+
+  it('sends a browser to the Prime storefront instead of the app link or splash', () => {
+    expect(PRIME_VIDEO_WEB_STOREFRONT).toBe('https://www.primevideo.com/storefront');
+    expect(browserPrimeWatchUrl(PRIME_VIDEO_IOS_DETAIL_URL)).toBe(PRIME_VIDEO_WEB_STOREFRONT);
+    expect(
+      browserPrimeWatchUrl('https://www.primevideo.com/splash/t/getTheApp?ref_=atv_dl_rdr'),
+    ).toBe(PRIME_VIDEO_WEB_STOREFRONT);
+    expect(browserPrimeWatchUrl('https://tv.youtube.com/search/Lions%20vs%20Panthers%20today')).toBe(
+      'https://tv.youtube.com/search/Lions%20vs%20Panthers%20today',
+    );
   });
 
   it('searches the matchup for a non-Thursday Prime game', () => {
@@ -113,7 +130,7 @@ describe('serviceWatchUrl', () => {
         kickoff: SUNDAY_ET,
         network: 'amazon_prime',
       }),
-    ).toBe('https://app.primevideo.com/search?phrase=Lions%20vs%20Panthers%20today');
+    ).toBe(PRIME_VIDEO_IOS_DETAIL_URL);
   });
 
   it('keeps the device-tested static landings', () => {

@@ -28,7 +28,7 @@ describe('SwitchingContext', () => {
       deepLinkUrl: 'https://app.primevideo.com/detail/x',
       matchup,
     });
-    expect(search).toMatch(/primevideo\.com\/search/);
+    expect(search).toBe('https://www.primevideo.com/storefront');
 
     expect(
       webSwitchUrl({

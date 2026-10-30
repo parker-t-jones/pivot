@@ -4,13 +4,33 @@ import type { AiringNetwork, UserService } from './types.js';
 /** Device-tested YouTube TV / Sunday Ticket search. Never a `/nflst/` path. */
 const YOUTUBE_TV_SEARCH = 'https://tv.youtube.com/search/';
 
-/** Device-tested Prime Video search. https only. */
-const PRIME_VIDEO_SEARCH = 'https://app.primevideo.com/search?phrase=';
+/** iOS Prime Video title page. The search link opens a blank query. */
+export const PRIME_VIDEO_IOS_DETAIL_URL = 'https://app.primevideo.com/detail?gti=%7BGTI%7D';
+
+/**
+ * Prime Video in a browser. `app.primevideo.com` redirects to the get-the-app splash.
+ * Web notifications and the web Switch open the storefront instead.
+ */
+export const PRIME_VIDEO_WEB_STOREFRONT = 'https://www.primevideo.com/storefront';
+
+/** Prime app and splash URLs become the storefront. Every other https URL is unchanged. */
+export function browserPrimeWatchUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  if (parsed.protocol !== 'https:') return url;
+  if (parsed.hostname === 'app.primevideo.com') return PRIME_VIDEO_WEB_STOREFRONT;
+  if (parsed.hostname === 'www.primevideo.com' && parsed.pathname.startsWith('/splash/')) {
+    return PRIME_VIDEO_WEB_STOREFRONT;
+  }
+  return url;
+}
 
 /** DirecTV Stream search. Query is "{Away} vs {Home}", without the "today" suffix. */
 const DIRECTV_SEARCH = 'https://stream.directv.com/search?q=';
-
-const THURSDAY_NIGHT_FOOTBALL = 'Thursday Night Football';
 
 export function isThursdayEt(kickoff: Date): boolean {
   const weekday = new Intl.DateTimeFormat('en-US', {
@@ -34,7 +54,7 @@ export interface ServiceWatchUrlInput {
   service: UserService;
   awayNickname: string;
   homeNickname: string;
-  /** Kickoff instant. Thursday in America/New_York selects the Prime TNF query. */
+  /** Kickoff instant. Required for a Prime link. The URL does not depend on the day. */
   kickoff: Date | null;
   /** Airing this link is for. The search phrase does not include it. */
   network: AiringNetwork;
@@ -44,8 +64,8 @@ export interface ServiceWatchUrlInput {
  * Watch URL for one service and game.
  *
  * YouTube TV searches "{Away} vs {Home} today". Sunday Ticket searches
- * "{Away} vs {Home} NFL ST today". DirecTV searches "{Away} vs {Home}". Prime searches
- * "Thursday Night Football" on a Thursday kickoff (Eastern) and the YouTube TV matchup otherwise.
+ * "{Away} vs {Home} NFL ST today". DirecTV searches "{Away} vs {Home}". Prime on iOS is
+ * `PRIME_VIDEO_IOS_DETAIL_URL`. Web opens `PRIME_VIDEO_WEB_STOREFRONT`.
  * NFL+, ESPN, Paramount+, and Peacock use `USER_SERVICE_LANDING_URLS`. The ESPN app scheme is
  * chosen on the device, not here.
  */
@@ -67,10 +87,7 @@ export function serviceWatchUrl(input: ServiceWatchUrlInput): string {
     return `${YOUTUBE_TV_SEARCH}${query}`;
   }
   if (input.service === 'amazon_prime' && namesReady && input.kickoff !== null) {
-    const phrase = isThursdayEt(input.kickoff)
-      ? THURSDAY_NIGHT_FOOTBALL
-      : matchupSearchQuery(input.awayNickname, input.homeNickname);
-    return `${PRIME_VIDEO_SEARCH}${encodeURIComponent(phrase)}`;
+    return PRIME_VIDEO_IOS_DETAIL_URL;
   }
   return USER_SERVICE_LANDING_URLS[input.service];
 }

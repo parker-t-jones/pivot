@@ -2,6 +2,7 @@ import { defaultClock, type Clock } from '@pivot/engine';
 import {
   networkLabelFromAirings,
   resolvePossessionAbbreviation,
+  browserPrimeWatchUrl,
   serviceWatchUrl,
   type FlagEvent,
   type FlagState,
@@ -194,6 +195,28 @@ function actionRecommendation(
     recommendedSource: likely.source.service,
     deepLinkUrl: url === '' ? null : url,
     airingWithoutOption: null,
+  };
+}
+
+/**
+ * Web Push copy. Prime's `app.primevideo.com` link and the get-the-app splash open the storefront.
+ * A saved link to some other page is left alone. The socket and the iOS push keep the detail URL.
+ */
+function webNotificationPayload<
+  T extends { action: { deep_link_url?: string | null; saved_url?: string } },
+>(payload: T): T {
+  const deep = payload.action.deep_link_url;
+  const saved = payload.action.saved_url;
+  const nextDeep = typeof deep === 'string' ? browserPrimeWatchUrl(deep) : deep;
+  const nextSaved = typeof saved === 'string' ? browserPrimeWatchUrl(saved) : saved;
+  if (nextDeep === deep && nextSaved === saved) return payload;
+  return {
+    ...payload,
+    action: {
+      ...payload.action,
+      deep_link_url: nextDeep,
+      ...(typeof saved === 'string' ? { saved_url: nextSaved } : {}),
+    },
   };
 }
 
@@ -451,7 +474,7 @@ export async function deliverFlagEvent(
         isDeviceActive: (userId, deviceId) => deps.gameStateStore.isDeviceActive(userId, deviceId),
         title: pushCopy.title,
         body: pushCopy.body,
-        data: withSavedUrl(envelope.payload, savedUrl),
+        data: webNotificationPayload(withSavedUrl(envelope.payload, savedUrl)),
         nowMs: clock(),
       });
     } catch (error) {

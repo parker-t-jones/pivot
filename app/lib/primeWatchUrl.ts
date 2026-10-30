@@ -1,6 +1,6 @@
-import { httpsWatchUrl } from './watchLink';
+import { PRIME_VIDEO_IOS_DETAIL_URL, PRIME_VIDEO_WEB_STOREFRONT } from '@pivot/shared/broadcast';
 
-const PRIME_WEB_SEARCH = 'https://www.primevideo.com/search';
+import { httpsWatchUrl } from './watchLink';
 
 /** Nicknames from the same fields the YouTube TV link uses (`away_team_name` / `home_team_name`). */
 export interface WatchMatchup {
@@ -9,15 +9,21 @@ export interface WatchMatchup {
 }
 
 /**
- * Web Prime search. `URLSearchParams` encodes spaces as `+`.
- * Phrase is "{Away nickname} vs {Home nickname}", with no "today" suffix.
+ * iOS Prime searches open a blank query. The detail URL is what Switch should open.
+ * A URL that is already the detail page is unchanged.
  */
-export function primeWebSearchUrl(awayNickname: string, homeNickname: string): string {
-  const params = new URLSearchParams({
-    ie: 'UTF8',
-    phrase: `${awayNickname} vs ${homeNickname}`,
-  });
-  return `${PRIME_WEB_SEARCH}?${params.toString()}`;
+export function iosWatchUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'app.primevideo.com') return url;
+  if (parsed.pathname !== '/search') return url;
+  const phrase = parsed.searchParams.get('phrase')?.trim() ?? '';
+  if (phrase.length === 0) return url;
+  return PRIME_VIDEO_IOS_DETAIL_URL;
 }
 
 function isPrimeHttps(url: string): boolean {
@@ -33,18 +39,15 @@ function isPrimeHttps(url: string): boolean {
 }
 
 /**
- * URL to open in the browser. Prime's native `app.primevideo.com` link is the Get-the-app page
- * on web, so a Prime https URL is replaced with the web search when both nicknames are present.
- * Every other service keeps the https link W3 already opens.
+ * URL to open in the browser. Prime's `app.primevideo.com` link is the get-the-app splash,
+ * so a Prime https URL opens the storefront. Every other service keeps its https link.
  */
 export function webWatchUrl(
   deepLinkUrl: string | null | undefined,
-  matchup: WatchMatchup,
+  _matchup: WatchMatchup,
 ): string | null {
   const httpsUrl = httpsWatchUrl(deepLinkUrl);
   if (httpsUrl === null) return null;
-  const away = matchup.awayNickname?.trim() ?? '';
-  const home = matchup.homeNickname?.trim() ?? '';
-  if (away.length === 0 || home.length === 0 || !isPrimeHttps(httpsUrl)) return httpsUrl;
-  return primeWebSearchUrl(away, home);
+  if (!isPrimeHttps(httpsUrl)) return httpsUrl;
+  return PRIME_VIDEO_WEB_STOREFRONT;
 }
