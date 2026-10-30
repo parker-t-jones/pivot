@@ -10,6 +10,7 @@ import { PlayerPicker } from './PlayerPicker';
 vi.mock('react-native', () => import('react-native-web'));
 vi.mock('expo-router', () => ({
   Redirect: () => null,
+  useLocalSearchParams: () => ({}),
 }));
 vi.mock('../contexts/SessionContext', () => ({
   useSession: () => ({ isLoading: true, session: null }),
