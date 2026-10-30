@@ -69,11 +69,14 @@ export function showsSundayTicketHint(presence: ReadonlyMap<string, boolean>): b
   return presence.get('youtube_tv') === true && presence.get('sunday_ticket') !== true;
 }
 
-/** Shown for pay-TV picks. Of FOX One, other cable, and the ESPN app, only other cable. */
+/**
+ * Network-site sign-in. DIRECTV, Hulu + Live TV, Fubo, and other cable open those sites.
+ * YouTube TV is excluded: those users get search and never get a network link.
+ * Of FOX One, other cable, and the ESPN app, only other cable.
+ */
 export const PAY_TV_SIGN_IN_COPY = "You'll sign in with your provider once on each network's site.";
 
 const PAY_TV_SIGN_IN_SERVICES = new Set<UserService>([
-  'youtube_tv',
   'hulu_live',
   'fubo',
   'directv',

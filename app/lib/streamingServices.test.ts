@@ -73,7 +73,7 @@ describe('userServiceAppStoreUrl', () => {
 
 describe('showsPayTvSignInCopy', () => {
   it('is the pay-TV picks, and only other cable of FOX One, other cable, and the ESPN app', () => {
-    expect(showsPayTvSignInCopy('youtube_tv')).toBe(true);
+    expect(showsPayTvSignInCopy('youtube_tv')).toBe(false);
     expect(showsPayTvSignInCopy('hulu_live')).toBe(true);
     expect(showsPayTvSignInCopy('fubo')).toBe(true);
     expect(showsPayTvSignInCopy('directv')).toBe(true);
