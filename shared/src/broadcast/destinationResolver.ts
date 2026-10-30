@@ -16,6 +16,7 @@ export type DestinationResolution =
   | { kind: 'destinations'; primary: WatchDestination; alternates: WatchDestination[] }
   | { kind: 'unavailable'; reason: 'not_on_your_services' }
   | { kind: 'unknown_network'; raw: string }
+  | { kind: 'no_broadcast_info' }
   | { kind: 'legacy' };
 
 export interface DestinationGame {
@@ -203,7 +204,9 @@ function toResolution(ranked: readonly WatchDestination[]): DestinationResolutio
  * `verified: false`, then earlier steps win. No subscribed services and no
  * saved link keeps today's path (`legacy`). Airings `mapMediaName` does not
  * know, and nothing else to open, are `unknown_network` — the card says
- * "On {raw}" and does not link.
+ * "On {raw}" and does not link. No airing rows at all are not "unavailable":
+ * a YouTube TV user still gets the nickname search, and everyone else is
+ * `no_broadcast_info` ("Broadcast TBD", no link).
  */
 export function resolveDestinations(
   game: DestinationGame,
@@ -226,6 +229,9 @@ export function resolveDestinations(
   const raw = unmapped[0];
   if (mapped.length === 0 && raw !== undefined && saved.length === 0) {
     return { kind: 'unknown_network', raw };
+  }
+  if (mapped.length === 0 && unmapped.length === 0) {
+    return noAiringResolution(game, subscribed, saved);
   }
   if (saved.length === 0 && subscribed.size === 0) return { kind: 'legacy' };
 
@@ -299,6 +305,43 @@ export function resolveDestinations(
     }
   }
 
+  return toResolution(rankDestinations(candidates));
+}
+
+/**
+ * Nothing was ingested for this game. YouTube TV search only needs nicknames.
+ * The network argument is unused by that URL. Anyone else gets no link.
+ */
+function noAiringResolution(
+  game: DestinationGame,
+  subscribed: ReadonlySet<string>,
+  saved: string,
+): DestinationResolution {
+  const candidates: Candidate[] = [];
+  if (saved.length > 0) {
+    candidates.push({
+      url: saved,
+      verified: true,
+      note: 'Saved stream link',
+      step: SAVED_STEP,
+    });
+  }
+  if (
+    subscribed.has('youtube_tv') &&
+    game.awayNickname.length > 0 &&
+    game.homeNickname.length > 0
+  ) {
+    addServiceUrl(
+      candidates,
+      YOUTUBE_TV_STEP,
+      'youtube_tv',
+      'nbc',
+      game,
+      true,
+      'YouTube TV search',
+    );
+  }
+  if (candidates.length === 0) return { kind: 'no_broadcast_info' };
   return toResolution(rankDestinations(candidates));
 }
 

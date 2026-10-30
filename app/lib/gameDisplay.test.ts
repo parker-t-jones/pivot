@@ -344,6 +344,14 @@ describe('watchCta', () => {
     });
   });
 
+  it('says the broadcast is unknown when the game has no airings', () => {
+    expect(watchCta([], [], { kind: 'no_broadcast_info' })).toEqual({
+      kind: 'airing',
+      text: 'Broadcast TBD',
+    });
+    expect(showsWatchButton(watchCta([], [], { kind: 'no_broadcast_info' }))).toBe(false);
+  });
+
   it('hides Switch when the game is not on the user services', () => {
     expect(
       showsWatchButton(watchCta([], fox, { kind: 'unavailable', reason: 'not_on_your_services' })),

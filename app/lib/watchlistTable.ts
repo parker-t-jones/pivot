@@ -248,7 +248,11 @@ function networkOrDash(game: WatchlistTableGame): string {
 
 function preferredHttps(game: WatchlistTableGame | null): string | null {
   if (!game) return null;
-  if (game.destination?.kind === 'unavailable' || game.destination?.kind === 'unknown_network') {
+  if (
+    game.destination?.kind === 'unavailable' ||
+    game.destination?.kind === 'unknown_network' ||
+    game.destination?.kind === 'no_broadcast_info'
+  ) {
     return null;
   }
   if (game.destination?.kind === 'destinations') return httpsWatchUrl(game.destination.primary.url);

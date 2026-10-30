@@ -202,11 +202,12 @@ function actionRecommendation(
       airingWithoutOption: resolution.raw,
     };
   }
-  if (resolution.kind === 'unavailable') {
+  if (resolution.kind === 'unavailable' || resolution.kind === 'no_broadcast_info') {
     return {
       recommendedSource: null,
       deepLinkUrl: null,
-      airingWithoutOption: networkLabelFromAirings(likely.airings),
+      airingWithoutOption:
+        resolution.kind === 'unavailable' ? networkLabelFromAirings(likely.airings) : null,
     };
   }
   if (likely.source === null) {

@@ -404,7 +404,15 @@ describe('GET /games/:id/broadcasts', () => {
     expect(response.json()).toEqual({
       game_id: GAME_1,
       broadcasts: [],
-      destination: { kind: 'unavailable', reason: 'not_on_your_services' },
+      destination: {
+        kind: 'destinations',
+        primary: {
+          url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs%20today',
+          verified: true,
+          note: 'YouTube TV search',
+        },
+        alternates: [],
+      },
     });
   });
 

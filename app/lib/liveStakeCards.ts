@@ -105,7 +105,11 @@ export function watchButtonLabel(
   const cta = watchCta(broadcasts, airings, destination);
   if (cta.kind === 'watch') return watchBroadcastLabel(cta.broadcast);
   if (cta.kind === 'airing') {
-    if (destination?.kind === 'unavailable' || destination?.kind === 'unknown_network') {
+    if (
+      destination?.kind === 'unavailable' ||
+      destination?.kind === 'unknown_network' ||
+      destination?.kind === 'no_broadcast_info'
+    ) {
       return cta.text;
     }
     if (cta.text.startsWith('On ')) return `Watch on ${cta.text.slice(3)}`;
@@ -255,7 +259,9 @@ export function buildLiveStakeCards(input: {
       extraChips: chips.extraChips,
       buttonLabel: watchButtonLabel(watch?.broadcasts ?? [], watch?.airings ?? [], destination),
       opensLink:
-        destination?.kind === 'unavailable' || destination?.kind === 'unknown_network'
+        destination?.kind === 'unavailable' ||
+        destination?.kind === 'unknown_network' ||
+        destination?.kind === 'no_broadcast_info'
           ? false
           : true,
       alternates: cta.kind === 'watch' ? (cta.alternates ?? []) : [],

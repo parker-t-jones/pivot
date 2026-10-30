@@ -235,7 +235,15 @@ describe('buildWeekWatch', () => {
     expect(watch.get('tnf')).toEqual({
       broadcasts: [],
       airings: [],
-      destination: { kind: 'unavailable', reason: 'not_on_your_services' },
+      destination: {
+        kind: 'destinations',
+        primary: {
+          url: 'https://tv.youtube.com/search/Packers%20vs%20Lions%20today',
+          verified: true,
+          note: 'YouTube TV search',
+        },
+        alternates: [],
+      },
     });
   });
 });

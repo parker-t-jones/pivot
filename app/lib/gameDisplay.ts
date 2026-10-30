@@ -433,8 +433,8 @@ function broadcastForDestination(
 /**
  * What goes where a card's Switch/Watch button sits (docs/B1-BROADCAST-DESIGN.md §1.7).
  * A resolver result replaces the ranked option: the primary link, later links as alternates,
- * "Not on your services" when nothing matches, and "On {raw}" with no link for an unmapped
- * airing. `legacy` (or no destination) keeps today's preferred option, or the airing as plain
+ * "Not on your services" when nothing matches, "On {raw}" with no link for an unmapped
+ * airing, and "Broadcast TBD" when the game has no airing rows. `legacy` (or no destination) keeps today's preferred option, or the airing as plain
  * text ("On FOX").
  */
 export function watchCta(
@@ -448,6 +448,9 @@ export function watchCta(
     }
     if (destination.kind === 'unknown_network') {
       return { kind: 'airing', text: `On ${destination.raw}` };
+    }
+    if (destination.kind === 'no_broadcast_info') {
+      return { kind: 'airing', text: 'Broadcast TBD' };
     }
     const primary = broadcastForDestination(destination.primary, broadcasts, true);
     const alternates = destination.alternates.map((alternate) =>

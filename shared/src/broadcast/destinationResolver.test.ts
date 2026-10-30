@@ -245,6 +245,18 @@ describe('resolveDestinations ranking', () => {
 });
 
 describe('resolveDestinations legacy and unknown', () => {
+  it('searches YouTube TV when the game has no airings', () => {
+    expect(resolveDestinations(game([]), ['youtube_tv'])).toMatchObject({
+      kind: 'destinations',
+      primary: { url: YTTV, note: 'YouTube TV search' },
+      alternates: [],
+    });
+  });
+
+  it('reports no broadcast info when DirecTV has no airings to match', () => {
+    expect(resolveDestinations(game([]), ['directv'])).toEqual({ kind: 'no_broadcast_info' });
+  });
+
   it('keeps an empty service list on the legacy path', () => {
     expect(resolveDestinations(game(['CBS']), [])).toEqual({ kind: 'legacy' });
     expect(resolveDestinations(game(['FOX']), [])).toEqual({ kind: 'legacy' });
