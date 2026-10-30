@@ -248,6 +248,9 @@ function networkOrDash(game: WatchlistTableGame): string {
 
 function preferredHttps(game: WatchlistTableGame | null): string | null {
   if (!game) return null;
+  if (game.destination?.kind === 'unavailable' || game.destination?.kind === 'unknown_network') {
+    return null;
+  }
   if (game.destination?.kind === 'destinations') return httpsWatchUrl(game.destination.primary.url);
   const preferred = game.broadcasts.find((broadcast) => broadcast.preferred) ?? game.broadcasts[0];
   return httpsWatchUrl(preferred?.deep_link_url);

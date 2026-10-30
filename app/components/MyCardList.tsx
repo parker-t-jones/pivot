@@ -8,6 +8,7 @@ import {
   type MyCardGame,
   type StakeRef,
 } from '../lib/board';
+import { GameAnchor } from '../lib/gameAnchor';
 import { fonts } from '../lib/fonts';
 import { compactScoreLabel, liveClockLabel } from '../lib/gameDisplay';
 import type { LineupGameGroup } from '../lib/homeState';
@@ -115,7 +116,7 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
   const matchup = `${game.awayTeamId} @ ${game.homeTeamId}`;
 
   return (
-    <View style={[styles.cardBlock, isFinal && styles.cardBlockFinal]}>
+    <GameAnchor gameId={game.gameId} style={[styles.cardBlock, isFinal && styles.cardBlockFinal]}>
       <View style={styles.cardHeader}>
         <View
           style={[
@@ -139,10 +140,7 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
           {matchup}
         </Text>
         {score !== null ? (
-          <Text
-            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-            style={styles.cardScore}
-          >
+          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.cardScore}>
             {score}
           </Text>
         ) : null}
@@ -173,7 +171,7 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
           ) : null}
         </View>
       ))}
-    </View>
+    </GameAnchor>
   );
 }
 

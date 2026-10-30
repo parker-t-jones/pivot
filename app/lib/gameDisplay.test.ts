@@ -23,6 +23,7 @@ import {
   hexWithAlpha,
   opponentAbbreviation,
   localRouteOption,
+  showsWatchButton,
   watchCta,
   watchOptionLabel,
   watchOptionParts,
@@ -341,6 +342,16 @@ describe('watchCta', () => {
       kind: 'airing',
       text: 'On Peacock',
     });
+  });
+
+  it('hides Switch when the game is not on the user services', () => {
+    expect(
+      showsWatchButton(watchCta([], fox, { kind: 'unavailable', reason: 'not_on_your_services' })),
+    ).toBe(false);
+    expect(showsWatchButton(watchCta([], [], { kind: 'unknown_network', raw: 'Peacock' }))).toBe(
+      false,
+    );
+    expect(showsWatchButton(null)).toBe(false);
   });
 });
 

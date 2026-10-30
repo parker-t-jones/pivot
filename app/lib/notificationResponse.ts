@@ -59,6 +59,8 @@ export interface SwitchToGameInput {
 
 export interface NotificationResponseDeps {
   switchToGame: (input: SwitchToGameInput) => void;
+  /** No watch link: open this game's card in Pivot instead of the missing-link error. */
+  openGame: (gameId: string) => void;
   recordNotificationAction: (
     action: NotificationUserAction,
     payload: FlagEventPayload,
@@ -95,10 +97,15 @@ export function applyNotificationResponse(
   }
 
   const { game_id, action: payloadAction, game_summary, new_state } = data;
+  const link = payloadAction.deep_link_url;
+  if (link == null || link.length === 0) {
+    deps.openGame(game_id);
+    return { handled: true, action, eventId: data.event_id, switched: false };
+  }
   const possessingTeam = resolvePossessingTeamDisplay(game_summary, new_state.possession_team);
   deps.switchToGame({
     gameId: game_id,
-    deepLinkUrl: payloadAction.deep_link_url,
+    deepLinkUrl: link,
     label: `${game_summary.away_team} @ ${game_summary.home_team}`,
     awayNickname: game_summary.away_team_name,
     homeNickname: game_summary.home_team_name,

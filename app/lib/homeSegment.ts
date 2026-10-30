@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export const HOME_SEGMENTS = [
   { key: 'board', label: 'BOARD' },
@@ -14,6 +14,13 @@ export type HomeSegmentKey = (typeof HOME_SEGMENTS)[number]['key'];
  * module reloads. Deliberately not AsyncStorage / preferences.
  */
 let rememberedSegment: HomeSegmentKey = 'board';
+const segmentListeners = new Set<(key: HomeSegmentKey) => void>();
+
+/** Show the full slate so a routed game's row is mounted. */
+export function focusHomeBoard(): void {
+  rememberedSegment = 'board';
+  for (const listener of segmentListeners) listener('board');
+}
 
 export function useHomeSegment(): [HomeSegmentKey, (key: string) => void] {
   const [segment, setSegment] = useState<HomeSegmentKey>(rememberedSegment);
@@ -21,6 +28,12 @@ export function useHomeSegment(): [HomeSegmentKey, (key: string) => void] {
     if (key !== 'board' && key !== 'my_card') return;
     rememberedSegment = key;
     setSegment(key);
+  }, []);
+  useEffect(() => {
+    segmentListeners.add(setSegment);
+    return () => {
+      segmentListeners.delete(setSegment);
+    };
   }, []);
   return [segment, select];
 }

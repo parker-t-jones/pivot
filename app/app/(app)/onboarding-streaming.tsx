@@ -9,6 +9,7 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextButton } from '../../components/TextButton';
 import { ApiRequestError } from '../../lib/apiClient';
 import { setAppPresence } from '../../lib/me';
+import { requestWeekGamesRefresh } from '../../lib/weekGamesRefresh';
 import {
   PAY_TV_SIGN_IN_COPY,
   showsPayTvSignInCopy,
@@ -47,6 +48,7 @@ export default function OnboardingStreamingScreen() {
             has_subscription: selected.has(service),
           })),
         );
+        requestWeekGamesRefresh();
       }
       router.replace('/(app)/notifications-permission?onboarding=1');
     } catch (error) {

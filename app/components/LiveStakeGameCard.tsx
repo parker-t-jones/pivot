@@ -13,6 +13,7 @@ import {
   type LiveStakeCardModel,
   type LiveStakeChip,
 } from '../lib/liveStakeCards';
+import { GameAnchor } from '../lib/gameAnchor';
 import type { LiveGame } from '../lib/schedule';
 import { scoreBlockWash } from '../lib/teamColors';
 import { theme } from '../lib/theme';
@@ -50,7 +51,7 @@ export function LiveStakeGameCard({
   const opponentTeam = opponentAbbreviation(game.possession_team, game.home_team, game.away_team);
 
   return (
-    <View style={[styles.card, model.active && styles.cardActive]}>
+    <GameAnchor gameId={game.game_id} style={[styles.card, model.active && styles.cardActive]}>
       {model.eyebrow ? <Text style={styles.eyebrow}>{model.eyebrow}</Text> : null}
 
       <View style={styles.matchupRow}>
@@ -117,7 +118,7 @@ export function LiveStakeGameCard({
           ) : null}
         </View>
       )}
-    </View>
+    </GameAnchor>
   );
 }
 

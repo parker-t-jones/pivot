@@ -37,6 +37,7 @@ import {
   setAppPresence,
   type MeResponse,
 } from '../../../lib/me';
+import { requestWeekGamesRefresh } from '../../../lib/weekGamesRefresh';
 import { unregisterPushNotificationsAsync } from '../../../lib/pushNotifications';
 import { revokeDesktopAlerts } from '../../../lib/webPush';
 import {
@@ -204,6 +205,7 @@ export default function SettingsScreen() {
           { service, has_subscription: hasSubscription },
         ]);
         setMe((current) => (current ? { ...current, app_presence } : current));
+        requestWeekGamesRefresh();
       }}
     />
   );

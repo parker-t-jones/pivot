@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { BoardRowData } from '../lib/board';
+import { GameAnchor } from '../lib/gameAnchor';
 import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
 
@@ -84,69 +85,70 @@ export function BoardRow({ row, showDivider = true, mode = 'pregame', live }: Bo
     .join(', ');
 
   return (
-    <View
-      accessibilityLabel={accessibilityLabel}
-      accessible
+    <GameAnchor
+      gameId={row.gameId}
       style={[styles.row, hasStake && styles.rowWithStake, showDivider && styles.rowDivider]}
     >
-      <View
-        style={[
-          styles.stripe,
-          hasStake && row.stripeSide !== null
-            ? { backgroundColor: stripeColor.length > 0 ? stripeColor : theme.colors.accent }
-            : null,
-        ]}
-      />
-      <Text
-        maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-        numberOfLines={1}
-        style={[
-          styles.time,
-          hasStake ? styles.timeWithStake : null,
-          liveRow ? styles.timeLive : null,
-          mutedFinal ? styles.timeFinal : null,
-        ]}
-      >
-        {time}
-      </Text>
-      <Text
-        maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-        numberOfLines={1}
-        style={[styles.matchup, hasStake && !mutedFinal ? null : styles.mutedText]}
-      >
-        {matchup}
-      </Text>
-      <Text
-        maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-        numberOfLines={1}
-        style={styles.network}
-      >
-        {row.network ?? ''}
-      </Text>
-      {score !== null ? (
+      <View accessibilityLabel={accessibilityLabel} accessible style={styles.rowFill}>
+        <View
+          style={[
+            styles.stripe,
+            hasStake && row.stripeSide !== null
+              ? { backgroundColor: stripeColor.length > 0 ? stripeColor : theme.colors.accent }
+              : null,
+          ]}
+        />
         <Text
           maxFontSizeMultiplier={theme.fontScaleCaps.dense}
           numberOfLines={1}
-          style={[styles.score, hasStake ? null : styles.mutedText]}
+          style={[
+            styles.time,
+            hasStake ? styles.timeWithStake : null,
+            liveRow ? styles.timeLive : null,
+            mutedFinal ? styles.timeFinal : null,
+          ]}
         >
-          {score}
+          {time}
         </Text>
-      ) : null}
-      <View style={[styles.dots, score !== null ? styles.dotsAfterScore : null]}>
-        {Array.from({ length: dotCount }, (_, index) => (
-          <View key={index} style={styles.dot} />
-        ))}
-        {overflowCount > 0 ? (
+        <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          numberOfLines={1}
+          style={[styles.matchup, hasStake && !mutedFinal ? null : styles.mutedText]}
+        >
+          {matchup}
+        </Text>
+        <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          numberOfLines={1}
+          style={styles.network}
+        >
+          {row.network ?? ''}
+        </Text>
+        {score !== null ? (
           <Text
             maxFontSizeMultiplier={theme.fontScaleCaps.dense}
             numberOfLines={1}
-            style={styles.dotOverflow}
+            style={[styles.score, hasStake ? null : styles.mutedText]}
           >
-            {`+${overflowCount}`}
+            {score}
           </Text>
         ) : null}
+        <View style={[styles.dots, score !== null ? styles.dotsAfterScore : null]}>
+          {Array.from({ length: dotCount }, (_, index) => (
+            <View key={index} style={styles.dot} />
+          ))}
+          {overflowCount > 0 ? (
+            <Text
+              maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+              numberOfLines={1}
+              style={styles.dotOverflow}
+            >
+              {`+${overflowCount}`}
+            </Text>
+          ) : null}
+        </View>
       </View>
-    </View>
+    </GameAnchor>
   );
 }
 
@@ -192,6 +194,12 @@ const styles = StyleSheet.create({
   },
   row: {
     alignItems: 'center',
+    flexDirection: 'row',
+    minHeight: ROW_HEIGHT,
+  },
+  rowFill: {
+    alignItems: 'center',
+    flex: 1,
     flexDirection: 'row',
     minHeight: ROW_HEIGHT,
   },

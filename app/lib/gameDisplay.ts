@@ -465,6 +465,11 @@ export function watchCta(
   return network === null ? { kind: 'none' } : { kind: 'airing', text: `On ${network}` };
 }
 
+/** A Switch/Watch button exists only when there is a link to open. */
+export function showsWatchButton(cta: WatchCta | null): boolean {
+  return cta?.kind === 'watch';
+}
+
 /** Button text for a watch option. A resolver note wins over "Watch on {service}". */
 export function watchBroadcastLabel(broadcast: GameBroadcast): string {
   return broadcast.label ?? `Watch on ${serviceLabel(broadcast.service)}`;

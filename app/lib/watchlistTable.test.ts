@@ -96,6 +96,30 @@ describe('watchlistPlayerRow', () => {
     expect(row.deepLinkUrl).toBe('https://www.cbs.com/live-tv/stream/');
   });
 
+  it('offers no link when the game is not on the user services', () => {
+    const row = watchlistPlayerRow({
+      id: 'slot-1',
+      slot: 'WR',
+      name: 'Davante Adams',
+      meta: 'LAR · WR',
+      teamAbbr: 'SF',
+      weekGames: [
+        game({
+          status: 'in_progress',
+          broadcasts: [
+            { preferred: true, deep_link_url: 'https://stream.directv.com/search?q=old' },
+          ],
+          destination: { kind: 'unavailable', reason: 'not_on_your_services' },
+        }),
+      ],
+      liveGames: [],
+      now: NOW,
+      timeZone: 'America/New_York',
+    });
+    expect(row.live).toBe(true);
+    expect(row.deepLinkUrl).toBeNull();
+  });
+
   it('drops a custom-scheme watch URL', () => {
     const row = watchlistPlayerRow({
       id: 'slot-1',

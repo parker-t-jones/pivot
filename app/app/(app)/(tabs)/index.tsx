@@ -1,6 +1,6 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useGlobalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ActiveLineupPicker } from '../../../components/ActiveLineupPicker';
@@ -31,6 +31,7 @@ import {
 import type { FlagEventPayload } from '../../../lib/flagEventPayload';
 import {
   localRouteOption,
+  showsWatchButton,
   watchCta,
   type CurrentFlag,
   type FlagsCurrentResponse,
@@ -92,6 +93,12 @@ import {
   type LiveGame,
   type ScheduleGame,
 } from '../../../lib/schedule';
+import { scrollGameIntoView } from '../../../lib/gameAnchor';
+import { focusHomeBoard } from '../../../lib/homeSegment';
+import {
+  subscribeWeekGamesRefresh,
+  takePendingWeekGamesRefresh,
+} from '../../../lib/weekGamesRefresh';
 import { fetchStakes } from '../../../lib/stakesClient';
 import type { ManualStake } from '../../../lib/stakes';
 import { resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../../../lib/teamDisplay';
@@ -182,6 +189,10 @@ function emptyHome(partial: Partial<HomeData> & Pick<HomeData, 'hasLeagues' | 'b
 
 export default function HomeScreen() {
   const router = useRouter();
+  const routeParams = useGlobalSearchParams<{ game?: string | string[] }>();
+  const routeGameId = Array.isArray(routeParams.game) ? routeParams.game[0] : routeParams.game;
+  const homeScrollRef = useRef<ScrollView | null>(null);
+  const scrolledGameRef = useRef<string | null>(null);
   const insets = useSafeAreaInsets();
   const { switchToGame } = useSwitching();
   const { status: leaguesStatus, leagues, leaguesRevision, refreshLeagues } = useLeaguesGate();
@@ -577,6 +588,39 @@ export default function HomeScreen() {
     // leaguesRevision is the intentional invalidation signal when the shared list changes.
   }, [leaguesStatus, leaguesRevision, leagues, loadHome]);
 
+  useEffect(() => {
+    return subscribeWeekGamesRefresh(() => {
+      void loadHome(leagues);
+    });
+  }, [leagues, loadHome]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!takePendingWeekGamesRefresh()) return;
+      void loadHome(leagues);
+    }, [leagues, loadHome]),
+  );
+
+  useEffect(() => {
+    if (!routeGameId || isLoading || homeData === null) return;
+    if (scrolledGameRef.current === routeGameId) return;
+    focusHomeBoard();
+    let cancelled = false;
+    const tryScroll = () => {
+      if (cancelled || scrolledGameRef.current === routeGameId) return;
+      if (scrollGameIntoView(routeGameId, homeScrollRef.current)) {
+        scrolledGameRef.current = routeGameId;
+      }
+    };
+    const frame = requestAnimationFrame(tryScroll);
+    const later = setTimeout(tryScroll, 350);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      clearTimeout(later);
+    };
+  }, [homeData, isLoading, routeGameId]);
+
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -593,10 +637,11 @@ export default function HomeScreen() {
     (game: LiveGame) => {
       const week = homeData?.weekGames.find((row) => row.game_id === game.game_id);
       const cta = week ? watchCta(week.broadcasts, week.airings, week.destination) : null;
-      const broadcast = cta?.kind === 'watch' ? cta.broadcast : null;
+      if (!showsWatchButton(cta) || cta?.kind !== 'watch') return;
+      const broadcast = cta.broadcast;
       switchToGame({
         gameId: game.game_id,
-        deepLinkUrl: broadcast?.deep_link_url ?? null,
+        deepLinkUrl: broadcast.deep_link_url,
         label: `${game.away_team} @ ${game.home_team}`,
         awayNickname: game.away_team_name,
         homeNickname: game.home_team_name,
@@ -632,7 +677,8 @@ export default function HomeScreen() {
       if (Platform.OS === 'web') {
         const game = homeData?.weekGames.find((row) => row.game_id === flag.game_id);
         const cta = game ? watchCta(game.broadcasts, game.airings, game.destination) : null;
-        if (cta?.kind === 'watch') {
+        if (!showsWatchButton(cta) || cta?.kind !== 'watch') return;
+        if (cta.kind === 'watch') {
           const flaggedTeam = resolveFlaggedTeamDisplay(
             flag.game,
             flag.flagged_players,
@@ -666,7 +712,8 @@ export default function HomeScreen() {
         console.warn('[home] failed to load broadcasts for also-flagged switch', error);
       }
       const fetched = watchCta(broadcasts, [], destination);
-      const broadcast = fetched.kind === 'watch' ? fetched.broadcast : null;
+      if (!showsWatchButton(fetched) || fetched.kind !== 'watch') return;
+      const broadcast = fetched.broadcast;
       const flaggedTeam = resolveFlaggedTeamDisplay(
         flag.game,
         flag.flagged_players,
@@ -674,7 +721,7 @@ export default function HomeScreen() {
       );
       switchToGame({
         gameId: flag.game_id,
-        deepLinkUrl: broadcast?.deep_link_url ?? null,
+        deepLinkUrl: broadcast.deep_link_url,
         label: `${flag.game.away_team} @ ${flag.game.home_team}`,
         awayNickname: flag.game.away_team_name,
         homeNickname: flag.game.home_team_name,
@@ -695,7 +742,7 @@ export default function HomeScreen() {
     [homeData?.weekGames],
   );
 
-  /** Also-flagged tiles read the week slate; a game missing from it keeps the on-tap Switch. */
+  /** Also-flagged tiles read the week slate. No watch link means no Switch button. */
   const alsoFlaggedCta = useCallback(
     (flag: CurrentFlag) => {
       const game = weekGameById.get(flag.game_id);
@@ -1007,6 +1054,7 @@ export default function HomeScreen() {
 
   return (
     <HomeDashboard
+      scrollRef={homeScrollRef}
       contentTopInset={insets.top + theme.spacing.lg}
       onRefresh={onRefresh}
       refreshing={isRefreshing}
