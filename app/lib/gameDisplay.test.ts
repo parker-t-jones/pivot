@@ -279,7 +279,7 @@ describe('watchCta', () => {
     });
     expect(watchCta([], [{ network: 'amazon_prime' }])).toEqual({
       kind: 'airing',
-      text: 'On PRIME',
+      text: 'On Prime Video',
     });
   });
 

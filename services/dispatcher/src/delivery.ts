@@ -1,6 +1,7 @@
 import { defaultClock, type Clock } from '@pivot/engine';
 import {
-  networkLabelFromAirings,
+  onNetworkLabel,
+  onNetworkName,
   resolvePossessionAbbreviation,
   resolveStoredDestination,
   browserPrimeWatchUrl,
@@ -201,7 +202,7 @@ function actionRecommendation(
     return {
       recommendedSource: null,
       deepLinkUrl: null,
-      airingWithoutOption: resolution.raw,
+      airingWithoutOption: onNetworkName(resolution.raw),
       watchLabel: null,
     };
   }
@@ -210,7 +211,7 @@ function actionRecommendation(
       recommendedSource: null,
       deepLinkUrl: null,
       airingWithoutOption:
-        resolution.kind === 'unavailable' ? networkLabelFromAirings(likely.airings) : null,
+        resolution.kind === 'unavailable' ? onNetworkLabel(likely.airings) : null,
       watchLabel: null,
     };
   }
@@ -218,7 +219,7 @@ function actionRecommendation(
     return {
       recommendedSource: null,
       deepLinkUrl: null,
-      airingWithoutOption: networkLabelFromAirings(likely.airings),
+      airingWithoutOption: onNetworkLabel(likely.airings),
       watchLabel: null,
     };
   }

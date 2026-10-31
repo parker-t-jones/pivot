@@ -8,6 +8,8 @@ import {
   isRegionalSlate,
   mapMediaName,
   networkLabelFromAirings,
+  onNetworkLabel,
+  onNetworkName,
   parseEspnAirings,
   rankWatchOptions,
   serviceWatchUrl,
@@ -220,6 +222,29 @@ describe('networkLabelFromAirings', () => {
     expect(
       networkLabelFromAirings([{ network: 'some_new_service' }, { network: 'nbc' }]),
     ).toBe('NBC');
+  });
+});
+
+describe('onNetworkLabel', () => {
+  it('spells airing keys for "On {network}" and leaves the board token alone', () => {
+    expect(onNetworkLabel([{ network: 'cbs' }])).toBe('CBS');
+    expect(onNetworkLabel([{ network: 'fox' }])).toBe('FOX');
+    expect(onNetworkLabel([{ network: 'nbc' }])).toBe('NBC');
+    expect(onNetworkLabel([{ network: 'abc' }])).toBe('ABC');
+    expect(onNetworkLabel([{ network: 'espn' }])).toBe('ESPN');
+    expect(onNetworkLabel([{ network: 'amazon_prime' }])).toBe('Prime Video');
+    expect(onNetworkLabel([{ network: 'nfl_network' }])).toBe('NFL Network');
+    expect(onNetworkLabel([{ network: 'peacock' }])).toBe('Peacock');
+    expect(onNetworkLabel([{ network: 'netflix' }])).toBe('Netflix');
+    expect(onNetworkLabel([{ network: 'paramount_plus' }])).toBe('Paramount+');
+    expect(networkLabelFromAirings([{ network: 'amazon_prime' }])).toBe('PRIME');
+    expect(networkLabelFromAirings([{ network: 'nfl_network' }])).toBe('NFLN');
+  });
+
+  it('renders an unmapped string as written', () => {
+    expect(onNetworkName('Peacock')).toBe('Peacock');
+    expect(onNetworkName('AMAZON_PRIME')).toBe('AMAZON_PRIME');
+    expect(onNetworkLabel([{ network: 'dumont' }])).toBeNull();
   });
 });
 

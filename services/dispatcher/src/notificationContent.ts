@@ -1,4 +1,4 @@
-import type { FlagEvent, FlagReason, FlagReasonType } from '@pivot/shared';
+import { onNetworkName, type FlagEvent, type FlagReason, type FlagReasonType } from '@pivot/shared';
 import type { PlayerInfo } from './catalogs.js';
 
 /**
@@ -153,7 +153,7 @@ export function notificationBody(
     ? sentence(watchLabel)
     : airingWithoutOption === null
       ? 'Tap to watch.'
-      : `On ${airingWithoutOption}.`;
+      : `On ${onNetworkName(airingWithoutOption)}.`;
 
   if (findReason(event.newState.reasons, 'red_zone')) {
     return `${team} in the red zone — ${clock}. ${cta}`;

@@ -186,7 +186,7 @@ describe('ATL @ GB replay', () => {
       expect(push.action).toEqual(
         expect.objectContaining({ recommended_source: null, deep_link_url: null }),
       );
-      expect(push.body).toMatch(/ On PRIME\.$/);
+      expect(push.body).toMatch(/ On Prime Video\.$/);
     }
   }, 120_000);
 

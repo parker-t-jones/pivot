@@ -1,5 +1,6 @@
 import {
-  networkLabelFromAirings,
+  onNetworkLabel,
+  onNetworkName,
   type AiringMarket,
   type DestinationResolution,
   type MarketConfidence,
@@ -450,7 +451,7 @@ export function watchCta(
       return { kind: 'airing', text: 'Not on your services' };
     }
     if (destination.kind === 'unknown_network') {
-      return { kind: 'airing', text: `On ${destination.raw}` };
+      return { kind: 'airing', text: `On ${onNetworkName(destination.raw)}` };
     }
     if (destination.kind === 'no_broadcast_info') {
       return { kind: 'airing', text: 'Broadcast TBD' };
@@ -467,7 +468,7 @@ export function watchCta(
   if (preferred && preferred.deep_link_url.length > 0) {
     return { kind: 'watch', broadcast: preferred };
   }
-  const network = networkLabelFromAirings(airings);
+  const network = onNetworkLabel(airings);
   return network === null ? { kind: 'none' } : { kind: 'airing', text: `On ${network}` };
 }
 
