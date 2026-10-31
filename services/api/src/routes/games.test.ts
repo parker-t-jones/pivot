@@ -420,6 +420,7 @@ describe('GET /games/:id/broadcasts', () => {
           url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs%20today',
           verified: true,
           note: 'YouTube TV search',
+          label: 'Find on YouTube TV',
         },
         alternates: [],
       },
@@ -499,12 +500,14 @@ describe('GET /games/:id/broadcasts', () => {
           url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs%20NFL%20ST%20today',
           verified: true,
           note: 'Sunday Ticket search',
+          label: 'Find on Sunday Ticket',
         },
         alternates: [
           {
             url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs%20today',
             verified: true,
             note: 'YouTube TV search',
+            label: 'Find on YouTube TV',
           },
         ],
       },

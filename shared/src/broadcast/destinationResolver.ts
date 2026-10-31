@@ -9,7 +9,10 @@ export type ResolverService = UserService;
 export interface WatchDestination {
   url: string;
   verified: boolean;
+  /** Internal. Never render. */
   note: string;
+  /** User-facing button, row, and push text. */
+  label: string;
 }
 
 export type DestinationResolution =
@@ -41,12 +44,14 @@ export interface DestinationGame {
 interface StaticDestination {
   verified: boolean;
   note: string;
+  label: string;
   url: string;
 }
 
 interface QueryDestination {
   verified: boolean;
   note: string;
+  label: string;
   base: string;
   query: string;
 }
@@ -61,42 +66,50 @@ export const DESTINATION_TABLE = {
   abc: {
     verified: true,
     note: 'Straight to the local ABC stream.',
+    label: 'Watch on ABC',
     url: 'https://abc.com/watch-live/b2f23a6e-a2a4-4d63-bd3b-e330921b0942',
   },
   cbs: {
     verified: true,
     note: 'Local CBS, then one Live Local tap.',
+    label: 'Watch on CBS',
     url: 'https://www.cbs.com/live-tv/stream/',
   },
   nbc: {
     verified: true,
     note: 'Straight to local NBC. Do not add callsign.',
+    label: 'Watch on NBC',
     url: 'https://www.nbc.com/live?brand=nbc',
   },
   foxSearch: {
     verified: true,
     note: 'FOX LIVE tile, then Watch live. Away at Home nicknames.',
+    label: 'Watch on FOX',
     base: 'https://www.fox.com/search?q=',
     query: '{away} at {home}',
   },
   foxChannels: {
     verified: true,
     note: 'FOX channel guide, one tap.',
+    label: 'FOX channel guide',
     url: 'https://www.fox.com/live/channels',
   },
   espn: {
     verified: false,
     note: 'ESPN watch. ESPN airings only.',
+    label: 'Watch on ESPN',
     url: 'https://www.espn.com/watch/',
   },
   paramountPlus: {
     verified: false,
     note: 'Paramount+ live TV.',
+    label: 'Open Paramount+',
     url: 'https://www.paramountplus.com/live-tv/',
   },
   peacock: {
     verified: false,
     note: 'Peacock sports landing.',
+    label: 'Open Peacock',
     url: 'https://www.peacocktv.com/watch/sports',
   },
 } as const satisfies Record<string, DestinationTemplate>;
@@ -151,7 +164,13 @@ function addTemplate(
 ): void {
   const url = materialize(template, game.awayNickname, game.homeNickname);
   if (url === null) return;
-  out.push({ url, verified: template.verified, note: template.note, step });
+  out.push({
+    url,
+    verified: template.verified,
+    note: template.note,
+    label: template.label,
+    step,
+  });
 }
 
 function addServiceUrl(
@@ -162,6 +181,7 @@ function addServiceUrl(
   game: DestinationGame,
   verified: boolean,
   note: string,
+  label: string,
 ): void {
   const url = serviceWatchUrl({
     service,
@@ -171,7 +191,7 @@ function addServiceUrl(
     network,
   });
   if (url.length === 0) return;
-  out.push({ url, verified, note, step });
+  out.push({ url, verified, note, label, step });
 }
 
 function rankDestinations(candidates: readonly Candidate[]): WatchDestination[] {
@@ -187,7 +207,12 @@ function rankDestinations(candidates: readonly Candidate[]): WatchDestination[] 
   for (const candidate of [...saved, ...generated]) {
     if (seen.has(candidate.url)) continue;
     seen.add(candidate.url);
-    unique.push({ url: candidate.url, verified: candidate.verified, note: candidate.note });
+    unique.push({
+      url: candidate.url,
+      verified: candidate.verified,
+      note: candidate.note,
+      label: candidate.label,
+    });
   }
   return unique;
 }
@@ -241,6 +266,7 @@ export function resolveDestinations(
       url: saved,
       verified: true,
       note: 'Saved stream link',
+      label: 'Your saved link',
       step: SAVED_STEP,
     });
   }
@@ -255,6 +281,7 @@ export function resolveDestinations(
       game,
       true,
       'Sunday Ticket search',
+      'Find on Sunday Ticket',
     );
   }
 
@@ -268,6 +295,7 @@ export function resolveDestinations(
       game,
       true,
       'YouTube TV search',
+      'Find on YouTube TV',
     );
   }
 
@@ -280,6 +308,7 @@ export function resolveDestinations(
       game,
       true,
       'Current Prime link',
+      'Open Prime Video',
     );
   }
   if (mapped.includes('cbs') && subscribed.has('paramount_plus')) {
@@ -323,6 +352,7 @@ function noAiringResolution(
       url: saved,
       verified: true,
       note: 'Saved stream link',
+      label: 'Your saved link',
       step: SAVED_STEP,
     });
   }
@@ -339,6 +369,7 @@ function noAiringResolution(
       game,
       true,
       'YouTube TV search',
+      'Find on YouTube TV',
     );
   }
   if (candidates.length === 0) return { kind: 'no_broadcast_info' };

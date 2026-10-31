@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import {
   alsoFlaggedSituationLines,
   showsWatchButton,
+  watchBroadcastLabel,
   type CurrentFlag,
   type GameBroadcast,
   type WatchCta,
@@ -62,6 +63,7 @@ export function AlsoFlaggedRow({ flags, onSwitch, ctaFor, onOpenAlternate }: Als
           const isSwitching = switchingGameId === flag.game_id;
           const situation = alsoFlaggedSituationLines(flag.game);
           const cta = ctaFor(flag);
+          const watchBroadcast = cta?.kind === 'watch' ? cta.broadcast : null;
           const betLabel = betChipLabel((flag.bets ?? []).map((bet) => bet.label));
           return (
             <GameAnchor key={flag.game_id} gameId={flag.game_id} style={styles.card}>
@@ -104,7 +106,9 @@ export function AlsoFlaggedRow({ flags, onSwitch, ctaFor, onOpenAlternate }: Als
                     {isSwitching ? (
                       <ActivityIndicator color={theme.colors.accent} size="small" />
                     ) : (
-                      <Text style={styles.switchLabel}>Switch</Text>
+                      <Text style={styles.switchLabel}>
+                        {watchBroadcast ? watchBroadcastLabel(watchBroadcast) : 'Switch'}
+                      </Text>
                     )}
                   </Pressable>
                 ) : null}

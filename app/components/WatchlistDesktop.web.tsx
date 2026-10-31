@@ -328,7 +328,7 @@ function TableRow({
               ];
             }}
           >
-            <Text style={styles.switchLabel}>Switch</Text>
+            <Text style={styles.switchLabel}>{row.watchLabel ?? 'Switch'}</Text>
           </Pressable>
         ) : onRemove ? (
           <Pressable

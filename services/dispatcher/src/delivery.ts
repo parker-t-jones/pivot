@@ -178,6 +178,7 @@ function actionRecommendation(
   recommendedSource: string | null;
   deepLinkUrl: string | null;
   airingWithoutOption: string | null;
+  watchLabel: string | null;
 } {
   const resolution = resolveStoredDestination({
     awayNickname: matchup.awayNickname,
@@ -193,6 +194,7 @@ function actionRecommendation(
       recommendedSource: likely.source?.service ?? null,
       deepLinkUrl: resolution.primary.url,
       airingWithoutOption: null,
+      watchLabel: resolution.primary.label,
     };
   }
   if (resolution.kind === 'unknown_network') {
@@ -200,6 +202,7 @@ function actionRecommendation(
       recommendedSource: null,
       deepLinkUrl: null,
       airingWithoutOption: resolution.raw,
+      watchLabel: null,
     };
   }
   if (resolution.kind === 'unavailable' || resolution.kind === 'no_broadcast_info') {
@@ -208,6 +211,7 @@ function actionRecommendation(
       deepLinkUrl: null,
       airingWithoutOption:
         resolution.kind === 'unavailable' ? networkLabelFromAirings(likely.airings) : null,
+      watchLabel: null,
     };
   }
   if (likely.source === null) {
@@ -215,6 +219,7 @@ function actionRecommendation(
       recommendedSource: null,
       deepLinkUrl: null,
       airingWithoutOption: networkLabelFromAirings(likely.airings),
+      watchLabel: null,
     };
   }
   const url = serviceWatchUrl({
@@ -228,6 +233,7 @@ function actionRecommendation(
     recommendedSource: likely.source.service,
     deepLinkUrl: url === '' ? null : url,
     airingWithoutOption: null,
+    watchLabel: null,
   };
 }
 
@@ -308,7 +314,7 @@ export async function deliverFlagEvent(
     event,
   );
 
-  const { recommendedSource, deepLinkUrl, airingWithoutOption } = actionRecommendation(
+  const { recommendedSource, deepLinkUrl, airingWithoutOption, watchLabel } = actionRecommendation(
     likelyBroadcast,
     {
       awayNickname: gameSummaryInfo?.awayTeamName ?? '',
@@ -349,7 +355,7 @@ export async function deliverFlagEvent(
           notificationGame,
           await resolveNotificationPlayers(deps, event, players),
         ),
-        body: notificationBody(event, notificationGame, airingWithoutOption),
+        body: notificationBody(event, notificationGame, airingWithoutOption, watchLabel),
       }
     : null;
 

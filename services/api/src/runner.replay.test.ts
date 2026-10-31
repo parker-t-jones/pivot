@@ -201,7 +201,7 @@ describe('ATL @ GB replay', () => {
           deep_link_url: 'https://tv.youtube.com/search/Falcons%20vs%20Packers%20today',
         }),
       );
-      expect(push.body).toMatch(/ Tap to watch\.$/);
+      expect(push.body).toMatch(/ Find on YouTube TV\.$/);
     }
   }, 120_000);
 

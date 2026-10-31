@@ -42,6 +42,8 @@ export interface WatchlistTableRow {
   deepLinkUrl: string | null;
   /** Matchup passed to the switch overlay. */
   switchLabel: string;
+  /** Destination label for the watch button. Null when the row has no resolver link. */
+  watchLabel: string | null;
 }
 
 const EMPTY = '\u2014';
@@ -146,6 +148,7 @@ export function watchlistStakeRow(input: {
     gameId: game?.game_id ?? input.gameId,
     deepLinkUrl: preferredHttps(game),
     switchLabel: input.matchup || input.name,
+    watchLabel: destinationLabel(game),
   };
 }
 
@@ -184,6 +187,7 @@ function rowFromGame(input: {
       gameId: null,
       deepLinkUrl: null,
       switchLabel: input.name,
+      watchLabel: null,
     };
   }
 
@@ -217,6 +221,7 @@ function rowFromGame(input: {
     gameId: input.game.game_id,
     deepLinkUrl: preferredHttps(input.game),
     switchLabel: `${input.game.away_team} @ ${input.game.home_team}`,
+    watchLabel: destinationLabel(input.game),
   };
 }
 
@@ -244,6 +249,11 @@ function kickoffDistance(game: WatchlistTableGame, now: Date): number {
 
 function networkOrDash(game: WatchlistTableGame): string {
   return networkLabelFromAirings(game.airings) ?? EMPTY;
+}
+
+function destinationLabel(game: WatchlistTableGame | null): string | null {
+  if (game?.destination?.kind !== 'destinations') return null;
+  return game.destination.primary.label;
 }
 
 function preferredHttps(game: WatchlistTableGame | null): string | null {

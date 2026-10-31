@@ -60,7 +60,7 @@ export interface GameBroadcast {
   network: string;
   market_confidence: MarketConfidence;
   route_hint?: RouteHint;
-  /** Resolver note, used as the button label when this option is not a ranked service row. */
+  /** User-facing destination label. The resolver note never goes here. */
   label?: string;
 }
 
@@ -415,7 +415,10 @@ function broadcastForDestination(
   preferred: boolean,
 ): GameBroadcast {
   const existing = broadcasts.find((broadcast) => broadcast.deep_link_url === destination.url);
-  if (existing) return existing;
+  // The ranked row has no resolver note. Reusing it makes the button "Watch on {service}".
+  if (existing) {
+    return { ...existing, deep_link_url: destination.url, preferred, label: destination.label };
+  }
   const fallback = pickPreferredBroadcast(broadcasts);
   return {
     service: fallback?.service ?? '',
@@ -426,7 +429,7 @@ function broadcastForDestination(
     preferred,
     network: fallback?.network ?? '',
     market_confidence: fallback?.market_confidence ?? 'national',
-    label: destination.note,
+    label: destination.label,
   };
 }
 
@@ -473,7 +476,7 @@ export function showsWatchButton(cta: WatchCta | null): boolean {
   return cta?.kind === 'watch';
 }
 
-/** Button text for a watch option. A resolver note wins over "Watch on {service}". */
+/** Button text for a watch option. A destination label wins over "Watch on {service}". */
 export function watchBroadcastLabel(broadcast: GameBroadcast): string {
   return broadcast.label ?? `Watch on ${serviceLabel(broadcast.service)}`;
 }

@@ -310,12 +310,14 @@ describe('watchCta', () => {
         url: 'https://www.fox.com/search?q=Bears%20at%20Falcons',
         verified: true,
         note: 'FOX LIVE tile, then Watch live. Away at Home nicknames.',
+        label: 'Watch on FOX',
       },
       alternates: [
         {
           url: 'https://www.fox.com/live/channels',
           verified: true,
           note: 'FOX channel guide, one tap.',
+          label: 'FOX channel guide',
         },
       ],
     });
@@ -323,7 +325,7 @@ describe('watchCta', () => {
       kind: 'watch',
       broadcast: {
         deep_link_url: 'https://www.fox.com/search?q=Bears%20at%20Falcons',
-        label: 'FOX LIVE tile, then Watch live. Away at Home nicknames.',
+        label: 'Watch on FOX',
       },
     });
     if (cta.kind !== 'watch') throw new Error('expected a watch cta');

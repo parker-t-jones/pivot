@@ -124,12 +124,14 @@ describe('buildWeekWatch', () => {
         url: 'https://www.fox.com/search?q=Bears%20at%20Packers',
         verified: true,
         note: 'FOX LIVE tile, then Watch live. Away at Home nicknames.',
+        label: 'Watch on FOX',
       },
       alternates: [
         {
           url: 'https://www.fox.com/live/channels',
           verified: true,
           note: 'FOX channel guide, one tap.',
+          label: 'FOX channel guide',
         },
       ],
     });
@@ -144,7 +146,11 @@ describe('buildWeekWatch', () => {
     );
     expect(watch.get('fox1')?.destination).toMatchObject({
       kind: 'destinations',
-      primary: { url: 'https://example.com/bears', note: 'Saved stream link' },
+      primary: {
+        url: 'https://example.com/bears',
+        note: 'Saved stream link',
+        label: 'Your saved link',
+      },
     });
   });
 
@@ -241,6 +247,7 @@ describe('buildWeekWatch', () => {
           url: 'https://tv.youtube.com/search/Packers%20vs%20Lions%20today',
           verified: true,
           note: 'YouTube TV search',
+          label: 'Find on YouTube TV',
         },
         alternates: [],
       },

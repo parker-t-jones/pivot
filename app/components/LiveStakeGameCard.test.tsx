@@ -150,7 +150,7 @@ describe('LiveStakeGameCard', () => {
               preferred: false,
               network: 'fox',
               market_confidence: 'national',
-              label: 'FOX channel guide, one tap.',
+              label: 'FOX channel guide',
             },
           ],
         },
@@ -166,7 +166,7 @@ describe('LiveStakeGameCard', () => {
       other?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     const channel = Array.from(document.querySelectorAll('[role="button"]')).find((node) =>
-      node.textContent?.includes('FOX channel guide, one tap.'),
+      node.textContent?.includes('FOX channel guide'),
     );
     act(() => {
       channel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));

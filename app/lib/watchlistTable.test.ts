@@ -84,6 +84,7 @@ describe('watchlistPlayerRow', () => {
               url: 'https://www.cbs.com/live-tv/stream/',
               verified: true,
               note: 'Local CBS, then one Live Local tap.',
+              label: 'Watch on CBS',
             },
             alternates: [],
           },
@@ -94,6 +95,7 @@ describe('watchlistPlayerRow', () => {
       timeZone: 'America/New_York',
     });
     expect(row.deepLinkUrl).toBe('https://www.cbs.com/live-tv/stream/');
+    expect(row.watchLabel).toBe('Watch on CBS');
   });
 
   it('offers no link when the game is not on the user services', () => {
