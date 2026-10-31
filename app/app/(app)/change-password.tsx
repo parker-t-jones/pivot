@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { AuthForm } from '../../components/AuthForm';
+import { DemoEditingBanner } from '../../components/DemoEditingBanner';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { SecondaryButton } from '../../components/SecondaryButton';
 import { TextField } from '../../components/TextField';
@@ -22,6 +23,7 @@ import {
   newPasswordIssueMessage,
   PASSWORD_POLICY_HINT,
 } from '../../lib/passwordPolicy';
+import { ApiRequestError, apiClient } from '../../lib/apiClient';
 import { PASSWORD_UPDATED } from '../../lib/passwordReset';
 import { supabase } from '../../lib/supabase';
 import { theme } from '../../lib/theme';
@@ -53,6 +55,27 @@ export default function ChangePasswordScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [gate, setGate] = useState<'checking' | 'open' | 'blocked'>('checking');
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiClient
+      .post('/me/password-change')
+      .then(() => {
+        if (!cancelled) setGate('open');
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        if (error instanceof ApiRequestError && error.status === 409) {
+          setGate('blocked');
+          return;
+        }
+        setGate('open');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -92,6 +115,7 @@ export default function ChangePasswordScreen() {
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
+      await apiClient.post('/me/password-change');
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password: currentPassword,
@@ -102,6 +126,10 @@ export default function ChangePasswordScreen() {
       }
       setPhase('new-password');
     } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        setGate('blocked');
+        return;
+      }
       fail(error instanceof Error ? error.message : 'Network request failed');
     } finally {
       setIsSubmitting(false);
@@ -118,6 +146,7 @@ export default function ChangePasswordScreen() {
     setSaved(false);
     setIsSubmitting(true);
     try {
+      await apiClient.post('/me/password-change');
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
         fail(error.message, error.code);
@@ -127,6 +156,10 @@ export default function ChangePasswordScreen() {
       setConfirmation('');
       setSaved(true);
     } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        setGate('blocked');
+        return;
+      }
       fail(error instanceof Error ? error.message : 'Network request failed');
     } finally {
       setIsSubmitting(false);
@@ -141,9 +174,13 @@ export default function ChangePasswordScreen() {
       <View style={styles.card}>
         <Text style={styles.title}>Change password</Text>
 
-        {phase === 'locking' ? <Text style={styles.subtitle}>Confirming it's you...</Text> : null}
+        {gate === 'blocked' ? <DemoEditingBanner /> : null}
 
-        {phase === 'cancelled' ? (
+        {gate === 'open' && phase === 'locking' ? (
+          <Text style={styles.subtitle}>Confirming it's you...</Text>
+        ) : null}
+
+        {gate === 'open' && phase === 'cancelled' ? (
           <>
             <Text style={styles.subtitle}>
               {lock === 'passcode' ? 'Passcode cancelled.' : 'Face ID cancelled.'}
@@ -159,7 +196,7 @@ export default function ChangePasswordScreen() {
           </>
         ) : null}
 
-        {phase === 'current-password' ? (
+        {gate === 'open' && phase === 'current-password' ? (
           <AuthForm
             onSubmit={() => {
               void onVerifyCurrent();
@@ -192,7 +229,7 @@ export default function ChangePasswordScreen() {
           </AuthForm>
         ) : null}
 
-        {phase === 'new-password' ? (
+        {gate === 'open' && phase === 'new-password' ? (
           <AuthForm
             onSubmit={() => {
               void onSave();

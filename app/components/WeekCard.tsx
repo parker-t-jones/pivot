@@ -12,12 +12,18 @@ interface WeekCardProps {
   model: WeekCardModel;
   onAddStake: () => void;
   onOpponentToggle?: () => void;
+  editsLocked?: boolean;
 }
 
 /**
  * Watchlist week card (PIVOT-STAKES-PLAN.md §11.4): a 2×2 grid, perforation, then Add a pick.
  */
-export function WeekCard({ model, onAddStake, onOpponentToggle }: WeekCardProps) {
+export function WeekCard({
+  model,
+  onAddStake,
+  onOpponentToggle,
+  editsLocked = false,
+}: WeekCardProps) {
   const { openUpgrade } = useUpgradeSheet();
   return (
     <Slip style={styles.slip}>
@@ -25,14 +31,14 @@ export function WeekCard({ model, onAddStake, onOpponentToggle }: WeekCardProps)
         <Cell cell={model.fantasy} />
         <Cell
           cell={model.opponent}
-          onPress={model.opponent.toggleable ? onOpponentToggle : undefined}
+          onPress={model.opponent.toggleable && !editsLocked ? onOpponentToggle : undefined}
         />
         <Cell cell={model.bets} onUpgrade={model.bets.upgrade ? () => openUpgrade() : undefined} />
         <Cell cell={model.pools} />
       </View>
       <SlipPerforation style={styles.perforation} />
       <View style={styles.footer}>
-        <PrimaryButton label="Add a pick" onPress={onAddStake} />
+        <PrimaryButton disabled={editsLocked} label="Add a pick" onPress={onAddStake} />
       </View>
     </Slip>
   );

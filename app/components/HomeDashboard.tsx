@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { fonts } from '../lib/fonts';
@@ -13,6 +13,7 @@ interface HomeDashboardProps {
   contentTopInset: number;
   refreshing: boolean;
   onRefresh: () => void;
+  scrollRef?: RefObject<ScrollView | null>;
 }
 
 /**
@@ -28,9 +29,11 @@ export function HomeDashboard({
   contentTopInset,
   refreshing,
   onRefresh,
+  scrollRef,
 }: HomeDashboardProps) {
   return (
     <ScrollView
+      ref={scrollRef}
       style={styles.screen}
       contentContainerStyle={[styles.content, { paddingTop: contentTopInset }]}
       refreshControl={

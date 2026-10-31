@@ -41,6 +41,7 @@ interface HomePregameViewProps {
   /** Instant behind `countdownMs`. The weekday label needs the clock, not just the distance. */
   nextKickoffAt: Date | null;
   nowMs: number;
+  editsLocked?: boolean;
 }
 
 /**
@@ -58,6 +59,7 @@ export function HomePregameView({
   countdownMs,
   nextKickoffAt,
   nowMs,
+  editsLocked = false,
 }: HomePregameViewProps) {
   const kickoff =
     countdownMs === null || nextKickoffAt === null
@@ -107,7 +109,12 @@ export function HomePregameView({
                 <Text
                   maxFontSizeMultiplier={theme.fontScaleCaps.dense}
                   numberOfLines={1}
-                  style={[styles.metaLabel, countdownMs !== null && countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
+                  style={[
+                    styles.metaLabel,
+                    countdownMs !== null &&
+                      countdownMs < ACCENT_COUNTDOWN_MS &&
+                      styles.countdownSoon,
+                  ]}
                 >
                   {`NEXT KICKOFF · ${kickoff}`}
                 </Text>
@@ -118,6 +125,7 @@ export function HomePregameView({
             <MyCardList
               betRefs={betRefs}
               groups={groups}
+              editsLocked={editsLocked}
               lineupGroups={lineupGroups}
               part="header"
             />
@@ -129,6 +137,7 @@ export function HomePregameView({
             <MyCardList
               betRefs={betRefs}
               groups={groups}
+              editsLocked={editsLocked}
               lineupGroups={lineupGroups}
               part="cards"
             />
@@ -153,7 +162,12 @@ export function HomePregameView({
                 </Text>
                 <Text
                   maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-                  style={[styles.countdown, countdownMs !== null && countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
+                  style={[
+                    styles.countdown,
+                    countdownMs !== null &&
+                      countdownMs < ACCENT_COUNTDOWN_MS &&
+                      styles.countdownSoon,
+                  ]}
                 >
                   {kickoff}
                 </Text>
@@ -163,7 +177,12 @@ export function HomePregameView({
           {board}
         </View>
         <View style={styles.side}>
-          <MyCardList betRefs={betRefs} groups={groups} lineupGroups={lineupGroups} />
+          <MyCardList
+            betRefs={betRefs}
+            groups={groups}
+            editsLocked={editsLocked}
+            lineupGroups={lineupGroups}
+          />
         </View>
       </View>
     );
@@ -182,7 +201,10 @@ export function HomePregameView({
             </Text>
             <Text
               maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-              style={[styles.countdown, countdownMs !== null && countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon]}
+              style={[
+                styles.countdown,
+                countdownMs !== null && countdownMs < ACCENT_COUNTDOWN_MS && styles.countdownSoon,
+              ]}
             >
               {kickoff}
             </Text>
@@ -195,7 +217,12 @@ export function HomePregameView({
       {segment === 'board' ? (
         board
       ) : (
-        <MyCardList betRefs={betRefs} groups={groups} lineupGroups={lineupGroups} />
+        <MyCardList
+          betRefs={betRefs}
+          groups={groups}
+          editsLocked={editsLocked}
+          lineupGroups={lineupGroups}
+        />
       )}
     </View>
   );

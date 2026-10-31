@@ -13,10 +13,12 @@ import {
   type LiveStakeCardModel,
   type LiveStakeChip,
 } from '../lib/liveStakeCards';
+import { GameAnchor } from '../lib/gameAnchor';
 import type { LiveGame } from '../lib/schedule';
 import { scoreBlockWash } from '../lib/teamColors';
 import { theme } from '../lib/theme';
 import { FieldGauge } from './FieldGauge';
+import { OtherWaysToWatch } from './OtherWaysToWatch';
 import { PrimaryButton } from './PrimaryButton';
 import { SecondaryButton } from './SecondaryButton';
 
@@ -49,24 +51,18 @@ export function LiveStakeGameCard({
   const opponentTeam = opponentAbbreviation(game.possession_team, game.home_team, game.away_team);
 
   return (
-    <View style={[styles.card, model.active && styles.cardActive]}>
+    <GameAnchor gameId={game.game_id} style={[styles.card, model.active && styles.cardActive]}>
       {model.eyebrow ? <Text style={styles.eyebrow}>{model.eyebrow}</Text> : null}
 
       <View style={styles.matchupRow}>
-        <View
-          style={[styles.sideChip, { backgroundColor: leftWash }]}
-          testID="live-score-left"
-        >
+        <View style={[styles.sideChip, { backgroundColor: leftWash }]} testID="live-score-left">
           <Text style={[styles.teamName, styles.teamLeft]} numberOfLines={1}>
             {matchup.leftName}
           </Text>
           <Text style={styles.score}>{matchup.leftScore}</Text>
         </View>
         <View style={styles.scoreDivider} />
-        <View
-          style={[styles.sideChip, { backgroundColor: rightWash }]}
-          testID="live-score-right"
-        >
+        <View style={[styles.sideChip, { backgroundColor: rightWash }]} testID="live-score-right">
           <Text style={styles.score}>{matchup.rightScore}</Text>
           <Text style={[styles.teamName, styles.teamRight]} numberOfLines={1}>
             {matchup.rightName}
@@ -101,22 +97,28 @@ export function LiveStakeGameCard({
         </View>
       ) : null}
 
-      <View style={styles.cta}>
-        <PrimaryButton
-          label={model.buttonLabel}
-          onPress={() => onSwitch(game)}
-          variant={model.active ? 'filled' : 'outlined'}
-          labelStyle={styles.ctaLabel}
-        />
-        {localRoute && onSwitchLocal ? (
-          <SecondaryButton
-            caption={watchOptionParts(localRoute).caption}
-            label={watchOptionParts(localRoute).title}
-            onPress={() => onSwitchLocal(localRoute)}
+      {model.opensLink === false ? (
+        <Text style={styles.airing}>{model.buttonLabel}</Text>
+      ) : (
+        <View style={styles.cta}>
+          <PrimaryButton
+            label={model.buttonLabel}
+            onPress={() => onSwitch(game)}
+            variant={model.active ? 'filled' : 'outlined'}
+            labelStyle={styles.ctaLabel}
           />
-        ) : null}
-      </View>
-    </View>
+          {model.alternates && model.alternates.length > 0 && onSwitchLocal ? (
+            <OtherWaysToWatch alternates={model.alternates} onOpen={onSwitchLocal} />
+          ) : localRoute && onSwitchLocal ? (
+            <SecondaryButton
+              caption={watchOptionParts(localRoute).caption}
+              label={watchOptionParts(localRoute).title}
+              onPress={() => onSwitchLocal(localRoute)}
+            />
+          ) : null}
+        </View>
+      )}
+    </GameAnchor>
   );
 }
 
@@ -215,6 +217,12 @@ const styles = StyleSheet.create({
     fontVariant: [...theme.type.ticker.fontVariant],
     letterSpacing: theme.type.ticker.letterSpacing,
   },
+  airing: {
+    color: theme.colors.textSecondary,
+    fontFamily: fonts.monoMedium,
+    fontSize: theme.type.caption.size,
+    marginTop: theme.spacing.sm,
+  },
   cta: {
     gap: theme.spacing.sm,
     marginTop: theme.spacing.sm,
@@ -301,9 +309,7 @@ export function YourLiveGames({
           model={model}
           onSwitch={onSwitch}
           onSwitchLocal={
-            onSwitchLocal
-              ? (broadcast) => onSwitchLocal(model.game, broadcast)
-              : undefined
+            onSwitchLocal ? (broadcast) => onSwitchLocal(model.game, broadcast) : undefined
           }
         />
       ))}

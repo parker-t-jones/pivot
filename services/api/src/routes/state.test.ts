@@ -24,11 +24,18 @@ async function signToken(payload: Record<string, unknown>): Promise<string> {
 }
 
 class FakeGamesSupabase {
-  constructor(
-    private readonly earliestByType: Partial<Record<'pre' | 'regular', string | null>>,
-  ) {}
+  constructor(private readonly earliestByType: Partial<Record<'pre' | 'regular', string | null>>) {}
 
   from(table: string) {
+    if (table === 'users') {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: { is_demo: false }, error: null }),
+          }),
+        }),
+      };
+    }
     if (table !== 'games') {
       throw new Error(`Unexpected table: ${table}`);
     }
@@ -43,9 +50,7 @@ class FakeGamesSupabase {
       limit: () => builder,
       maybeSingle: async () => {
         const start =
-          seasonType === 'pre' || seasonType === 'regular'
-            ? this.earliestByType[seasonType]
-            : null;
+          seasonType === 'pre' || seasonType === 'regular' ? this.earliestByType[seasonType] : null;
         return {
           data: start ? { scheduled_start: start } : null,
           error: null,
@@ -72,9 +77,14 @@ async function buildTestApp(options: {
   fastify.setValidatorCompiler(validatorCompiler);
   fastify.setSerializerCompiler(serializerCompiler);
 
-  await fastify.register(authPlugin, { jwtSecret: JWT_SECRET, supabaseUrl: 'http://127.0.0.1:54321' });
+  await fastify.register(authPlugin, {
+    jwtSecret: JWT_SECRET,
+    supabaseUrl: 'http://127.0.0.1:54321',
+  });
   await fastify.register(servicesPlugin, {
-    supabase: new FakeGamesSupabase(options.earliestByType ?? {}) as unknown as SupabaseServiceClient,
+    supabase: new FakeGamesSupabase(
+      options.earliestByType ?? {},
+    ) as unknown as SupabaseServiceClient,
     lineupCache,
     gameStateStore: new InMemoryGameStateStore(),
     realtimeSubscriber: new InMemoryRealtimeBus(),

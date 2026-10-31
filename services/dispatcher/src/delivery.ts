@@ -1,7 +1,9 @@
 import { defaultClock, type Clock } from '@pivot/engine';
 import {
-  networkLabelFromAirings,
+  onNetworkLabel,
+  onNetworkName,
   resolvePossessionAbbreviation,
+  resolveStoredDestination,
   browserPrimeWatchUrl,
   serviceWatchUrl,
   type FlagEvent,
@@ -164,24 +166,61 @@ async function resolveNotificationPlayers(
 }
 
 /**
- * The Section 9 `action.recommended_source`/`action.deep_link_url`: the top-ranked watch option
- * (`resolveLikelyBroadcastSource`, the same ranking `GET /games/:id/broadcasts` serves) and its
- * service landing URL. With no option, both are null and `airingWithoutOption` names the network for
- * the push copy ("On FOX").
+ * The Section 9 `action.recommended_source`/`action.deep_link_url`. A user with services, or a
+ * saved link, gets the resolver's primary URL on both payloads. An empty service list and no
+ * saved link stays on `serviceWatchUrl`. With no link, `airingWithoutOption` still names the
+ * network for the push copy ("On FOX").
  */
 function actionRecommendation(
   likely: LikelyBroadcast,
   matchup: { awayNickname: string; homeNickname: string },
+  savedUrl: string | null,
 ): {
   recommendedSource: string | null;
   deepLinkUrl: string | null;
   airingWithoutOption: string | null;
+  watchLabel: string | null;
 } {
+  const resolution = resolveStoredDestination({
+    awayNickname: matchup.awayNickname,
+    homeNickname: matchup.homeNickname,
+    kickoff: likely.kickoff,
+    airings: likely.airings,
+    services: likely.services,
+    savedUrl,
+    outOfMarketSunday: likely.outOfMarketSunday,
+  });
+  if (resolution.kind === 'destinations') {
+    return {
+      recommendedSource: likely.source?.service ?? null,
+      deepLinkUrl: resolution.primary.url,
+      airingWithoutOption: null,
+      watchLabel: resolution.primary.label,
+    };
+  }
+  if (resolution.kind === 'unknown_network') {
+    return {
+      recommendedSource: null,
+      deepLinkUrl: null,
+      airingWithoutOption: onNetworkName(resolution.raw),
+      watchLabel: null,
+    };
+  }
+  if (resolution.kind === 'unavailable' || resolution.kind === 'no_broadcast_info') {
+    return {
+      recommendedSource: null,
+      deepLinkUrl: null,
+      airingWithoutOption:
+        resolution.kind === 'unavailable' ? onNetworkLabel(likely.airings) : null,
+      watchLabel: null,
+    };
+  }
   if (likely.source === null) {
     return {
       recommendedSource: null,
       deepLinkUrl: null,
-      airingWithoutOption: networkLabelFromAirings(likely.airings),
+      airingWithoutOption: onNetworkLabel(likely.airings),
+      watchLabel: null,
     };
   }
   const url = serviceWatchUrl({
@@ -195,6 +234,7 @@ function actionRecommendation(
     recommendedSource: likely.source.service,
     deepLinkUrl: url === '' ? null : url,
     airingWithoutOption: null,
+    watchLabel: null,
   };
 }
 
@@ -246,7 +286,12 @@ export async function deliverFlagEvent(
   const deliveredAt = clock();
 
   const pushDeviceId = user.expoPushDeviceId || LEGACY_IOS_DEVICE_ID;
-  const [session, present, deviceActive, gameState, gameSummaryInfo, likelyBroadcast] =
+  // One lookup for the envelope and every device. The 300ms cap still applies; a miss sends
+  // without the link. This has to finish before the payload is built so iOS and web share it.
+  const savedUrlPromise = deps.webPush?.savedLinks
+    ? lookupSavedGameLink(deps.webPush.savedLinks, event.userId, event.gameId)
+    : Promise.resolve(null);
+  const [session, present, deviceActive, gameState, gameSummaryInfo, likelyBroadcast, savedUrl] =
     await Promise.all([
       deps.userDirectory.getViewingSession(event.userId),
       deps.gameStateStore.isUserActive(event.userId),
@@ -254,6 +299,7 @@ export async function deliverFlagEvent(
       deps.gameStateStore.getGameState(event.gameId),
       deps.gameCatalog.getGameSummary(event.gameId),
       resolveLikelyBroadcastSource(event.gameId, event.userId, deps.broadcastCatalog),
+      savedUrlPromise,
     ]);
 
   // `present` is any counting device, including the legacy member. Hidden web does not count.
@@ -269,12 +315,13 @@ export async function deliverFlagEvent(
     event,
   );
 
-  const { recommendedSource, deepLinkUrl, airingWithoutOption } = actionRecommendation(
+  const { recommendedSource, deepLinkUrl, airingWithoutOption, watchLabel } = actionRecommendation(
     likelyBroadcast,
     {
       awayNickname: gameSummaryInfo?.awayTeamName ?? '',
       homeNickname: gameSummaryInfo?.homeTeamName ?? '',
     },
+    savedUrl,
   );
 
   const triggeringPlayerIds = [
@@ -309,7 +356,7 @@ export async function deliverFlagEvent(
           notificationGame,
           await resolveNotificationPlayers(deps, event, players),
         ),
-        body: notificationBody(event, notificationGame, airingWithoutOption),
+        body: notificationBody(event, notificationGame, airingWithoutOption, watchLabel),
       }
     : null;
 
@@ -459,11 +506,7 @@ export async function deliverFlagEvent(
 
   const webDelivery = (async (): Promise<void> => {
     if (!deps.webPush || !pushCopy) return;
-    // One lookup for every device in this fan-out. A failure omits `saved_url` and still sends.
-    // The Expo payload and the realtime envelope keep the object built above.
-    const savedUrl = deps.webPush.savedLinks
-      ? await lookupSavedGameLink(deps.webPush.savedLinks, event.userId, event.gameId)
-      : null;
+    // `savedUrl` was already resolved for the envelope. Web still copies it onto `saved_url`.
     try {
       await deliverWebPushes({
         sender: deps.webPush.sender,

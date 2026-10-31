@@ -64,16 +64,23 @@ interface PresenceRow {
   has_subscription: boolean;
 }
 
+interface SavedLinkRow {
+  game_id: string;
+  url: string;
+}
+
 interface FakeTables {
   games: GameRow[];
   teams: TeamRow[];
   airings: AiringRow[];
   presence: Map<string, PresenceRow[]>;
+  links?: SavedLinkRow[];
 }
 
 /** Counts `user_app_presence` reads so week-slate tests can assert a single presence load. */
 class FakeSupabase {
   presenceReads = 0;
+  linkReads = 0;
   /** `game_id` lists passed to each `game_airings` read. */
   airingReads: string[][] = [];
 
@@ -98,8 +105,36 @@ class FakeSupabase {
         select: () => ({
           in: async (_col: string, gameIds: string[]) => {
             this.airingReads.push(gameIds);
-            return { data: this.tables.airings.filter((a) => gameIds.includes(a.game_id)), error: null };
+            return {
+              data: this.tables.airings.filter((a) => gameIds.includes(a.game_id)),
+              error: null,
+            };
           },
+        }),
+      };
+    }
+    if (table === 'user_game_links') {
+      return {
+        select: () => ({
+          eq: () => ({
+            in: async (_col: string, gameIds: string[]) => {
+              this.linkReads += 1;
+              return {
+                data: (this.tables.links ?? []).filter((link) => gameIds.includes(link.game_id)),
+                error: null,
+              };
+            },
+          }),
+        }),
+      };
+    }
+    if (table === 'users') {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: { is_demo: false }, error: null }),
+            single: async () => ({ data: { is_demo: false }, error: null }),
+          }),
         }),
       };
     }
@@ -118,10 +153,16 @@ class FakeSupabase {
 
   private gamesQuery() {
     const rows = this.tables.games;
-    const run = (filters: { week?: number; status?: string; id?: string; season_type?: string }) => {
+    const run = (filters: {
+      week?: number;
+      status?: string;
+      id?: string;
+      season_type?: string;
+    }) => {
       let filtered = rows;
       if (filters.week !== undefined) filtered = filtered.filter((g) => g.week === filters.week);
-      if (filters.status !== undefined) filtered = filtered.filter((g) => g.status === filters.status);
+      if (filters.status !== undefined)
+        filtered = filtered.filter((g) => g.status === filters.status);
       if (filters.id !== undefined) filtered = filtered.filter((g) => g.id === filters.id);
       if (filters.season_type !== undefined) {
         filtered = filtered.filter((g) => g.season_type === filters.season_type);
@@ -138,7 +179,13 @@ class FakeSupabase {
               maybeSingle: async () => {
                 const match = rows.find((g) => g.id === id);
                 return {
-                  data: match ? { id: match.id, week: match.week, season_type: match.season_type ?? 'regular' } : null,
+                  data: match
+                    ? {
+                        id: match.id,
+                        week: match.week,
+                        season_type: match.season_type ?? 'regular',
+                      }
+                    : null,
                   error: null,
                 };
               },
@@ -215,6 +262,7 @@ interface FixtureOptions {
   teams?: TeamRow[];
   airings?: AiringRow[];
   presence?: Map<string, PresenceRow[]>;
+  links?: SavedLinkRow[];
   gameStateStore?: InMemoryGameStateStore;
 }
 
@@ -224,6 +272,7 @@ async function buildTestApp(options: FixtureOptions = {}) {
     teams: options.teams ?? DEFAULT_TEAMS,
     airings: options.airings ?? [],
     presence: options.presence ?? new Map(),
+    links: options.links ?? [],
   });
   const gameStateStore = options.gameStateStore ?? new InMemoryGameStateStore();
   const lineupCache = new InMemoryLineupCache();
@@ -252,7 +301,10 @@ async function buildTestApp(options: FixtureOptions = {}) {
     throw error;
   });
 
-  await fastify.register(authPlugin, { jwtSecret: JWT_SECRET, supabaseUrl: 'http://127.0.0.1:54321' });
+  await fastify.register(authPlugin, {
+    jwtSecret: JWT_SECRET,
+    supabaseUrl: 'http://127.0.0.1:54321',
+  });
   await fastify.register(servicesPlugin, {
     supabase: fake as unknown as SupabaseServiceClient,
     lineupCache,
@@ -264,7 +316,13 @@ async function buildTestApp(options: FixtureOptions = {}) {
 }
 
 function airing(gameId: string, network: string): AiringRow {
-  return { game_id: gameId, network, market: 'national', espn_media_name: network.toUpperCase(), espn_type: 'TV' };
+  return {
+    game_id: gameId,
+    network,
+    market: 'national',
+    espn_media_name: network.toUpperCase(),
+    espn_type: 'TV',
+  };
 }
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
@@ -296,8 +354,22 @@ describe('GET /games/:id/broadcasts', () => {
   });
 
   it('rejects an unauthenticated request', async () => {
-    app = await buildTestApp({ games: [{ id: GAME_1, week: 1, status: 'scheduled', scheduled_start: '2026-09-10T17:00:00Z', home_team_id: TEAM_HOME, away_team_id: TEAM_AWAY }] });
-    const response = await app.fastify.inject({ method: 'GET', url: `/games/${GAME_1}/broadcasts` });
+    app = await buildTestApp({
+      games: [
+        {
+          id: GAME_1,
+          week: 1,
+          status: 'scheduled',
+          scheduled_start: '2026-09-10T17:00:00Z',
+          home_team_id: TEAM_HOME,
+          away_team_id: TEAM_AWAY,
+        },
+      ],
+    });
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: `/games/${GAME_1}/broadcasts`,
+    });
     expect(response.statusCode).toBe(401);
   });
 
@@ -317,7 +389,17 @@ describe('GET /games/:id/broadcasts', () => {
 
   it('returns an empty broadcast list for a game with no airings', async () => {
     app = await buildTestApp({
-      games: [{ id: GAME_1, week: 1, status: 'scheduled', scheduled_start: '2026-09-10T17:00:00Z', home_team_id: TEAM_HOME, away_team_id: TEAM_AWAY }],
+      games: [
+        {
+          id: GAME_1,
+          week: 1,
+          season_type: 'regular',
+          status: 'scheduled',
+          scheduled_start: '2026-09-10T17:00:00Z',
+          home_team_id: TEAM_HOME,
+          away_team_id: TEAM_AWAY,
+        },
+      ],
       presence: new Map([['user-1', [{ service: 'youtube_tv', has_subscription: true }]]]),
     });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
@@ -329,14 +411,43 @@ describe('GET /games/:id/broadcasts', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ game_id: GAME_1, broadcasts: [] });
+    expect(response.json()).toEqual({
+      game_id: GAME_1,
+      broadcasts: [],
+      destination: {
+        kind: 'destinations',
+        primary: {
+          url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs%20today',
+          verified: true,
+          note: 'YouTube TV search',
+          label: 'Find on YouTube TV',
+        },
+        alternates: [],
+      },
+    });
   });
 
   it('ranks Ticket over YouTube TV on a regional FOX game, judged against the whole week', async () => {
     app = await buildTestApp({
       games: [
-        { id: GAME_1, week: 3, season_type: 'regular', status: 'scheduled', scheduled_start: SUNDAY_1PM, home_team_id: TEAM_HOME, away_team_id: TEAM_AWAY },
-        { id: GAME_2, week: 3, season_type: 'regular', status: 'scheduled', scheduled_start: SUNDAY_1PM, home_team_id: TEAM_HOME_2, away_team_id: TEAM_AWAY_2 },
+        {
+          id: GAME_1,
+          week: 3,
+          season_type: 'regular',
+          status: 'scheduled',
+          scheduled_start: SUNDAY_1PM,
+          home_team_id: TEAM_HOME,
+          away_team_id: TEAM_AWAY,
+        },
+        {
+          id: GAME_2,
+          week: 3,
+          season_type: 'regular',
+          status: 'scheduled',
+          scheduled_start: SUNDAY_1PM,
+          home_team_id: TEAM_HOME_2,
+          away_team_id: TEAM_AWAY_2,
+        },
       ],
       airings: [airing(GAME_1, 'fox'), airing(GAME_2, 'fox')],
       presence: new Map([
@@ -383,13 +494,40 @@ describe('GET /games/:id/broadcasts', () => {
           route_hint: 'in_market_local',
         },
       ],
+      destination: {
+        kind: 'destinations',
+        primary: {
+          url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs%20NFL%20ST%20today',
+          verified: true,
+          note: 'Sunday Ticket search',
+          label: 'Find on Sunday Ticket',
+        },
+        alternates: [
+          {
+            url: 'https://tv.youtube.com/search/Raiders%20vs%20Chiefs%20today',
+            verified: true,
+            note: 'YouTube TV search',
+            label: 'Find on YouTube TV',
+          },
+        ],
+      },
     });
     expect(app.fake.airingReads).toEqual([[GAME_1, GAME_2]]);
+    expect(app.fake.linkReads).toBe(1);
   });
 
   it('returns no options for a user with no services, not a free network row', async () => {
     app = await buildTestApp({
-      games: [{ id: GAME_1, week: 3, status: 'scheduled', scheduled_start: SUNDAY_1PM, home_team_id: TEAM_HOME, away_team_id: TEAM_AWAY }],
+      games: [
+        {
+          id: GAME_1,
+          week: 3,
+          status: 'scheduled',
+          scheduled_start: SUNDAY_1PM,
+          home_team_id: TEAM_HOME,
+          away_team_id: TEAM_AWAY,
+        },
+      ],
       airings: [airing(GAME_1, 'fox')],
     });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
@@ -401,12 +539,25 @@ describe('GET /games/:id/broadcasts', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ game_id: GAME_1, broadcasts: [] });
+    expect(response.json()).toEqual({
+      game_id: GAME_1,
+      broadcasts: [],
+      destination: { kind: 'legacy' },
+    });
   });
 
   it('ignores a presence row without a subscription', async () => {
     app = await buildTestApp({
-      games: [{ id: GAME_1, week: 3, status: 'scheduled', scheduled_start: SUNDAY_1PM, home_team_id: TEAM_HOME, away_team_id: TEAM_AWAY }],
+      games: [
+        {
+          id: GAME_1,
+          week: 3,
+          status: 'scheduled',
+          scheduled_start: SUNDAY_1PM,
+          home_team_id: TEAM_HOME,
+          away_team_id: TEAM_AWAY,
+        },
+      ],
       airings: [airing(GAME_1, 'fox')],
       presence: new Map([['user-1', [{ service: 'youtube_tv', has_subscription: false }]]]),
     });
@@ -522,11 +673,53 @@ describe('GET /games?week=', () => {
       airings: [{ network: 'amazon_prime', market: 'national', market_confidence: 'national' }],
     });
     // A CBS game the user can't watch: no options, but its airing is still listed for the board.
+    expect(body.games[0].destination).toMatchObject({
+      kind: 'destinations',
+      primary: { url: 'https://app.primevideo.com/detail?gti=%7BGTI%7D' },
+    });
     expect(body.games[1].broadcasts).toEqual([]);
-    expect(body.games[1].airings).toEqual([{ network: 'cbs', market: 'national', market_confidence: 'national' }]);
-    // ONE presence load and ONE airings load for the whole slate — not one per game.
+    expect(body.games[1].destination).toEqual({
+      kind: 'unavailable',
+      reason: 'not_on_your_services',
+    });
+    expect(body.games[1].airings).toEqual([
+      { network: 'cbs', market: 'national', market_confidence: 'national' },
+    ]);
+    // ONE presence load, ONE airings load, and ONE saved-link load for the whole slate.
     expect(app.fake.presenceReads).toBe(1);
     expect(app.fake.airingReads).toHaveLength(1);
+    expect(app.fake.linkReads).toBe(1);
+  });
+
+  it('loads the week of saved links in one query and ranks that link first', async () => {
+    app = await buildTestApp({
+      games: [
+        {
+          id: GAME_1,
+          week: 1,
+          season_type: 'regular',
+          status: 'scheduled',
+          scheduled_start: '2026-09-11T00:15:00Z',
+          home_team_id: TEAM_HOME,
+          away_team_id: TEAM_AWAY,
+        },
+      ],
+      airings: [airing(GAME_1, 'cbs')],
+      presence: new Map([['user-1', [{ service: 'directv', has_subscription: true }]]]),
+      links: [{ game_id: GAME_1, url: 'https://example.com/chiefs' }],
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/games?week=1',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().games[0].destination).toMatchObject({
+      kind: 'destinations',
+      primary: { url: 'https://example.com/chiefs' },
+    });
+    expect(app.fake.linkReads).toBe(1);
   });
 });
 

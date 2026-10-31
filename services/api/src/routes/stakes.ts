@@ -2,6 +2,8 @@ import type { Json } from '../lib/database.types.js';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { isBetCondition } from '../lib/betIndex.js';
+import { demoAccountFixed, userIsDemo } from '../lib/demoAccount.js';
+import { demoStakesResponse } from '../lib/demoFixture.js';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { requireUser } from '../plugins/auth.js';
@@ -120,6 +122,13 @@ function stakeResponse(row: StakeRow) {
 /** Manual spread, total, moneyline, and survivor stakes. Fantasy rows stay on sync. */
 const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate);
+  fastify.addHook('preHandler', async (request) => {
+    if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') {
+      return;
+    }
+    const user = requireUser(request);
+    if (await userIsDemo(fastify.supabase, user.id)) throw demoAccountFixed();
+  });
 
   fastify.post('/stakes', { schema: { body: postBody } }, async (request, reply) => {
     const user = requireUser(request);
@@ -235,6 +244,9 @@ const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
     const nfl = await getCurrentNflState(fastify.lineupCache);
     const season = Number(nfl.season);
     const week = request.query.week ?? nfl.week;
+    if (await userIsDemo(fastify.supabase, user.id)) {
+      return demoStakesResponse(user.id, Number.isInteger(season) ? season : 0, week, new Date());
+    }
 
     const { data, error } = await fastify.supabase
       .from('stakes')

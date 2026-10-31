@@ -1,4 +1,4 @@
-import { networkLabelFromAirings } from '@pivot/shared/broadcast';
+import { networkLabelFromAirings, type DestinationResolution } from '@pivot/shared/broadcast';
 
 import { compactScoreLabel, liveClockLabel } from './gameDisplay';
 import { kickoffLabel } from './kickoffLabel';
@@ -13,6 +13,7 @@ export interface WatchlistTableGame {
   away_team: string;
   airings: readonly { network: string }[];
   broadcasts: readonly { preferred: boolean; deep_link_url: string }[];
+  destination?: DestinationResolution;
 }
 
 export interface WatchlistTableLive {
@@ -41,6 +42,8 @@ export interface WatchlistTableRow {
   deepLinkUrl: string | null;
   /** Matchup passed to the switch overlay. */
   switchLabel: string;
+  /** Destination label for the watch button. Null when the row has no resolver link. */
+  watchLabel: string | null;
 }
 
 const EMPTY = '\u2014';
@@ -145,6 +148,7 @@ export function watchlistStakeRow(input: {
     gameId: game?.game_id ?? input.gameId,
     deepLinkUrl: preferredHttps(game),
     switchLabel: input.matchup || input.name,
+    watchLabel: destinationLabel(game),
   };
 }
 
@@ -183,11 +187,14 @@ function rowFromGame(input: {
       gameId: null,
       deepLinkUrl: null,
       switchLabel: input.name,
+      watchLabel: null,
     };
   }
 
-  const live = input.liveGames.find((candidate) => candidate.game_id === input.game?.game_id) ?? null;
-  const inProgress = input.game.status === 'in_progress' || (live !== null && input.game.status !== 'final');
+  const live =
+    input.liveGames.find((candidate) => candidate.game_id === input.game?.game_id) ?? null;
+  const inProgress =
+    input.game.status === 'in_progress' || (live !== null && input.game.status !== 'final');
   const isFinal = input.game.status === 'final';
   const kickoff = new Date(input.game.scheduled_start);
   const label = watchlistStatusLabel({
@@ -214,6 +221,7 @@ function rowFromGame(input: {
     gameId: input.game.game_id,
     deepLinkUrl: preferredHttps(input.game),
     switchLabel: `${input.game.away_team} @ ${input.game.home_team}`,
+    watchLabel: destinationLabel(input.game),
   };
 }
 
@@ -243,8 +251,21 @@ function networkOrDash(game: WatchlistTableGame): string {
   return networkLabelFromAirings(game.airings) ?? EMPTY;
 }
 
+function destinationLabel(game: WatchlistTableGame | null): string | null {
+  if (game?.destination?.kind !== 'destinations') return null;
+  return game.destination.primary.label;
+}
+
 function preferredHttps(game: WatchlistTableGame | null): string | null {
   if (!game) return null;
+  if (
+    game.destination?.kind === 'unavailable' ||
+    game.destination?.kind === 'unknown_network' ||
+    game.destination?.kind === 'no_broadcast_info'
+  ) {
+    return null;
+  }
+  if (game.destination?.kind === 'destinations') return httpsWatchUrl(game.destination.primary.url);
   const preferred = game.broadcasts.find((broadcast) => broadcast.preferred) ?? game.broadcasts[0];
   return httpsWatchUrl(preferred?.deep_link_url);
 }

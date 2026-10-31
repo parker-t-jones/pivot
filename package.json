@@ -14,6 +14,7 @@
     "seed:players": "tsx scripts/seed-players.ts",
     "seed:broadcasts": "tsx scripts/seed-broadcasts.ts",
     "seed:test-user": "tsx scripts/seed-test-user.ts",
+    "seed:demo-user": "tsx scripts/seed-demo-user.ts",
     "seed:schedule": "tsx scripts/seed-schedule.ts",
     "backfill:stakes": "tsx scripts/backfill-stakes.ts",
     "compare:caches": "tsx scripts/compare-caches.ts",

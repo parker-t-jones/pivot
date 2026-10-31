@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
@@ -9,6 +10,7 @@ import { useSwitching } from '../contexts/SwitchingContext';
 import { isFlagEventPayload } from '../lib/flagEventPayload';
 import { isPivotPushMessage, offerInTabAlert, subscribeInTabAlerts } from '../lib/inTabAlerts';
 import { recordNotificationAction, type NotificationUserAction } from '../lib/notificationActions';
+import { homeGameHref } from '../lib/notificationOpenTarget';
 import { resolvePossessingTeamDisplay } from '../lib/teamDisplay';
 
 /**
@@ -50,6 +52,7 @@ let nextBannerKey = 0;
  */
 export function NotificationBannerHost() {
   const { switchToGame } = useSwitching();
+  const router = useRouter();
   const [activeBanner, setActiveBanner] = useState<FlagEventBannerData | null>(null);
   const activeBannerRef = useRef<FlagEventBannerData | null>(null);
   activeBannerRef.current = activeBanner;
@@ -61,7 +64,10 @@ export function NotificationBannerHost() {
       const { title, body, data } = notification.request.content;
 
       if (!isFlagEventPayload(data)) {
-        console.warn('[banner] received notification with unrecognized data shape — ignoring', data);
+        console.warn(
+          '[banner] received notification with unrecognized data shape — ignoring',
+          data,
+        );
         return;
       }
 
@@ -118,13 +124,21 @@ export function NotificationBannerHost() {
       // using the recommended source the dispatcher already resolved into the flag payload.
       if (action === 'switched') {
         const { game_id, action: payloadAction, game_summary, new_state } = banner.payload;
+        const link = payloadAction.deep_link_url;
+        if (link == null || link.length === 0) {
+          router.dismissTo(homeGameHref(game_id));
+          return;
+        }
         // Sprint 9 Phase 2 — the realtime payload already carries `possession_team` (Phase 1), the
         // most direct source for the overlay's team name/color-flash on this path (more direct than
         // the cold-start path's lineup cross-reference — see `teamDisplay.ts`).
-        const possessingTeam = resolvePossessingTeamDisplay(game_summary, new_state.possession_team);
+        const possessingTeam = resolvePossessingTeamDisplay(
+          game_summary,
+          new_state.possession_team,
+        );
         switchToGame({
           gameId: game_id,
-          deepLinkUrl: payloadAction.deep_link_url,
+          deepLinkUrl: link,
           label: `${game_summary.away_team} @ ${game_summary.home_team}`,
           awayNickname: game_summary.away_team_name,
           homeNickname: game_summary.home_team_name,
@@ -135,7 +149,7 @@ export function NotificationBannerHost() {
         });
       }
     },
-    [switchToGame],
+    [router, switchToGame],
   );
 
   if (!activeBanner) return null;

@@ -46,6 +46,7 @@ import { theme } from '../lib/theme';
 import { promptUpgradeForCapError } from '../lib/upgradePrompt';
 import { FREE_BET_ALLOWANCE, freeBetCount } from '../lib/weekCardModel';
 import { AddPickGameList, type AddPickGameGroupModel } from './AddPickGameList';
+import { DemoEditingBanner } from './DemoEditingBanner';
 import { AddPickLineEntry } from './AddPickLineEntry';
 import { AddPickReview } from './AddPickReview';
 import { AddPickSlip } from './AddPickSlip';
@@ -92,6 +93,7 @@ export function AddPickFlow({
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   const [stakes, setStakes] = useState<ManualStake[]>([]);
   const [slots, setSlots] = useState<LineupSlot[]>([]);
+  const [editsLocked, setEditsLocked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +123,7 @@ export function AddPickFlow({
         const [stakePage, leagues] = await Promise.all([fetchStakes(nfl.week), fetchLeagues()]);
         if (cancelled) return;
         const isPro = me.subscription_tier === 'pro';
+        setEditsLocked(me.is_demo === true);
         setStakes(stakePage.stakes);
         setAllowance({
           isPro,
@@ -198,6 +201,7 @@ export function AddPickFlow({
   };
 
   const chooseKind = (next: PickKind) => {
+    if (editsLocked) return;
     setKind(next);
     setGame(null);
     setTeamId(null);
@@ -295,6 +299,7 @@ export function AddPickFlow({
         }));
 
   const submit = async () => {
+    if (editsLocked) return;
     if (type === null || game === null || kind === null) return;
     if (pickNeedsTeam(kind) && (teamId === null || teamId.length === 0)) {
       setFormError('Pick a team in that game.');
@@ -352,6 +357,7 @@ export function AddPickFlow({
         <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.eyebrow}>
           {addPickEyebrow(kind, step)}
         </Text>
+        {editsLocked ? <DemoEditingBanner /> : null}
       </View>
       <AddPickSlip
         game={slipGame}
@@ -374,6 +380,7 @@ export function AddPickFlow({
         {step === 'type' ? (
           <AddPickTypeStep
             allowance={allowance}
+            disabled={editsLocked}
             onChoose={chooseKind}
             onUpgrade={() => openUpgrade('stake_limit_free')}
           />
@@ -425,6 +432,7 @@ export function AddPickFlow({
 
         {step === 'confirm' && kind ? (
           <AddPickReview
+            disabled={editsLocked}
             error={formError}
             note={allowance ? addPickReviewNote(kind, allowance) : null}
             onSubmit={() => void submit()}

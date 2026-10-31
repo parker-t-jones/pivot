@@ -104,6 +104,11 @@ class FakeSupabase {
               if (!existing) return { data: null, error: { message: 'not found' } };
               return { data: existing, error: null };
             },
+            maybeSingle: async () => {
+              const existing = this.users.get(userId);
+              if (!existing) return { data: null, error: null };
+              return { data: existing, error: null };
+            },
           }),
         }),
         update: (payload: Partial<UserRow>) => ({
@@ -147,16 +152,14 @@ class FakeSupabase {
     }
     if (table === 'web_push_subscriptions') {
       return {
-        upsert: (
-          row: {
-            user_id: string;
-            device_id: string;
-            endpoint: string;
-            p256dh: string;
-            auth: string;
-            user_agent: string | null;
-          },
-        ) => {
+        upsert: (row: {
+          user_id: string;
+          device_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent: string | null;
+        }) => {
           const existing = this.webPush.get(row.endpoint);
           this.webPush.set(row.endpoint, {
             user_id: row.user_id,
@@ -482,6 +485,7 @@ describe('GET /me', () => {
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
       features: { bets: false },
+      is_demo: false,
     });
   });
 
@@ -532,6 +536,7 @@ describe('GET /me features.bets', () => {
         watchedLeagueIds: [],
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
+      is_demo: false,
     });
     return features;
   }
@@ -747,7 +752,22 @@ describe('POST /me/app-presence', () => {
     expect(response.json().app_presence).toHaveLength(4);
   });
 
-  it.each(['cbs', 'fox', 'nbc', 'abc', 'espn', 'nfl_network', 'hulu'])(
+  it.each(['fox_one', 'cable_other', 'espn'] as const)('accepts %s', async (service) => {
+    app = await buildTestApp();
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/app-presence',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { services: [{ service, has_subscription: true }] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().app_presence).toEqual([{ service, has_subscription: true }]);
+  });
+
+  it.each(['cbs', 'fox', 'nbc', 'abc', 'nfl_network', 'hulu'])(
     'rejects the retired or network key %s with validation_error',
     async (service) => {
       app = await buildTestApp();

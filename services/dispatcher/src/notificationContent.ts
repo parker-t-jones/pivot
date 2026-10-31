@@ -1,4 +1,4 @@
-import type { FlagEvent, FlagReason, FlagReasonType } from '@pivot/shared';
+import { onNetworkName, type FlagEvent, type FlagReason, type FlagReasonType } from '@pivot/shared';
 import type { PlayerInfo } from './catalogs.js';
 
 /**
@@ -132,13 +132,16 @@ export function notificationTitle(
  *
  * `airingWithoutOption` is the network label ("FOX") when the user has no service to open the game
  * with: the body then ends "On FOX." instead of "Tap to watch." (docs/B1-BROADCAST-DESIGN.md §1.7).
+ * `watchLabel` is the destination's user-facing label ("Watch on CBS"). It replaces that ending
+ * when the resolver produced a link. The internal destination note never goes here.
  */
 export function notificationBody(
   event: FlagEvent,
   game: NotificationGameContext,
   airingWithoutOption: string | null = null,
+  watchLabel: string | null = null,
 ): string {
-  if (event.type === 'bet_in_play') return 'Tap to switch.';
+  if (event.type === 'bet_in_play') return watchLabel ? sentence(watchLabel) : 'Tap to switch.';
   if (event.type === 'flag_removed') {
     const team = game.possessionTeamName;
     return team ? `Possession changed — ${team} has the ball now.` : 'Possession has changed.';
@@ -146,10 +149,18 @@ export function notificationBody(
 
   const team = game.possessionTeamName ?? 'The offense';
   const clock = `${quarterLabel(game.quarter)}, ${formatClock(game.timeRemainingSec)}`;
-  const cta = airingWithoutOption === null ? 'Tap to watch.' : `On ${airingWithoutOption}.`;
+  const cta = watchLabel
+    ? sentence(watchLabel)
+    : airingWithoutOption === null
+      ? 'Tap to watch.'
+      : `On ${onNetworkName(airingWithoutOption)}.`;
 
   if (findReason(event.newState.reasons, 'red_zone')) {
     return `${team} in the red zone — ${clock}. ${cta}`;
   }
   return `${team} have the ball — ${clock}. ${cta}`;
+}
+
+function sentence(label: string): string {
+  return /[.!?]$/.test(label) ? label : `${label}.`;
 }

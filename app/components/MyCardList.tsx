@@ -8,12 +8,14 @@ import {
   type MyCardGame,
   type StakeRef,
 } from '../lib/board';
+import { GameAnchor } from '../lib/gameAnchor';
 import { fonts } from '../lib/fonts';
 import { compactScoreLabel, liveClockLabel } from '../lib/gameDisplay';
 import type { LineupGameGroup } from '../lib/homeState';
 import type { LiveGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { useOpenAddPick } from '../lib/useOpenAddPick';
+import { DemoEditingBanner } from './DemoEditingBanner';
 import { ManageLineupLink } from './HomeSegmentRow';
 import { TextButton } from './TextButton';
 import { StreamLinkControl } from './StreamLinkControl';
@@ -38,6 +40,7 @@ interface MyCardListProps {
    * with the board column. Other layouts keep both together.
    */
   part?: 'all' | 'header' | 'cards';
+  editsLocked?: boolean;
 }
 
 function formatKickoffTime(kickoff: Date): string {
@@ -51,6 +54,7 @@ export function MyCardList({
   liveGames = [],
   betRefs = [],
   part = 'all',
+  editsLocked = false,
 }: MyCardListProps) {
   const myCardGames = useMemo(
     () => buildMyCardGames(flattenRows(groups), lineupGroups, betRefs),
@@ -69,9 +73,18 @@ export function MyCardList({
         {`YOUR PICKS · ${stakeCount}`}
       </Text>
       <View style={styles.headerActions}>
-        <TextButton label="Add a pick" onPress={openAddPick} size="smallStrong" />
+        <TextButton
+          disabled={editsLocked}
+          label="Add a pick"
+          onPress={() => {
+            if (editsLocked) return;
+            openAddPick();
+          }}
+          size="smallStrong"
+        />
         <ManageLineupLink />
       </View>
+      {editsLocked ? <DemoEditingBanner /> : null}
     </View>
   );
   const cards =
@@ -115,7 +128,7 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
   const matchup = `${game.awayTeamId} @ ${game.homeTeamId}`;
 
   return (
-    <View style={[styles.cardBlock, isFinal && styles.cardBlockFinal]}>
+    <GameAnchor gameId={game.gameId} style={[styles.cardBlock, isFinal && styles.cardBlockFinal]}>
       <View style={styles.cardHeader}>
         <View
           style={[
@@ -139,10 +152,7 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
           {matchup}
         </Text>
         {score !== null ? (
-          <Text
-            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-            style={styles.cardScore}
-          >
+          <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.cardScore}>
             {score}
           </Text>
         ) : null}
@@ -173,7 +183,7 @@ function MyCardGameBlock({ game, live }: { game: MyCardGame; live: LiveGame | nu
           ) : null}
         </View>
       ))}
-    </View>
+    </GameAnchor>
   );
 }
 

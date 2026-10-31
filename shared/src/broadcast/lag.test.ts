@@ -15,9 +15,12 @@ describe('USER_SERVICE_LAG_SECONDS', () => {
       fubo: 75,
       directv: 75,
       sling: 75,
+      cable_other: 75,
       amazon_prime: 40,
       peacock: 45,
       paramount_plus: 50,
+      fox_one: 60,
+      espn: 60,
       espn_plus: 60,
       nfl_plus: 60,
     });

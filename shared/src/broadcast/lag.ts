@@ -14,9 +14,12 @@ export const USER_SERVICE_LAG_SECONDS: Record<UserService, number> = {
   fubo: 75, // unmeasured
   directv: 75, // unmeasured
   sling: 75, // unmeasured
+  cable_other: 75, // unmeasured
   amazon_prime: 40,
   peacock: 45,
   paramount_plus: 50,
+  fox_one: 60, // unmeasured
+  espn: 60, // unmeasured
   espn_plus: 60,
   nfl_plus: 60,
 };

@@ -83,6 +83,8 @@ describe('resolveLikelyBroadcastSource', () => {
       source: null,
       airings: [],
       kickoff: null,
+      services: [],
+      outOfMarketSunday: false,
     });
   });
 });

@@ -23,6 +23,7 @@ import {
 } from '../lib/watchlistTable';
 import { useSwitching } from '../contexts/SwitchingContext';
 import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
+import { DemoEditingBanner } from './DemoEditingBanner';
 import { PrimaryButton } from './PrimaryButton';
 import { StreamLinkControl } from './StreamLinkControl';
 import { TextButton } from './TextButton';
@@ -56,6 +57,7 @@ export function WatchlistDesktop({
   onRemoveStake,
   betPrompt,
   extras,
+  editsLocked = false,
 }: WatchlistDesktopProps) {
   const { switchToGame } = useSwitching();
   const { openUpgrade } = useUpgradeSheet();
@@ -94,7 +96,7 @@ export function WatchlistDesktop({
   const visibleRows = rows.filter((row) => !removal.hiddenIds.includes(row.id));
 
   const openRow = (row: WatchlistTableRow) => {
-    if (!row.live || !row.gameId) return;
+    if (!row.live || !row.gameId || !row.deepLinkUrl) return;
     const source = games.find((game) => game.game_id === row.gameId);
     switchToGame({
       gameId: row.gameId,
@@ -132,17 +134,20 @@ export function WatchlistDesktop({
             </Text>
           </View>
           <View style={styles.addWrap}>
-            <PrimaryButton label="Add a pick" onPress={onAddStake} />
+            <PrimaryButton disabled={editsLocked} label="Add a pick" onPress={onAddStake} />
           </View>
         </View>
+        {editsLocked ? <DemoEditingBanner /> : null}
         <View style={styles.stripRow}>
           <Text style={styles.strip}>Fantasy {weekCard.fantasy.value}</Text>
           <Text style={styles.strip}>·</Text>
           <Pressable
             accessibilityLabel={`Opponent, ${weekCard.opponent.value}`}
             accessibilityRole="button"
-            accessibilityState={{ disabled: weekCard.opponent.toggleable !== true }}
-            disabled={weekCard.opponent.toggleable !== true}
+            accessibilityState={{
+              disabled: editsLocked || weekCard.opponent.toggleable !== true,
+            }}
+            disabled={editsLocked || weekCard.opponent.toggleable !== true}
             onPress={() => onWatchOpponent(weekCard.opponent.value === 'Off')}
           >
             <Text
@@ -184,12 +189,19 @@ export function WatchlistDesktop({
                 key={row.id}
                 onOpen={() => openRow(row)}
                 onRemove={removable.has(row.id) ? () => hideStake(row.id) : null}
+                removalsLocked={editsLocked}
                 row={row}
               />
             ))
           )}
           {betPrompt ? (
-            <Pressable accessibilityRole="button" onPress={onAddStake} style={styles.promptRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: editsLocked }}
+              disabled={editsLocked}
+              onPress={onAddStake}
+              style={styles.promptRow}
+            >
               <Text style={styles.prompt}>{betPrompt}</Text>
             </Pressable>
           ) : null}
@@ -203,10 +215,12 @@ function TableRow({
   row,
   onOpen,
   onRemove,
+  removalsLocked = false,
 }: {
   row: WatchlistTableRow & { muted: boolean };
   onOpen: () => void;
   onRemove: (() => void) | null;
+  removalsLocked?: boolean;
 }) {
   const teams =
     row.awayTeam && row.homeTeam
@@ -218,7 +232,7 @@ function TableRow({
   const [pointerInside, setPointerInside] = useState(false);
   const [rowFocused, setRowFocused] = useState(false);
   const [removeFocused, setRemoveFocused] = useState(false);
-  const showRemove = pointerInside || rowFocused || removeFocused;
+  const showRemove = removalsLocked || pointerInside || rowFocused || removeFocused;
   const rowHot = pointerInside || rowFocused;
 
   useEffect(() => {
@@ -243,15 +257,15 @@ function TableRow({
         setRowFocused(false);
       }}
       onFocus={() => setRowFocused(true)}
-      onPress={row.live ? onOpen : undefined}
+      onPress={row.live && row.deepLinkUrl ? onOpen : undefined}
       ref={rowRef}
       style={(state) => {
         const { pressed, focused } = webPressState(state);
         return [
           styles.row,
           (rowHot || focused) && styles.rowHover,
-          pressed && row.live && styles.rowPressed,
-          focused && row.live && styles.rowFocused,
+          pressed && row.live && row.deepLinkUrl && styles.rowPressed,
+          focused && row.live && row.deepLinkUrl && styles.rowFocused,
         ];
       }}
       testID="watchlist-row"
@@ -300,7 +314,7 @@ function TableRow({
         {row.status}
       </Text>
       <View style={styles.actionCol}>
-        {row.live ? (
+        {row.live && row.deepLinkUrl ? (
           <Pressable
             accessibilityRole="button"
             onPress={onOpen}
@@ -314,17 +328,23 @@ function TableRow({
               ];
             }}
           >
-            <Text style={styles.switchLabel}>Switch</Text>
+            <Text style={styles.switchLabel}>{row.watchLabel ?? 'Switch'}</Text>
           </Pressable>
         ) : onRemove ? (
           <Pressable
             accessibilityLabel="Remove"
             accessibilityRole="button"
+            accessibilityState={{ disabled: removalsLocked }}
+            disabled={removalsLocked}
             onBlur={() => setRemoveFocused(false)}
             onFocus={() => setRemoveFocused(true)}
             onPress={onRemove}
             pointerEvents={showRemove ? 'auto' : 'none'}
-            style={[styles.removeHit, !showRemove && styles.removeHidden]}
+            style={[
+              styles.removeHit,
+              !showRemove && styles.removeHidden,
+              removalsLocked && styles.removeLocked,
+            ]}
           >
             <Text style={styles.removeLabel}>Remove</Text>
           </Pressable>
@@ -456,6 +476,9 @@ const styles = StyleSheet.create({
   },
   removeHidden: {
     opacity: 0,
+  },
+  removeLocked: {
+    opacity: theme.opacity.disabled,
   },
   removeHit: {
     minHeight: 44,

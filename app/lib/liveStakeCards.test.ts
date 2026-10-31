@@ -234,6 +234,32 @@ describe('MNF halftime fixture', () => {
     expect(chips[0]?.tone).toBe('sideline');
   });
 
+  it('labels the button from destination.primary, not the ranked broadcast', () => {
+    const destination = {
+      kind: 'destinations' as const,
+      primary: {
+        url: 'https://www.cbs.com/live-tv/stream/',
+        verified: true,
+        note: 'Local CBS, then one Live Local tap.',
+        label: 'Watch on CBS',
+      },
+      alternates: [],
+    };
+    const ranked = { ...MNF_BROADCAST, deep_link_url: destination.primary.url };
+    expect(watchButtonLabel([ranked], MNF_AIRINGS, destination)).toBe('Watch on CBS');
+    const [card] = buildLiveStakeCards({
+      liveGames: [MNF_HALFTIME_LIVE],
+      stakeGameIds: new Set([MNF_GAME_ID]),
+      activeFlags: MNF_FLAGS_CURRENT.flags,
+      playersByGameId: new Map([[MNF_GAME_ID, [...MNF_STARTERS]]]),
+      betsByGameId: new Map(),
+      watchByGameId: new Map([
+        [MNF_GAME_ID, { broadcasts: [ranked], airings: MNF_AIRINGS, destination }],
+      ]),
+    });
+    expect(card?.buttonLabel).toBe('Watch on CBS');
+  });
+
   it('uses the saved-link network label Watch on YouTube TV', () => {
     expect(watchButtonLabel([MNF_BROADCAST], MNF_AIRINGS)).toBe('Watch on YouTube TV');
     const [card] = buildLiveStakeCards({
@@ -242,7 +268,9 @@ describe('MNF halftime fixture', () => {
       activeFlags: MNF_FLAGS_CURRENT.flags,
       playersByGameId: new Map([[MNF_GAME_ID, [...MNF_STARTERS]]]),
       betsByGameId: new Map(),
-      watchByGameId: new Map([[MNF_GAME_ID, { broadcasts: [MNF_BROADCAST], airings: MNF_AIRINGS }]]),
+      watchByGameId: new Map([
+        [MNF_GAME_ID, { broadcasts: [MNF_BROADCAST], airings: MNF_AIRINGS }],
+      ]),
     });
     expect(card?.eyebrow).toBe('LIVE · YOUR GAME');
     expect(card?.active).toBe(false);

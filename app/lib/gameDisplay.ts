@@ -1,8 +1,11 @@
 import {
-  networkLabelFromAirings,
+  onNetworkLabel,
+  onNetworkName,
   type AiringMarket,
+  type DestinationResolution,
   type MarketConfidence,
   type RouteHint,
+  type WatchDestination,
 } from '@pivot/shared/broadcast';
 import type { FlaggedPlayer, GameSummary } from './flagEventPayload';
 
@@ -58,6 +61,8 @@ export interface GameBroadcast {
   network: string;
   market_confidence: MarketConfidence;
   route_hint?: RouteHint;
+  /** User-facing destination label. The resolver note never goes here. */
+  label?: string;
 }
 
 /** One airing of a game (`GET /games?week=` `airings`) — who is broadcasting it. */
@@ -70,6 +75,7 @@ export interface GameAiring {
 export interface GameBroadcastsResponse {
   game_id: string;
   broadcasts: GameBroadcast[];
+  destination?: DestinationResolution;
 }
 
 /** Human labels for airing networks and user services (docs/B1-BROADCAST-DESIGN.md §1.3–1.4) —
@@ -82,7 +88,10 @@ const SERVICE_LABELS: Record<string, string> = {
   fubo: 'Fubo',
   directv: 'DIRECTV',
   sling: 'Sling TV',
+  espn: 'ESPN',
   espn_plus: 'ESPN+',
+  fox_one: 'FOX One',
+  cable_other: 'Other cable',
   paramount_plus: 'Paramount+',
   peacock: 'Peacock',
   amazon_prime: 'Prime Video',
@@ -93,7 +102,6 @@ const SERVICE_LABELS: Record<string, string> = {
   cbs: 'CBS',
   nbc: 'NBC',
   abc: 'ABC',
-  espn: 'ESPN',
 };
 
 export function serviceLabel(service: string): string {
@@ -398,23 +406,78 @@ export function watchOptionLabel(broadcast: GameBroadcast): string {
 }
 
 export type WatchCta =
-  | { kind: 'watch'; broadcast: GameBroadcast }
+  | { kind: 'watch'; broadcast: GameBroadcast; alternates?: GameBroadcast[] }
   | { kind: 'airing'; text: string }
   | { kind: 'none' };
 
+function broadcastForDestination(
+  destination: WatchDestination,
+  broadcasts: readonly GameBroadcast[],
+  preferred: boolean,
+): GameBroadcast {
+  const existing = broadcasts.find((broadcast) => broadcast.deep_link_url === destination.url);
+  // The ranked row has no resolver note. Reusing it makes the button "Watch on {service}".
+  if (existing) {
+    return { ...existing, deep_link_url: destination.url, preferred, label: destination.label };
+  }
+  const fallback = pickPreferredBroadcast(broadcasts);
+  return {
+    service: fallback?.service ?? '',
+    deep_link_url: destination.url,
+    requires_subscription: true,
+    user_has_subscription: true,
+    typical_lag_seconds: fallback?.typical_lag_seconds ?? 0,
+    preferred,
+    network: fallback?.network ?? '',
+    market_confidence: fallback?.market_confidence ?? 'national',
+    label: destination.label,
+  };
+}
+
 /**
- * What goes where a card's Switch/Watch button sits (docs/B1-BROADCAST-DESIGN.md §1.7): the
- * preferred option when the user has one that opens, otherwise the airing as plain text
- * ("On FOX") — never a disabled button.
+ * What goes where a card's Switch/Watch button sits (docs/B1-BROADCAST-DESIGN.md §1.7).
+ * A resolver result replaces the ranked option: the primary link, later links as alternates,
+ * "Not on your services" when nothing matches, "On {raw}" with no link for an unmapped
+ * airing, and "Broadcast TBD" when the game has no airing rows. `legacy` (or no destination) keeps today's preferred option, or the airing as plain
+ * text ("On FOX").
  */
 export function watchCta(
   broadcasts: readonly GameBroadcast[],
   airings: readonly { network: string }[],
+  destination?: DestinationResolution,
 ): WatchCta {
+  if (destination && destination.kind !== 'legacy') {
+    if (destination.kind === 'unavailable') {
+      return { kind: 'airing', text: 'Not on your services' };
+    }
+    if (destination.kind === 'unknown_network') {
+      return { kind: 'airing', text: `On ${onNetworkName(destination.raw)}` };
+    }
+    if (destination.kind === 'no_broadcast_info') {
+      return { kind: 'airing', text: 'Broadcast TBD' };
+    }
+    const primary = broadcastForDestination(destination.primary, broadcasts, true);
+    const alternates = destination.alternates.map((alternate) =>
+      broadcastForDestination(alternate, broadcasts, false),
+    );
+    return alternates.length > 0
+      ? { kind: 'watch', broadcast: primary, alternates }
+      : { kind: 'watch', broadcast: primary };
+  }
   const preferred = pickPreferredBroadcast(broadcasts);
   if (preferred && preferred.deep_link_url.length > 0) {
     return { kind: 'watch', broadcast: preferred };
   }
-  const network = networkLabelFromAirings(airings);
+  const network = onNetworkLabel(airings);
   return network === null ? { kind: 'none' } : { kind: 'airing', text: `On ${network}` };
+}
+
+/** A Switch/Watch button exists only when there is a link to open. */
+export function showsWatchButton(cta: WatchCta | null): boolean {
+  return cta?.kind === 'watch';
+}
+
+/** Button text for a watch option. A destination label wins over "Watch on {service}". */
+export function watchBroadcastLabel(broadcast: GameBroadcast): string {
+  return broadcast.label ?? `Watch on ${serviceLabel(broadcast.service)}`;
 }

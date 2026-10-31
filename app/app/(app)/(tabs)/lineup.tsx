@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DemoEditingBanner } from '../../../components/DemoEditingBanner';
 import { ErrorState } from '../../../components/ErrorState';
 import { LoadingState } from '../../../components/LoadingState';
 import { SecondaryButton } from '../../../components/SecondaryButton';
@@ -255,9 +256,7 @@ export default function LineupScreen() {
   const selectActiveLeague = useCallback((watchedLeagueIds: readonly string[] | null) => {
     knownWatchedRef.current = watchedLeagueIds;
     openSettledRef.current = true;
-    setSelectedLeagueId(
-      watchlistLeagueOnOpen({ leagues: leaguesRef.current, watchedLeagueIds }),
-    );
+    setSelectedLeagueId(watchlistLeagueOnOpen({ leagues: leaguesRef.current, watchedLeagueIds }));
   }, []);
 
   useEffect(() => {
@@ -300,43 +299,46 @@ export default function LineupScreen() {
     }, [selectActiveLeague]),
   );
 
-  const loadLineup = useCallback(async (league: LeagueSummary | null) => {
-    if (!league) {
-      setLineup(null);
-      setWeekGames(null);
-      if (!betsOn) {
-        setBets([]);
-        setStakesKnown(false);
-      }
-      setLoadError(null);
-      return;
-    }
-    setLoadError(null);
-    try {
-      const response = await fetchLineup(league.league_id);
-      setLineup(response);
-      if (betsOn) {
-        try {
-          const stakes = await fetchStakes(response.week);
-          setBets(stakes.stakes);
-          setStakesKnown(true);
-        } catch {
+  const loadLineup = useCallback(
+    async (league: LeagueSummary | null) => {
+      if (!league) {
+        setLineup(null);
+        setWeekGames(null);
+        if (!betsOn) {
           setBets([]);
           setStakesKnown(false);
         }
+        setLoadError(null);
+        return;
       }
+      setLoadError(null);
       try {
-        const slate = await fetchGamesWeek(response.week);
-        setWeekGames(slate.games);
-      } catch {
+        const response = await fetchLineup(league.league_id);
+        setLineup(response);
+        if (betsOn) {
+          try {
+            const stakes = await fetchStakes(response.week);
+            setBets(stakes.stakes);
+            setStakesKnown(true);
+          } catch {
+            setBets([]);
+            setStakesKnown(false);
+          }
+        }
+        try {
+          const slate = await fetchGamesWeek(response.week);
+          setWeekGames(slate.games);
+        } catch {
+          setWeekGames(null);
+        }
+      } catch (error) {
+        setLineup(null);
         setWeekGames(null);
+        setLoadError(error instanceof ApiRequestError ? error.message : 'Could not load lineup.');
       }
-    } catch (error) {
-      setLineup(null);
-      setWeekGames(null);
-      setLoadError(error instanceof ApiRequestError ? error.message : 'Could not load lineup.');
-    }
-  }, [betsOn]);
+    },
+    [betsOn],
+  );
 
   useEffect(() => {
     void fetchMe()
@@ -556,9 +558,7 @@ export default function LineupScreen() {
   const showPools = watchlist && sections.includes('pools');
   const weekCard = weekCardModel({
     starterCount:
-      browsedLeagueReady && weekGames != null
-        ? browsedStarterCount(lineup.slots, weekGames)
-        : null,
+      browsedLeagueReady && weekGames != null ? browsedStarterCount(lineup.slots, weekGames) : null,
     opponentStatus,
     betCount: stakesKnown ? freeBetCount(bets) : null,
     survivorCount: stakesKnown ? poolBets.length : null,
@@ -721,15 +721,11 @@ export default function LineupScreen() {
     });
   }, [bets, lineup, me, nflWeek, stakesKnown, watchedStarterTotal, weekGames]);
 
+  const editsLocked = me?.is_demo === true;
+
   if (showFullLoading(lineup != null, isLoading)) {
     return (
-      <View
-        style={[
-          styles.screen,
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.lg },
-        ]}
-      >
+      <View style={[styles.screen, styles.content, { paddingTop: insets.top + theme.spacing.lg }]}>
         {watchlist ? <WatchlistHeader week={nflWeek} /> : <LineupHeader week={null} />}
         <LoadingState message={lineupLoadingMessage(watchlist)} />
       </View>
@@ -741,8 +737,10 @@ export default function LineupScreen() {
       <WatchlistDesktop
         benchSlots={showRoster ? benchSlots : []}
         bottomInset={insets.bottom + theme.spacing.huge}
+        editsLocked={editsLocked}
         extras={
           <>
+            {editsLocked ? <DemoEditingBanner /> : null}
             {showActions ? (
               <View style={styles.leagueActions}>
                 <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
@@ -750,6 +748,7 @@ export default function LineupScreen() {
                 </Text>
                 <View style={styles.leagueActionRow}>
                   <TextButton
+                    disabled={editsLocked}
                     label="Connect"
                     onPress={() => {
                       router.push('/(app)/connect-team');
@@ -758,7 +757,7 @@ export default function LineupScreen() {
                   />
                   {selectedLeague?.platform === 'sleeper' ? (
                     <TextButton
-                      disabled={manageBusy}
+                      disabled={manageBusy || editsLocked}
                       label="Sync"
                       onPress={() => runLeagueAction('Sync')}
                       size="smallStrong"
@@ -766,7 +765,7 @@ export default function LineupScreen() {
                   ) : null}
                   {selectedLeague && selectedLeague.platform !== 'sleeper' ? (
                     <TextButton
-                      disabled={manageBusy}
+                      disabled={manageBusy || editsLocked}
                       label="Edit lineup"
                       onPress={() => runLeagueAction('Edit lineup')}
                       size="smallStrong"
@@ -774,7 +773,7 @@ export default function LineupScreen() {
                   ) : null}
                   {selectedLeague && selectedLeague.platform !== 'sleeper' ? (
                     <TextButton
-                      disabled={manageBusy}
+                      disabled={manageBusy || editsLocked}
                       label="Rename"
                       onPress={() => runLeagueAction('Rename')}
                       size="smallStrong"
@@ -782,7 +781,7 @@ export default function LineupScreen() {
                   ) : null}
                   {selectedLeague ? (
                     <TextButton
-                      disabled={manageBusy}
+                      disabled={manageBusy || editsLocked}
                       label="Disconnect"
                       onPress={() => runLeagueAction('Disconnect')}
                       size="smallStrong"
@@ -794,6 +793,7 @@ export default function LineupScreen() {
             ) : null}
             {showLeagueChips ? (
               <LeagueBrowse
+                editsLocked={editsLocked}
                 leagues={leagues}
                 onSelect={onSelectLeague}
                 onSetActive={onSetActive}
@@ -809,6 +809,7 @@ export default function LineupScreen() {
         liveGames={liveGames}
         now={now}
         onAddStake={() => {
+          if (editsLocked) return;
           openAddPick();
         }}
         onFilter={selectFilter}
@@ -844,8 +845,10 @@ export default function LineupScreen() {
         style={[styles.screen, styles.emptyScreen, { paddingTop: insets.top + theme.spacing.lg }]}
       >
         <LineupHeader week={null} />
+        {editsLocked ? <DemoEditingBanner /> : null}
         <Text style={styles.emptyCopy}>Connect a fantasy team to manage your lineup.</Text>
         <SecondaryButton
+          disabled={editsLocked}
           label="Connect a team"
           onPress={() => router.push('/(app)/connect-team')}
         />
@@ -872,12 +875,15 @@ export default function LineupScreen() {
       }
     >
       {watchlist ? <WatchlistHeader week={headerWeek} /> : <LineupHeader week={headerWeek} />}
+      {editsLocked ? <DemoEditingBanner /> : null}
 
       {watchlist ? (
         <>
           <WeekCard
+            editsLocked={editsLocked}
             model={weekCard}
             onAddStake={() => {
+              if (editsLocked) return;
               openAddPick();
             }}
             onOpponentToggle={() => {
@@ -895,6 +901,7 @@ export default function LineupScreen() {
           </Text>
           <View style={styles.leagueActionRow}>
             <TextButton
+              disabled={editsLocked}
               label="Connect"
               onPress={() => {
                 router.push('/(app)/connect-team');
@@ -903,7 +910,7 @@ export default function LineupScreen() {
             />
             {selectedLeague?.platform === 'sleeper' ? (
               <TextButton
-                disabled={manageBusy}
+                disabled={manageBusy || editsLocked}
                 label="Sync"
                 onPress={() => runLeagueAction('Sync')}
                 size="smallStrong"
@@ -911,7 +918,7 @@ export default function LineupScreen() {
             ) : null}
             {selectedLeague && selectedLeague.platform !== 'sleeper' ? (
               <TextButton
-                disabled={manageBusy}
+                disabled={manageBusy || editsLocked}
                 label="Edit lineup"
                 onPress={() => runLeagueAction('Edit lineup')}
                 size="smallStrong"
@@ -919,7 +926,7 @@ export default function LineupScreen() {
             ) : null}
             {selectedLeague && selectedLeague.platform !== 'sleeper' ? (
               <TextButton
-                disabled={manageBusy}
+                disabled={manageBusy || editsLocked}
                 label="Rename"
                 onPress={() => runLeagueAction('Rename')}
                 size="smallStrong"
@@ -927,7 +934,7 @@ export default function LineupScreen() {
             ) : null}
             {selectedLeague ? (
               <TextButton
-                disabled={manageBusy}
+                disabled={manageBusy || editsLocked}
                 label="Disconnect"
                 onPress={() => runLeagueAction('Disconnect')}
                 size="smallStrong"
@@ -940,6 +947,7 @@ export default function LineupScreen() {
 
       {showLeagueChips ? (
         <LeagueBrowse
+          editsLocked={editsLocked}
           leagues={leagues}
           onSelect={onSelectLeague}
           onSetActive={onSetActive}
@@ -979,7 +987,7 @@ export default function LineupScreen() {
               </Text>
               {selectedLeague && !watchlist ? (
                 <TextButton
-                  disabled={manageBusy}
+                  disabled={manageBusy || editsLocked}
                   label="Manage"
                   onPress={openManage}
                   size="smallStrong"
@@ -1009,7 +1017,7 @@ export default function LineupScreen() {
                         onToggleStar={(value) => {
                           void toggleStar(slot, value);
                         }}
-                        saving={savingSlotId === slot.slot_id || !lineup}
+                        saving={savingSlotId === slot.slot_id || !lineup || editsLocked}
                         slot={slot}
                         timeZone={timeZone}
                         weekGames={weekGames}
@@ -1035,7 +1043,7 @@ export default function LineupScreen() {
                           onToggleStar={(value) => {
                             void toggleStar(slot, value);
                           }}
-                          saving={savingSlotId === slot.slot_id || !lineup}
+                          saving={savingSlotId === slot.slot_id || !lineup || editsLocked}
                           slot={slot}
                           timeZone={timeZone}
                           weekGames={weekGames}
@@ -1053,9 +1061,11 @@ export default function LineupScreen() {
           <BetGroup
             empty="No bets this week."
             liveGames={liveGames}
+            editsLocked={editsLocked}
             onAdd={
               betPrompt
                 ? () => {
+                    if (editsLocked) return;
                     openAddPick();
                   }
                 : undefined
@@ -1069,6 +1079,7 @@ export default function LineupScreen() {
         ) : null}
         {showPools ? (
           <BetGroup
+            editsLocked={editsLocked}
             empty="No pools this week."
             liveGames={liveGames}
             onRemove={confirmRemoveBet}
@@ -1084,8 +1095,10 @@ export default function LineupScreen() {
               BETS
             </Text>
             <TextButton
+              disabled={editsLocked}
               label="Add a pick"
               onPress={() => {
+                if (editsLocked) return;
                 openAddPick();
               }}
             />
@@ -1109,6 +1122,7 @@ export default function LineupScreen() {
                     </Text>
                   </View>
                   <TextButton
+                    disabled={editsLocked}
                     label="Remove"
                     onPress={() => confirmRemoveBet(stake)}
                     tone="danger"
@@ -1200,6 +1214,7 @@ function BetGroup({
   onRemove,
   prompt,
   onAdd,
+  editsLocked = false,
 }: {
   title: string;
   empty: string;
@@ -1209,6 +1224,7 @@ function BetGroup({
   onRemove: (stake: ManualStake) => void;
   prompt?: string | null;
   onAdd?: () => void;
+  editsLocked?: boolean;
 }) {
   return (
     <View style={styles.opponentSection}>
@@ -1218,6 +1234,7 @@ function BetGroup({
       {stakes.length === 0 && !prompt ? <Text style={styles.emptyCopy}>{empty}</Text> : null}
       {stakes.map((stake) => (
         <StakeEntry
+          editsLocked={editsLocked}
           key={stake.id}
           liveGames={liveGames}
           onRemove={onRemove}
@@ -1226,7 +1243,7 @@ function BetGroup({
         />
       ))}
       {prompt && onAdd ? (
-        <TextButton label={prompt} onPress={onAdd} size="smallStrong" />
+        <TextButton disabled={editsLocked} label={prompt} onPress={onAdd} size="smallStrong" />
       ) : null}
     </View>
   );
@@ -1237,11 +1254,13 @@ function StakeEntry({
   liveGames,
   weekGames,
   onRemove,
+  editsLocked = false,
 }: {
   stake: ManualStake;
   liveGames: readonly LiveGame[];
   weekGames: ScheduleGame[] | null;
   onRemove: (stake: ManualStake) => void;
+  editsLocked?: boolean;
 }) {
   const type = stake.condition.type;
   const game = stake.game;
@@ -1260,7 +1279,12 @@ function StakeEntry({
           matchup={stakeMatchup(stake)}
           model={spreadLineModel({ line, pickedSide: side, status, score })}
         />
-        <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
+        <TextButton
+          disabled={editsLocked}
+          label="Remove"
+          onPress={() => onRemove(stake)}
+          tone="danger"
+        />
       </View>
     );
   }
@@ -1280,7 +1304,12 @@ function StakeEntry({
             score,
           })}
         />
-        <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
+        <TextButton
+          disabled={editsLocked}
+          label="Remove"
+          onPress={() => onRemove(stake)}
+          tone="danger"
+        />
       </View>
     );
   }
@@ -1294,7 +1323,12 @@ function StakeEntry({
         <SurvivorBadgeCard
           model={survivorBadgeModel({ abbreviation, pickedSide: side, status, score })}
         />
-        <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
+        <TextButton
+          disabled={editsLocked}
+          label="Remove"
+          onPress={() => onRemove(stake)}
+          tone="danger"
+        />
       </View>
     );
   }
@@ -1309,7 +1343,12 @@ function StakeEntry({
           {stakeMeta(stake)}
         </Text>
       </View>
-      <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
+      <TextButton
+        disabled={editsLocked}
+        label="Remove"
+        onPress={() => onRemove(stake)}
+        tone="danger"
+      />
     </View>
   );
 }
@@ -1366,6 +1405,7 @@ function LeagueBrowse({
   onSelect,
   onSetActive,
   settingActive,
+  editsLocked = false,
 }: {
   leagues: LeagueSummary[];
   selectedLeague: LeagueSummary | null;
@@ -1374,6 +1414,7 @@ function LeagueBrowse({
   onSelect: (leagueId: string) => void;
   onSetActive: () => void;
   settingActive: boolean;
+  editsLocked?: boolean;
 }) {
   return (
     <View style={styles.switcherBlock}>
@@ -1391,7 +1432,7 @@ function LeagueBrowse({
           </Text>
         ) : watchLabel != null ? (
           <TextButton
-            disabled={settingActive}
+            disabled={settingActive || editsLocked}
             label={watchLabel}
             onPress={onSetActive}
             size="smallStrong"

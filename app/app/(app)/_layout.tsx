@@ -14,6 +14,7 @@ import { PushPermissionProvider, usePushPermission } from '../../contexts/PushPe
 import { SwitchingProvider } from '../../contexts/SwitchingContext';
 import { UpgradeSheetProvider } from '../../contexts/UpgradeSheetContext';
 import { isConnectDeferredForSession } from '../../lib/connectDeferredSession';
+import { homeGameHref } from '../../lib/notificationOpenTarget';
 import {
   readNotifPromptSnoozed,
   resolveAppGate,
@@ -78,6 +79,18 @@ function AppNavigator() {
         break;
     }
   }, [decisionKey, decision, router]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; gameId?: string } | null;
+      if (!data || data.type !== 'pivot-open-game' || typeof data.gameId !== 'string') return;
+      if (data.gameId.length === 0) return;
+      router.dismissTo(homeGameHref(data.gameId));
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [router]);
 
   if (decision.action === 'wait') {
     return <LoadingState message="Loading" />;
