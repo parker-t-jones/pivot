@@ -32,6 +32,8 @@ export interface MeResponse {
   preferences: Preferences;
   app_presence: AppPresenceEntry[];
   features?: { bets: boolean };
+  /** True only for the App Review account. Absent on an older server. */
+  is_demo?: boolean;
 }
 
 export async function fetchMe(): Promise<MeResponse> {
@@ -60,6 +62,11 @@ export async function setAppPresence(
 
 export async function deleteAccount(): Promise<void> {
   await apiClient.delete('/me');
+}
+
+/** Reviewer-only. 404 for every other account. */
+export async function sendDemoAlert(): Promise<void> {
+  await apiClient.post('/me/demo-alert');
 }
 
 /** Free-tier caps (mirrored from `@pivot/shared`). */

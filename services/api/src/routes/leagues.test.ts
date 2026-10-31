@@ -49,6 +49,19 @@ class FakeSupabase {
   }
 
   from(table: string) {
+    if (table === 'users') {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: { is_demo: false }, error: null }),
+            single: async () => ({
+              data: { is_demo: false, subscription_tier: 'free' },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
     if (table !== 'leagues') {
       throw new Error(`Unexpected table in test fixture: ${table}`);
     }
@@ -81,7 +94,9 @@ class FakeSupabase {
   }
 }
 
-function seedLeague(overrides: Partial<LeagueRow> & Pick<LeagueRow, 'id' | 'platform' | 'name'>): LeagueRow {
+function seedLeague(
+  overrides: Partial<LeagueRow> & Pick<LeagueRow, 'id' | 'platform' | 'name'>,
+): LeagueRow {
   return {
     user_id: USER_ID,
     sport: 'nfl',
@@ -124,9 +139,7 @@ describe('PATCH /leagues/:id', () => {
   });
 
   it('renames a manual league and returns the summary', async () => {
-    app = await buildTestApp([
-      seedLeague({ id: MANUAL_ID, platform: 'manual', name: 'Old Name' }),
-    ]);
+    app = await buildTestApp([seedLeague({ id: MANUAL_ID, platform: 'manual', name: 'Old Name' })]);
     const token = await signToken({ sub: USER_ID, email: 'a@b.com' });
 
     const response = await app.fastify.inject({

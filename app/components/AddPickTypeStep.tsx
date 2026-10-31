@@ -13,10 +13,12 @@ export function AddPickTypeStep({
   allowance,
   onChoose,
   onUpgrade,
+  disabled = false,
 }: {
   allowance: Allowance | null;
   onChoose: (kind: PickKind) => void;
   onUpgrade: () => void;
+  disabled?: boolean;
 }) {
   return (
     <View style={styles.stack}>
@@ -28,9 +30,10 @@ export function AddPickTypeStep({
         const locked = access === 'upgrade';
         return (
           <ListRow
+            disabled={disabled}
             key={option.kind}
-            onPress={locked ? onUpgrade : () => onChoose(option.kind)}
-            style={locked ? styles.locked : undefined}
+            onPress={disabled ? () => undefined : locked ? onUpgrade : () => onChoose(option.kind)}
+            style={disabled || locked ? styles.locked : undefined}
             subtitle={locked ? 'No free bets left · Upgrade' : option.explainer}
             title={option.label}
           />

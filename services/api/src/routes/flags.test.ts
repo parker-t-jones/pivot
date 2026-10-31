@@ -107,6 +107,9 @@ class FakeQuery<T> implements PromiseLike<{ data: T[] | null; error: null }> {
   single(): Promise<{ data: T | null; error: null }> {
     return Promise.resolve({ data: this.rows[0] ?? null, error: null });
   }
+  maybeSingle(): Promise<{ data: T | null; error: null }> {
+    return this.single();
+  }
   then<TResult1 = { data: T[] | null; error: null }, TResult2 = never>(
     onfulfilled?: (value: { data: T[] | null; error: null }) => TResult1 | PromiseLike<TResult1>,
     onrejected?: (reason: unknown) => TResult2 | PromiseLike<TResult2>,

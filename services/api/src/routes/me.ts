@@ -1,6 +1,8 @@
 import { parsePreferences, FREE_MAX_WATCHED_LEAGUES, USER_SERVICES } from '@pivot/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { sendDemoAccountAlert } from '../lib/demoAlert.js';
+import { rejectIfDemo } from '../lib/demoAccount.js';
 import { ApiError } from '../lib/errors.js';
 import { betsEnabledForUser } from '../lib/features.js';
 import { getLineupSyncContext, rebuildUserLineupCache } from '../lib/lineup-sync.js';
@@ -56,6 +58,7 @@ interface UserRowForMe {
   email: string;
   preferences: unknown;
   subscription_tier: string;
+  is_demo?: boolean;
 }
 
 interface AppPresenceRow {
@@ -74,6 +77,7 @@ function meResponse(user: UserRowForMe, appPresence: AppPresenceRow[]) {
       has_subscription: row.has_subscription,
     })),
     features: { bets: betsEnabledForUser(user.id) },
+    is_demo: user.is_demo === true,
   };
 }
 
@@ -123,7 +127,7 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
     const { data: userRow, error: userError } = await fastify.supabase
       .from('users')
-      .select('id, email, preferences, subscription_tier')
+      .select('id, email, preferences, subscription_tier, is_demo')
       .eq('id', user.id)
       .single();
     if (userError) throw userError;
@@ -149,6 +153,7 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
     { schema: { body: preferencesPatchBody } },
     async (request) => {
       const user = requireUser(request);
+      await rejectIfDemo(fastify.supabase, user.id);
 
       const { data: existingRow, error: existingError } = await fastify.supabase
         .from('users')
@@ -239,6 +244,7 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
    */
   fastify.post('/me/app-presence', { schema: { body: appPresenceBody } }, async (request) => {
     const user = requireUser(request);
+    await rejectIfDemo(fastify.supabase, user.id);
     const { services } = request.body;
 
     const { error } = await fastify.supabase.from('user_app_presence').upsert(
@@ -270,11 +276,31 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
    */
   fastify.delete('/me', async (request, reply) => {
     const user = requireUser(request);
+    await rejectIfDemo(fastify.supabase, user.id);
     const { error } = await fastify.supabase.auth.admin.deleteUser(user.id);
     if (error) {
       throw new ApiError(500, 'account_deletion_failed', error.message);
     }
     return reply.status(204).send();
+  });
+
+  /** Preflight for the change-password screen. Supabase `updateUser` has no API guard of its own. */
+  fastify.post('/me/password-change', async (request, reply) => {
+    const user = requireUser(request);
+    await rejectIfDemo(fastify.supabase, user.id);
+    return reply.status(204).send();
+  });
+
+  /** Reviewer-only push for the fixture live game. 404 for every other account. */
+  fastify.post('/me/demo-alert', async (request) => {
+    const user = requireUser(request);
+    await sendDemoAccountAlert({
+      supabase: fastify.supabase,
+      userId: user.id,
+      gameStateStore: fastify.gameStateStore,
+      realtimeSubscriber: fastify.realtimeSubscriber,
+    });
+    return { sent: true };
   });
 
   /**

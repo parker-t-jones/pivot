@@ -5,15 +5,12 @@ import {
   type Action,
   type ViewingSessionSnapshot,
 } from '@pivot/dispatcher';
-import {
-  parsePreferences,
-  type FlagEvent,
-  type FlagState,
-  type GameState,
-} from '@pivot/shared';
+import { parsePreferences, type FlagEvent, type FlagState, type GameState } from '@pivot/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { loadWeekBets, mergeBetRows, type BetChip, type WeekBets } from '../lib/betFlagsCurrent.js';
+import { userIsDemo } from '../lib/demoAccount.js';
+import { demoFlagsResponse } from '../lib/demoFixture.js';
 import { runnerHeartbeatFresh } from '../runner/heartbeat.js';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
@@ -75,6 +72,9 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
    */
   fastify.get('/flags/current', async (request) => {
     const user = requireUser(request);
+    if (await userIsDemo(fastify.supabase, user.id)) {
+      return demoFlagsResponse(new Date());
+    }
     const generatedAt = new Date().toISOString();
     const seenStatus = new Map<string, GameState['status']>();
     const rememberGame = async (gameId: string): Promise<GameState | null> => {
@@ -375,7 +375,11 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         .single();
 
       if (error || !data) {
-        throw new ApiError(404, 'flag_event_not_found', `No flag event found with id "${event_id}".`);
+        throw new ApiError(
+          404,
+          'flag_event_not_found',
+          `No flag event found with id "${event_id}".`,
+        );
       }
 
       return { event_id: data.id, user_action: data.user_action };

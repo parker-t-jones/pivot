@@ -104,6 +104,11 @@ class FakeSupabase {
               if (!existing) return { data: null, error: { message: 'not found' } };
               return { data: existing, error: null };
             },
+            maybeSingle: async () => {
+              const existing = this.users.get(userId);
+              if (!existing) return { data: null, error: null };
+              return { data: existing, error: null };
+            },
           }),
         }),
         update: (payload: Partial<UserRow>) => ({
@@ -147,16 +152,14 @@ class FakeSupabase {
     }
     if (table === 'web_push_subscriptions') {
       return {
-        upsert: (
-          row: {
-            user_id: string;
-            device_id: string;
-            endpoint: string;
-            p256dh: string;
-            auth: string;
-            user_agent: string | null;
-          },
-        ) => {
+        upsert: (row: {
+          user_id: string;
+          device_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent: string | null;
+        }) => {
           const existing = this.webPush.get(row.endpoint);
           this.webPush.set(row.endpoint, {
             user_id: row.user_id,
@@ -482,6 +485,7 @@ describe('GET /me', () => {
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
       features: { bets: false },
+      is_demo: false,
     });
   });
 
@@ -532,6 +536,7 @@ describe('GET /me features.bets', () => {
         watchedLeagueIds: [],
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
+      is_demo: false,
     });
     return features;
   }

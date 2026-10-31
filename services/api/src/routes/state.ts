@@ -1,4 +1,5 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { userIsDemo } from '../lib/demoAccount.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { deriveDisplayPhaseNow, derivePhaseOpeners } from '../lib/phase-openers.js';
 import { requireUser } from '../plugins/auth.js';
@@ -15,7 +16,7 @@ const stateRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate);
 
   fastify.get('/state/nfl', async (request) => {
-    requireUser(request);
+    const user = requireUser(request);
     const nflState = await getCurrentNflState(fastify.lineupCache);
     const openers = await derivePhaseOpeners(fastify.supabase);
     // Missing schedule seed → deriveDisplayPhase falls back to Sleeper season_type (unreliable
@@ -31,6 +32,7 @@ const stateRoutes: FastifyPluginAsyncZod = async (fastify) => {
       );
     }
     const displayPhase = deriveDisplayPhaseNow(openers, nflState.seasonType);
+    const demo = await userIsDemo(fastify.supabase, user.id);
     return {
       season: nflState.season,
       week: nflState.week,
@@ -46,7 +48,7 @@ const stateRoutes: FastifyPluginAsyncZod = async (fastify) => {
       season_start_date: nflState.seasonStartDate,
       preseason_start: openers.preseasonStart,
       regular_season_start: openers.regularSeasonStart,
-      display_phase: displayPhase,
+      display_phase: demo ? 'regular' : displayPhase,
     };
   });
 };

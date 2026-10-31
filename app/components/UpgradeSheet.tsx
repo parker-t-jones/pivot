@@ -21,9 +21,13 @@ import {
 } from '../lib/purchases';
 import { theme } from '../lib/theme';
 import {
+  PRIVACY_POLICY_URL,
   PRO_PERKS,
+  TERMS_OF_USE_URL,
   UPGRADE_HEADLINE,
+  UPGRADE_PLAN_LABEL,
   UPGRADE_PRICE_FALLBACK,
+  UPGRADE_RENEWAL_DISCLOSURE,
   UPGRADE_SUBTITLE,
   upgradePurchaseLabel,
 } from '../lib/upgradeCopy';
@@ -54,6 +58,7 @@ export function UpgradeSheet() {
   const insets = useSafeAreaInsets();
 
   const [priceLabel, setPriceLabel] = useState(UPGRADE_PRICE_FALLBACK);
+  const [storePrice, setStorePrice] = useState<string | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isPro, setIsPro] = useState(false);
@@ -78,7 +83,8 @@ export function UpgradeSheet() {
       try {
         const pkg = await getProMonthlyPackage();
         if (pkg?.product.priceString) {
-          setPriceLabel(`${pkg.product.priceString}/month`);
+          setStorePrice(pkg.product.priceString);
+          setPriceLabel(pkg.product.priceString);
         }
       } catch (error) {
         console.warn('[upgrade] failed to load offering', error);
@@ -217,6 +223,32 @@ export function UpgradeSheet() {
               />
             )}
 
+            <Text style={styles.disclosure}>{UPGRADE_PLAN_LABEL}</Text>
+            {storePrice ? <Text style={styles.disclosure}>{storePrice}</Text> : null}
+            <Text style={styles.disclosure}>{UPGRADE_RENEWAL_DISCLOSURE}</Text>
+            <View style={styles.legalRow}>
+              <Text
+                accessibilityRole="link"
+                onPress={() => {
+                  void Linking.openURL(TERMS_OF_USE_URL);
+                }}
+                style={styles.legalLink}
+                testID={TERMS_OF_USE_URL}
+              >
+                Terms of Use
+              </Text>
+              <Text
+                accessibilityRole="link"
+                onPress={() => {
+                  void Linking.openURL(PRIVACY_POLICY_URL);
+                }}
+                style={styles.legalLink}
+                testID={PRIVACY_POLICY_URL}
+              >
+                Privacy Policy
+              </Text>
+            </View>
+
             <View style={styles.footerRow}>
               <TextButton
                 disabled={isRestoring}
@@ -262,6 +294,11 @@ const styles = StyleSheet.create({
     fontSize: theme.type.small.size,
     lineHeight: theme.type.small.size * 1.4,
   },
+  disclosure: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.caption.size,
+    lineHeight: theme.type.caption.size * 1.4,
+  },
   dim: {
     bottom: 0,
     left: 0,
@@ -275,6 +312,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.monoMedium,
     fontSize: theme.type.eyebrow.size,
     letterSpacing: 1,
+  },
+  legalLink: {
+    color: theme.colors.accent,
+    fontSize: theme.type.caption.size,
+    textDecorationLine: 'underline',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
   },
   footerRow: {
     alignItems: 'center',

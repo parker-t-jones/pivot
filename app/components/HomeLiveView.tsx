@@ -34,6 +34,7 @@ interface HomeLiveViewProps {
   betRefs?: readonly StakeRef[];
   /** Every game in progress, for MY CARD's live headers. */
   liveGames: LiveGame[];
+  editsLocked?: boolean;
 }
 
 /**
@@ -48,6 +49,7 @@ export function HomeLiveView({
   lineupGroups,
   betRefs = [],
   liveGames,
+  editsLocked = false,
 }: HomeLiveViewProps) {
   const tier = useDesktopTier();
   const [segment, selectSegment] = useHomeSegment();
@@ -64,6 +66,7 @@ export function HomeLiveView({
         <View style={styles.side}>
           <MyCardList
             betRefs={betRefs}
+            editsLocked={editsLocked}
             groups={groups}
             lineupGroups={lineupGroups}
             liveGames={liveGames}
@@ -86,6 +89,7 @@ export function HomeLiveView({
       ) : (
         <MyCardList
           betRefs={betRefs}
+          editsLocked={editsLocked}
           groups={groups}
           lineupGroups={lineupGroups}
           liveGames={liveGames}

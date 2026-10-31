@@ -15,6 +15,7 @@ import type { LineupGameGroup } from '../lib/homeState';
 import type { LiveGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { useOpenAddPick } from '../lib/useOpenAddPick';
+import { DemoEditingBanner } from './DemoEditingBanner';
 import { ManageLineupLink } from './HomeSegmentRow';
 import { TextButton } from './TextButton';
 import { StreamLinkControl } from './StreamLinkControl';
@@ -39,6 +40,7 @@ interface MyCardListProps {
    * with the board column. Other layouts keep both together.
    */
   part?: 'all' | 'header' | 'cards';
+  editsLocked?: boolean;
 }
 
 function formatKickoffTime(kickoff: Date): string {
@@ -52,6 +54,7 @@ export function MyCardList({
   liveGames = [],
   betRefs = [],
   part = 'all',
+  editsLocked = false,
 }: MyCardListProps) {
   const myCardGames = useMemo(
     () => buildMyCardGames(flattenRows(groups), lineupGroups, betRefs),
@@ -70,9 +73,18 @@ export function MyCardList({
         {`YOUR PICKS · ${stakeCount}`}
       </Text>
       <View style={styles.headerActions}>
-        <TextButton label="Add a pick" onPress={openAddPick} size="smallStrong" />
+        <TextButton
+          disabled={editsLocked}
+          label="Add a pick"
+          onPress={() => {
+            if (editsLocked) return;
+            openAddPick();
+          }}
+          size="smallStrong"
+        />
         <ManageLineupLink />
       </View>
+      {editsLocked ? <DemoEditingBanner /> : null}
     </View>
   );
   const cards =

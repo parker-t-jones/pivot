@@ -594,6 +594,7 @@ export type Database = {
           expo_push_device_id: string | null
           expo_push_token: string | null
           id: string
+          is_demo: boolean
           preferences: Json
           subscription_tier: string
           updated_at: string
@@ -604,6 +605,7 @@ export type Database = {
           expo_push_device_id?: string | null
           expo_push_token?: string | null
           id: string
+          is_demo?: boolean
           preferences?: Json
           subscription_tier?: string
           updated_at?: string
@@ -614,6 +616,7 @@ export type Database = {
           expo_push_device_id?: string | null
           expo_push_token?: string | null
           id?: string
+          is_demo?: boolean
           preferences?: Json
           subscription_tier?: string
           updated_at?: string

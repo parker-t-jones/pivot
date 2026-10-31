@@ -1013,6 +1013,7 @@ export default function HomeScreen() {
             sections={liveBoardSections}
             betRefs={betRefs}
             groups={boardGroups}
+            editsLocked={me?.is_demo === true}
             lineupGroups={homeData.lineupGroups}
             liveGames={homeData.liveGames}
           />
@@ -1030,6 +1031,7 @@ export default function HomeScreen() {
             betRefs={betRefs}
             groups={boardGroups}
             hero={pregameHero}
+            editsLocked={me?.is_demo === true}
             lineupGroups={homeData.lineupGroups}
             week={homeData.nflState?.week ?? 0}
           />

@@ -128,6 +128,16 @@ class FakeSupabase {
         }),
       };
     }
+    if (table === 'users') {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: { is_demo: false }, error: null }),
+            single: async () => ({ data: { is_demo: false }, error: null }),
+          }),
+        }),
+      };
+    }
     if (table === 'user_app_presence') {
       return {
         select: () => ({

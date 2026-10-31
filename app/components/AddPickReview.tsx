@@ -10,12 +10,14 @@ export function AddPickReview({
   error,
   saving,
   onSubmit,
+  disabled = false,
 }: {
   readout: string | null;
   note: string | null;
   error: string | null;
   saving: boolean;
   onSubmit: () => void;
+  disabled?: boolean;
 }) {
   return (
     <View style={styles.stack} testID="add-pick-review">
@@ -30,7 +32,7 @@ export function AddPickReview({
         </Text>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <PrimaryButton label="Add a pick" loading={saving} onPress={onSubmit} />
+      <PrimaryButton disabled={disabled} label="Add a pick" loading={saving} onPress={onSubmit} />
     </View>
   );
 }

@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { FREE_MAX_LEAGUES, FREE_MAX_MANUAL_LINEUP_SLOTS } from '@pivot/shared';
 import '../plugins/services.js';
 import { requireUser } from '../plugins/auth.js';
+import { demoAccountFixed, userIsDemo } from '../lib/demoAccount.js';
+import { DEMO_LEAGUE_ID, demoLeague, demoLineupResponse } from '../lib/demoFixture.js';
 import { ApiError } from '../lib/errors.js';
+import { getCurrentNflState } from '../lib/nfl-state.js';
 import { getOwnedLeagueOrThrow } from '../lib/get-owned-league.js';
 import {
   buildLineupResponse,
@@ -70,8 +73,23 @@ function leagueSummary(league: {
 
 const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate);
+  fastify.addHook('preHandler', async (request) => {
+    if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') {
+      return;
+    }
+    const user = requireUser(request);
+    if (await userIsDemo(fastify.supabase, user.id)) throw demoAccountFixed();
+  });
 
   fastify.get('/leagues', async (request) => {
+    const user = requireUser(request);
+    if (await userIsDemo(fastify.supabase, user.id)) {
+      const nfl = await getCurrentNflState(fastify.lineupCache);
+      const season = Number(nfl.season);
+      return {
+        leagues: [demoLeague(Number.isInteger(season) ? season : new Date().getFullYear())],
+      };
+    }
     const { data, error } = await fastify.supabase
       .from('leagues')
       .select('*')
@@ -333,11 +351,19 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       },
     },
     async (request) => {
-      const league = await getOwnedLeagueOrThrow(
-        fastify.supabase,
-        requireUser(request).id,
-        request.params.id,
-      );
+      const user = requireUser(request);
+      if (await userIsDemo(fastify.supabase, user.id)) {
+        if (request.params.id !== DEMO_LEAGUE_ID) {
+          throw new ApiError(
+            404,
+            'league_not_found',
+            `No league found with id "${request.params.id}".`,
+          );
+        }
+        const nfl = await getCurrentNflState(fastify.lineupCache);
+        return demoLineupResponse(request.query.week ?? nfl.week);
+      }
+      const league = await getOwnedLeagueOrThrow(fastify.supabase, user.id, request.params.id);
       const syncContext = await getLineupSyncContext({
         supabase: fastify.supabase,
         lineupCache: fastify.lineupCache,
@@ -392,10 +418,7 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         .eq('id', requireUser(request).id)
         .single();
       if (tierError) throw tierError;
-      if (
-        userRow.subscription_tier !== 'pro' &&
-        slots.length > FREE_MAX_MANUAL_LINEUP_SLOTS
-      ) {
+      if (userRow.subscription_tier !== 'pro' && slots.length > FREE_MAX_MANUAL_LINEUP_SLOTS) {
         throw new ApiError(
           403,
           'manual_lineup_limit_free',

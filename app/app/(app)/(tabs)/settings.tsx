@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { UserService } from '@pivot/shared/broadcast';
 
+import { DemoEditingBanner } from '../../../components/DemoEditingBanner';
 import { ErrorState } from '../../../components/ErrorState';
 import { LoadingState } from '../../../components/LoadingState';
 import { SecondaryButton } from '../../../components/SecondaryButton';
@@ -34,6 +35,7 @@ import {
   deleteAccount,
   fetchMe,
   patchPreferences,
+  sendDemoAlert,
   setAppPresence,
   type MeResponse,
 } from '../../../lib/me';
@@ -179,6 +181,7 @@ export default function SettingsScreen() {
     <AccountSection
       email={me.email}
       subscriptionTier={me.subscription_tier}
+      isDemo={me.is_demo === true}
       isSigningOut={isSigningOut}
       isDeletingAccount={isDeletingAccount}
       onChangePassword={() => {
@@ -190,6 +193,7 @@ export default function SettingsScreen() {
   );
   const notifications = (
     <NotificationsSection
+      editsLocked={me.is_demo === true}
       preferences={me.preferences}
       onChange={async (patch) => {
         const updated = await patchPreferences(patch);
@@ -200,6 +204,7 @@ export default function SettingsScreen() {
   const streaming = (
     <StreamingServicesSection
       appPresence={me.app_presence}
+      editsLocked={me.is_demo === true}
       onChange={async (service, hasSubscription) => {
         const { app_presence } = await setAppPresence([
           { service, has_subscription: hasSubscription },
@@ -302,6 +307,7 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 function AccountSection({
   email,
   subscriptionTier,
+  isDemo,
   isSigningOut,
   isDeletingAccount,
   onChangePassword,
@@ -310,6 +316,7 @@ function AccountSection({
 }: {
   email: string;
   subscriptionTier: string;
+  isDemo: boolean;
   isSigningOut: boolean;
   isDeletingAccount: boolean;
   onChangePassword: () => void;
@@ -318,17 +325,57 @@ function AccountSection({
 }) {
   const { openUpgrade } = useUpgradeSheet();
   const isPro = subscriptionTier === 'pro';
+  const [isSendingDemoAlert, setIsSendingDemoAlert] = useState(false);
+  const [demoAlertNote, setDemoAlertNote] = useState<string | null>(null);
+
+  const onSendDemoAlert = async () => {
+    setIsSendingDemoAlert(true);
+    setDemoAlertNote(null);
+    try {
+      await sendDemoAlert();
+      setDemoAlertNote('Sent.');
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.code === 'demo_alert_no_token') {
+        setDemoAlertNote('Turn on notifications to see a demo alert');
+        return;
+      }
+      if (error instanceof ApiRequestError && error.code === 'demo_alert_rate_limited') {
+        setDemoAlertNote('Try again in a minute');
+        return;
+      }
+      void alertAsync('Could not send demo alert', errorMessage(error));
+    } finally {
+      setIsSendingDemoAlert(false);
+    }
+  };
 
   return (
     <SectionCard title="Account">
+      {isDemo ? <DemoEditingBanner /> : null}
       <Text style={styles.rowLabel}>{email}</Text>
       <Text style={styles.rowSubtext}>{isPro ? 'Pro' : 'Free'} plan</Text>
 
       <SecondaryButton
+        disabled={isDemo}
         label="Change password"
         onPress={onChangePassword}
         style={styles.accountButton}
       />
+
+      {isDemo ? (
+        <>
+          <SecondaryButton
+            disabled={isSendingDemoAlert}
+            label={isSendingDemoAlert ? 'Sending…' : 'Send a demo alert'}
+            loading={isSendingDemoAlert}
+            onPress={() => {
+              void onSendDemoAlert();
+            }}
+            style={styles.accountButton}
+          />
+          {demoAlertNote ? <Text style={styles.rowSubtext}>{demoAlertNote}</Text> : null}
+        </>
+      ) : null}
 
       {isPro ? (
         <TextButton
@@ -359,7 +406,7 @@ function AccountSection({
       />
 
       <TextButton
-        disabled={isDeletingAccount}
+        disabled={isDeletingAccount || isDemo}
         hitArea="padding"
         label="Delete account"
         onPress={onDeleteAccount}
@@ -372,9 +419,11 @@ function AccountSection({
 }
 
 function NotificationsSection({
+  editsLocked,
   preferences,
   onChange,
 }: {
+  editsLocked: boolean;
   preferences: MeResponse['preferences'];
   onChange: (patch: {
     notificationMode?: MeResponse['preferences']['notificationMode'];
@@ -395,21 +444,26 @@ function NotificationsSection({
     }
   };
 
+  const locked = isSaving || editsLocked;
+
   return (
     <SectionCard title="Notifications">
-      <View style={styles.segmentedControl}>
+      {editsLocked ? <DemoEditingBanner /> : null}
+      <View
+        style={[styles.segmentedControl, editsLocked ? { opacity: theme.opacity.disabled } : null]}
+      >
         {NOTIFICATION_MODES.map((mode) => {
           const isActive = preferences.notificationMode === mode.value;
           return (
             <Pressable
               key={mode.value}
-              disabled={isSaving}
+              disabled={locked}
               onPress={() => save({ notificationMode: mode.value })}
               style={({ pressed }) => [
                 styles.segment,
                 isActive && styles.segmentActive,
                 pressed &&
-                  !isSaving &&
+                  !locked &&
                   (isActive ? styles.segmentActivePressed : styles.segmentPressed),
               ]}
             >
@@ -424,7 +478,7 @@ function NotificationsSection({
       <View style={styles.toggleRow}>
         <Text style={styles.rowLabel}>Quiet hours</Text>
         <Switch
-          disabled={isSaving}
+          disabled={locked}
           onValueChange={(enabled) => save({ quietHours: { enabled } })}
           thumbColor={SWITCH_THUMB}
           trackColor={SWITCH_TRACK}
@@ -442,6 +496,7 @@ function NotificationsSection({
         <View style={styles.toggleRow}>
           <Text style={styles.rowLabel}>Alert sound</Text>
           <Switch
+            disabled={editsLocked}
             onValueChange={(enabled) => {
               writeAlertSoundEnabled(enabled);
               setSoundOn(enabled);
@@ -475,9 +530,11 @@ function formatHour(hour: number): string {
 
 function StreamingServicesSection({
   appPresence,
+  editsLocked,
   onChange,
 }: {
   appPresence: MeResponse['app_presence'];
+  editsLocked: boolean;
   onChange: (service: UserService, hasSubscription: boolean) => Promise<void>;
 }) {
   const [savingService, setSavingService] = useState<string | null>(null);
@@ -492,6 +549,7 @@ function StreamingServicesSection({
 
   return (
     <SectionCard title="Streaming services">
+      {editsLocked ? <DemoEditingBanner /> : null}
       <Text style={styles.sectionHint}>
         Tell us which of these you subscribe to so we can recommend the right one to switch to.
       </Text>
@@ -500,7 +558,7 @@ function StreamingServicesSection({
           <View style={styles.toggleRow}>
             <Text style={styles.rowLabel}>{userServiceLabel(service)}</Text>
             <Switch
-              disabled={savingService === service}
+              disabled={editsLocked || savingService === service}
               onValueChange={async (value) => {
                 setSavingService(service);
                 try {

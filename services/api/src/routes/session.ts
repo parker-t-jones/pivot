@@ -3,6 +3,8 @@ import { computeFlagState } from '@pivot/engine';
 import type { FastifyInstance } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { userIsDemo } from '../lib/demoAccount.js';
+import { isDemoGameId } from '../lib/demoFixture.js';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { resolvePrimaryWatch } from '../lib/primaryWatch.js';
@@ -183,6 +185,17 @@ const sessionRoutes: FastifyPluginAsyncZod = async (fastify) => {
     async (request) => {
       const user = requireUser(request);
       const { game_id, source } = request.body;
+      if (isDemoGameId(game_id) && (await userIsDemo(fastify.supabase, user.id))) {
+        const now = new Date().toISOString();
+        return {
+          primary_game_id: game_id,
+          primary_source: source,
+          primary_priority_score: null,
+          thumbnail_game_ids: [] as string[],
+          started_at: now,
+          last_updated_at: now,
+        };
+      }
 
       const { data: game, error: gameError } = await fastify.supabase
         .from('games')

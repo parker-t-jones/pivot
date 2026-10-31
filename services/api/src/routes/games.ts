@@ -1,6 +1,13 @@
 import { buildGameSummary } from '@pivot/dispatcher';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { loadSubscribedServices, userIsDemo } from '../lib/demoAccount.js';
+import {
+  demoBroadcastsResponse,
+  demoLiveResponse,
+  demoWeekResponse,
+  isDemoGameId,
+} from '../lib/demoFixture.js';
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { deriveDisplayPhaseNow, derivePhaseOpeners } from '../lib/phase-openers.js';
@@ -61,6 +68,10 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
     async (request) => {
       const user = requireUser(request);
       const { week } = request.query;
+      if (await userIsDemo(fastify.supabase, user.id)) {
+        const services = await loadSubscribedServices(fastify.supabase, user.id);
+        return demoWeekResponse(week, services, new Date());
+      }
 
       // Scope week slate by schedule-derived display_phase (not Sleeper season_type, which runs
       // ahead of actual games). During 'off' there is no active phase slate — return empty.
@@ -155,7 +166,10 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
    * Registered before `/games/:id/broadcasts` so `live` is never treated as an `:id`.
    */
   fastify.get('/games/live', async (request) => {
-    requireUser(request);
+    const user = requireUser(request);
+    if (await userIsDemo(fastify.supabase, user.id)) {
+      return demoLiveResponse(new Date());
+    }
 
     const { data: gameRows, error: gamesError } = await fastify.supabase
       .from('games')
@@ -242,6 +256,17 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
     async (request) => {
       const user = requireUser(request);
       const { id: gameId } = request.params;
+      if (isDemoGameId(gameId)) {
+        if (!(await userIsDemo(fastify.supabase, user.id))) {
+          throw new ApiError(404, 'game_not_found', 'No game exists with that id.');
+        }
+        const services = await loadSubscribedServices(fastify.supabase, user.id);
+        const body = demoBroadcastsResponse(gameId, services, new Date());
+        if (!body) {
+          throw new ApiError(404, 'game_not_found', 'No game exists with that id.');
+        }
+        return body;
+      }
 
       const { data: game, error: gameError } = await fastify.supabase
         .from('games')
