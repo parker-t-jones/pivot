@@ -188,7 +188,7 @@ export function WatchlistDesktop({
               <TableRow
                 key={row.id}
                 onOpen={() => openRow(row)}
-                onRemove={removable.has(row.id) ? () => hideStake(row.id) : null}
+                onRemove={editsLocked || !removable.has(row.id) ? null : () => hideStake(row.id)}
                 removalsLocked={editsLocked}
                 row={row}
               />

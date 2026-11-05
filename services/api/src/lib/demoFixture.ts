@@ -431,11 +431,17 @@ export function demoStakesResponse(userId: string, season: number, week: number,
   };
 }
 
-const FLAGGED_PLAYER_IDS = PLAYERS.filter((player) => player.team.id === CHIEFS.id).map(
-  (player) => player.id,
-);
+/** The live-game star named in the demo alert. One player, so the title is "Sam Hart active". */
+function demoAlertPlayer(): DemoPlayer {
+  const player = PLAYERS.find((row) => row.first_name === 'Sam' && row.last_name === 'Hart');
+  if (!player) throw new Error('demo slate is missing Sam Hart');
+  return player;
+}
 
-/** `flag_added` for the live game. A fresh id each call so delivery does not dedupe. */
+/**
+ * `flag_added` for the fixture live game (Chiefs ball, Q2 7:14). Offense, not red zone, so the
+ * body says who has the ball. A fresh id each call so delivery does not dedupe.
+ */
 export function demoAlertEvent(userId: string, now: Date): FlagEvent {
   const at = now.getTime();
   return {
@@ -448,7 +454,7 @@ export function demoAlertEvent(userId: string, now: Date): FlagEvent {
       gameId: DEMO_LIVE_GAME_ID,
       flagged: true,
       priorityScore: 90,
-      reasons: [{ type: 'red_zone', triggeringPlayerIds: FLAGGED_PLAYER_IDS }],
+      reasons: [{ type: 'offense_active', triggeringPlayerIds: [demoAlertPlayer().id] }],
       computedAt: at,
     },
     scheduledFireAt: at,

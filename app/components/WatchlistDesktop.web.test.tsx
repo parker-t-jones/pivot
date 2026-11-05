@@ -113,12 +113,17 @@ describe('desktop watchlist remove', () => {
     vi.useRealTimers();
   });
 
-  function renderTable(onRemoveStake: (stake: ManualStake) => void, showTable = true): void {
+  function renderTable(
+    onRemoveStake: (stake: ManualStake) => void,
+    showTable = true,
+    editsLocked = false,
+  ): void {
     const table: ReactNode = showTable ? (
       <WatchlistDesktop
         benchSlots={[]}
         betPrompt={null}
         bottomInset={0}
+        editsLocked={editsLocked}
         extras={null}
         filter="bets"
         liveGames={[]}
@@ -246,5 +251,11 @@ describe('desktop watchlist remove', () => {
       'Undo',
     );
     expect(deleteStake).not.toHaveBeenCalled();
+  });
+
+  it('hides Remove on a demo bet row', () => {
+    renderTable(() => undefined, true, true);
+    expect(document.body.textContent).toContain(STAKE_NAME);
+    expect(document.querySelector('[aria-label="Remove"]')).toBeNull();
   });
 });

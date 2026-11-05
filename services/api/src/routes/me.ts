@@ -3,6 +3,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { sendDemoAccountAlert } from '../lib/demoAlert.js';
 import { rejectIfDemo } from '../lib/demoAccount.js';
+import { DEMO_LEAGUE_ID } from '../lib/demoFixture.js';
 import { ApiError } from '../lib/errors.js';
 import { betsEnabledForUser } from '../lib/features.js';
 import { getLineupSyncContext, rebuildUserLineupCache } from '../lib/lineup-sync.js';
@@ -67,11 +68,14 @@ interface AppPresenceRow {
 }
 
 function meResponse(user: UserRowForMe, appPresence: AppPresenceRow[]) {
+  const preferences = parsePreferences(user.preferences);
   return {
     user_id: user.id,
     email: user.email,
     subscription_tier: user.subscription_tier,
-    preferences: parsePreferences(user.preferences),
+    // The fixture league is not a `leagues` row. Serve it as the active lineup without writing.
+    preferences:
+      user.is_demo === true ? { ...preferences, watchedLeagueIds: [DEMO_LEAGUE_ID] } : preferences,
     app_presence: appPresence.map((row) => ({
       service: row.service,
       has_subscription: row.has_subscription,

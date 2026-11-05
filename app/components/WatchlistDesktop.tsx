@@ -39,6 +39,6 @@ export interface WatchlistDesktopProps {
   /** Bets-tab prompt. Null when that tab has 3 or more rows, or the free cap is used up. */
   betPrompt: string | null;
   extras: ReactNode;
-  /** Demo account: Add a pick, Remove, and the opponent toggle stay visible and do not fire. */
+  /** Demo account: Add a pick and the opponent toggle stay visible and do not fire. Remove is hidden. */
   editsLocked?: boolean;
 }

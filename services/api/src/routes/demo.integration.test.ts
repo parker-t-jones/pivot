@@ -16,7 +16,7 @@ import { SignJWT } from 'jose';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import { resetDemoAlertRateLimit } from '../lib/demoAlert.js';
-import { DEMO_LIVE_GAME_ID, demoAlertEvent } from '../lib/demoFixture.js';
+import { DEMO_LEAGUE_ID, DEMO_LIVE_GAME_ID, demoAlertEvent } from '../lib/demoFixture.js';
 import { apiErrorHandler } from '../lib/errors.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
@@ -153,6 +153,7 @@ async function buildApp(user: UserRow, presence: { service: string; has_subscrip
     { season: '2026', week: 1, seasonType: 'regular', seasonStartDate: null },
     300,
   );
+  const realtimeBus = new InMemoryRealtimeBus();
   const fastify = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
   fastify.setValidatorCompiler(validatorCompiler);
   fastify.setSerializerCompiler(serializerCompiler);
@@ -165,11 +166,11 @@ async function buildApp(user: UserRow, presence: { service: string; has_subscrip
     supabase: new FakeSupabase(user, [REAL_GAME], presence) as unknown as SupabaseServiceClient,
     lineupCache,
     gameStateStore: new InMemoryGameStateStore(),
-    realtimeSubscriber: new InMemoryRealtimeBus(),
+    realtimeSubscriber: realtimeBus,
   });
   await fastify.register(gamesRoutes);
   await fastify.register(meRoutes);
-  return fastify;
+  return { fastify, realtimeBus };
 }
 
 describe('demo account does not change a normal user', () => {
@@ -187,7 +188,7 @@ describe('demo account does not change a normal user', () => {
   });
 
   it('serves GET /games and GET /games/live from the normal handler and 404s POST /me/demo-alert', async () => {
-    const fastify = await buildApp(userRow(false, null), []);
+    const { fastify } = await buildApp(userRow(false, null), []);
     const token = await signToken();
     const headers = { authorization: `Bearer ${token}` };
 
@@ -206,11 +207,15 @@ describe('demo account does not change a normal user', () => {
     expect(alert.statusCode).toBe(404);
     expect(alert.json()).toEqual({ error: { code: 'not_found', message: 'Not found.' } });
 
+    const me = await fastify.inject({ method: 'GET', url: '/me', headers });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().preferences.watchedLeagueIds).toEqual([]);
+
     await fastify.close();
   });
 
   it('serves the fixture slate for a demo user, and distinguishes a missing token from the rate limit', async () => {
-    const weekApp = await buildApp(userRow(true, null), [
+    const { fastify: weekApp } = await buildApp(userRow(true, null), [
       { service: 'directv', has_subscription: true },
     ]);
     const headers = { authorization: `Bearer ${await signToken()}` };
@@ -223,12 +228,15 @@ describe('demo account does not change a normal user', () => {
       kind: 'destinations',
       primary: { url: 'https://www.cbs.com/live-tv/stream/' },
     });
+    const me = await weekApp.inject({ method: 'GET', url: '/me', headers });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().preferences.watchedLeagueIds).toEqual([DEMO_LEAGUE_ID]);
     const missingToken = await weekApp.inject({ method: 'POST', url: '/me/demo-alert', headers });
     expect(missingToken.statusCode).toBe(409);
     expect(missingToken.json().error.code).toBe('demo_alert_no_token');
     await weekApp.close();
 
-    const pushApp = await buildApp(userRow(true, 'ExponentPushToken[demo]'), [
+    const { fastify: pushApp } = await buildApp(userRow(true, 'ExponentPushToken[demo]'), [
       { service: 'directv', has_subscription: true },
     ]);
     const pushHeaders = { authorization: `Bearer ${await signToken()}` };
@@ -273,7 +281,7 @@ describe('demo account does not change a normal user', () => {
       ),
     ).toBe(true);
 
-    const fastify = await buildApp(userRow(true, 'ExponentPushToken[demo]', preferences), [
+    const { fastify } = await buildApp(userRow(true, 'ExponentPushToken[demo]', preferences), [
       { service: 'directv', has_subscription: true },
     ]);
     const sent = await fastify.inject({
@@ -283,6 +291,29 @@ describe('demo account does not change a normal user', () => {
     });
     expect(sent.statusCode, sent.body).toBe(200);
     expect(sent.json()).toEqual({ sent: true });
+    await fastify.close();
+  });
+
+  it('sends a demo alert about the fixture live game, not a real player', async () => {
+    const { fastify, realtimeBus } = await buildApp(userRow(true, 'ExponentPushToken[demo]'), [
+      { service: 'directv', has_subscription: true },
+    ]);
+    const sent = await fastify.inject({
+      method: 'POST',
+      url: '/me/demo-alert',
+      headers: { authorization: `Bearer ${await signToken()}` },
+    });
+    expect(sent.statusCode, sent.body).toBe(200);
+
+    const envelope = realtimeBus.published.at(-1)?.message as {
+      payload?: { game_id?: string };
+      notification?: { title?: string; body?: string };
+    };
+    expect(envelope.payload?.game_id).toBe(DEMO_LIVE_GAME_ID);
+    expect(envelope.notification?.title).toBe('Sam Hart active');
+    expect(envelope.notification?.body).toBe('Chiefs have the ball — Q2, 7:14. Watch on CBS.');
+    const copy = `${envelope.notification?.title} ${envelope.notification?.body}`;
+    expect(copy).not.toMatch(/Jonathan|Taylor|Colts|Tap to watch/);
     await fastify.close();
   });
 });

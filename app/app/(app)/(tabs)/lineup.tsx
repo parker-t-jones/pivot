@@ -1279,12 +1279,9 @@ function StakeEntry({
           matchup={stakeMatchup(stake)}
           model={spreadLineModel({ line, pickedSide: side, status, score })}
         />
-        <TextButton
-          disabled={editsLocked}
-          label="Remove"
-          onPress={() => onRemove(stake)}
-          tone="danger"
-        />
+        {editsLocked ? null : (
+          <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
+        )}
       </View>
     );
   }
@@ -1304,12 +1301,9 @@ function StakeEntry({
             score,
           })}
         />
-        <TextButton
-          disabled={editsLocked}
-          label="Remove"
-          onPress={() => onRemove(stake)}
-          tone="danger"
-        />
+        {editsLocked ? null : (
+          <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
+        )}
       </View>
     );
   }
@@ -1323,12 +1317,9 @@ function StakeEntry({
         <SurvivorBadgeCard
           model={survivorBadgeModel({ abbreviation, pickedSide: side, status, score })}
         />
-        <TextButton
-          disabled={editsLocked}
-          label="Remove"
-          onPress={() => onRemove(stake)}
-          tone="danger"
-        />
+        {editsLocked ? null : (
+          <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
+        )}
       </View>
     );
   }
@@ -1343,12 +1334,9 @@ function StakeEntry({
           {stakeMeta(stake)}
         </Text>
       </View>
-      <TextButton
-        disabled={editsLocked}
-        label="Remove"
-        onPress={() => onRemove(stake)}
-        tone="danger"
-      />
+      {editsLocked ? null : (
+        <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
+      )}
     </View>
   );
 }
