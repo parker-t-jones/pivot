@@ -126,9 +126,10 @@ export async function sendDemoAccountAlert(input: {
       gameStateStore: {
         getGameState: async (gameId) =>
           gameId === DEMO_LIVE_GAME_ID ? liveState : input.gameStateStore.getGameState(gameId),
-        isUserActive: (userId) => (capture ? false : input.gameStateStore.isUserActive(userId)),
+        isUserActive: (userId) =>
+          capture ? Promise.resolve(false) : input.gameStateStore.isUserActive(userId),
         isDeviceActive: (userId, deviceId) =>
-          capture ? false : input.gameStateStore.isDeviceActive(userId, deviceId),
+          capture ? Promise.resolve(false) : input.gameStateStore.isDeviceActive(userId, deviceId),
       },
       gameCatalog: games,
       playerCatalog: players,
