@@ -22,7 +22,7 @@ export type WatchlistSection =
 export function watchlistSections(filter: WatchlistFilter): readonly WatchlistSection[] {
   switch (filter) {
     case 'all':
-      return ['starters', 'bets', 'opponent'];
+      return ['starters', 'opponent', 'bets', 'pools'];
     case 'fantasy':
       return ['leagueActions', 'leagueChips', 'starters', 'opponent'];
     case 'bets':

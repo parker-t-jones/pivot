@@ -15,6 +15,7 @@ import type { LineupSlot } from '../lib/leagues';
 import type { LiveGame, ScheduleGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { formatStakeLabel, stakeTeams, type ManualStake } from '../lib/stakes';
+import { isBenchSlot } from '../lib/weekCardModel';
 import { webPressState } from '../lib/webPress';
 import {
   watchlistPlayerRow,
@@ -43,7 +44,8 @@ export function WatchlistDesktop({
   starterSlots,
   benchSlots,
   opponentSlots,
-  opponentHeading = null,
+  showOpponent = false,
+  opponentTeamName = null,
   opponentNote = null,
   stakes,
   pools,
@@ -64,15 +66,26 @@ export function WatchlistDesktop({
   const { switchToGame } = useSwitching();
   const { openUpgrade } = useUpgradeSheet();
   const games = weekGames ?? [];
-  const rows = useMemo(
+  const lineupRows = useMemo(
     () => [
       ...starterSlots.map((slot) => playerRow(slot, games, liveGames, now, timeZone, false)),
       ...benchSlots.map((slot) => playerRow(slot, games, liveGames, now, timeZone, true)),
-      ...opponentSlots.map((slot) => playerRow(slot, games, liveGames, now, timeZone, true)),
+    ],
+    [benchSlots, games, liveGames, now, starterSlots, timeZone],
+  );
+  const opponentRows = useMemo(
+    () =>
+      opponentSlots
+        .filter((slot) => !isBenchSlot(slot))
+        .map((slot) => opponentPlayerRow(slot, games, liveGames, now, timeZone)),
+    [games, liveGames, now, opponentSlots, timeZone],
+  );
+  const betRows = useMemo(
+    () => [
       ...stakes.map((stake) => stakeRow(stake, 'BET', games, liveGames, now, timeZone)),
       ...pools.map((stake) => stakeRow(stake, 'POOL', games, liveGames, now, timeZone)),
     ],
-    [benchSlots, games, liveGames, now, opponentSlots, pools, stakes, starterSlots, timeZone],
+    [games, liveGames, now, pools, stakes, timeZone],
   );
   const removable = useMemo(() => {
     const byId = new Map<string, ManualStake>();
@@ -95,7 +108,11 @@ export function WatchlistDesktop({
     });
   }, []);
 
-  const visibleRows = rows.filter((row) => !removal.hiddenIds.includes(row.id));
+  const visibleBets = betRows.filter((row) => !removal.hiddenIds.includes(row.id));
+  const opponentName = opponentTeamName?.trim() ?? '';
+  const showLineup = lineupRows.length > 0;
+  const showBets = betRows.length > 0 || betPrompt != null;
+  const showEmpty = !showLineup && !showOpponent && !showBets;
 
   const openRow = (row: WatchlistTableRow) => {
     if (!row.live || !row.gameId || !row.deepLinkUrl) return;
@@ -174,43 +191,121 @@ export function WatchlistDesktop({
         </View>
         <WatchlistFilters onChange={onFilter} value={filter} />
         {extras}
-        {opponentHeading ? <Text style={styles.eyebrow}>{opponentHeading}</Text> : null}
-        {opponentNote ? <Text style={styles.empty}>{opponentNote}</Text> : null}
-        <View style={styles.table} testID="watchlist-table">
-          <View style={styles.head}>
-            <Text style={[styles.headCell, styles.slotCol]}>Slot</Text>
-            <Text style={[styles.headCell, styles.playerCol]}>Pick</Text>
-            <Text style={[styles.headCell, styles.gameCol]}>Game</Text>
-            <Text style={[styles.headCell, styles.networkCol]}>Network</Text>
-            <Text style={[styles.headCell, styles.statusCol]}>Status</Text>
-            <Text style={[styles.headCell, styles.actionCol]}> </Text>
-          </View>
-          {visibleRows.length === 0 && !betPrompt ? (
-            <Text style={styles.empty}>Nothing in this view yet.</Text>
-          ) : visibleRows.length === 0 ? null : (
-            visibleRows.map((row) => (
-              <TableRow
-                key={row.id}
-                onOpen={() => openRow(row)}
-                onRemove={editsLocked || !removable.has(row.id) ? null : () => hideStake(row.id)}
-                removalsLocked={editsLocked}
-                row={row}
+        {showLineup ? (
+          <SectionTable
+            editsLocked={editsLocked}
+            onOpen={openRow}
+            removable={removable}
+            rows={lineupRows}
+            testID="watchlist-lineup"
+          />
+        ) : null}
+        {showOpponent ? (
+          <View style={styles.opponentBlock} testID="watchlist-opponent">
+            <Text style={styles.eyebrow}>OPPONENT</Text>
+            {opponentName.length > 0 ? (
+              <Text style={styles.opponentTeam}>{`vs. ${opponentName}`}</Text>
+            ) : null}
+            {opponentNote ? <Text style={styles.empty}>{opponentNote}</Text> : null}
+            {opponentRows.length > 0 ? (
+              <SectionTable
+                editsLocked={editsLocked}
+                onOpen={openRow}
+                removable={removable}
+                rows={opponentRows}
+                testID="watchlist-opponent-table"
               />
-            ))
-          )}
-          {betPrompt ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: editsLocked }}
-              disabled={editsLocked}
-              onPress={onAddStake}
-              style={styles.promptRow}
-            >
-              <Text style={styles.prompt}>{betPrompt}</Text>
-            </Pressable>
-          ) : null}
-        </View>
+            ) : null}
+          </View>
+        ) : null}
+        {showBets ? (
+          <SectionTable
+            betPrompt={betPrompt}
+            editsLocked={editsLocked}
+            onAddStake={onAddStake}
+            onOpen={openRow}
+            removable={removable}
+            rows={visibleBets}
+            testID="watchlist-table"
+          />
+        ) : null}
+        {showEmpty ? (
+          <SectionTable
+            editsLocked={editsLocked}
+            onOpen={openRow}
+            removable={removable}
+            rows={[]}
+            testID="watchlist-table"
+          />
+        ) : null}
       </ScrollView>
+    </View>
+  );
+}
+
+type DesktopRow = WatchlistTableRow & { muted: boolean; quiet?: boolean };
+
+function TableHead() {
+  return (
+    <View style={styles.head}>
+      <Text style={[styles.headCell, styles.slotCol]}>Slot</Text>
+      <Text style={[styles.headCell, styles.playerCol]}>Pick</Text>
+      <Text style={[styles.headCell, styles.gameCol]}>Game</Text>
+      <Text style={[styles.headCell, styles.networkCol]}>Network</Text>
+      <Text style={[styles.headCell, styles.statusCol]}>Status</Text>
+      <Text style={[styles.headCell, styles.actionCol]}> </Text>
+    </View>
+  );
+}
+
+function SectionTable({
+  testID,
+  rows,
+  onOpen,
+  removable,
+  editsLocked,
+  betPrompt = null,
+  onAddStake,
+}: {
+  testID: string;
+  rows: readonly DesktopRow[];
+  onOpen: (row: DesktopRow) => void;
+  removable: ReadonlyMap<string, ManualStake>;
+  editsLocked: boolean;
+  betPrompt?: string | null;
+  onAddStake?: () => void;
+}) {
+  return (
+    <View style={styles.table} testID={testID}>
+      <TableHead />
+      {rows.length === 0 && !betPrompt ? (
+        <Text style={styles.empty}>Nothing in this view yet.</Text>
+      ) : (
+        rows.map((row) => (
+          <TableRow
+            key={row.id}
+            onOpen={() => onOpen(row)}
+            onRemove={
+              row.quiet === true || editsLocked || !removable.has(row.id)
+                ? null
+                : () => hideStake(row.id)
+            }
+            removalsLocked={editsLocked}
+            row={row}
+          />
+        ))
+      )}
+      {betPrompt && onAddStake ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: editsLocked }}
+          disabled={editsLocked}
+          onPress={onAddStake}
+          style={styles.promptRow}
+        >
+          <Text style={styles.prompt}>{betPrompt}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -221,11 +316,13 @@ function TableRow({
   onRemove,
   removalsLocked = false,
 }: {
-  row: WatchlistTableRow & { muted: boolean };
+  row: DesktopRow;
   onOpen: () => void;
   onRemove: (() => void) | null;
   removalsLocked?: boolean;
 }) {
+  const quiet = row.quiet === true;
+  const canOpen = !quiet && Boolean(row.live && row.deepLinkUrl);
   const teams =
     row.awayTeam && row.homeTeam
       ? { away: row.awayTeam, home: row.homeTeam }
@@ -261,15 +358,15 @@ function TableRow({
         setRowFocused(false);
       }}
       onFocus={() => setRowFocused(true)}
-      onPress={row.live && row.deepLinkUrl ? onOpen : undefined}
+      onPress={canOpen ? onOpen : undefined}
       ref={rowRef}
       style={(state) => {
         const { pressed, focused } = webPressState(state);
         return [
           styles.row,
           (rowHot || focused) && styles.rowHover,
-          pressed && row.live && row.deepLinkUrl && styles.rowPressed,
-          focused && row.live && row.deepLinkUrl && styles.rowFocused,
+          pressed && canOpen && styles.rowPressed,
+          focused && canOpen && styles.rowFocused,
         ];
       }}
       testID="watchlist-row"
@@ -299,7 +396,7 @@ function TableRow({
             {row.game}
           </Text>
         )}
-        {row.gameId && teams ? (
+        {row.gameId && teams && !quiet ? (
           <StreamLinkControl away={teams.away} gameId={row.gameId} home={teams.home} />
         ) : null}
       </View>
@@ -318,7 +415,7 @@ function TableRow({
         {row.status}
       </Text>
       <View style={styles.actionCol}>
-        {row.live && row.deepLinkUrl ? (
+        {quiet ? null : row.live && row.deepLinkUrl ? (
           <Pressable
             accessibilityRole="button"
             onPress={onOpen}
@@ -370,7 +467,7 @@ function playerRow(
   now: Date,
   timeZone: string,
   muted: boolean,
-): WatchlistTableRow & { muted: boolean } {
+): DesktopRow {
   return {
     ...watchlistPlayerRow({
       id: slot.slot_id,
@@ -387,6 +484,20 @@ function playerRow(
   };
 }
 
+function opponentPlayerRow(
+  slot: LineupSlot,
+  weekGames: readonly ScheduleGame[],
+  liveGames: readonly LiveGame[],
+  now: Date,
+  timeZone: string,
+): DesktopRow {
+  return {
+    ...playerRow(slot, weekGames, liveGames, now, timeZone, true),
+    slot: 'OPP',
+    quiet: true,
+  };
+}
+
 function stakeRow(
   stake: ManualStake,
   slot: string,
@@ -394,7 +505,7 @@ function stakeRow(
   liveGames: readonly LiveGame[],
   now: Date,
   timeZone: string,
-): WatchlistTableRow & { muted: boolean } {
+): DesktopRow {
   const game = stake.game;
   const matchup = game ? `${game.away_team} @ ${game.home_team}` : '';
   const kickoff = stakeKickoff(stake);
@@ -522,6 +633,13 @@ const styles = StyleSheet.create({
     fontFamily: theme.type.eyebrow.fontFamily,
     fontSize: theme.type.eyebrow.size,
     letterSpacing: theme.type.eyebrow.letterSpacing,
+  },
+  opponentBlock: {
+    gap: theme.spacing.sm,
+  },
+  opponentTeam: {
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.body.size,
   },
   game: {
     color: theme.colors.textSecondary,

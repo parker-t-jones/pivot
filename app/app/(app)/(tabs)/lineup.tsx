@@ -63,11 +63,7 @@ import {
 import { orderLineupSlots, slotLabel } from '../../../lib/lineupOrder';
 import { fetchMe, patchPreferences, type MeResponse } from '../../../lib/me';
 import { fetchNflState } from '../../../lib/nflState';
-import {
-  opponentEmptyCopy,
-  opponentHeader,
-  opponentSectionState,
-} from '../../../lib/opponentLineup';
+import { opponentEmptyCopy, opponentSectionState } from '../../../lib/opponentLineup';
 import { formatGameLine, gameForTeam } from '../../../lib/playerGame';
 import {
   fetchGamesLive,
@@ -561,15 +557,22 @@ export default function LineupScreen() {
   const showLeagueChips = !watchlist || sections.includes('leagueChips');
   const showRoster = !watchlist || sections.includes('starters');
   const showOpponent = !watchlist || sections.includes('opponent');
-  const opponentTitle = !showOpponent
+  const opponentTeamName =
+    showOpponent && (opponentView === 'on' || opponentView === 'off')
+      ? (lineup?.opponent?.team_name?.trim() ?? '')
+      : '';
+  const opponentNote = !showOpponent
     ? null
-    : opponentView === 'on' || opponentView === 'off'
-      ? opponentHeader(lineup?.opponent?.team_name)
-      : opponentView === 'empty'
-        ? 'OPPONENT'
+    : opponentView === 'empty'
+      ? opponentEmptyCopy(lineup?.last_synced_at)
+      : opponentView === 'off'
+        ? "See your opponent's red-zone trips on Home. No notifications."
         : null;
-  const opponentNote =
-    showOpponent && opponentView === 'empty' ? opponentEmptyCopy(lineup?.last_synced_at) : null;
+  const showOpponentSection = showOpponent && opponentView !== 'hidden';
+  const opponentPlayerSlots =
+    opponentView === 'on' && lineup?.opponent
+      ? lineup.opponent.starters.map(opponentStarterSlot).filter((slot) => !isBenchSlot(slot))
+      : [];
   const showActions = watchlist && sections.includes('leagueActions');
   const showPropBets = watchlist && sections.includes('bets');
   const showPools = watchlist && sections.includes('pools');
@@ -838,13 +841,10 @@ export default function LineupScreen() {
         onWatchOpponent={(value) => {
           void onWatchOpponent(value);
         }}
-        opponentHeading={opponentTitle}
         opponentNote={opponentNote}
-        opponentSlots={
-          showOpponent && opponentView === 'on' && lineup?.opponent
-            ? lineup.opponent.starters.map(opponentStarterSlot)
-            : []
-        }
+        opponentSlots={showOpponent && opponentView === 'on' ? opponentPlayerSlots : []}
+        opponentTeamName={opponentTeamName.length > 0 ? opponentTeamName : null}
+        showOpponent={showOpponentSection}
         pools={showPools ? poolBets : []}
         refreshing={isRefreshing}
         stakes={showPropBets ? propBets : []}
@@ -1076,6 +1076,42 @@ export default function LineupScreen() {
           </>
         ) : null}
 
+        {showOpponentSection && browsedLeagueReady ? (
+          <View style={styles.opponentSection} testID="watchlist-opponent">
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+              OPPONENT
+            </Text>
+            {opponentTeamName.length > 0 ? (
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.opponentTeam}>
+                {`vs. ${opponentTeamName}`}
+              </Text>
+            ) : null}
+            {opponentView === 'on' ? (
+              <View style={styles.rosterWell}>
+                {opponentPlayerSlots.map((slot, index) => (
+                  <PlayerRow
+                    divided={index > 0}
+                    key={slot.slot_id}
+                    mutedName
+                    now={now}
+                    onToggleStar={() => undefined}
+                    opponent
+                    saving={false}
+                    showTeamStripe={false}
+                    slot={slot}
+                    timeZone={timeZone}
+                    weekGames={weekGames}
+                  />
+                ))}
+              </View>
+            ) : (
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.opponentHint}>
+                {opponentNote}
+              </Text>
+            )}
+          </View>
+        ) : null}
+
         {showPropBets ? (
           <BetGroup
             empty="No bets this week."
@@ -1096,7 +1132,7 @@ export default function LineupScreen() {
             weekGames={weekGames}
           />
         ) : null}
-        {showPools ? (
+        {showPools && (filter === 'pools' || poolBets.length > 0) ? (
           <BetGroup
             editsLocked={editsLocked}
             empty="No pools this week."
@@ -1148,51 +1184,6 @@ export default function LineupScreen() {
                   />
                 </View>
               ))
-            )}
-          </View>
-        ) : null}
-
-        {showOpponent && browsedLeagueReady && opponentView === 'empty' ? (
-          <View style={styles.opponentSection}>
-            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
-              OPPONENT
-            </Text>
-            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.opponentHint}>
-              {opponentNote}
-            </Text>
-          </View>
-        ) : null}
-
-        {showOpponent &&
-        browsedLeagueReady &&
-        opponentView !== 'hidden' &&
-        opponentView !== 'empty' &&
-        lineup?.opponent ? (
-          <View style={styles.opponentSection}>
-            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
-              {opponentHeader(lineup.opponent.team_name)}
-            </Text>
-            {opponentView === 'off' ? (
-              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.opponentHint}>
-                See your opponent's red-zone trips on Home. No notifications.
-              </Text>
-            ) : (
-              <View style={styles.rosterWell}>
-                {lineup.opponent.starters.map((starter, index) => (
-                  <PlayerRow
-                    divided={index > 0}
-                    key={starter.player_id}
-                    mutedName
-                    now={now}
-                    onToggleStar={() => undefined}
-                    saving={false}
-                    showTeamStripe={false}
-                    slot={opponentStarterSlot(starter)}
-                    timeZone={timeZone}
-                    weekGames={weekGames}
-                  />
-                ))}
-              </View>
             )}
           </View>
         ) : null}
@@ -1566,6 +1557,7 @@ function PlayerRow({
   timeZone,
   onToggleStar,
   showTeamStripe = true,
+  opponent = false,
 }: {
   slot: LineupSlot;
   divided: boolean;
@@ -1575,8 +1567,9 @@ function PlayerRow({
   now: Date;
   timeZone: string;
   onToggleStar: (value: boolean) => void;
-  /** Opponent rows keep the column and skip the team-color stripe. */
+  /** Opponent rows keep the column, skip the team-color stripe, and have no star control. */
   showTeamStripe?: boolean;
+  opponent?: boolean;
 }) {
   const name = playerDisplayName(slot);
   const teamId = slot.player.team?.abbreviation ?? '';
@@ -1599,7 +1592,7 @@ function PlayerRow({
             numberOfLines={1}
             style={styles.slotTag}
           >
-            {slotLabel(slot.position_in_lineup)}
+            {opponent ? 'OPP' : slotLabel(slot.position_in_lineup)}
           </Text>
         </View>
         <View style={styles.playerInfo}>
@@ -1620,7 +1613,7 @@ function PlayerRow({
           </Text>
         ) : null}
       </View>
-      {SHOW_STAR_TOGGLES ? (
+      {SHOW_STAR_TOGGLES && !opponent ? (
         <Switch
           disabled={saving}
           onValueChange={onToggleStar}
@@ -1715,6 +1708,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: theme.spacing.sm,
     justifyContent: 'space-between',
+  },
+  opponentTeam: {
+    color: theme.colors.textPrimary,
+    fontSize: theme.type.body.size,
   },
   opponentHint: {
     color: theme.colors.textTertiary,

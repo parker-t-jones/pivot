@@ -23,9 +23,11 @@ export interface WatchlistDesktopProps {
   starterSlots: readonly LineupSlot[];
   benchSlots: readonly LineupSlot[];
   opponentSlots: readonly LineupSlot[];
-  /** "vs. {team}" or "OPPONENT". Null when this filter hides the opponent section. */
-  opponentHeading?: string | null;
-  /** Bye week or a matchup that has not synced yet. */
+  /** False on Bets and Pools. The section is its own card under the user's lineup. */
+  showOpponent?: boolean;
+  /** Sleeper fantasy team name. The eyebrow stays "OPPONENT". */
+  opponentTeamName?: string | null;
+  /** Empty copy, or the tracking-off hint. Rendered inside the opponent section. */
   opponentNote?: string | null;
   stakes: readonly ManualStake[];
   pools: readonly ManualStake[];
