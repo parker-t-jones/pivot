@@ -282,6 +282,7 @@ export async function writeThroughOpponentStakes(
   leagueId: string,
   week: number,
   slots: readonly OpponentStakeSlot[],
+  teamName: string | null = null,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   if (!stakesWriteEnabled(env)) return;
@@ -345,6 +346,16 @@ export async function writeThroughOpponentStakes(
     }
 
     await applyDiff(supabase, diffRosteredSet(existing, next));
+
+    const { error: nameError } = await supabase
+      .from('stakes')
+      .update({ opponent_team_name: teamName })
+      .eq('user_id', league.user_id)
+      .eq('season', league.season_year)
+      .eq('week', week)
+      .eq('source', 'SLEEPER_OPPONENT')
+      .eq('source_ref', league.id);
+    if (nameError) throw nameError;
   } catch (err) {
     logFailure(userId, leagueId, err);
   }

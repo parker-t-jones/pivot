@@ -8,6 +8,8 @@ export type NormalizedLineupSlot = RosterMappingSlot;
 export interface FetchedLineup {
   slots: NormalizedLineupSlot[];
   opponentSlots: NormalizedLineupSlot[];
+  /** Sleeper fantasy team name for the paired roster. Null when there is no opponent. */
+  opponentTeamName?: string | null;
 }
 
 export interface FetchLineupInput {

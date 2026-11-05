@@ -43,6 +43,8 @@ export function WatchlistDesktop({
   starterSlots,
   benchSlots,
   opponentSlots,
+  opponentHeading = null,
+  opponentNote = null,
   stakes,
   pools,
   weekGames,
@@ -172,6 +174,8 @@ export function WatchlistDesktop({
         </View>
         <WatchlistFilters onChange={onFilter} value={filter} />
         {extras}
+        {opponentHeading ? <Text style={styles.eyebrow}>{opponentHeading}</Text> : null}
+        {opponentNote ? <Text style={styles.empty}>{opponentNote}</Text> : null}
         <View style={styles.table} testID="watchlist-table">
           <View style={styles.head}>
             <Text style={[styles.headCell, styles.slotCol]}>Slot</Text>

@@ -63,7 +63,11 @@ import {
 import { orderLineupSlots, slotLabel } from '../../../lib/lineupOrder';
 import { fetchMe, patchPreferences, type MeResponse } from '../../../lib/me';
 import { fetchNflState } from '../../../lib/nflState';
-import { opponentSectionState } from '../../../lib/opponentLineup';
+import {
+  opponentEmptyCopy,
+  opponentHeader,
+  opponentSectionState,
+} from '../../../lib/opponentLineup';
 import { formatGameLine, gameForTeam } from '../../../lib/playerGame';
 import {
   fetchGamesLive,
@@ -547,12 +551,25 @@ export default function LineupScreen() {
     preferenceKnown: me != null,
     watchOpponent,
   });
-  const opponentView = opponentSectionState(lineup?.opponent, opponentStatus === 'on');
+  const opponentView = opponentSectionState(
+    lineup?.opponent,
+    opponentStatus === 'on',
+    selectedLeague?.platform !== 'sleeper' && lineup?.opponent != null,
+  );
   const { bets: propBets, pools: poolBets } = splitBets(bets);
   const sections = watchlistSections(filter);
   const showLeagueChips = !watchlist || sections.includes('leagueChips');
   const showRoster = !watchlist || sections.includes('starters');
   const showOpponent = !watchlist || sections.includes('opponent');
+  const opponentTitle = !showOpponent
+    ? null
+    : opponentView === 'on' || opponentView === 'off'
+      ? opponentHeader(lineup?.opponent?.team_name)
+      : opponentView === 'empty'
+        ? 'OPPONENT'
+        : null;
+  const opponentNote =
+    showOpponent && opponentView === 'empty' ? opponentEmptyCopy(lineup?.last_synced_at) : null;
   const showActions = watchlist && sections.includes('leagueActions');
   const showPropBets = watchlist && sections.includes('bets');
   const showPools = watchlist && sections.includes('pools');
@@ -821,6 +838,8 @@ export default function LineupScreen() {
         onWatchOpponent={(value) => {
           void onWatchOpponent(value);
         }}
+        opponentHeading={opponentTitle}
+        opponentNote={opponentNote}
         opponentSlots={
           showOpponent && opponentView === 'on' && lineup?.opponent
             ? lineup.opponent.starters.map(opponentStarterSlot)
@@ -1133,10 +1152,25 @@ export default function LineupScreen() {
           </View>
         ) : null}
 
-        {showOpponent && browsedLeagueReady && opponentView !== 'hidden' && lineup?.opponent ? (
+        {showOpponent && browsedLeagueReady && opponentView === 'empty' ? (
           <View style={styles.opponentSection}>
             <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
               OPPONENT
+            </Text>
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.opponentHint}>
+              {opponentNote}
+            </Text>
+          </View>
+        ) : null}
+
+        {showOpponent &&
+        browsedLeagueReady &&
+        opponentView !== 'hidden' &&
+        opponentView !== 'empty' &&
+        lineup?.opponent ? (
+          <View style={styles.opponentSection}>
+            <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.benchEyebrow}>
+              {opponentHeader(lineup.opponent.team_name)}
             </Text>
             {opponentView === 'off' ? (
               <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.opponentHint}>

@@ -6,6 +6,7 @@ import {
   DEMO_STAKE_SPREAD_ID,
   DEMO_UPCOMING_GAME_ID,
   demoFlagsResponse,
+  demoLineupResponse,
   demoLiveResponse,
   demoStakesResponse,
   demoWeekResponse,
@@ -63,5 +64,13 @@ describe('demo fixture', () => {
     ]);
     expect(stakes.stakes.every((stake) => stake.game_id === DEMO_LIVE_GAME_ID)).toBe(true);
     expect(stakes.stakes[0]?.game?.home_team).toBe('KC');
+  });
+
+  it('gives the demo lineup a fixture opponent with an invented team name', () => {
+    const lineup = demoLineupResponse(7);
+    expect(lineup.opponent?.team_name).toBe('Silver Harbor');
+    expect(
+      lineup.opponent?.starters.map((starter) => `${starter.first_name} ${starter.last_name}`),
+    ).toEqual(['Jordan Lee', 'Mina Cole']);
   });
 });

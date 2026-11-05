@@ -7,7 +7,8 @@ import type {
   FetchRosterPlayersInput,
   NormalizedLineupSlot,
 } from './fantasy-provider.js';
-import { opponentSlotsFrom } from './opponentSlots.js';
+import { opponentRosterIdFrom, opponentSlotsFrom } from './opponentSlots.js';
+import { opponentTeamNameForOwner } from './sleeperOpponentName.js';
 import { mapRosterToLineupSlots } from './roster-mapping.js';
 import { sleeperClient, type SleeperMatchup, type SleeperRoster } from './sleeper-client.js';
 
@@ -110,7 +111,13 @@ export class SleeperProvider implements FantasyProvider {
       rosterPositions: league.roster_positions,
       ...(rosters ? { rosters } : {}),
     });
-    return { slots, opponentSlots };
+    const opponentTeamName = await readOpponentTeamName(
+      input.externalLeagueId,
+      matchups,
+      input.externalRosterId,
+      rosters,
+    );
+    return { slots, opponentSlots, opponentTeamName };
   }
 
   /** Static roster player IDs — no week / starter scoping (off/pre `display_phase`). */
@@ -133,6 +140,30 @@ async function getOwnedRoster(externalLeagueId: string, externalRosterId: string
     );
   }
   return roster;
+}
+
+/**
+ * Fantasy team name for the paired roster. A failed users/rosters read leaves the
+ * starters in place and the Watchlist header as "OPPONENT".
+ */
+async function readOpponentTeamName(
+  externalLeagueId: string,
+  matchups: readonly SleeperMatchup[],
+  externalRosterId: string,
+  rosters: readonly SleeperRoster[] | undefined,
+): Promise<string | null> {
+  const opponentRosterId = opponentRosterIdFrom(matchups, externalRosterId);
+  if (!opponentRosterId) return null;
+  try {
+    const rosterRows = rosters ?? (await sleeperClient.getLeagueRosters(externalLeagueId));
+    const ownerId =
+      rosterRows.find((roster) => String(roster.roster_id) === opponentRosterId)?.owner_id ?? null;
+    const users = await sleeperClient.getLeagueUsers(externalLeagueId);
+    return opponentTeamNameForOwner(users, ownerId);
+  } catch (error) {
+    console.warn('[sleeper] opponent team name unavailable', error);
+    return null;
+  }
 }
 
 /** One matchups request. A 404 is an empty week, the same as the old fallback trigger. */

@@ -336,7 +336,39 @@ export function demoLineupResponse(week: number) {
     last_synced_at: null,
     lineup_source: null,
     regular_season_start: null,
-    opponent: null,
+    opponent: {
+      team_name: 'Silver Harbor',
+      starters: [
+        {
+          player_id: 'de000000-0000-4000-8000-000000000111',
+          first_name: 'Jordan',
+          last_name: 'Lee',
+          position: 'WR',
+          team: {
+            team_id: RAIDERS.id,
+            abbreviation: RAIDERS.abbreviation,
+            name: RAIDERS.name,
+          },
+          kickoff: null,
+          bye: false,
+          slot_label: 'WR1',
+        },
+        {
+          player_id: 'de000000-0000-4000-8000-000000000112',
+          first_name: 'Mina',
+          last_name: 'Cole',
+          position: 'RB',
+          team: {
+            team_id: RAIDERS.id,
+            abbreviation: RAIDERS.abbreviation,
+            name: RAIDERS.name,
+          },
+          kickoff: null,
+          bye: false,
+          slot_label: 'RB1',
+        },
+      ],
+    },
     slots: PLAYERS.map((player) => ({
       slot_id: player.slot_id,
       slot_type: 'starter' as const,

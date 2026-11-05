@@ -54,7 +54,7 @@ export interface LineupResponse {
   last_synced_at: string | null;
   slots: LineupSlot[];
   /** Null for a manual league or a week with no opponent stakes. Absent on older responses. */
-  opponent?: { starters: OpponentStarter[] } | null;
+  opponent?: { team_name?: string | null; starters: OpponentStarter[] } | null;
 }
 
 export async function fetchLeagues(): Promise<LeagueSummary[]> {

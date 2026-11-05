@@ -1,4 +1,7 @@
 import { ApiError } from '../lib/errors.js';
+import type { SleeperLeagueUser } from './sleeperOpponentName.js';
+
+export type { SleeperLeagueUser };
 
 const SLEEPER_BASE_URL = 'https://api.sleeper.app/v1';
 
@@ -79,6 +82,10 @@ export const sleeperClient = {
 
   async getLeagueRosters(leagueId: string): Promise<SleeperRoster[]> {
     return await getJson<SleeperRoster[]>(`/league/${encodeURIComponent(leagueId)}/rosters`);
+  },
+
+  async getLeagueUsers(leagueId: string): Promise<SleeperLeagueUser[]> {
+    return await getJson<SleeperLeagueUser[]>(`/league/${encodeURIComponent(leagueId)}/users`);
   },
 
   async getLeagueMatchups(leagueId: string, week: number): Promise<SleeperMatchup[]> {

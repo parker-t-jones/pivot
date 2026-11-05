@@ -21,6 +21,19 @@ export interface OpponentSlotOptions {
  * Bye week (`matchup_id` null) and a missing own roster are an empty list.
  * No other row with the same `matchup_id` is an empty list and one log.
  */
+/** The other roster in this week's pairing. Null on a bye or when the roster is missing. */
+export function opponentRosterIdFrom(
+  matchups: readonly SleeperMatchup[],
+  myRosterId: string,
+): string | null {
+  const mine = matchups.find((row) => String(row.roster_id) === myRosterId);
+  if (!mine || mine.matchup_id == null) return null;
+  const opponent = matchups.find(
+    (row) => row.matchup_id === mine.matchup_id && String(row.roster_id) !== myRosterId,
+  );
+  return opponent ? String(opponent.roster_id) : null;
+}
+
 export function opponentSlotsFrom(
   matchups: readonly SleeperMatchup[],
   myRosterId: string,

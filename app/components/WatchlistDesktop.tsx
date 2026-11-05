@@ -23,6 +23,10 @@ export interface WatchlistDesktopProps {
   starterSlots: readonly LineupSlot[];
   benchSlots: readonly LineupSlot[];
   opponentSlots: readonly LineupSlot[];
+  /** "vs. {team}" or "OPPONENT". Null when this filter hides the opponent section. */
+  opponentHeading?: string | null;
+  /** Bye week or a matchup that has not synced yet. */
+  opponentNote?: string | null;
   stakes: readonly ManualStake[];
   pools: readonly ManualStake[];
   weekGames: readonly ScheduleGame[] | null;

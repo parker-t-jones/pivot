@@ -120,7 +120,7 @@ export async function syncLeagueLineup(
       .eq('id', league.id);
     if (updateError) throw updateError;
 
-    await writeThroughOpponentStakes(deps.supabase, league.id, context.week, []);
+    await writeThroughOpponentStakes(deps.supabase, league.id, context.week, [], null);
     await writeThroughLeagueStakes(deps.supabase, league.id, context.week);
     await refreshLineupCache(deps, league, context.week, {
       lineupSource: 'roster_fallback',
@@ -226,6 +226,7 @@ export async function syncLeagueLineup(
       league.id,
       context.week,
       opponentResolved.slots,
+      fetched.opponentTeamName ?? null,
     );
   }
   await writeThroughLeagueStakes(deps.supabase, league.id, context.week);
@@ -285,8 +286,8 @@ async function readOpponentForWrite(
 
 /** Test doubles still return a slot array. The Sleeper provider returns both lists. */
 function readFetchedLineup(value: FetchedLineup | readonly NormalizedLineupSlot[]): FetchedLineup {
-  if (isSlotList(value)) return { slots: [...value], opponentSlots: [] };
-  return value;
+  if (isSlotList(value)) return { slots: [...value], opponentSlots: [], opponentTeamName: null };
+  return { ...value, opponentTeamName: value.opponentTeamName ?? null };
 }
 
 /** Some Sleeper ids missed `players`, but at least one resolved. All-miss stays a 503. */
@@ -671,6 +672,8 @@ export interface LineupOpponentStarter {
 
 /** This week's opponent starters. Null for manual leagues and when no opponent stakes exist. */
 export interface LineupOpponent {
+  /** Sleeper `metadata.team_name`, or the owner's `display_name`. Null when neither was stored. */
+  team_name: string | null;
   starters: LineupOpponentStarter[];
 }
 
@@ -699,13 +702,20 @@ async function loadOpponentStarters(
 
   const { data: stakeRows, error: stakesError } = await supabase
     .from('stakes')
-    .select('subject, condition, season, week, user_id, source_ref, slot_label, slot_index')
+    .select(
+      'subject, condition, season, week, user_id, source_ref, slot_label, slot_index, opponent_team_name',
+    )
     .eq('user_id', league.user_id)
     .eq('week', week)
     .eq('source_ref', league.id);
   if (stakesError) throw stakesError;
 
-  const picked: { playerId: string; slotLabel: string | null; slotIndex: number | null }[] = [];
+  const picked: {
+    playerId: string;
+    slotLabel: string | null;
+    slotIndex: number | null;
+    teamName: string | null;
+  }[] = [];
   const seen = new Set<string>();
   for (const row of stakeRows ?? []) {
     if (row.user_id !== league.user_id || row.week !== week || row.source_ref !== league.id) {
@@ -719,6 +729,7 @@ async function loadOpponentStarters(
       playerId,
       slotLabel: row.slot_label ?? null,
       slotIndex: row.slot_index ?? null,
+      teamName: row.opponent_team_name ?? null,
     });
   }
   if (picked.length === 0) return null;
@@ -780,7 +791,8 @@ async function loadOpponentStarters(
     });
   }
   if (starters.length === 0) return null;
-  return { starters: orderOpponentStarters(starters) };
+  const teamName = picked.find((row) => row.teamName && row.teamName.trim().length > 0)?.teamName;
+  return { team_name: teamName?.trim() ?? null, starters: orderOpponentStarters(starters) };
 }
 
 /** NFL position order used when a stake was written before slot metadata existed. */

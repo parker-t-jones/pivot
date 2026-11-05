@@ -177,7 +177,7 @@ describe('opponent and rostered stake replaces', () => {
       },
     });
 
-    await writeThroughOpponentStakes(supabase as never, LEAGUE_ID, 5, [], WRITE_ENV);
+    await writeThroughOpponentStakes(supabase as never, LEAGUE_ID, 5, [], null, WRITE_ENV);
     expect(deleted).toEqual([['opp-1']]);
   });
 

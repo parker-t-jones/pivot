@@ -1,5 +1,8 @@
 import { orderLineupSlots } from '@pivot/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { opponentSlotsFrom } from '../providers/opponentSlots.js';
+import type { SleeperMatchup } from '../providers/sleeper-client.js';
+import { opponentStakesFor, resolveOpponentStakeSlots } from './opponentStakes.js';
 import type { SupabaseServiceClient } from './supabase.js';
 import { buildLineupResponse, syncLeagueLineup, type LeagueRow } from './lineup-sync.js';
 
@@ -965,6 +968,7 @@ describe('buildLineupResponse', () => {
     const { opponent, ...own } = response;
     expect(own).toEqual(ownMatchup);
     expect(opponent).toEqual({
+      team_name: null,
       starters: [
         {
           player_id: 'p-wr',
@@ -1149,5 +1153,75 @@ describe('buildLineupResponse', () => {
       'Brown',
       'Lions',
     ]);
+  });
+
+  it('stores the paired opponent starters and returns them with the team name', async () => {
+    const matchups: SleeperMatchup[] = [
+      { roster_id: 1, matchup_id: 3, starters: ['mine'], players: ['mine'] },
+      { roster_id: 2, matchup_id: 3, starters: ['opp-sleeper'], players: ['opp-sleeper'] },
+      { roster_id: 3, matchup_id: 9, starters: ['someone-else'], players: ['someone-else'] },
+    ];
+    const paired = opponentSlotsFrom(matchups, '1');
+    const resolved = resolveOpponentStakeSlots(
+      paired,
+      new Map([['opp-sleeper', { id: 'p-opp', team_id: 't-lv', position: 'WR' }]]),
+    );
+    const rows = opponentStakesFor(resolved.slots, {
+      userId: 'user-1',
+      season: 2026,
+      week: 5,
+      leagueId: 'league-1',
+      gameIdByTeamId: new Map([['t-lv', 'game-lv']]),
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        source: 'SLEEPER_OPPONENT',
+        sourceRef: 'league-1',
+        condition: { type: 'OPPONENT_ROSTERED' },
+        subject: { type: 'PLAYER', playerId: 'p-opp', teamId: 't-lv' },
+      }),
+    ]);
+
+    const response = await buildLineupResponse(
+      matchupClient({
+        stakes: rows.map((row) => ({
+          user_id: row.userId,
+          week: row.week,
+          season: row.season,
+          source_ref: row.sourceRef,
+          condition: row.condition,
+          subject: row.subject,
+          slot_label: row.slotLabel,
+          slot_index: row.slotIndex,
+          opponent_team_name: 'Silver Harbor',
+        })),
+        players: [
+          {
+            id: 'p-opp',
+            first_name: 'Jordan',
+            last_name: 'Lee',
+            position: 'WR',
+            team_id: 't-lv',
+            teams: { id: 't-lv', abbreviation: 'LV', name: 'Raiders' },
+          },
+        ],
+        games: [
+          {
+            id: 'game-lv',
+            home_team_id: 't-lv',
+            away_team_id: 't-kc',
+            scheduled_start: '2026-10-04T17:00:00Z',
+            season_type: 'regular',
+          },
+        ],
+      }),
+      sleeperLeague,
+      5,
+      '2026-09-09',
+    );
+
+    expect(response.opponent?.team_name).toBe('Silver Harbor');
+    expect(response.opponent?.starters.map((starter) => starter.last_name)).toEqual(['Lee']);
   });
 });

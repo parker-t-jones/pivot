@@ -387,6 +387,8 @@ export type Database = {
           created_at: string
           game_id: string
           id: string
+          /** Fantasy team name for OPPONENT_ROSTERED rows. Display only. */
+          opponent_team_name: string | null
           season: number
           /** Lineup slot string (`RB1`, `FLEX`). Display only; null on ROSTERED rows. */
           slot_label: string | null
@@ -404,6 +406,7 @@ export type Database = {
           created_at?: string
           game_id: string
           id?: string
+          opponent_team_name?: string | null
           season: number
           slot_label?: string | null
           slot_index?: number | null
@@ -419,6 +422,7 @@ export type Database = {
           created_at?: string
           game_id?: string
           id?: string
+          opponent_team_name?: string | null
           season?: number
           slot_label?: string | null
           slot_index?: number | null

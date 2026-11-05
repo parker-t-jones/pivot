@@ -95,7 +95,7 @@ describe('SleeperProvider', () => {
       roster_positions: ['QB', 'BN'],
     };
 
-    it('uses matchup starters/players when a matching matchup exists and does not call getLeagueRosters', async () => {
+    it('uses matchup starters and reads the opponent team name from league users', async () => {
       vi.spyOn(sleeperClient, 'getLeague').mockResolvedValue(league);
       const getLeagueMatchups = vi.spyOn(sleeperClient, 'getLeagueMatchups').mockResolvedValue([
         {
@@ -106,9 +106,19 @@ describe('SleeperProvider', () => {
         },
         { roster_id: 2, matchup_id: 4, starters: ['qb1'], players: ['qb1', 'bench1'] },
       ]);
-      const getLeagueRosters = vi.spyOn(sleeperClient, 'getLeagueRosters');
+      const getLeagueRosters = vi.spyOn(sleeperClient, 'getLeagueRosters').mockResolvedValue([
+        { roster_id: 1, owner_id: 'owner-1', starters: [], players: [] },
+        { roster_id: 2, owner_id: 'me', starters: [], players: [] },
+      ]);
+      vi.spyOn(sleeperClient, 'getLeagueUsers').mockResolvedValue([
+        {
+          user_id: 'owner-1',
+          display_name: 'Casey',
+          metadata: { team_name: 'Silver Harbor' },
+        },
+      ]);
 
-      const { slots, opponentSlots } = await new SleeperProvider().fetchLineup({
+      const { slots, opponentSlots, opponentTeamName } = await new SleeperProvider().fetchLineup({
         externalLeagueId: 'league-1',
         externalRosterId: '2',
         week: 5,
@@ -121,8 +131,9 @@ describe('SleeperProvider', () => {
       expect(opponentSlots).toEqual([
         { externalPlayerId: 'other-qb', slotType: 'starter', positionInLineup: 'QB' },
       ]);
+      expect(opponentTeamName).toBe('Silver Harbor');
       expect(getLeagueMatchups).toHaveBeenCalledTimes(1);
-      expect(getLeagueRosters).not.toHaveBeenCalled();
+      expect(getLeagueRosters).toHaveBeenCalledTimes(1);
     });
 
     it('falls back to getLeagueRosters when the matchup exists but starters is still null', async () => {
@@ -174,7 +185,12 @@ describe('SleeperProvider', () => {
         },
       ]);
 
-      const { opponentSlots } = await new SleeperProvider().fetchLineup({
+      vi.spyOn(sleeperClient, 'getLeagueUsers').mockResolvedValue([
+        { user_id: 'user-abc', display_name: 'Mine', metadata: { team_name: 'My Side' } },
+        { user_id: 'opponent', display_name: 'Casey Nguyen', metadata: { team_name: '  ' } },
+      ]);
+
+      const { opponentSlots, opponentTeamName } = await new SleeperProvider().fetchLineup({
         externalLeagueId: 'league-1',
         externalRosterId: '2',
         week: 4,
@@ -183,6 +199,7 @@ describe('SleeperProvider', () => {
       expect(opponentSlots).toEqual([
         { externalPlayerId: 'opp-qb', slotType: 'starter', positionInLineup: 'QB' },
       ]);
+      expect(opponentTeamName).toBe('Casey Nguyen');
       expect(getLeagueMatchups).toHaveBeenCalledTimes(1);
       expect(getLeagueRosters).toHaveBeenCalledTimes(1);
     });
