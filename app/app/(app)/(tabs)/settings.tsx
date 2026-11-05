@@ -23,6 +23,7 @@ import { usePushPermission } from '../../../contexts/PushPermissionContext';
 import { useSession } from '../../../contexts/SessionContext';
 import { useUpgradeSheet } from '../../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../../lib/apiClient';
+import { presentDemoAlertWithoutToken } from '../../../lib/demoLocalAlert';
 import { alertAsync, confirmAsync } from '../../../lib/confirm';
 import { desktopAlertCopy, lastDesktopAlertState } from '../../../lib/desktopAlerts';
 import { clearRememberedWatchlist } from '../../../lib/lineupLoading';
@@ -336,7 +337,16 @@ function AccountSection({
       setDemoAlertNote('Sent.');
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === 'demo_alert_no_token') {
-        setDemoAlertNote('Turn on notifications to see a demo alert');
+        const presented = await presentDemoAlertWithoutToken(error.details);
+        if (presented === 'scheduled') {
+          setDemoAlertNote('Sent.');
+          return;
+        }
+        if (presented === 'permission_off') {
+          setDemoAlertNote('Turn on notifications to see a demo alert');
+          return;
+        }
+        void alertAsync('Could not send demo alert', error.message);
         return;
       }
       if (error instanceof ApiRequestError && error.code === 'demo_alert_rate_limited') {

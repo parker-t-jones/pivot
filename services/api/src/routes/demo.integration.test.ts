@@ -234,7 +234,12 @@ describe('demo account does not change a normal user', () => {
     const missingToken = await weekApp.inject({ method: 'POST', url: '/me/demo-alert', headers });
     expect(missingToken.statusCode).toBe(409);
     expect(missingToken.json().error.code).toBe('demo_alert_no_token');
+    expect(missingToken.json().error.details).toMatchObject({
+      title: 'Sam Hart active',
+      body: 'Chiefs have the ball — Q2, 7:14. Watch on CBS.',
+    });
     await weekApp.close();
+    resetDemoAlertRateLimit();
 
     const { fastify: pushApp } = await buildApp(userRow(true, 'ExponentPushToken[demo]'), [
       { service: 'directv', has_subscription: true },

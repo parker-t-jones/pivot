@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  CapturingPushNotifier,
   createPushNotifier,
   deliverFlagEvent,
   InMemoryBroadcastCatalog,
@@ -79,9 +80,6 @@ export async function sendDemoAccountAlert(input: {
     .eq('id', input.userId)
     .single();
   if (error) throw error;
-  if (!row.expo_push_token) {
-    throw new ApiError(409, DEMO_ALERT_NO_TOKEN, DEMO_ALERT_NO_TOKEN_MESSAGE);
-  }
 
   const recent = await rateLimitStore.countRecentNotifications(
     input.userId,
@@ -107,24 +105,30 @@ export async function sendDemoAccountAlert(input: {
     notificationMode: 'all' as const,
     quietHours: { ...stored.quietHours, enabled: false },
   };
+  const liveState = demoLiveGameState(now);
+  const hasToken = Boolean(row.expo_push_token);
+  // A simulator can have OS permission and still have no Expo token. Build the same
+  // alert and hand it back so the app can present it locally.
+  const capture = hasToken ? null : new CapturingPushNotifier();
+  const pushToken = row.expo_push_token ?? 'ExponentPushToken[demo-local]';
   const directory = new InMemoryUserDirectory();
   directory.setUser({
     id: input.userId,
     subscriptionTier: row.subscription_tier === 'pro' ? 'pro' : 'free',
     preferences,
-    expoPushToken: row.expo_push_token,
+    expoPushToken: pushToken,
     expoPushDeviceId: row.expo_push_device_id,
   });
 
-  const liveState = demoLiveGameState(now);
   const pushDriver = process.env['PUSH_DRIVER'] === 'expo' ? 'expo' : 'none';
   await deliverFlagEvent(
     {
       gameStateStore: {
         getGameState: async (gameId) =>
           gameId === DEMO_LIVE_GAME_ID ? liveState : input.gameStateStore.getGameState(gameId),
-        isUserActive: (userId) => input.gameStateStore.isUserActive(userId),
-        isDeviceActive: (userId, deviceId) => input.gameStateStore.isDeviceActive(userId, deviceId),
+        isUserActive: (userId) => (capture ? false : input.gameStateStore.isUserActive(userId)),
+        isDeviceActive: (userId, deviceId) =>
+          capture ? false : input.gameStateStore.isDeviceActive(userId, deviceId),
       },
       gameCatalog: games,
       playerCatalog: players,
@@ -132,11 +136,13 @@ export async function sendDemoAccountAlert(input: {
       userDirectory: directory,
       persistence: new InMemoryFlagEventPersistence(),
       realtimeBus: publishBus(input.realtimeSubscriber),
-      rateLimitStore,
-      pushNotifier: createPushNotifier({
-        pushDriver,
-        expoAccessToken: process.env['EXPO_ACCESS_TOKEN'],
-      }),
+      rateLimitStore: capture ? new InMemoryRateLimitStore() : rateLimitStore,
+      pushNotifier:
+        capture ??
+        createPushNotifier({
+          pushDriver,
+          expoAccessToken: process.env['EXPO_ACCESS_TOKEN'],
+        }),
       clock: () => now.getTime(),
     },
     demoAlertEvent(input.userId, now),
@@ -144,9 +150,22 @@ export async function sendDemoAccountAlert(input: {
       id: input.userId,
       subscriptionTier: row.subscription_tier === 'pro' ? 'pro' : 'free',
       preferences,
-      expoPushToken: row.expo_push_token,
+      expoPushToken: pushToken,
       expoPushDeviceId: row.expo_push_device_id,
     },
     randomUUID(),
   );
+
+  if (capture) {
+    const preview = capture.calls[0];
+    if (!preview) {
+      throw new ApiError(409, DEMO_ALERT_NO_TOKEN, DEMO_ALERT_NO_TOKEN_MESSAGE);
+    }
+    await rateLimitStore.recordNotification(input.userId, randomUUID(), now.getTime());
+    throw new ApiError(409, DEMO_ALERT_NO_TOKEN, DEMO_ALERT_NO_TOKEN_MESSAGE, {
+      title: preview.title,
+      body: preview.body,
+      data: preview.data,
+    });
+  }
 }
