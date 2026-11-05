@@ -11,6 +11,7 @@ import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
 import { alertAsync } from '../lib/confirm';
 import { fonts } from '../lib/fonts';
 import { fetchMe } from '../lib/me';
+import { isLocalEntitlementActive } from '../lib/subscriptionPlan';
 import {
   configurePurchases,
   customerHasPro,
@@ -66,7 +67,7 @@ export function UpgradeSheet() {
   const refreshTier = useCallback(async () => {
     try {
       const me = await fetchMe();
-      setIsPro(me.subscription_tier === 'pro');
+      setIsPro(me.subscription_tier === 'pro' || isLocalEntitlementActive());
     } catch {
       // keep prior state
     }

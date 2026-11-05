@@ -1,6 +1,7 @@
 import type { UserService } from '@pivot/shared/broadcast';
 import { apiClient } from './apiClient';
 import { noteMeFeatures } from './featureGate';
+import { noteServerTier } from './subscriptionPlan';
 
 export interface QuietHours {
   enabled: boolean;
@@ -36,9 +37,14 @@ export interface MeResponse {
   is_demo?: boolean;
 }
 
+function noteMe(me: MeResponse): void {
+  noteMeFeatures(me);
+  noteServerTier(me.subscription_tier === 'pro' ? 'pro' : 'free');
+}
+
 export async function fetchMe(): Promise<MeResponse> {
   const me = await apiClient.get<MeResponse>('/me');
-  noteMeFeatures(me);
+  noteMe(me);
   return me;
 }
 
@@ -50,7 +56,7 @@ export async function patchPreferences(patch: {
   watchedLeagueIds?: string[];
 }): Promise<MeResponse> {
   const me = await apiClient.patch<MeResponse>('/me/preferences', patch);
-  noteMeFeatures(me);
+  noteMe(me);
   return me;
 }
 

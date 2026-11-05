@@ -5,6 +5,9 @@ import Purchases, {
   type PurchasesPackage,
 } from 'react-native-purchases';
 
+import { fetchMe } from './me';
+import { noteLocalEntitlement, noteServerTier } from './subscriptionPlan';
+
 /** RevenueCat entitlement id — must match the dashboard. */
 export const PRO_ENTITLEMENT_ID = 'pro';
 
@@ -13,7 +16,9 @@ export const PRO_MONTHLY_PRODUCT_ID = 'pivot_pro_monthly';
 
 const API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
 
-let configuredForUserId: string | null = null;
+/** `Purchases.configure` may run once per process. Identity changes go through logIn/logOut. */
+let sdkConfigured = false;
+let identifiedUserId: string | null = null;
 
 export function isPurchasesConfigured(): boolean {
   return typeof API_KEY === 'string' && API_KEY.length > 0;
@@ -21,22 +26,40 @@ export function isPurchasesConfigured(): boolean {
 
 /**
  * Identify the RevenueCat subscriber with the Supabase user id so the webhook
- * can update `users.subscription_tier` for the same id.
+ * `app_user_id` matches `users.id`. Configure once, then `logIn` on every account.
  */
 export async function configurePurchases(userId: string): Promise<void> {
   if (!API_KEY || Platform.OS !== 'ios') {
     return;
   }
-  if (configuredForUserId === userId) {
+  if (identifiedUserId === userId) {
     return;
   }
 
-  if (__DEV__) {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
     Purchases.setLogLevel(LOG_LEVEL.DEBUG);
   }
 
-  Purchases.configure({ apiKey: API_KEY, appUserID: userId });
-  configuredForUserId = userId;
+  if (!sdkConfigured) {
+    Purchases.configure({ apiKey: API_KEY });
+    sdkConfigured = true;
+  }
+
+  const { customerInfo } = await Purchases.logIn(userId);
+  identifiedUserId = userId;
+  noteLocalEntitlement(customerHasPro(customerInfo));
+}
+
+/** Anonymous RevenueCat user. Call on sign-out, before the next account can purchase. */
+export async function logOutPurchases(): Promise<void> {
+  noteServerTier('free');
+  noteLocalEntitlement(false);
+  if (!API_KEY || Platform.OS !== 'ios' || !sdkConfigured || identifiedUserId === null) {
+    identifiedUserId = null;
+    return;
+  }
+  identifiedUserId = null;
+  await Purchases.logOut();
 }
 
 export async function getProMonthlyPackage(): Promise<PurchasesPackage | null> {
@@ -57,15 +80,27 @@ export function customerHasPro(info: CustomerInfo): boolean {
   return Boolean(info.entitlements.active[PRO_ENTITLEMENT_ID]);
 }
 
+async function refreshTierAfterStore(info: CustomerInfo): Promise<void> {
+  noteLocalEntitlement(customerHasPro(info));
+  try {
+    await fetchMe();
+  } catch (error) {
+    console.warn('[purchases] failed to refresh /me after store update', error);
+  }
+}
+
 export async function purchaseProMonthly(): Promise<CustomerInfo> {
   const pkg = await getProMonthlyPackage();
   if (!pkg) {
     throw new Error('Pro subscription is not available right now.');
   }
   const { customerInfo } = await Purchases.purchasePackage(pkg);
+  await refreshTierAfterStore(customerInfo);
   return customerInfo;
 }
 
 export async function restorePurchases(): Promise<CustomerInfo> {
-  return await Purchases.restorePurchases();
+  const customerInfo = await Purchases.restorePurchases();
+  await refreshTierAfterStore(customerInfo);
+  return customerInfo;
 }

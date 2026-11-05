@@ -23,6 +23,8 @@ const revenueCatEventSchema = z.object({
   event: z.object({
     type: z.string(),
     app_user_id: z.string().min(1),
+    /** SANDBOX and PRODUCTION share the same tier rules. */
+    environment: z.string().optional(),
     entitlement_ids: z.array(z.string()).nullable().optional(),
     entitlements: z
       .record(z.string(), z.unknown())

@@ -9,7 +9,7 @@ import {
 } from 'react';
 
 import { supabase } from '../lib/supabase';
-import { configurePurchases } from '../lib/purchases';
+import { configurePurchases, logOutPurchases } from '../lib/purchases';
 
 interface SessionContextValue {
   isLoading: boolean;
@@ -56,11 +56,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+    } = supabase.auth.onAuthStateChange((event, currentSession) => {
       setSession(currentSession);
       setIsLoading(false);
       if (currentSession?.user?.id) {
         void configurePurchases(currentSession.user.id);
+        return;
+      }
+      if (event === 'SIGNED_OUT') {
+        void logOutPurchases();
       }
     });
 

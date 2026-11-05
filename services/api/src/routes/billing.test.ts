@@ -42,6 +42,23 @@ describe('resolveRevenueCatTier', () => {
     ).toBe('free');
   });
 
+  it('grants pro for SANDBOX the same as PRODUCTION', () => {
+    const sandbox = resolveRevenueCatTier({
+      type: 'INITIAL_PURCHASE',
+      app_user_id: 'user-1',
+      entitlement_ids: ['pro'],
+      environment: 'SANDBOX',
+    });
+    const production = resolveRevenueCatTier({
+      type: 'INITIAL_PURCHASE',
+      app_user_id: 'user-1',
+      entitlement_ids: ['pro'],
+      environment: 'PRODUCTION',
+    });
+    expect(sandbox).toBe('pro');
+    expect(production).toBe(sandbox);
+  });
+
   it('ignores unknown events without pro entitlement', () => {
     expect(
       resolveRevenueCatTier({

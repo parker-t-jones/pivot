@@ -4,10 +4,17 @@
  * in the web bundle. Pro is purchased in the iOS app.
  */
 
+import { noteLocalEntitlement, noteServerTier } from './subscriptionPlan';
+
 export function isPurchasesConfigured(): boolean {
   return false;
 }
 
 export async function configurePurchases(_userId: string): Promise<void> {
   // No-op. RevenueCat stays on iOS.
+}
+
+export async function logOutPurchases(): Promise<void> {
+  noteServerTier('free');
+  noteLocalEntitlement(false);
 }

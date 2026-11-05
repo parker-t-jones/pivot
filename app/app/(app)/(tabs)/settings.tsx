@@ -50,6 +50,14 @@ import {
   USER_SERVICE_OPTIONS,
   userServiceLabel,
 } from '../../../lib/streamingServices';
+import {
+  currentSettingsPlanLabel,
+  isLocalEntitlementActive,
+  noteServerTier,
+  settingsPlanLabel,
+  subscribeSettingsPlan,
+  type SubscriptionTier,
+} from '../../../lib/subscriptionPlan';
 import { supabase } from '../../../lib/supabase';
 import { theme } from '../../../lib/theme';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
@@ -305,6 +313,23 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
   );
 }
 
+function useSettingsPlanLabel(serverTier: string): 'Pro plan' | 'Free plan' {
+  const tier: SubscriptionTier = serverTier === 'pro' ? 'pro' : 'free';
+  const [label, setLabel] = useState<'Pro plan' | 'Free plan'>(() =>
+    settingsPlanLabel(tier, isLocalEntitlementActive()),
+  );
+
+  useEffect(() => {
+    noteServerTier(tier);
+    setLabel(currentSettingsPlanLabel());
+    return subscribeSettingsPlan(() => {
+      setLabel(currentSettingsPlanLabel());
+    });
+  }, [tier]);
+
+  return label;
+}
+
 function AccountSection({
   email,
   subscriptionTier,
@@ -325,7 +350,8 @@ function AccountSection({
   onDeleteAccount: () => void;
 }) {
   const { openUpgrade } = useUpgradeSheet();
-  const isPro = subscriptionTier === 'pro';
+  const planLabel = useSettingsPlanLabel(subscriptionTier);
+  const isPro = planLabel === 'Pro plan';
   const [isSendingDemoAlert, setIsSendingDemoAlert] = useState(false);
   const [demoAlertNote, setDemoAlertNote] = useState<string | null>(null);
 
@@ -363,7 +389,7 @@ function AccountSection({
     <SectionCard title="Account">
       {isDemo ? <DemoEditingBanner /> : null}
       <Text style={styles.rowLabel}>{email}</Text>
-      <Text style={styles.rowSubtext}>{isPro ? 'Pro' : 'Free'} plan</Text>
+      <Text style={styles.rowSubtext}>{planLabel}</Text>
 
       <SecondaryButton
         disabled={isDemo}
