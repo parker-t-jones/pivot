@@ -1,6 +1,12 @@
-import { PRIME_VIDEO_IOS_DETAIL_URL, PRIME_VIDEO_WEB_STOREFRONT } from '@pivot/shared/broadcast';
+import { PRIME_VIDEO_WEB_STOREFRONT } from '@pivot/shared/broadcast';
 
 import { httpsWatchUrl } from './watchLink';
+
+/**
+ * The installed app rewrites a Prime search URL to this placeholder. A real GTI
+ * detail URL and the Prime app home are not search URLs, so they open as-is.
+ */
+const PRIME_SEARCH_REWRITE_URL = 'https://app.primevideo.com/detail?gti=%7BGTI%7D';
 
 /** Nicknames from the same fields the YouTube TV link uses (`away_team_name` / `home_team_name`). */
 export interface WatchMatchup {
@@ -23,7 +29,7 @@ export function iosWatchUrl(url: string): string {
   if (parsed.pathname !== '/search') return url;
   const phrase = parsed.searchParams.get('phrase')?.trim() ?? '';
   if (phrase.length === 0) return url;
-  return PRIME_VIDEO_IOS_DETAIL_URL;
+  return PRIME_SEARCH_REWRITE_URL;
 }
 
 function isPrimeHttps(url: string): boolean {

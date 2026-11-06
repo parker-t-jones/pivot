@@ -4,8 +4,18 @@ import type { AiringNetwork, UserService } from './types.js';
 /** Device-tested YouTube TV / Sunday Ticket search. Never a `/nflst/` path. */
 const YOUTUBE_TV_SEARCH = 'https://tv.youtube.com/search/';
 
-/** iOS Prime Video title page. The search link opens a blank query. */
-export const PRIME_VIDEO_IOS_DETAIL_URL = 'https://app.primevideo.com/detail?gti=%7BGTI%7D';
+/** Prime Video app home. Used when a game has no `prime_event_gti` row. */
+const PRIME_APP_HOME_URL = 'https://app.primevideo.com/';
+
+/** `amzn1.dv.gti.` plus 36 hex/dash characters. Same check as the table. */
+const PRIME_GTI_PATTERN = /^amzn1\.dv\.gti\.[0-9a-f-]{36}$/;
+
+function primeDetailUrl(gti: string | null | undefined): string | null {
+  if (gti == null) return null;
+  const trimmed = gti.trim();
+  if (!PRIME_GTI_PATTERN.test(trimmed)) return null;
+  return `https://app.primevideo.com/detail?gti=${trimmed}`;
+}
 
 /**
  * Prime Video in a browser. `app.primevideo.com` redirects to the get-the-app splash.
@@ -54,18 +64,21 @@ export interface ServiceWatchUrlInput {
   service: UserService;
   awayNickname: string;
   homeNickname: string;
-  /** Kickoff instant. Required for a Prime link. The URL does not depend on the day. */
+  /** Kickoff instant. Unused for Prime. */
   kickoff: Date | null;
   /** Airing this link is for. The search phrase does not include it. */
   network: AiringNetwork;
+  /** `prime_event_gti.gti` for this game. Absent, Prime opens the app home. */
+  primeGti?: string | null;
 }
 
 /**
  * Watch URL for one service and game.
  *
  * YouTube TV searches "{Away} vs {Home} today". Sunday Ticket searches
- * "{Away} vs {Home} NFL ST today". DirecTV searches "{Away} vs {Home}". Prime on iOS is
- * `PRIME_VIDEO_IOS_DETAIL_URL`. Web opens `PRIME_VIDEO_WEB_STOREFRONT`.
+ * "{Away} vs {Home} NFL ST today". DirecTV searches "{Away} vs {Home}". Prime with a
+ * GTI opens `https://app.primevideo.com/detail?gti=…`. With no GTI it opens the Prime
+ * app home. Web opens `PRIME_VIDEO_WEB_STOREFRONT`.
  * NFL+, ESPN, Paramount+, and Peacock use `USER_SERVICE_LANDING_URLS`. The ESPN app scheme is
  * chosen on the device, not here.
  */
@@ -81,13 +94,11 @@ export function serviceWatchUrl(input: ServiceWatchUrlInput): string {
     return `${DIRECTV_SEARCH}${query}`;
   }
   if (input.service === 'youtube_tv' && namesReady) {
-    const query = encodeURIComponent(
-      matchupSearchQuery(input.awayNickname, input.homeNickname),
-    );
+    const query = encodeURIComponent(matchupSearchQuery(input.awayNickname, input.homeNickname));
     return `${YOUTUBE_TV_SEARCH}${query}`;
   }
-  if (input.service === 'amazon_prime' && namesReady && input.kickoff !== null) {
-    return PRIME_VIDEO_IOS_DETAIL_URL;
+  if (input.service === 'amazon_prime') {
+    return primeDetailUrl(input.primeGti) ?? PRIME_APP_HOME_URL;
   }
   return USER_SERVICE_LANDING_URLS[input.service];
 }

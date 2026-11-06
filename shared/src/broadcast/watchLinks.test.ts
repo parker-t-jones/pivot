@@ -3,13 +3,20 @@ import {
   browserPrimeWatchUrl,
   isThursdayEt,
   matchupSearchQuery,
-  PRIME_VIDEO_IOS_DETAIL_URL,
   PRIME_VIDEO_WEB_STOREFRONT,
   serviceWatchUrl,
 } from './watchLinks.js';
 
 const THURSDAY_ET = new Date('2026-10-02T00:15:00Z');
 const SUNDAY_ET = new Date('2026-09-27T17:00:00Z');
+const PRIME_HOME = 'https://app.primevideo.com/';
+const TNF_GTI = 'amzn1.dv.gti.40a47435-7182-404c-b9cd-cebccb6d53dd';
+const TNF_DETAIL = `https://app.primevideo.com/detail?gti=${TNF_GTI}`;
+
+function isPrimeAppSearch(url: string): boolean {
+  const parsed = new URL(url);
+  return parsed.hostname === 'app.primevideo.com' && parsed.pathname === '/search';
+}
 
 describe('serviceWatchUrl', () => {
   it('encodes a YouTube TV search for the nicknames plus today', () => {
@@ -92,45 +99,59 @@ describe('serviceWatchUrl', () => {
         kickoff: SUNDAY_ET,
         network: 'amazon_prime',
       }),
-    ).toBe(PRIME_VIDEO_IOS_DETAIL_URL);
+    ).toBe(PRIME_HOME);
+    expect(isPrimeAppSearch(PRIME_HOME)).toBe(false);
   });
 
-  it('opens the Prime detail page for a Thursday Prime game', () => {
+  it('opens the Prime detail page when a GTI is stored', () => {
+    const url = serviceWatchUrl({
+      service: 'amazon_prime',
+      awayNickname: 'Steelers',
+      homeNickname: 'Browns',
+      kickoff: THURSDAY_ET,
+      network: 'amazon_prime',
+      primeGti: TNF_GTI,
+    });
+    expect(url).toBe(TNF_DETAIL);
+    expect(isPrimeAppSearch(url)).toBe(false);
+  });
+
+  it('opens the Prime app home when no GTI is stored', () => {
     expect(isThursdayEt(THURSDAY_ET)).toBe(true);
-    expect(PRIME_VIDEO_IOS_DETAIL_URL).toBe('https://app.primevideo.com/detail?gti=%7BGTI%7D');
-    expect(
-      serviceWatchUrl({
-        service: 'amazon_prime',
-        awayNickname: 'Steelers',
-        homeNickname: 'Browns',
-        kickoff: THURSDAY_ET,
-        network: 'amazon_prime',
-      }),
-    ).toBe(PRIME_VIDEO_IOS_DETAIL_URL);
+    const url = serviceWatchUrl({
+      service: 'amazon_prime',
+      awayNickname: 'Steelers',
+      homeNickname: 'Browns',
+      kickoff: THURSDAY_ET,
+      network: 'amazon_prime',
+    });
+    expect(url).toBe(PRIME_HOME);
+    expect(isPrimeAppSearch(url)).toBe(false);
   });
 
   it('sends a browser to the Prime storefront instead of the app link or splash', () => {
     expect(PRIME_VIDEO_WEB_STOREFRONT).toBe('https://www.primevideo.com/storefront');
-    expect(browserPrimeWatchUrl(PRIME_VIDEO_IOS_DETAIL_URL)).toBe(PRIME_VIDEO_WEB_STOREFRONT);
+    expect(browserPrimeWatchUrl(TNF_DETAIL)).toBe(PRIME_VIDEO_WEB_STOREFRONT);
+    expect(browserPrimeWatchUrl(PRIME_HOME)).toBe(PRIME_VIDEO_WEB_STOREFRONT);
     expect(
       browserPrimeWatchUrl('https://www.primevideo.com/splash/t/getTheApp?ref_=atv_dl_rdr'),
     ).toBe(PRIME_VIDEO_WEB_STOREFRONT);
-    expect(browserPrimeWatchUrl('https://tv.youtube.com/search/Lions%20vs%20Panthers%20today')).toBe(
-      'https://tv.youtube.com/search/Lions%20vs%20Panthers%20today',
-    );
+    expect(
+      browserPrimeWatchUrl('https://tv.youtube.com/search/Lions%20vs%20Panthers%20today'),
+    ).toBe('https://tv.youtube.com/search/Lions%20vs%20Panthers%20today');
   });
 
-  it('searches the matchup for a non-Thursday Prime game', () => {
+  it('opens the Prime app home for a non-Thursday Prime game with no GTI', () => {
     expect(isThursdayEt(SUNDAY_ET)).toBe(false);
-    expect(
-      serviceWatchUrl({
-        service: 'amazon_prime',
-        awayNickname: 'Lions',
-        homeNickname: 'Panthers',
-        kickoff: SUNDAY_ET,
-        network: 'amazon_prime',
-      }),
-    ).toBe(PRIME_VIDEO_IOS_DETAIL_URL);
+    const url = serviceWatchUrl({
+      service: 'amazon_prime',
+      awayNickname: 'Lions',
+      homeNickname: 'Panthers',
+      kickoff: SUNDAY_ET,
+      network: 'amazon_prime',
+    });
+    expect(url).toBe(PRIME_HOME);
+    expect(isPrimeAppSearch(url)).toBe(false);
   });
 
   it('keeps the device-tested static landings', () => {

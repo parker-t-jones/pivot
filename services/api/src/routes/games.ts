@@ -11,6 +11,7 @@ import {
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { deriveDisplayPhaseNow, derivePhaseOpeners } from '../lib/phase-openers.js';
+import { loadPrimeGtis } from '../lib/primeEventGti.js';
 import { AIRING_COLUMNS, buildWeekWatch } from '../lib/watchOptions.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
@@ -100,7 +101,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const teamIds = [...new Set(games.flatMap((g) => [g.home_team_id, g.away_team_id]))];
       const gameIds = games.map((g) => g.id);
 
-      const [teamsResult, airingsResult, presenceResult, savedUrls] = await Promise.all([
+      const [teamsResult, airingsResult, presenceResult, savedUrls, primeGtis] = await Promise.all([
         fastify.supabase
           .from('teams')
           .select('id, abbreviation, name, primary_color, secondary_color')
@@ -116,6 +117,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
           .select('game_id, url')
           .eq('user_id', user.id)
           .in('game_id', gameIds),
+        loadPrimeGtis(fastify.supabase, gameIds),
       ]);
       if (teamsResult.error) throw teamsResult.error;
       if (airingsResult.error) throw airingsResult.error;
@@ -133,6 +135,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         airingsResult.data ?? [],
         subscribedServicesFrom(presenceResult.data),
         urlsByGame(savedUrls.data),
+        primeGtis,
       );
 
       return {
@@ -289,7 +292,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const teamIds = [...new Set(slate.flatMap((g) => [g.home_team_id, g.away_team_id]))];
 
       const slateIds = slate.map((g) => g.id);
-      const [airingsResult, presenceResult, teamsResult, savedUrls] = await Promise.all([
+      const [airingsResult, presenceResult, teamsResult, savedUrls, primeGtis] = await Promise.all([
         fastify.supabase.from('game_airings').select(AIRING_COLUMNS).in('game_id', slateIds),
         fastify.supabase
           .from('user_app_presence')
@@ -301,6 +304,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
           .select('game_id, url')
           .eq('user_id', user.id)
           .in('game_id', slateIds),
+        loadPrimeGtis(fastify.supabase, slateIds),
       ]);
       if (airingsResult.error) throw airingsResult.error;
       if (presenceResult.error) throw presenceResult.error;
@@ -318,6 +322,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
         airingsResult.data ?? [],
         subscribedServicesFrom(presenceResult.data),
         urlsByGame(savedUrls.data),
+        primeGtis,
       ).get(gameId);
 
       return {

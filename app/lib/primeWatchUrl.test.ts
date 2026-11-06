@@ -19,9 +19,9 @@ const NATIVE_SEA_DEN = 'https://app.primevideo.com/search?phrase=Thursday%20Nigh
 
 describe('prime web watch URL', () => {
   it('opens the storefront for a Prime game and the detail page on iOS', () => {
-    expect(
-      webWatchUrl(NATIVE_SEA_DEN, { awayNickname: 'Seahawks', homeNickname: 'Broncos' }),
-    ).toBe('https://www.primevideo.com/storefront');
+    expect(webWatchUrl(NATIVE_SEA_DEN, { awayNickname: 'Seahawks', homeNickname: 'Broncos' })).toBe(
+      'https://www.primevideo.com/storefront',
+    );
     expect(
       webWatchUrl('https://www.primevideo.com/splash/t/getTheApp?ref_=atv_dl_rdr', {
         awayNickname: 'Seahawks',
@@ -29,7 +29,27 @@ describe('prime web watch URL', () => {
       }),
     ).toBe('https://www.primevideo.com/storefront');
     expect(iosWatchUrl(NATIVE_SEA_DEN)).toBe('https://app.primevideo.com/detail?gti=%7BGTI%7D');
-    expect(serviceWatchUrl(SEA_DEN)).toBe('https://app.primevideo.com/detail?gti=%7BGTI%7D');
+    expect(iosWatchUrl('https://app.primevideo.com/')).toBe('https://app.primevideo.com/');
+    expect(
+      iosWatchUrl(
+        'https://app.primevideo.com/detail?gti=amzn1.dv.gti.40a47435-7182-404c-b9cd-cebccb6d53dd',
+      ),
+    ).toBe(
+      'https://app.primevideo.com/detail?gti=amzn1.dv.gti.40a47435-7182-404c-b9cd-cebccb6d53dd',
+    );
+    expect(serviceWatchUrl(SEA_DEN)).toBe('https://app.primevideo.com/');
+    expect(
+      webWatchUrl('https://app.primevideo.com/', {
+        awayNickname: 'Seahawks',
+        homeNickname: 'Broncos',
+      }),
+    ).toBe('https://www.primevideo.com/storefront');
+    expect(
+      webWatchUrl(
+        'https://app.primevideo.com/detail?gti=amzn1.dv.gti.40a47435-7182-404c-b9cd-cebccb6d53dd',
+        { awayNickname: 'Seahawks', homeNickname: 'Broncos' },
+      ),
+    ).toBe('https://www.primevideo.com/storefront');
   });
 
   it('leaves a non-Prime link unchanged', () => {

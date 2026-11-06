@@ -22,7 +22,7 @@ export const USER_SERVICE_LANDING_URLS: Record<UserService, string> = {
   sling: '', // no confirmed carriage, so never emitted
   // No single provider page. The destination resolver builds the network link.
   cable_other: '',
-  // Fallback when nicknames or kickoff are missing. A real game uses the app.primevideo.com search.
+  // Unused for a normal game. serviceWatchUrl returns the GTI detail URL or the Prime app home.
   amazon_prime: 'https://www.primevideo.com/',
   peacock: 'https://www.peacocktv.com/watch/sports',
   // Device-tested Oct 2 2026: opens the app. Landing inside the app was unverified (no account).

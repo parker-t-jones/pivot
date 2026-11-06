@@ -59,6 +59,11 @@ export interface DeliveryDeps {
     /** One read of `user_game_links` per fan-out. Omitted, web payloads have no `saved_url`. */
     savedLinks?: SavedGameLinkLookup;
   };
+  /**
+   * One fresh read of `prime_event_gti` for this game, at send time. Omitted or failed,
+   * Prime opens the app home. A lookup error must not fail the push.
+   */
+  primeGtiFor?: (gameId: string) => Promise<string | null>;
   clock?: Clock;
 }
 
@@ -175,6 +180,7 @@ function actionRecommendation(
   likely: LikelyBroadcast,
   matchup: { awayNickname: string; homeNickname: string },
   savedUrl: string | null,
+  primeGti: string | null,
 ): {
   recommendedSource: string | null;
   deepLinkUrl: string | null;
@@ -189,6 +195,7 @@ function actionRecommendation(
     services: likely.services,
     savedUrl,
     outOfMarketSunday: likely.outOfMarketSunday,
+    primeGti,
   });
   if (resolution.kind === 'destinations') {
     return {
@@ -229,6 +236,7 @@ function actionRecommendation(
     homeNickname: matchup.homeNickname,
     kickoff: likely.kickoff,
     network: likely.source.network,
+    primeGti,
   });
   return {
     recommendedSource: likely.source.service,
@@ -291,16 +299,32 @@ export async function deliverFlagEvent(
   const savedUrlPromise = deps.webPush?.savedLinks
     ? lookupSavedGameLink(deps.webPush.savedLinks, event.userId, event.gameId)
     : Promise.resolve(null);
-  const [session, present, deviceActive, gameState, gameSummaryInfo, likelyBroadcast, savedUrl] =
-    await Promise.all([
-      deps.userDirectory.getViewingSession(event.userId),
-      deps.gameStateStore.isUserActive(event.userId),
-      deps.gameStateStore.isDeviceActive(event.userId, pushDeviceId),
-      deps.gameStateStore.getGameState(event.gameId),
-      deps.gameCatalog.getGameSummary(event.gameId),
-      resolveLikelyBroadcastSource(event.gameId, event.userId, deps.broadcastCatalog),
-      savedUrlPromise,
-    ]);
+  const primeGtiPromise = deps.primeGtiFor
+    ? deps.primeGtiFor(event.gameId).catch((error: unknown) => {
+        const reason = error instanceof Error ? error.message : 'lookup failed';
+        console.warn(`[push] prime gti lookup failed game=${event.gameId}: ${reason}`);
+        return null;
+      })
+    : Promise.resolve(null);
+  const [
+    session,
+    present,
+    deviceActive,
+    gameState,
+    gameSummaryInfo,
+    likelyBroadcast,
+    savedUrl,
+    primeGti,
+  ] = await Promise.all([
+    deps.userDirectory.getViewingSession(event.userId),
+    deps.gameStateStore.isUserActive(event.userId),
+    deps.gameStateStore.isDeviceActive(event.userId, pushDeviceId),
+    deps.gameStateStore.getGameState(event.gameId),
+    deps.gameCatalog.getGameSummary(event.gameId),
+    resolveLikelyBroadcastSource(event.gameId, event.userId, deps.broadcastCatalog),
+    savedUrlPromise,
+    primeGtiPromise,
+  ]);
 
   // `present` is any counting device, including the legacy member. Hidden web does not count.
   // The push decision below uses `deviceActive` for the token's device only.
@@ -322,6 +346,7 @@ export async function deliverFlagEvent(
       homeNickname: gameSummaryInfo?.homeTeamName ?? '',
     },
     savedUrl,
+    primeGti,
   );
 
   const triggeringPlayerIds = [

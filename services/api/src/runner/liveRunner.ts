@@ -92,6 +92,8 @@ export interface LiveRunnerDeps {
     subscriptions: WebPushSubscriptionStore;
     savedLinks?: SavedGameLinkLookup;
   };
+  /** One fresh `prime_event_gti` read per flag. Omitted, Prime pushes open the app home. */
+  primeGtiFor?: (gameId: string) => Promise<string | null>;
   scoreboard?: EspnClient;
   owner?: string;
   /** Postgres + the Redis lineup cache. Rebuilt when this process becomes leader. */
@@ -341,6 +343,7 @@ function deliveryDeps(deps: LiveRunnerDeps): DeliveryDeps {
     rateLimitStore: deps.rateLimit,
     pushNotifier: deps.pushNotifier,
     ...(deps.webPush ? { webPush: deps.webPush } : {}),
+    ...(deps.primeGtiFor ? { primeGtiFor: deps.primeGtiFor } : {}),
   };
 }
 

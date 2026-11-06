@@ -28,7 +28,6 @@ export {
   browserPrimeWatchUrl,
   isThursdayEt,
   matchupSearchQuery,
-  PRIME_VIDEO_IOS_DETAIL_URL,
   PRIME_VIDEO_WEB_STOREFRONT,
   sundayTicketSearchQuery,
   serviceWatchUrl,

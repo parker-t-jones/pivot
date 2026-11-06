@@ -74,7 +74,7 @@ class FakeSupabase {
       };
     }
     if (table === 'games') return gamesQuery(this.games);
-    if (table === 'teams' || table === 'game_airings') {
+    if (table === 'teams' || table === 'game_airings' || table === 'prime_event_gti') {
       return { select: () => ({ in: async () => ({ data: [], error: null }) }) };
     }
     if (table === 'user_game_links') {

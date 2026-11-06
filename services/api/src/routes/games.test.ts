@@ -69,18 +69,25 @@ interface SavedLinkRow {
   url: string;
 }
 
+interface PrimeGtiRow {
+  game_id: string;
+  gti: string;
+}
+
 interface FakeTables {
   games: GameRow[];
   teams: TeamRow[];
   airings: AiringRow[];
   presence: Map<string, PresenceRow[]>;
   links?: SavedLinkRow[];
+  primeGtis?: PrimeGtiRow[];
 }
 
 /** Counts `user_app_presence` reads so week-slate tests can assert a single presence load. */
 class FakeSupabase {
   presenceReads = 0;
   linkReads = 0;
+  primeGtiReads = 0;
   /** `game_id` lists passed to each `game_airings` read. */
   airingReads: string[][] = [];
 
@@ -125,6 +132,19 @@ class FakeSupabase {
               };
             },
           }),
+        }),
+      };
+    }
+    if (table === 'prime_event_gti') {
+      return {
+        select: () => ({
+          in: async (_col: string, gameIds: string[]) => {
+            this.primeGtiReads += 1;
+            return {
+              data: (this.tables.primeGtis ?? []).filter((row) => gameIds.includes(row.game_id)),
+              error: null,
+            };
+          },
         }),
       };
     }
@@ -263,6 +283,7 @@ interface FixtureOptions {
   airings?: AiringRow[];
   presence?: Map<string, PresenceRow[]>;
   links?: SavedLinkRow[];
+  primeGtis?: PrimeGtiRow[];
   gameStateStore?: InMemoryGameStateStore;
 }
 
@@ -273,6 +294,7 @@ async function buildTestApp(options: FixtureOptions = {}) {
     airings: options.airings ?? [],
     presence: options.presence ?? new Map(),
     links: options.links ?? [],
+    primeGtis: options.primeGtis ?? [],
   });
   const gameStateStore = options.gameStateStore ?? new InMemoryGameStateStore();
   const lineupCache = new InMemoryLineupCache();
@@ -661,7 +683,7 @@ describe('GET /games?week=', () => {
       broadcasts: [
         {
           service: 'amazon_prime',
-          deep_link_url: 'https://app.primevideo.com/detail?gti=%7BGTI%7D',
+          deep_link_url: 'https://app.primevideo.com/',
           requires_subscription: true,
           user_has_subscription: true,
           typical_lag_seconds: 40,
@@ -675,7 +697,7 @@ describe('GET /games?week=', () => {
     // A CBS game the user can't watch: no options, but its airing is still listed for the board.
     expect(body.games[0].destination).toMatchObject({
       kind: 'destinations',
-      primary: { url: 'https://app.primevideo.com/detail?gti=%7BGTI%7D' },
+      primary: { url: 'https://app.primevideo.com/' },
     });
     expect(body.games[1].broadcasts).toEqual([]);
     expect(body.games[1].destination).toEqual({
@@ -685,10 +707,47 @@ describe('GET /games?week=', () => {
     expect(body.games[1].airings).toEqual([
       { network: 'cbs', market: 'national', market_confidence: 'national' },
     ]);
-    // ONE presence load, ONE airings load, and ONE saved-link load for the whole slate.
+    // ONE presence load, ONE airings load, ONE saved-link load, and ONE GTI load for the slate.
     expect(app.fake.presenceReads).toBe(1);
     expect(app.fake.airingReads).toHaveLength(1);
     expect(app.fake.linkReads).toBe(1);
+    expect(app.fake.primeGtiReads).toBe(1);
+  });
+
+  it('uses one prime_event_gti read and puts that GTI on the watch URL', async () => {
+    const gti = 'amzn1.dv.gti.40a47435-7182-404c-b9cd-cebccb6d53dd';
+    const detail = `https://app.primevideo.com/detail?gti=${gti}`;
+    app = await buildTestApp({
+      games: [
+        {
+          id: GAME_1,
+          week: 1,
+          season_type: 'regular',
+          status: 'scheduled',
+          scheduled_start: '2026-09-11T00:15:00Z',
+          home_team_id: TEAM_HOME,
+          away_team_id: TEAM_AWAY,
+        },
+      ],
+      airings: [airing(GAME_1, 'amazon_prime')],
+      presence: new Map([['user-1', [{ service: 'amazon_prime', has_subscription: true }]]]),
+      primeGtis: [{ game_id: GAME_1, gti }],
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/games?week=1',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.games[0].broadcasts[0].deep_link_url).toBe(detail);
+    expect(body.games[0].destination.primary.url).toBe(detail);
+    expect(app.fake.primeGtiReads).toBe(1);
+    const parsed = new URL(detail);
+    expect(parsed.hostname === 'app.primevideo.com' && parsed.pathname === '/search').toBe(false);
   });
 
   it('loads the week of saved links in one query and ranks that link first', async () => {

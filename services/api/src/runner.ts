@@ -7,6 +7,7 @@ import { warnIfWebPushDisabled } from './lib/vapidConfig.js';
 import { createSupabaseServiceClient } from './lib/supabase.js';
 import { leaderOwner } from './runner/leaderLock.js';
 import { startLiveRunner } from './runner/liveRunner.js';
+import { SupabasePrimeGtiLookup } from './runner/primeEventGti.js';
 import { SupabaseSavedGameLinkLookup } from './runner/savedGameLinks.js';
 import { SupabaseWebPushSubscriptionStore } from './runner/webPushSubscriptions.js';
 import { guardRunnerStart } from './runner/redisGuard.js';
@@ -94,6 +95,7 @@ const handle = startLiveRunner({
       }
     : {}),
   scoreboard: espnClient,
+  primeGtiFor: (gameId) => new SupabasePrimeGtiLookup(supabase).gtiFor(gameId),
   owner: leaderOwner(process.env['FLY_MACHINE_ID'], hostname(), process.pid),
 });
 

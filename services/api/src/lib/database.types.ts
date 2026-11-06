@@ -346,6 +346,24 @@ export type Database = {
           },
         ]
       }
+      prime_event_gti: {
+        Row: {
+          game_id: string
+          gti: string
+          updated_at: string
+        }
+        Insert: {
+          game_id: string
+          gti: string
+          updated_at?: string
+        }
+        Update: {
+          game_id?: string
+          gti?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       stake_trigger_log: {
         Row: {
           code: string

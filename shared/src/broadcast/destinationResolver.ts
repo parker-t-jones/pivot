@@ -34,6 +34,8 @@ export interface DestinationGame {
    * existing lookup (300ms cap, then send without it) for both the iOS and web payloads.
    */
   savedUrl: string | null;
+  /** `prime_event_gti.gti` for this game. Absent, Prime opens the app home. */
+  primeGti?: string | null;
   /**
    * Regional Sunday CBS/FOX slate, where `rankWatchOptions` puts Sunday Ticket
    * ahead of YouTube TV.
@@ -189,6 +191,7 @@ function addServiceUrl(
     homeNickname: game.homeNickname,
     kickoff: game.kickoff,
     network,
+    primeGti: game.primeGti ?? null,
   });
   if (url.length === 0) return;
   out.push({ url, verified, note, label, step });
@@ -411,6 +414,7 @@ export function resolveStoredDestination(input: {
   services: readonly string[];
   savedUrl: string | null;
   outOfMarketSunday: boolean;
+  primeGti?: string | null;
 }): DestinationResolution {
   const airings: { rawName: string }[] = [];
   for (const airing of input.airings) {
@@ -428,6 +432,7 @@ export function resolveStoredDestination(input: {
       airings,
       savedUrl: input.savedUrl,
       outOfMarketSunday: input.outOfMarketSunday,
+      primeGti: input.primeGti ?? null,
     },
     services,
   );

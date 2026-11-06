@@ -197,6 +197,71 @@ describe('deliverFlagEvent', () => {
     );
   });
 
+  it('opens a stored Prime GTI on the detail page, and the app home when the row is absent', async () => {
+    const kickoff = new Date('2026-10-16T00:15:00Z');
+    const catalog = new InMemoryBroadcastCatalog();
+    catalog.setWeekAirings([
+      {
+        id: 'g1',
+        kickoff,
+        airings: [
+          {
+            network: 'amazon_prime',
+            market: 'national',
+            espnMediaName: 'Prime Video',
+            espnType: 'TV',
+          },
+        ],
+      },
+    ]);
+    catalog.setUserSubscribedServices('u1', ['amazon_prime']);
+    const gameCatalog = new InMemoryGameCatalog();
+    gameCatalog.setGame('g1', {
+      homeTeamAbbreviation: 'DEN',
+      awayTeamAbbreviation: 'SEA',
+      homeTeamName: 'Broncos',
+      awayTeamName: 'Seahawks',
+      homeTeamPrimaryColor: '#FB4F14',
+      homeTeamSecondaryColor: '#002244',
+      awayTeamPrimaryColor: '#002244',
+      awayTeamSecondaryColor: '#69BE28',
+    });
+    const gti = 'amzn1.dv.gti.40a47435-7182-404c-b9cd-cebccb6d53dd';
+    const detail = `https://app.primevideo.com/detail?gti=${gti}`;
+
+    const withGti = new InMemoryRealtimeBus();
+    await deliverFlagEvent(
+      buildDeps({
+        broadcastCatalog: catalog,
+        realtimeBus: withGti,
+        gameCatalog,
+        primeGtiFor: async () => gti,
+      }),
+      makeEvent(),
+      freeUser,
+    );
+    const gtiEnvelope = withGti.published[0]?.message as FlagEventEnvelope;
+    expect(gtiEnvelope.payload.action.deep_link_url).toBe(detail);
+
+    const withoutGti = new InMemoryRealtimeBus();
+    await deliverFlagEvent(
+      buildDeps({
+        broadcastCatalog: catalog,
+        realtimeBus: withoutGti,
+        gameCatalog,
+        primeGtiFor: async () => null,
+      }),
+      makeEvent({ id: 'evt-2' }),
+      freeUser,
+    );
+    const homeEnvelope = withoutGti.published[0]?.message as FlagEventEnvelope;
+    expect(homeEnvelope.payload.action.deep_link_url).toBe('https://app.primevideo.com/');
+    for (const url of [detail, 'https://app.primevideo.com/']) {
+      const parsed = new URL(url);
+      expect(parsed.hostname === 'app.primevideo.com' && parsed.pathname === '/search').toBe(false);
+    }
+  });
+
   it('recommends Sunday Ticket over YouTube TV on a regional FOX game', async () => {
     const broadcastCatalog = weekCatalog(['youtube_tv', 'sunday_ticket']);
     const bus = new InMemoryRealtimeBus();

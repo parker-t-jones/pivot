@@ -21,7 +21,9 @@ const ABC = 'https://abc.com/watch-live/b2f23a6e-a2a4-4d63-bd3b-e330921b0942';
 const PARAMOUNT = 'https://www.paramountplus.com/live-tv/';
 const PEACOCK = 'https://www.peacocktv.com/watch/sports';
 const ESPN = 'https://www.espn.com/watch/';
-const PRIME = 'https://app.primevideo.com/detail?gti=%7BGTI%7D';
+const PRIME = 'https://app.primevideo.com/';
+const PRIME_GTI = 'amzn1.dv.gti.40a47435-7182-404c-b9cd-cebccb6d53dd';
+const PRIME_DETAIL = `https://app.primevideo.com/detail?gti=${PRIME_GTI}`;
 
 function game(rawNames: readonly string[], patch?: Partial<DestinationGame>): DestinationGame {
   return {
@@ -123,6 +125,17 @@ describe('resolveDestinations matrix', () => {
     expect(result.kind).toBe('destinations');
     if (result.kind !== 'destinations') return;
     expect(result.primary.url).toBe(current);
+  });
+
+  it('opens a stored Prime GTI on the detail page', () => {
+    const result = resolveDestinations(game(['Prime Video'], { primeGti: PRIME_GTI }), [
+      'amazon_prime',
+    ]);
+    expect(result.kind).toBe('destinations');
+    if (result.kind !== 'destinations') return;
+    expect(result.primary.url).toBe(PRIME_DETAIL);
+    const parsed = new URL(result.primary.url);
+    expect(parsed.hostname === 'app.primevideo.com' && parsed.pathname === '/search').toBe(false);
   });
 });
 

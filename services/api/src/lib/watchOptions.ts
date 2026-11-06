@@ -104,6 +104,7 @@ export function buildWeekWatch(
   airingRows: readonly AiringRow[],
   subscribedServices: ReadonlySet<string>,
   savedUrls: ReadonlyMap<string, string> = new Map(),
+  primeGtis: ReadonlyMap<string, string> = new Map(),
 ): Map<string, GameWatch> {
   const week = weekGameAirings(games, airingRows);
   const slate = week.map(toSlateGame);
@@ -128,6 +129,7 @@ export function buildWeekWatch(
           homeNickname: names?.home ?? '',
           kickoff: game.kickoff,
           network: option.network,
+          primeGti: primeGtis.get(game.id) ?? null,
         }),
         requires_subscription: true,
         user_has_subscription: true,
@@ -165,6 +167,7 @@ export function buildWeekWatch(
       services: [...subscribedServices],
       savedUrl: savedUrls.get(game.id) ?? null,
       outOfMarketSunday: regional,
+      primeGti: primeGtis.get(game.id) ?? null,
     });
 
     result.set(game.id, { broadcasts, airings: wireAirings, destination });
