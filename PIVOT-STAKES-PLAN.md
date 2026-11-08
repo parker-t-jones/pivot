@@ -297,20 +297,20 @@ Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via
 2. Phase 4: are the default prop thresholds (80% / one big play) right, or should the thresholds be user-set per stake?
 3. Phase 5: is Kalshi worth building before a legal read on marketing to prediction-market users? The feature itself is read-only and low risk. The positioning is the part to check.
 4. Phases 3–4: how should REVEALs that don't follow a possession change be timed? (Recommendation: send them as outcome-free NUDGEs in v1, since that sidesteps timing entirely, and revisit once live data on mid-drive triggers exists.)
-5. Phase M1: final Season Pass price. $34.99 is the working number (Section 10.2).
+5. ~~Phase M1: final Season Pass price.~~ Withdrawn (Nov 8, 2026): there is no Season Pass. Monthly Pro is the only product (Section 10.3).
 6. Phase M1: are Kalshi market search and per-trigger alert tuning Pro-only, or free? (Recommendation: free at launch. Gate volume, not features, per Section 10.1. Revisit once there's usage data.)
 7. Phase 6: are shared watchlists free? (Recommendation: yes. Like opponent tracking, they're a growth lever.)
 
 **Decided (Sept 23–24, 2026):**
 - Free bet cap is **3** non-fantasy stakes per week.
 - Opponent tracking is **free** and doesn't count toward any cap.
-- A **Season Pass** is added next to monthly Pro.
+- ~~A **Season Pass** is added next to monthly Pro.~~ Reversed Nov 8, 2026: monthly Pro is the only Pro product. A Season Pass may return before the 2027 season (Section 10.3).
 - Home is **one screen built on the Board layout (direction A)**, with a **Board | My card** switch. There is no day-of-week screen swapping and no sidebar.
 - The palette stays **amber on black with the existing warm neutrals**. Cool-slate neutrals were considered and rejected.
 - (Sept 24, after the recon) The ladder is built around the **real accent `#F5A018`**. U1 is additive, not a palette migration.
 - `flare` `#FFC94D` is approved as a live-only exception to the single-accent rule.
 - The stake cap follows the existing **403 + snake_case code** convention (`stake_limit_free`).
-- Pro gating moves to a read-time `isPro` predicate. The webhook-written `subscription_tier` is no longer trusted on its own.
+- ~~Pro gating moves to a read-time `isPro` predicate.~~ Parked Nov 8, 2026 with the Season Pass, which was the only reason for it. With monthly only, the webhook-written `subscription_tier` stays the source of truth.
 - Per-game notification collapse is built as a step *before* the unchanged global rate limiter.
 
 ---
@@ -337,31 +337,13 @@ Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via
 - **Where it's enforced:** on the API. `POST /stakes` returns **403** with `code: 'stake_limit_free'` and `details: { limit: 3 }`, matching the existing cap convention. Add `stake_limit_free` to the code list in `app/lib/upgradePrompt.ts` so the paywall opens. Never enforce only on the client.
 
 ### 10.3 Products (RevenueCat)
-- `pivot_pro_monthly`: existing, auto-renewing. Launched at $4.99/month. The price is set in App Store Connect and read from RevenueCat at runtime; the client never hardcodes it.
-- `pivot_pro_season`: **new**, a **non-renewing subscription**. Working price $34.99, which is about 36% off paying monthly from September through the Super Bowl.
-  - Expires **the day after the Super Bowl**. For the 2026 season that's Feb 15, 2027; the Super Bowl is Feb 14, 2027. Store the expiry in config per season. Don't hard-code it.
-  - Apple requires non-renewing subscriptions to work on all of a user's devices. The Supabase account covers that: the entitlement lives server-side.
-- **Entitlement model:** gate on a shared read-time predicate, not on the cached column.
-  - Add `users.pro_expires_at timestamptz null` (a migration, plus the `database.types.ts` update).
-  - Add `isPro(user: { subscription_tier, pro_expires_at }, now)` in `shared/`, with unit tests. It returns `true` when `subscription_tier === 'pro'` (monthly, maintained by the webhook's grant and revoke events) **or** `pro_expires_at > now`.
-  - **All 5 server gating reads** move to `isPro`:
-    - `leagues.ts` `assertCanConnectLeague`
-    - the connect-league flow
-    - the manual-lineup cap in `leagues.ts`
-    - the watched-league cap in `me.ts`
-    - `watched-leagues.ts`
-
-    That way a lapsed season pass stops being Pro at the exact expiry moment, with no event and no cron job.
-  - `GET /me` and `PATCH /me/preferences` add a computed `is_pro: boolean` to the response. **All client read sites** switch from `me.subscription_tier === 'pro'` to `me.is_pro`: `UpgradeSheet.tsx`, `ActiveLineupPicker.tsx`, `connect-team.tsx`, `edit-manual-lineup.tsx` and `settings.tsx`.
-  - The webhook sets `pro_expires_at` on `NON_RENEWING_PURCHASE` for the season product. That event type is already in `GRANT_TYPES`. **Don't** set `subscription_tier = 'pro'` for season-pass purchases. Leave that column for monthly only, so the two sources never fight.
-  - Pass-through reads (`flags.ts`, `lineup-sync.ts`) switch to `isPro` as well, for consistency.
-- **Purchases client (real-money fix):**
-  - `getProMonthlyPackage()` in `app/lib/purchases.ts` falls back to `current.availablePackages[0]`. With two products in the offering, that fallback could charge the Season Pass price under a monthly button.
-  - Replace it with `getPackage(productId)`, which does an **exact product-id match only**. It returns `null` when nothing matches, and the paywall hides that option instead of guessing.
-  - Add `PRO_SEASON_PRODUCT_ID = 'pivot_pro_season'`.
-- **Dashboard prerequisite (Parker, before M1):** create `pivot_pro_season` in App Store Connect and in RevenueCat, attached to the `pro` entitlement. Whether RevenueCat sends `EXPIRATION` for it doesn't matter anymore, because `isPro` reads the expiry directly.
-- **Late-season policy:** hide `pivot_pro_season` from the paywall after a configurable week. Default: after Week 12, `SEASON_PASS_LAST_WEEK = 12`. After that week, only monthly is offered.
-- Out of scope for now: annual SKU, family sharing, win-back offers, and the August "Pivot is back" push for lapsed season-pass users. That push is a later scheduled job; note it in PLAN.md.
+- `pivot_pro_monthly`: existing, auto-renewing. **This is the only Pro product.** Launched at $4.99/month. The price is set in App Store Connect and read from RevenueCat at runtime; the client never hardcodes it.
+- **No Season Pass (Nov 8, 2026).** The earlier plan for a non-renewing `pivot_pro_season` product is withdrawn: only the monthly product exists in RevenueCat. It may return before the 2027 season. If it does, it needs its own design pass covering an expiry-aware entitlement (a stored expiry plus a read-time Pro check, since a non-renewing product lapses with no inbound event), the paywall layout, and a late-season cutoff.
+- **Entitlement model:** unchanged. `users.subscription_tier` is written only by the RevenueCat webhook (grant and revoke events for the monthly product), and the server gating reads keep reading it.
+- **Purchases client (real-money hardening):**
+  - `getProMonthlyPackage()` in `app/lib/purchases.ts` falls back to `current.availablePackages[0]`. With one product in the offering that's harmless, but if any other package is ever added to the offering, the fallback could charge that package's price under the monthly button.
+  - Replace it with `getPackage(productId)`, which does an **exact product-id match only**. It returns `null` when nothing matches, and the paywall hides the purchase button instead of guessing.
+- Out of scope for now: Season Pass, annual SKU, family sharing and win-back offers.
 
 ### 10.4 Paywall copy and layout
 Keep the existing floating Pro card treatment. It's the reference design for the "slip" component (Section 11.2). Update the content:
@@ -374,27 +356,18 @@ Free covers 3 leagues, 1 Active Lineup and 3 bets a week. Pro removes the caps.
 ▸ Unlimited bets, props, markets and pools
 ▸ Unlimited manual lineup players
 
-[ Season Pass — $34.99 ]        ← primary, gold
-  Through the Super Bowl · Save 36% vs. monthly
-[ {RevenueCat price} / month ]  ← secondary
+[ {RevenueCat price} / month ]  ← primary, gold
 Restore purchases                Not now
 ```
 
-- **The savings line is computed, not hard-coded:** `1 − seasonPrice / (monthlyPrice × monthsRemainingUntilExpiry)`, rounded down. Hide the line if the result is under 10%.
+- **The price is RevenueCat's localized price string** for `pivot_pro_monthly`, never a literal.
 - **Context line:** when the cap-hit code is `stake_limit_free`, add a line above the headline: "You've tracked 3 bets this week."
 
 ### 10.5 Verify (Phase M1)
-1. **Sandbox purchase:** in a sandbox build, buy the Season Pass with a sandbox Apple ID. Expect:
-   - `users.pro_expires_at` equals the configured date;
-   - `subscription_tier` is **unchanged**;
-   - `GET /me` returns `is_pro: true`;
-   - the Pro UI unlocks without a relaunch.
-1b. **Expiry boundary:** in a local database, set `pro_expires_at` to one minute from now for a test user. Before it passes, connecting a 4th league succeeds. After it passes, the same request returns `403 league_limit_free`. Nothing else needs to run in between. Also run the `isPro` unit tests with `pnpm test`.
-1c. **Package resolver:** unit-test `getPackage` with an offering that contains only `pivot_pro_season`. `getPackage('pivot_pro_monthly')` must return `null`, never the season package.
+1. **Package resolver:** unit-test `getPackage` with an offering whose only package has a different product id. `getPackage('pivot_pro_monthly')` must return `null`, never that package.
 2. **Stake cap:** as a Free user, add 3 spread stakes. The 4th `POST /stakes` should return `403` with `code: 'stake_limit_free'`, and the paywall should open with the context line.
 3. **Opponent stakes don't count:** as a Free user with opponent tracking on and 14 opponent players, add 3 bet stakes. All succeed. The cap is still hit only on bet #4.
-4. **Late-season hide:** set `SEASON_PASS_LAST_WEEK` to the current week minus 1. The paywall should show monthly only.
-5. **Restore:** run restore purchases on a second sandbox device. Pro should restore from `pro_expires_at`.
+4. **Sandbox purchase and restore:** in a sandbox build, buy monthly Pro with a sandbox Apple ID. `subscription_tier` becomes `'pro'` and the Pro UI unlocks. Run restore purchases on a second sandbox device; Pro should restore.
 
 ---
 
@@ -611,7 +584,7 @@ The UI and monetization phases don't depend on the stakes phases unless noted. T
 | **U2** | Board pure functions + tests, `networkLabel`, `BoardRow`, `FeaturedStakeCard`, Home pre-game mode (11.3) | U1 | Opus 5, High, MAX (touches `loadHome`) |
 | **U3** | `SegmentedControl` + MY CARD, fantasy-only (11.3) | U2 | Sonnet 5 High |
 | **U4** | Home live mode mapping, `state1`/`state2` (11.3) | U2, **P0** | Opus 5, High, MAX |
-| **M1** | `pro_expires_at` + `isPro` predicate across all gating reads, `is_pro` on `/me`, exact-match package resolver, Season Pass, paywall copy (10.3–10.4) | U1; Parker creates the product in App Store Connect and RevenueCat | Opus 5, High, MAX (billing and entitlements; real money) |
+| **M1** | Exact-match package resolver, paywall copy (10.3–10.4). No Season Pass (withdrawn Nov 8, 2026) | U1 | Opus 5, High, MAX (billing; real money) |
 | **M2** | Stake cap enforcement, `403 stake_limit_free` (10.2) | Stakes Phase 3 | Sonnet 5 High |
 | **U5** | Onboarding changes + tutorial cards + coach marks + `SlipPerforation` + the two preference keys (12.1–12.2) | U3 | Sonnet 5 High |
 | **U6** | Demo game day (12.2) | U4, U5 | Opus 5, High, MAX (fixture compression, local notifications) |
