@@ -23,6 +23,7 @@ export default defineConfig({
       'app/**/*.test.ts',
       'app/**/*.test.tsx',
       'scripts/**/*.test.ts',
+      'experiments/**/*.test.ts',
     ],
   },
 });
