@@ -1,19 +1,11 @@
 import type { LineupCacheProvider } from '../cache/index.js';
 import type { Json } from './database.types.js';
+import { conditionTypeOf, isBetConditionType } from './pickRows.js';
 import type { SupabaseServiceClient } from './supabase.js';
 
-const BET_CONDITION_TYPES = new Set([
-  'SPREAD',
-  'TOTAL_OVER',
-  'TOTAL_UNDER',
-  'MONEYLINE',
-  'SURVIVOR',
-]);
-
+/** Every manual pick, props and parlay legs included. Only fantasy rows are not bets. */
 export function isBetCondition(condition: Json): boolean {
-  if (typeof condition !== 'object' || condition === null || Array.isArray(condition)) return false;
-  const type = condition['type'];
-  return typeof type === 'string' && BET_CONDITION_TYPES.has(type);
+  return isBetConditionType(conditionTypeOf(condition));
 }
 
 /** Indexes the user's current-week bet games and drops games they no longer have a bet on. */

@@ -3,15 +3,18 @@ import {
   evaluateStake,
   type EventDispatcher,
   type PlayEvent,
+  type PropPlayer,
   type Stake,
   type Trigger,
 } from '@pivot/engine';
 import type { FlagEvent, FlagState, GameState, UserLineupCache } from '@pivot/shared';
-import { formatStakeLabel, type StakeTeam } from '@pivot/shared/stakeLabel';
+import type { GamePlayerStats } from '@pivot/shared';
+import { formatPickLabel, shortPlayerName, type StakeTeam } from '@pivot/shared/stakeLabel';
 import type { LineupCacheProvider } from '../cache/index.js';
 import { isBetCondition } from '../lib/betIndex.js';
-import type { Json } from '../lib/database.types.js';
 import { claimFirstFire, firstFires, type FireClaimRedis } from '../lib/fireClaim.js';
+import { STAKE_ROW_COLUMNS, toStake, type StakeRowLike } from '../lib/pickRows.js';
+import { loadPropPlayers } from '../lib/propPlayers.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 
 const BET_CACHE_TTL_MS = 60_000;
@@ -24,17 +27,11 @@ const EMPTY_LINEUP: UserLineupCache = {
   starPlayerIds: new Set(),
 };
 
-const STAKE_SOURCES = new Set<Stake['source']>([
-  'SLEEPER_ROSTER',
-  'SLEEPER_OPPONENT',
-  'MANUAL',
-  'KALSHI_MARKET',
-  'SHARED_LIST',
-]);
-
-interface PreparedBet {
+export interface PreparedBet {
   stake: Stake;
   label: string;
+  /** Resolved from `players` for PLAYER subjects. */
+  player?: PropPlayer;
 }
 
 export interface BetStakeCache {
@@ -67,6 +64,8 @@ export interface BetPassDeps {
   dispatcher: EventDispatcher;
   cache: BetStakeCache;
   clock?: () => number;
+  /** Latest parsed summary for the game, kept by the runner. Player and team props read it. */
+  playerStats?: (gameId: string) => GamePlayerStats | undefined;
 }
 
 /** Copies poll timing onto the event when the play has it. Same fields as the fantasy path. */
@@ -103,29 +102,60 @@ export async function runBetPass(
       deps.cache.set(play.gameId, now, prepared);
     }
 
-    for (const { stake, label } of prepared) {
-      const triggers = evaluateStake(stake, {
+    const stats = deps.playerStats?.(play.gameId);
+    const evaluated: { trigger: Trigger; bet: PreparedBet }[] = [];
+    for (const bet of prepared) {
+      const triggers = evaluateStake(bet.stake, {
         gameId: play.gameId,
         game: gameState,
         lineup: EMPTY_LINEUP,
+        ...(stats ? { playerStats: stats } : {}),
+        ...(bet.player ? { player: bet.player } : {}),
       });
-      const claimed = await firstFires(triggers, (trigger) =>
-        claimFirstFire(trigger.stakeId, trigger.code, {
+      for (const trigger of triggers) evaluated.push({ trigger, bet });
+    }
+
+    for (const { trigger, bet } of oneLegPerSlipAndCode(evaluated)) {
+      const [claimed] = await firstFires([trigger], (candidate) =>
+        claimFirstFire(candidate.stakeId, candidate.code, {
           gameId: play.gameId,
           supabase: deps.supabase,
           redis: deps.redis,
         }),
       );
-      for (const trigger of claimed) {
-        await deps.dispatcher.dispatch(
-          betEvent(trigger, stake.userId, label, play, now),
-          play.playId,
-        );
-      }
+      if (claimed === undefined) continue;
+      await deps.dispatcher.dispatch(
+        betEvent(claimed, bet.stake.userId, bet.label, play, now),
+        play.playId,
+      );
     }
   } catch (error) {
     console.error(`[bets] pass failed game=${play.gameId} err=${failureReason(error)}`);
   }
+}
+
+/**
+ * A parlay's legs in this game send at most one event per trigger code: the highest-leverage leg
+ * (ties keep the first). Singles pass through. A slip in several games is handled per game.
+ */
+export function oneLegPerSlipAndCode<T extends { trigger: Trigger; bet: PreparedBet }>(
+  evaluated: readonly T[],
+): T[] {
+  const kept: T[] = [];
+  const bySlip = new Map<string, T>();
+  for (const entry of evaluated) {
+    const slipId = entry.bet.stake.slipId;
+    if (slipId === undefined) {
+      kept.push(entry);
+      continue;
+    }
+    const key = `${slipId}:${entry.trigger.code}`;
+    const current = bySlip.get(key);
+    if (current === undefined || entry.trigger.leverage > current.trigger.leverage) {
+      bySlip.set(key, entry);
+    }
+  }
+  return [...kept, ...bySlip.values()];
 }
 
 function betEvent(
@@ -160,58 +190,51 @@ function betEvent(
   );
 }
 
-interface StakeRow {
-  id: string;
-  user_id: string;
-  season: number;
-  week: number;
-  game_id: string;
-  subject: Json;
-  condition: Json;
-  source: string;
-  weight: number;
-  created_at: string;
-}
-
 async function loadBetStakes(
   supabase: SupabaseServiceClient,
   gameId: string,
 ): Promise<PreparedBet[]> {
   const { data, error } = await supabase
     .from('stakes')
-    .select('id, user_id, season, week, game_id, subject, condition, source, weight, created_at')
+    .select(STAKE_ROW_COLUMNS)
     .eq('game_id', gameId);
   if (error) throw new Error(error.message);
 
-  const rows = ((data ?? []) as StakeRow[]).filter((row) => isBetCondition(row.condition));
+  const stakes = ((data ?? []) as StakeRowLike[])
+    .filter((row) => isBetCondition(row.condition))
+    .flatMap((row) => {
+      const stake = toStake(row);
+      return stake ? [stake] : [];
+    });
   const teamIds = [
     ...new Set(
-      rows.flatMap((row) => {
-        const teamId = teamIdOf(row.subject);
-        return teamId === null ? [] : [teamId];
-      }),
+      stakes.flatMap((stake) => (stake.subject.type === 'TEAM' ? [stake.subject.teamId] : [])),
     ),
   ];
+  const players = await loadPropPlayers(
+    supabase,
+    stakes.flatMap((stake) => (stake.subject.type === 'PLAYER' ? [stake.subject.playerId] : [])),
+  );
   const teams = await loadTeams(supabase, teamIds);
-  const prepared: PreparedBet[] = [];
-  for (const row of rows) {
-    const stake = toStake(row);
-    if (stake === null) continue;
-    prepared.push({
+  return stakes.map((stake) => {
+    const player =
+      stake.subject.type === 'PLAYER' ? players.get(stake.subject.playerId) : undefined;
+    return {
       stake,
-      label: formatStakeLabel(
+      ...(player ? { player } : {}),
+      label: formatPickLabel(
         {
           condition: stake.condition,
           subject: {
             type: stake.subject.type,
             teamId: stake.subject.type === 'TEAM' ? stake.subject.teamId : null,
           },
+          playerName: player ? shortPlayerName(player.firstName, player.lastName) : null,
         },
         teams,
       ),
-    });
-  }
-  return prepared;
+    };
+  });
 }
 
 async function loadTeams(
@@ -228,54 +251,4 @@ async function loadTeams(
     teamId: team.id,
     abbreviation: team.abbreviation,
   }));
-}
-
-function teamIdOf(subject: Json): string | null {
-  if (typeof subject !== 'object' || subject === null || Array.isArray(subject)) return null;
-  const teamId = subject['teamId'];
-  return typeof teamId === 'string' ? teamId : null;
-}
-
-function toStake(row: StakeRow): Stake | null {
-  if (!STAKE_SOURCES.has(row.source as Stake['source'])) return null;
-  const subject = toSubject(row.subject, row.game_id);
-  const condition = toCondition(row.condition);
-  if (subject === null || condition === null) return null;
-  return {
-    id: row.id,
-    userId: row.user_id,
-    season: row.season,
-    week: row.week,
-    gameId: row.game_id,
-    subject,
-    condition,
-    source: row.source as Stake['source'],
-    weight: row.weight,
-    createdAt: row.created_at,
-  };
-}
-
-function toSubject(value: Json, gameId: string): Stake['subject'] | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const type = value['type'];
-  if (type === 'GAME') return { type: 'GAME', gameId };
-  const teamId = value['teamId'];
-  if (type === 'TEAM' && typeof teamId === 'string') return { type: 'TEAM', teamId };
-  return null;
-}
-
-function toCondition(value: Json): Stake['condition'] | null {
-  if (!isBetCondition(value)) return null;
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const type = value['type'];
-  if (type === 'MONEYLINE') return { type: 'MONEYLINE', side: 'TEAM' };
-  if (type === 'SURVIVOR') return { type: 'SURVIVOR' };
-  const line = value['line'];
-  if (
-    (type === 'SPREAD' || type === 'TOTAL_OVER' || type === 'TOTAL_UNDER') &&
-    typeof line === 'number'
-  ) {
-    return { type, line };
-  }
-  return null;
 }

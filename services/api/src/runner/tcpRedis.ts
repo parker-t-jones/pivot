@@ -120,6 +120,14 @@ export function tcpFiredClaims(redis: Redis): {
   };
 }
 
+/** `game_player_stats:{gameId}` reads and writes (`lib/gamePlayerStats.ts`). */
+export function tcpGamePlayerStats(redis: Redis): {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ttlSec: number): Promise<void>;
+} {
+  return tcpFiredClaims(redis);
+}
+
 export function tcpFlagEventQueue(redis: Redis): FlagEventQueue {
   return {
     async enqueue(event: FlagEvent, triggeringPlayId: string | null = null): Promise<void> {

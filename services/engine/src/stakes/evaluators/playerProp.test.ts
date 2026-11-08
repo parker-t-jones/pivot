@@ -62,7 +62,9 @@ describe('evaluatePlayerProp: activity', () => {
     expect(codes(rushOver, ctx({ game: game({ status: 'scheduled' }) }))).toEqual([]);
     expect(codes(rushOver, ctx({ game: game({ status: 'final' }) }))).toEqual([]);
     expect(codes({ ...rushOver, gameId: 'other' })).toEqual([]);
-    expect(codes(rushOver, ctx({ player: undefined }))).toEqual([]);
+    const noPlayer = ctx();
+    delete noPlayer.player;
+    expect(codes(rushOver, noPlayer)).toEqual([]);
   });
 
   it('treats a defensive player as active when the opponent has the ball', () => {

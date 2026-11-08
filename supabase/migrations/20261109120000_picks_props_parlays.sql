@@ -1,10 +1,11 @@
 -- Player props, team/game props, and parlays (docs/P2-PICKS-MODEL.md). Requires
 -- 20261108200000_stake_spent_slots.sql. Existing picks keep working unchanged.
 
--- ESPN athlete id so boxscore stats can be matched to players. Filled by seed:players.
+-- ESPN athlete id so boxscore stats can be matched to players. Filled by seed:players from
+-- Sleeper. Not unique: a duplicate id in Sleeper's dump must not fail the whole seed upsert.
 ALTER TABLE public.players ADD COLUMN espn_id text;
 
-CREATE UNIQUE INDEX players_espn_id_uidx ON public.players (espn_id) WHERE espn_id IS NOT NULL;
+CREATE INDEX players_espn_id_idx ON public.players (espn_id) WHERE espn_id IS NOT NULL;
 
 -- A parlay. Its legs are stakes rows with slip_id set. The slip uses one free slot.
 CREATE TABLE public.pick_slips (

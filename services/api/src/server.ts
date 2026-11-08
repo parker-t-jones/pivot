@@ -33,6 +33,8 @@ import realtimeRoutes from './routes/realtime.js';
 import sessionRoutes from './routes/session.js';
 import sleeperRoutes from './routes/sleeper.js';
 import stakesRoutes from './routes/stakes.js';
+import picksRoutes from './routes/picks.js';
+import { readGamePlayerStats } from './lib/gamePlayerStats.js';
 import stateRoutes from './routes/state.js';
 
 export interface BuildServerDeps {
@@ -43,20 +45,22 @@ export interface BuildServerDeps {
 }
 
 /** Same Redis the runner writes. TCP when this process already has that client; otherwise Upstash REST. */
-function runnerHeartbeatReader(
+function runnerKeyReader(
   env: Env,
   commandRedis: { get(key: string): Promise<string | null> } | undefined,
-): () => Promise<string | null> {
+): (key: string) => Promise<string | null> {
   if (commandRedis) {
-    return async () => commandRedis.get(RUNNER_HEARTBEAT_KEY);
+    return async (key) => commandRedis.get(key);
   }
   if (env.CACHE_DRIVER === 'redis' && env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
     const redis = new UpstashRedis({
       url: env.UPSTASH_REDIS_REST_URL,
       token: env.UPSTASH_REDIS_REST_TOKEN,
+      // Values are stored as JSON strings by the runner; return them unparsed.
+      automaticDeserialization: false,
     });
-    return async () => {
-      const value = await redis.get<string>(RUNNER_HEARTBEAT_KEY);
+    return async (key) => {
+      const value = await redis.get<string>(key);
       return typeof value === 'string' ? value : null;
     };
   }
@@ -98,6 +102,8 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
     closeRealtimeChannels = channels.close;
   }
 
+  const readKey = runnerKeyReader(env, commandRedis);
+
   const fastify = Fastify({ logger: true }).withTypeProvider<ZodTypeProvider>();
   fastify.setValidatorCompiler(validatorCompiler);
   fastify.setSerializerCompiler(serializerCompiler);
@@ -115,7 +121,8 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
     lineupCache,
     gameStateStore,
     realtimeSubscriber,
-    readRunnerHeartbeat: runnerHeartbeatReader(env, commandRedis),
+    readRunnerHeartbeat: () => readKey(RUNNER_HEARTBEAT_KEY),
+    readGamePlayerStats: (gameId) => readGamePlayerStats({ get: readKey }, gameId),
   });
   await fastify.register(websocketPlugin);
 
@@ -127,6 +134,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
   await fastify.register(stateRoutes);
   await fastify.register(gamesRoutes);
   await fastify.register(stakesRoutes);
+  await fastify.register(picksRoutes);
   await fastify.register(gameLinksRoutes);
   await fastify.register(sessionRoutes);
   await fastify.register(meRoutes);

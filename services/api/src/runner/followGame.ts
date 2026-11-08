@@ -33,6 +33,11 @@ export interface FollowGameDeps {
   /** Aborted when this process loses the lock. The source is disconnected. */
   signal: AbortSignal;
   pollIntervalMs?: number;
+  /**
+   * Every summary that validated, the seed included, so a game first seen final still settles.
+   * A throw is logged and never stops the game.
+   */
+  onSummary?: (summary: EspnSummary, receivedAt: number) => Promise<void> | void;
 }
 
 /**
@@ -48,6 +53,13 @@ export async function followGame(deps: FollowGameDeps): Promise<void> {
   for (const playId of summaryPlayIds(seeded)) {
     await deps.seen.add(deps.eventId, playId);
   }
+  if (deps.onSummary) {
+    try {
+      await deps.onSummary(seeded, Date.now());
+    } catch (error) {
+      console.error(`[runner] seed onSummary failed ${deps.eventId}: ${failureReason(error)}`);
+    }
+  }
   if (deps.signal.aborted || summaryIsFinal(seeded)) return;
 
   const pollIntervalMs = deps.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
@@ -57,6 +69,7 @@ export async function followGame(deps: FollowGameDeps): Promise<void> {
       client: { getSummary: deps.getSummary },
       initialSeenPlayIds: await deps.seen.members(deps.eventId),
       pollIntervalMs,
+      ...(deps.onSummary ? { onSummary: deps.onSummary } : {}),
     });
     const disconnect = (): void => {
       void source.disconnect();

@@ -10,20 +10,20 @@ Every pick is a row in `stakes` and is tied to exactly one game. A parlay is a `
 
 ### Player props (`subject: { type: 'PLAYER', playerId, teamId }`)
 
-| Prop                            | Condition                                                | ESPN source (summary `boxscore.players[].statistics`)                        |
-| ------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Passing yards                   | `STAT_OVER`/`STAT_UNDER`, `stat: 'PASS_YDS'`             | passing `passingYards`                                                       |
-| Completions                     | `PASS_COMP`                                              | passing `completions/passingAttempts`, left of `/`                           |
-| Pass attempts                   | `PASS_ATT`                                               | same cell, right of `/`                                                      |
-| Passing TDs                     | `PASS_TD`                                                | passing `passingTouchdowns`                                                  |
-| Interceptions thrown            | `INT_THROWN`                                             | **passing** `interceptions` (not the defensive group)                        |
-| Rushing yards / attempts        | `RUSH_YDS` / `RUSH_ATT`                                  | rushing `rushingYards` / `rushingAttempts`                                   |
-| Receiving yards / receptions    | `REC_YDS` / `RECEPTIONS`                                 | receiving `receivingYards` / `receptions`                                    |
-| TDs scored (e.g. 2+ = over 1.5) | `ANY_TD`                                                 | rushing + receiving + kick/punt return + defensive + interception-return TDs |
-| FGs made                        | `FG_MADE`                                                | kicking `fieldGoalsMade/fieldGoalAttempts`, left of `/`                      |
-| Kicking points                  | `KICK_PTS`                                               | kicking `totalKickingPoints`                                                 |
-| Anytime TD                      | `PLAYER_EVENT`, `event: 'ANY_TD'`, `side: 'YES' \| 'NO'` | `ANY_TD` ≥ 1                                                                 |
-| First TD                        | `PLAYER_EVENT`, `event: 'FIRST_TD'`, `side`              | §5                                                                           |
+| Prop                            | Condition                                                | ESPN source (summary `boxscore.players[].statistics`)                                                                                                                 |
+| ------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Passing yards                   | `STAT_OVER`/`STAT_UNDER`, `stat: 'PASS_YDS'`             | passing `passingYards`                                                                                                                                                |
+| Completions                     | `PASS_COMP`                                              | passing `completions/passingAttempts`, left of `/`                                                                                                                    |
+| Pass attempts                   | `PASS_ATT`                                               | same cell, right of `/`                                                                                                                                               |
+| Passing TDs                     | `PASS_TD`                                                | passing `passingTouchdowns`                                                                                                                                           |
+| Interceptions thrown            | `INT_THROWN`                                             | **passing** `interceptions` (not the defensive group)                                                                                                                 |
+| Rushing yards / attempts        | `RUSH_YDS` / `RUSH_ATT`                                  | rushing `rushingYards` / `rushingAttempts`                                                                                                                            |
+| Receiving yards / receptions    | `REC_YDS` / `RECEPTIONS`                                 | receiving `receivingYards` / `receptions`                                                                                                                             |
+| TDs scored (e.g. 2+ = over 1.5) | `ANY_TD`                                                 | rushing + receiving + kick/punt return TDs, plus the larger of `defensiveTouchdowns` and `interceptionTouchdowns` (a pick-six may be listed in both; unverified live) |
+| FGs made                        | `FG_MADE`                                                | kicking `fieldGoalsMade/fieldGoalAttempts`, left of `/`                                                                                                               |
+| Kicking points                  | `KICK_PTS`                                               | kicking `totalKickingPoints`                                                                                                                                          |
+| Anytime TD                      | `PLAYER_EVENT`, `event: 'ANY_TD'`, `side: 'YES' \| 'NO'` | `ANY_TD` ≥ 1                                                                                                                                                          |
+| First TD                        | `PLAYER_EVENT`, `event: 'FIRST_TD'`, `side`              | §5                                                                                                                                                                    |
 
 Lines are multiples of 0.5. An integer line can land exactly, which is a tie.
 
@@ -77,7 +77,7 @@ Lines are multiples of 0.5. An integer line can land exactly, which is a tie.
 - Player prop: `priorityToLeverage(flag.priorityScore) × (0.5 + 0.5 × proximity)`. For an over, `proximity = 1 − min(needed / (2 × bigPlay), 1)`, with bigPlay = 15 rush yds, 25 rec yds, 40 pass yds, 1 for counts. For an under, it measures how close the stat is to going over the line. TD props get +0.25 in the red zone, capped at 1.
 - Team prop: 0.6 with the ball, 0.9 in the red zone.
 - Game-level: existing `lateGameLeverage`.
-- A slip ranks a game **once** (the max over its legs in that game), so a 6-leg same-game parlay doesn't outweigh everything else. The leg's leverage is ×1.0 when it is the slip's last undecided leg and ×0.8 otherwise.
+- A slip ranks a game **once** (a game's score is the max over its picks), so a 6-leg same-game parlay doesn't outweigh everything else. On Home (`/flags/current`), a leg's leverage is ×1.0 when it is the slip's last undecided leg, ×0.8 otherwise, and 0 once the slip has lost. The runner's push priority does not apply this factor.
 
 ## 5. Progress, settlement, first TD
 
@@ -106,7 +106,7 @@ Lines are multiples of 0.5. An integer line can land exactly, which is a tie.
 | Segment `SPREAD_SWING` / `TOTAL_SWING`                                   | REVEAL | The existing rules, applied to the segment's late stretch. Same gate.                                                                                                                                                                                                                                                                                                                                                                           |
 | Results, "leg 2 of 4 alive"                                              | —      | **In-app only in v1.** No push. `GAME_FINAL` stays off.                                                                                                                                                                                                                                                                                                                                                                                         |
 
-Every trigger fires at most once per pick per game (`claimFirstFire`, unchanged). Per-drive dedupe still needs a drive id on `GameState`.
+Every trigger fires at most once per pick per game (`claimFirstFire`, unchanged). A parlay's legs in the same game send at most one event per trigger code per play: the highest-leverage leg. Per-drive dedupe still needs a drive id on `GameState`.
 
 **In-app:** `GET /picks` returns live progress from the Redis snapshot `game_player_stats:{gameId}`, which the runner writes on each summary poll. That is the same live, unheld path `GET /games/live` uses for the scores on Home. Anything in a push goes through the gate.
 
@@ -115,6 +115,8 @@ Every trigger fires at most once per pick per game (`claimFirstFire`, unchanged)
 - `POST /picks`: a single pick `{ pick }` or a parlay `{ legs: [...] }`. Accepts every bet type, including the existing four. Survivor can't be a leg. It validates that the player is active and on one of the game's teams, that the line is a multiple of 0.5 inside the stat's range, and that the same pick doesn't already exist.
 - `GET /picks?week=` returns the singles, the slips with their legs and summary, progress for each pick, `free_slots_used`, and `free_limit`.
 - `DELETE /picks/slips/:id`. Single picks are still deleted with `DELETE /stakes/:id`.
+- Error codes: `stake_game_invalid`, `stake_team_invalid`, `stake_player_invalid`, `stake_line_invalid`, `stake_type_invalid` (400); `slip_leg_invalid` (survivor leg), `slip_week_mismatch` (400); `stake_duplicate`, `survivor_pick_exists`, `slip_duplicate_leg`, `pick_in_slip` (409); `stake_limit_free` (403); `slip_not_found` (404).
+- Runtime: the runner parses each ESPN summary it already polls (`parseEspnPlayerStats`), writes `game_player_stats:{gameId}` (12 h TTL), feeds the bet pass from memory, and settles the game's picks on the first final summary. The seed summary is included, so a runner restart after the final still settles.
 - Demo account: writes are refused with `demo_account_fixed`. `GET /picks` returns the demo fixture's picks with no slips.
 
 **Old iOS builds:** `POST /stakes` and `DELETE /stakes/:id` keep their behavior. `GET /stakes` returns only legacy-shaped rows (one of the four existing types, no `segment`, no slip, not a player subject) and adds the slots that the hidden new rows use to `free_slots_spent`, so an old build's "free left" stays correct.
@@ -123,7 +125,7 @@ Every trigger fires at most once per pick per game (`claimFirstFire`, unchanged)
 
 Migration `20261109120000_picks_props_parlays.sql`:
 
-- `players.espn_id` (unique where set), filled by `pnpm seed:players` from Sleeper's `espn_id`.
+- `players.espn_id` (indexed, not unique, so a duplicate in Sleeper's dump can't fail the seed), filled by `pnpm seed:players` from Sleeper's `espn_id`.
 - `pick_slips` (RLS on, service role only).
 - `stakes.slip_id`, `result`, `result_value`, `settled_at`. The condition CHECK is widened to the new types, plus a CHECK that a leg is never fantasy or survivor.
 - `stake_spent_slots.slot_kind` (`stake` | `slip`).
