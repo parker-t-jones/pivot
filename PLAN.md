@@ -239,11 +239,11 @@ priority = (active_players × 2)
 **v1:** Free App Store download + optional Pro in-app subscription (RevenueCat / StoreKit).
 
 
-|                                 | Free              | Pro (`pivot_pro_monthly`, target $9.99/mo) |
-| ------------------------------- | ----------------- | ------------------------------------------ |
-| Connected leagues               | Max **3**         | Unlimited                                  |
-| Watched leagues (Active Lineup) | Exactly **1**     | **1+** multi-select + Select all           |
-| Manual lineup size              | Max **9** players | Unlimited                                  |
+|                                 | Free              | Pro (`pivot_pro_monthly`, price from RevenueCat; launched at $4.99/mo) |
+| ------------------------------- | ----------------- | ---------------------------------------------------------------------- |
+| Connected leagues               | Max **3**         | Unlimited                                                              |
+| Watched leagues (Active Lineup) | Exactly **1**     | **1+** multi-select + Select all                                       |
+| Manual lineup size              | Max **9** players | Unlimited                                                              |
 
 
 - `users.subscription_tier`: `'free' | 'pro'` (default `'free'`). Synced from RevenueCat webhooks (`POST /billing/revenuecat`) and refreshed client-side after purchase/restore.
@@ -1926,7 +1926,7 @@ Issues that need resolution but don't block the build:
    obtain per-broadcast content IDs at scale, per provider?" — a data-sourcing and possibly
    partnership problem, not a client-engineering one. Section 15's partnership work is the most
    plausible unlock; it would also make this moot for any partner whose video we embed directly.
-3. **Pro annual SKU / price research.** Monthly Pro is `$9.99` via RevenueCat (`pivot_pro_monthly`); annual and packaging experiments deferred.
+3. **Pro annual SKU / price research.** Monthly Pro (`pivot_pro_monthly`) launched at $4.99/month. The app reads the price from RevenueCat and never hardcodes it; with no store price the button reads "Upgrade to Pro". Annual and packaging experiments deferred.
 4. **Pivot trademark clearance.** Informal web searches turned up nothing conflicting with
   the name, but that is not formal clearance. A real search (e.g. USPTO TESS) and/or legal counsel
    review is still outstanding before App Store Connect listing and any trademark filing. Do not

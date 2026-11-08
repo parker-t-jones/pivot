@@ -61,7 +61,7 @@ Report the actual numbers. Never claim a gate passed without running it.
 - **No "edge" positioning.** ESPN's feed runs ahead of the broadcast. Never expose that head start as a feature, especially to bettors.
 - **Pivot never takes wagers**, never shows promo codes or affiliate links, and never nudges anyone to place a bet.
 - **Free-tier caps are enforced server-side** with HTTP 403 + a snake_case `code` (e.g. `league_limit_free`, `stake_limit_free`); the client maps codes in `app/lib/upgradePrompt.ts`. Survivor picks do not count toward the 3 free bets. `users.subscription_tier` is written only by the RevenueCat webhook (service role); never add a client write path.
-- **Prices come from RevenueCat.** Don't hardcode a price in copy. (Known issue: `UPGRADE_PRICE_FALLBACK` in `app/lib/upgradeCopy.ts` still says $9.99; launch price is $4.99.)
+- **Prices come from RevenueCat.** Don't hardcode a price in copy or code (`scripts/upgradeCopy.test.ts` fails on a `$`-digit price in app source). With no store price the button reads "Upgrade to Pro" and a tap retries offerings. Launch price is $4.99/month.
 - **The App Store reviewer demo account must keep working.** Users with `is_demo` are pinned to a fixture live game and lineup (`services/api/src/lib/demoAccount.ts`, `demoFixture.ts`, `demoAlert.ts`); writes are refused with `demo_account_fixed`. Don't break or bypass that path.
 
 ## Frozen identifiers — never change

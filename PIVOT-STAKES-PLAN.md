@@ -337,7 +337,7 @@ Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via
 - **Where it's enforced:** on the API. `POST /stakes` returns **403** with `code: 'stake_limit_free'` and `details: { limit: 3 }`, matching the existing cap convention. Add `stake_limit_free` to the code list in `app/lib/upgradePrompt.ts` so the paywall opens. Never enforce only on the client.
 
 ### 10.3 Products (RevenueCat)
-- `pivot_pro_monthly`: existing, auto-renewing. **This is the only Pro product.** The price comes from RevenueCat; don't hard-code it in copy.
+- `pivot_pro_monthly`: existing, auto-renewing. **This is the only Pro product.** Launched at $4.99/month. The price is set in App Store Connect and read from RevenueCat at runtime; the client never hardcodes it.
 - **No Season Pass (Nov 8, 2026).** The earlier plan for a non-renewing `pivot_pro_season` product is withdrawn: only the monthly product exists in RevenueCat. It may return before the 2027 season. If it does, it needs its own design pass covering an expiry-aware entitlement (a stored expiry plus a read-time Pro check, since a non-renewing product lapses with no inbound event), the paywall layout, and a late-season cutoff.
 - **Entitlement model:** unchanged. `users.subscription_tier` is written only by the RevenueCat webhook (grant and revoke events for the monthly product), and the server gating reads keep reading it.
 - **Purchases client (real-money hardening):**
@@ -356,7 +356,7 @@ Free covers 3 leagues, 1 Active Lineup and 3 bets a week. Pro removes the caps.
 ▸ Unlimited bets, props, markets and pools
 ▸ Unlimited manual lineup players
 
-[ {monthly price} / month ]     ← primary, gold
+[ {RevenueCat price} / month ]  ← primary, gold
 Restore purchases                Not now
 ```
 
