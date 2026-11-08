@@ -44,17 +44,23 @@ export interface WeekCardInputs {
   survivorCount: number | null;
   /** `subscription_tier === 'pro'`. */
   isPro: boolean;
+  /** NFL week the card is for. `null` before the week is known. */
+  week?: number | null;
+  /** Games this week the card covers (`cardGameCount`). `null` while unknown. */
+  gameCount?: number | null;
 }
 
 export interface WeekCardCell {
   label: string;
   value: string;
-  /** Free remaining-allowance copy uses `accent`. Everything else stays primary. */
+  /** `note` (the free allowance) is in the accent color. Values stay primary. */
   accent: boolean;
   /** Failed request. The value is an em dash in the muted color, never 0. */
   muted: boolean;
   /** Desktop segment when it differs from `label` + `value`. */
   strip?: string;
+  /** Second line under the value: the free allowance. Absent on Pro. */
+  note?: string;
   /** Free user has used the weekly allowance. */
   upgrade?: boolean;
   /** Opponent cell can be tapped to toggle tracking. */
@@ -62,6 +68,10 @@ export interface WeekCardCell {
 }
 
 export interface WeekCardModel {
+  /** "YOUR WEEK 9 CARD", or "YOUR WEEK CARD" before the week is known. */
+  eyebrow: string;
+  /** "6 GAMES" / "1 GAME". `null` hides it. */
+  gameCountLabel: string | null;
   fantasy: WeekCardCell;
   opponent: WeekCardCell;
   bets: WeekCardCell;
@@ -70,24 +80,24 @@ export interface WeekCardModel {
 
 const UNKNOWN = '\u2014';
 
+const BETS_LABEL = 'Bets & props';
+
 function betCell(count: number | null, isPro: boolean): WeekCardCell {
   if (count == null) {
-    return {
-      label: isPro ? 'Bets & props' : 'Free bets',
-      value: UNKNOWN,
-      accent: false,
-      muted: true,
-    };
+    return { label: BETS_LABEL, value: UNKNOWN, accent: false, muted: true };
   }
+  const value = String(count);
   if (isPro) {
-    return { label: 'Bets & props', value: String(count), accent: false, muted: false };
+    return { label: BETS_LABEL, value, accent: false, muted: false };
   }
   const left = Math.max(0, FREE_BET_ALLOWANCE - count);
   const atCap = count >= FREE_BET_ALLOWANCE;
+  const note = atCap ? 'No free bets left' : `${left} free left`;
   return {
-    label: 'Free bets',
-    value: atCap ? 'No free bets left' : `${left} left`,
-    strip: atCap ? 'No free bets left' : `${left} free bets left this week`,
+    label: BETS_LABEL,
+    value,
+    note,
+    strip: `${BETS_LABEL} ${value} \u00b7 ${note}`,
     accent: true,
     muted: false,
     upgrade: atCap,
@@ -103,7 +113,11 @@ function countValue(
 }
 
 export function weekCardModel(inputs: WeekCardInputs): WeekCardModel {
+  const week = inputs.week ?? null;
+  const games = inputs.gameCount ?? null;
   return {
+    eyebrow: week == null ? 'YOUR WEEK CARD' : `YOUR WEEK ${week} CARD`,
+    gameCountLabel: games == null ? null : `${games} ${games === 1 ? 'GAME' : 'GAMES'}`,
     fantasy: {
       label: 'Fantasy',
       ...countValue(inputs.starterCount, (count) => ({ value: String(count), accent: false })),
@@ -111,7 +125,7 @@ export function weekCardModel(inputs: WeekCardInputs): WeekCardModel {
     opponent: opponentCell(inputs.opponentStatus),
     bets: betCell(inputs.betCount, inputs.isPro),
     pools: {
-      label: 'Pools',
+      label: 'Survivor pool',
       ...countValue(inputs.survivorCount, (count) => ({ value: String(count), accent: false })),
     },
   };
@@ -154,6 +168,32 @@ export function sparseBetPrompt(input: {
   const left = FREE_BET_ALLOWANCE - input.betsUsed;
   if (left <= 0) return null;
   return `${left} free bets left · Add a pick`;
+}
+
+/**
+ * Distinct games this week the card covers: games a playing starter's team is in,
+ * plus games with a pick. Picks outside the week schedule are left out.
+ */
+export function cardGameCount(
+  starterTeams: readonly (string | null | undefined)[],
+  stakeGameIds: readonly string[],
+  weekGames: readonly { game_id: string; home_team: string; away_team: string }[],
+): number {
+  const teams = new Set(
+    starterTeams.map((abbr) => abbr?.trim().toUpperCase() ?? '').filter((abbr) => abbr.length > 0),
+  );
+  const picked = new Set(stakeGameIds);
+  let count = 0;
+  for (const game of weekGames) {
+    if (
+      picked.has(game.game_id) ||
+      teams.has(game.home_team.trim().toUpperCase()) ||
+      teams.has(game.away_team.trim().toUpperCase())
+    ) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 export interface BrowsedStarterSlot {

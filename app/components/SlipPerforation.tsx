@@ -30,6 +30,11 @@ interface SlipPerforationProps {
    * dashes replace a bottom border.
    */
   edge?: 'ticket' | 'card';
+  /**
+   * Card mode only: the fill above the dashes. `surface` (default) is a raised card
+   * on the page background. `background` is a black `Slip`, like the WeekCard.
+   */
+  above?: 'surface' | 'background';
 }
 
 function dashes(count: number): ReactElement[] {
@@ -78,13 +83,17 @@ function DashRule({ testID, style }: { testID: string; style?: StyleProp<ViewSty
  * half-circle notch at each end, filled with the Slip background so the cut reads as a hole
  * through the card.
  */
-export function SlipPerforation({ style, edge = 'ticket' }: SlipPerforationProps) {
+export function SlipPerforation({
+  style,
+  edge = 'ticket',
+  above = 'surface',
+}: SlipPerforationProps) {
   if (edge === 'card') {
     return (
       <View style={[cardStyles.row, style]} testID="slip-perforation-card">
         <CardNotch side="left" />
         <View style={cardStyles.middle}>
-          <View style={cardStyles.above} />
+          <View style={above === 'background' ? cardStyles.below : cardStyles.above} />
           <DashRule style={cardStyles.rule} testID="slip-perforation-dashes" />
           <View style={cardStyles.below} />
         </View>

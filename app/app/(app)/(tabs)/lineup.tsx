@@ -18,12 +18,8 @@ import { DemoEditingBanner } from '../../../components/DemoEditingBanner';
 import { ErrorState } from '../../../components/ErrorState';
 import { LoadingState } from '../../../components/LoadingState';
 import { SecondaryButton } from '../../../components/SecondaryButton';
-import {
-  RosterStripCard,
-  SpreadLineCard,
-  SurvivorBadgeCard,
-  TotalLineCard,
-} from '../../../components/StakeCards';
+import { PickCard } from '../../../components/PickCard';
+import { RosterStripCard } from '../../../components/StakeCards';
 import { TextButton } from '../../../components/TextButton';
 import { WatchlistDesktop } from '../../../components/WatchlistDesktop';
 import { WatchlistFilters } from '../../../components/WatchlistFilters';
@@ -71,15 +67,8 @@ import {
   type LiveGame,
   type ScheduleGame,
 } from '../../../lib/schedule';
-import {
-  pickedSideOf,
-  rosterStripInputs,
-  rosterStripModel,
-  spreadLineModel,
-  survivorBadgeModel,
-  totalLineModel,
-  type GameScore,
-} from '../../../lib/stakeCards';
+import { pickCardModel } from '../../../lib/pickCard';
+import { rosterStripInputs, rosterStripModel } from '../../../lib/stakeCards';
 import { formatStakeLabel, stakeTeams, type ManualStake } from '../../../lib/stakes';
 import { subscribeAddPickSaved } from '../../../lib/addPickDrawer';
 import { flushStakeUndo, takePendingStakeUndo } from '../../../lib/stakeUndoStore';
@@ -90,6 +79,7 @@ import { useOpenAddPick } from '../../../lib/useOpenAddPick';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
 import {
   browsedStarterCount,
+  cardGameCount,
   freeBetCount,
   isBenchSlot,
   opponentStripStatus,
@@ -576,6 +566,7 @@ export default function LineupScreen() {
   const showActions = watchlist && sections.includes('leagueActions');
   const showPropBets = watchlist && sections.includes('bets');
   const showPools = watchlist && sections.includes('pools');
+  const headerWeek = watchlist ? (lineup?.week ?? nflWeek) : (lineup?.week ?? null);
   const weekCard = weekCardModel({
     starterCount:
       browsedLeagueReady && weekGames != null ? browsedStarterCount(lineup.slots, weekGames) : null,
@@ -583,6 +574,17 @@ export default function LineupScreen() {
     betCount: stakesKnown ? freeBetCount(bets) : null,
     survivorCount: stakesKnown ? poolBets.length : null,
     isPro: me?.subscription_tier === 'pro',
+    week: headerWeek,
+    gameCount:
+      weekGames != null && stakesKnown
+        ? cardGameCount(
+            browsedLeagueReady
+              ? starterSlots.map((slot) => slot.player.team?.abbreviation ?? null)
+              : [],
+            bets.map((stake) => stake.game_id),
+            weekGames,
+          )
+        : null,
   });
   const betPrompt =
     filter === 'bets' && stakesKnown
@@ -592,7 +594,6 @@ export default function LineupScreen() {
           isPro: me?.subscription_tier === 'pro',
         })
       : null;
-  const headerWeek = watchlist ? (lineup?.week ?? nflWeek) : (lineup?.week ?? null);
 
   const onWatchOpponent = async (next: boolean) => {
     if (watchOpponentSave.current || next === watchOpponent) return;
@@ -1125,6 +1126,7 @@ export default function LineupScreen() {
                   }
                 : undefined
             }
+            now={now}
             onRemove={confirmRemoveBet}
             prompt={betPrompt}
             stakes={propBets}
@@ -1137,6 +1139,7 @@ export default function LineupScreen() {
             editsLocked={editsLocked}
             empty="No pools this week."
             liveGames={liveGames}
+            now={now}
             onRemove={confirmRemoveBet}
             stakes={poolBets}
             title="POOLS"
@@ -1239,6 +1242,7 @@ function BetGroup({
   onRemove,
   prompt,
   onAdd,
+  now,
   editsLocked = false,
 }: {
   title: string;
@@ -1246,6 +1250,7 @@ function BetGroup({
   stakes: ManualStake[];
   liveGames: readonly LiveGame[];
   weekGames: ScheduleGame[] | null;
+  now: Date;
   onRemove: (stake: ManualStake) => void;
   prompt?: string | null;
   onAdd?: () => void;
@@ -1262,6 +1267,7 @@ function BetGroup({
           editsLocked={editsLocked}
           key={stake.id}
           liveGames={liveGames}
+          now={now}
           onRemove={onRemove}
           stake={stake}
           weekGames={weekGames}
@@ -1278,125 +1284,23 @@ function StakeEntry({
   stake,
   liveGames,
   weekGames,
+  now,
   onRemove,
   editsLocked = false,
 }: {
   stake: ManualStake;
   liveGames: readonly LiveGame[];
   weekGames: ScheduleGame[] | null;
+  now: Date;
   onRemove: (stake: ManualStake) => void;
   editsLocked?: boolean;
 }) {
-  const type = stake.condition.type;
-  const game = stake.game;
-  const line = stake.condition.line;
-  const side = game ? pickedSideOf(stake.subject.teamId, game) : null;
-  const status = stakeStatus(stake, liveGames, weekGames);
-  const score = stakeScore(stake, liveGames);
-
-  if (type === 'SPREAD' && game && side && typeof line === 'number') {
-    return (
-      <View style={styles.stakeCard}>
-        <SpreadLineCard
-          axisLabel="14"
-          kickoff={stakeKickoff(stake)}
-          label={formatStakeLabel(stake, stakeTeams(stake))}
-          matchup={stakeMatchup(stake)}
-          model={spreadLineModel({ line, pickedSide: side, status, score })}
-        />
-        {editsLocked ? null : (
-          <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
-        )}
-      </View>
-    );
-  }
-
-  if ((type === 'TOTAL_OVER' || type === 'TOTAL_UNDER') && typeof line === 'number') {
-    return (
-      <View style={styles.stakeCard}>
-        <TotalLineCard
-          axisLabel="21"
-          kickoff={stakeKickoff(stake)}
-          label={formatStakeLabel(stake, stakeTeams(stake))}
-          matchup={stakeMatchup(stake)}
-          model={totalLineModel({
-            line,
-            side: type === 'TOTAL_OVER' ? 'over' : 'under',
-            status,
-            score,
-          })}
-        />
-        {editsLocked ? null : (
-          <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
-        )}
-      </View>
-    );
-  }
-
-  if (type === 'SURVIVOR' && game && side) {
-    const abbreviation =
-      stakeTeams(stake).find((team) => team.teamId === stake.subject.teamId)?.abbreviation ??
-      (side === 'home' ? game.home_team : game.away_team);
-    return (
-      <View style={styles.stakeCard}>
-        <SurvivorBadgeCard
-          model={survivorBadgeModel({ abbreviation, pickedSide: side, status, score })}
-        />
-        {editsLocked ? null : (
-          <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
-        )}
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.betRow}>
-      <View style={styles.playerInfo}>
-        <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.playerName}>
-          {formatStakeLabel(stake, stakeTeams(stake))}
-        </Text>
-        <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.playerMeta}>
-          {stakeMeta(stake)}
-        </Text>
-      </View>
-      {editsLocked ? null : (
-        <TextButton label="Remove" onPress={() => onRemove(stake)} tone="danger" />
-      )}
-    </View>
+    <PickCard
+      model={pickCardModel({ stake, teams: stakeTeams(stake), weekGames, liveGames, now })}
+      onRemove={editsLocked ? undefined : () => onRemove(stake)}
+    />
   );
-}
-
-function stakeStatus(
-  stake: ManualStake,
-  liveGames: readonly LiveGame[],
-  weekGames: ScheduleGame[] | null,
-): string {
-  if (liveGames.some((game) => game.game_id === stake.game_id)) return 'in_progress';
-  return (
-    weekGames?.find((game) => game.game_id === stake.game_id)?.status ??
-    stake.game?.status ??
-    'scheduled'
-  );
-}
-
-function stakeScore(stake: ManualStake, liveGames: readonly LiveGame[]): GameScore | null {
-  return liveGames.find((game) => game.game_id === stake.game_id)?.score ?? null;
-}
-
-function stakeMatchup(stake: ManualStake): string {
-  if (!stake.game) return '';
-  return `${stake.game.away_team} @ ${stake.game.home_team}`;
-}
-
-function stakeKickoff(stake: ManualStake): string {
-  if (!stake.game) return '';
-  const when = new Date(stake.game.scheduled_start);
-  if (Number.isNaN(when.getTime())) return '';
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(when);
 }
 
 function LineupHeader({ week }: { week: number | null }) {
@@ -1640,9 +1544,6 @@ const styles = StyleSheet.create({
   content: {
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg2,
-  },
-  stakeCard: {
-    gap: theme.spacing.sm,
   },
   betRow: {
     alignItems: 'center',

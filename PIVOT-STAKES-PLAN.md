@@ -526,9 +526,9 @@ Rules:
 - **Rename the "Lineup" tab to "Watchlist" only when stakes Phase 3 ships.** Until then, the Lineup tab and its screens are unchanged.
 - **Layout, top to bottom:**
   1. A "WEEK {n}" eyebrow and "Watchlist" title.
-  2. The **week card** (`Slip` with perforation): a 2×2 grid of Fantasy (starters), Opponent (tracking / off), Bets & props ("{used} of 3 free" in `accent` for Free users, the plain count for Pro), and Pools. Below the grid, a primary "Add a stake" button.
-  3. Filter pills: All / Fantasy / Bets / Markets / Pools.
-  4. Stake-shaped cards (Section 11.2).
+  2. The **week card** (black `Slip`): a "YOUR WEEK {n} CARD" eyebrow with the game count on the right ("6 GAMES": distinct games this week with a playing starter in the browsed league or a pick), then a labeled 2×2 grid of Fantasy (starters), Opponent (Tracking / Off / Sleeper only), Bets & props (the count, plus "{n} free left" in `accent` for Free users, "No free bets left" with Upgrade at the cap, nothing extra on Pro), and Survivor pool. Below the grid, a card-edge perforation and a primary "Add a pick" button.
+  3. Filter pills: All / Fantasy / Bets / Pools. No Markets tab (prediction markets are not built).
+  4. One card per non-fantasy pick (`PickCard`, issue #13): a type eyebrow (SPREAD, TOTAL, MONEYLINE, SURVIVOR), the pick in `accent` ("DET −3.5", "O 84.5"), the matchup and kickoff or live status top-right, a live progress bar from the live feed (spread cover margin, total against its line, the picked team's margin for moneyline and survivor), and a dimmed FINAL. The client has no final scores, so a final card shows no outcome. On desktop the Pick column shows the same eyebrow and accent pick.
 - The league management actions from today's Lineup screen (connect, sync, edit lineup, disconnect) move into the Fantasy filter view as a header block. They must stay reachable within 2 taps.
 
 ### 11.5 Verify (Phases U1–U4)

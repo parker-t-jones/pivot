@@ -14,7 +14,8 @@ import { slotLabel } from '../lib/lineupOrder';
 import type { LineupSlot } from '../lib/leagues';
 import type { LiveGame, ScheduleGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
-import { formatStakeLabel, stakeTeams, type ManualStake } from '../lib/stakes';
+import { pickEyebrow, pickText } from '../lib/pickCard';
+import { stakeTeams, type ManualStake } from '../lib/stakes';
 import { isBenchSlot } from '../lib/weekCardModel';
 import { webPressState } from '../lib/webPress';
 import {
@@ -187,7 +188,9 @@ export function WatchlistDesktop({
             <TextButton label="Upgrade" onPress={() => openUpgrade()} size="small" />
           ) : null}
           <Text style={styles.strip}>·</Text>
-          <Text style={styles.strip}>Pools {weekCard.pools.value}</Text>
+          <Text style={styles.strip}>
+            {weekCard.pools.label} {weekCard.pools.value}
+          </Text>
         </View>
         <WatchlistFilters onChange={onFilter} value={filter} />
         {extras}
@@ -243,7 +246,12 @@ export function WatchlistDesktop({
   );
 }
 
-type DesktopRow = WatchlistTableRow & { muted: boolean; quiet?: boolean };
+type DesktopRow = WatchlistTableRow & {
+  muted: boolean;
+  quiet?: boolean;
+  /** Pick rows: type eyebrow (SPREAD, TOTAL, …) above the pick, which is in accent. */
+  eyebrow?: string;
+};
 
 function TableHead() {
   return (
@@ -375,7 +383,21 @@ function TableRow({
         {row.slot}
       </Text>
       <View style={styles.playerCol}>
-        <Text numberOfLines={1} style={[styles.name, row.muted && styles.nameMuted]}>
+        {row.eyebrow ? (
+          <Text numberOfLines={1} style={styles.pickEyebrow}>
+            {row.eyebrow}
+          </Text>
+        ) : null}
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.name,
+            row.muted && styles.nameMuted,
+            row.eyebrow != null && styles.pickName,
+            row.eyebrow != null && row.statusMuted && styles.pickNameFinal,
+          ]}
+          testID={row.eyebrow != null ? 'watchlist-pick' : undefined}
+        >
           {row.name}
         </Text>
         {row.meta.length > 0 ? (
@@ -513,8 +535,8 @@ function stakeRow(
     ...watchlistStakeRow({
       id: stake.id,
       slot,
-      name: formatStakeLabel(stake, stakeTeams(stake)),
-      meta: stakeKind(stake),
+      name: pickText(stake, stakeTeams(stake)),
+      meta: '',
       gameId: stake.game_id,
       matchup,
       kickoff,
@@ -524,23 +546,8 @@ function stakeRow(
       timeZone,
     }),
     muted: false,
+    eyebrow: pickEyebrow(stake.condition.type),
   };
-}
-
-function stakeKind(stake: ManualStake): string {
-  switch (stake.condition.type) {
-    case 'SPREAD':
-      return 'Spread';
-    case 'TOTAL_OVER':
-    case 'TOTAL_UNDER':
-      return 'Total';
-    case 'MONEYLINE':
-      return 'Moneyline';
-    case 'SURVIVOR':
-      return 'Survivor';
-    default:
-      return '';
-  }
 }
 
 function stakeKickoff(stake: ManualStake): string {
@@ -698,6 +705,18 @@ const styles = StyleSheet.create({
   },
   nameMuted: {
     color: theme.colors.textSecondary,
+  },
+  pickEyebrow: {
+    color: theme.colors.brass,
+    fontFamily: theme.type.eyebrow.fontFamily,
+    fontSize: theme.type.eyebrow.size,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
+  },
+  pickName: {
+    color: theme.colors.accent,
+  },
+  pickNameFinal: {
+    color: theme.colors.textTertiary,
   },
   network: {
     color: theme.colors.textSecondary,

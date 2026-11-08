@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   browsedStarterCount,
+  cardGameCount,
   freeBetCount,
   opponentStripStatus,
   sparseBetPrompt,
@@ -19,11 +20,12 @@ const free: WeekCardInputs = {
 };
 
 describe('weekCardModel', () => {
-  it('shows 3 left for a Free user with no bets', () => {
+  it('says 3 free left for a Free user with no bets', () => {
     expect(weekCardModel(free).bets).toEqual({
-      label: 'Free bets',
-      value: '3 left',
-      strip: '3 free bets left this week',
+      label: 'Bets & props',
+      value: '0',
+      note: '3 free left',
+      strip: 'Bets & props 0 \u00b7 3 free left',
       accent: true,
       muted: false,
       upgrade: false,
@@ -39,8 +41,8 @@ describe('weekCardModel', () => {
     ];
     expect(freeBetCount(stakes)).toBe(1);
     const bets = weekCardModel({ ...free, betCount: freeBetCount(stakes), survivorCount: 2 }).bets;
-    expect(bets.value).toBe('2 left');
-    expect(bets.strip).toBe('2 free bets left this week');
+    expect(bets.value).toBe('1');
+    expect(bets.note).toBe('2 free left');
 
     const atCap = [
       { condition: { type: 'SPREAD' } },
@@ -49,7 +51,7 @@ describe('weekCardModel', () => {
       { condition: { type: 'SURVIVOR' } },
     ];
     expect(freeBetCount(atCap)).toBe(3);
-    expect(weekCardModel({ ...free, betCount: freeBetCount(atCap) }).bets.value).toBe(
+    expect(weekCardModel({ ...free, betCount: freeBetCount(atCap) }).bets.note).toBe(
       'No free bets left',
     );
   });
@@ -60,9 +62,10 @@ describe('weekCardModel', () => {
     expect(
       weekCardModel({ ...free, betCount: freeBetCount(survivors), survivorCount: 2 }).bets,
     ).toEqual({
-      label: 'Free bets',
-      value: '3 left',
-      strip: '3 free bets left this week',
+      label: 'Bets & props',
+      value: '0',
+      note: '3 free left',
+      strip: 'Bets & props 0 \u00b7 3 free left',
       accent: true,
       muted: false,
       upgrade: false,
@@ -71,45 +74,55 @@ describe('weekCardModel', () => {
     const spread = [...survivors, { condition: { type: 'SPREAD' } }];
     expect(freeBetCount(spread)).toBe(1);
     expect(
-      weekCardModel({ ...free, betCount: freeBetCount(spread), survivorCount: 2 }).bets.value,
-    ).toBe('2 left');
+      weekCardModel({ ...free, betCount: freeBetCount(spread), survivorCount: 2 }).bets.note,
+    ).toBe('2 free left');
 
     const total = [...spread, { condition: { type: 'TOTAL_OVER' } }];
     expect(freeBetCount(total)).toBe(2);
     expect(
-      weekCardModel({ ...free, betCount: freeBetCount(total), survivorCount: 2 }).bets.value,
-    ).toBe('1 left');
+      weekCardModel({ ...free, betCount: freeBetCount(total), survivorCount: 2 }).bets.note,
+    ).toBe('1 free left');
 
     const atCap = [...total, { condition: { type: 'MONEYLINE' } }];
     expect(freeBetCount(atCap)).toBe(3);
     expect(
       weekCardModel({ ...free, betCount: freeBetCount(atCap), survivorCount: 2 }).bets,
     ).toEqual({
-      label: 'Free bets',
-      value: 'No free bets left',
-      strip: 'No free bets left',
+      label: 'Bets & props',
+      value: '3',
+      note: 'No free bets left',
+      strip: 'Bets & props 3 \u00b7 No free bets left',
       accent: true,
       muted: false,
       upgrade: true,
     });
   });
 
-  it('shows 2 left with one bet', () => {
+  it('says 2 free left with one bet', () => {
     expect(weekCardModel({ ...free, betCount: 1 }).bets).toEqual({
-      label: 'Free bets',
-      value: '2 left',
-      strip: '2 free bets left this week',
+      label: 'Bets & props',
+      value: '1',
+      note: '2 free left',
+      strip: 'Bets & props 1 \u00b7 2 free left',
       accent: true,
       muted: false,
       upgrade: false,
     });
   });
 
+  it('never says "of 3 free"', () => {
+    for (const betCount of [0, 1, 2, 3]) {
+      const bets = weekCardModel({ ...free, betCount }).bets;
+      expect(`${bets.value} ${bets.note ?? ''} ${bets.strip ?? ''}`).not.toMatch(/of 3/);
+    }
+  });
+
   it('says there are no free bets left at the cap and offers Upgrade', () => {
     expect(weekCardModel({ ...free, betCount: 3 }).bets).toEqual({
-      label: 'Free bets',
-      value: 'No free bets left',
-      strip: 'No free bets left',
+      label: 'Bets & props',
+      value: '3',
+      note: 'No free bets left',
+      strip: 'Bets & props 3 \u00b7 No free bets left',
       accent: true,
       muted: false,
       upgrade: true,
@@ -118,13 +131,13 @@ describe('weekCardModel', () => {
 
   it('stays at no free bets left when the count is over the cap', () => {
     const bets = weekCardModel({ ...free, betCount: 4 }).bets;
-    expect(bets.value).toBe('No free bets left');
-    expect(bets.strip).toBe('No free bets left');
+    expect(bets.note).toBe('No free bets left');
+    expect(bets.strip).toBe('Bets & props 4 \u00b7 No free bets left');
     expect(bets.upgrade).toBe(true);
     expect(bets.value.includes('-')).toBe(false);
   });
 
-  it('shows the plain count for Pro', () => {
+  it('shows the plain count for Pro, with no free note', () => {
     expect(weekCardModel({ ...free, betCount: 4, isPro: true }).bets).toEqual({
       label: 'Bets & props',
       value: '4',
@@ -179,19 +192,20 @@ describe('weekCardModel', () => {
       muted: true,
     });
     expect(model.opponent.value).toBe('Off');
-    expect(model.bets.value).toBe('3 left');
+    expect(model.bets.note).toBe('3 free left');
     expect(model.pools.value).toBe('1');
   });
 
   it('renders an em dash for a failed bet count and does not say of 3 free', () => {
     const model = weekCardModel({ ...free, betCount: null, isPro: false });
     expect(model.bets).toEqual({
-      label: 'Free bets',
+      label: 'Bets & props',
       value: '\u2014',
       accent: false,
       muted: true,
     });
     expect(model.bets.value).not.toContain('free');
+    expect(model.bets.note).toBeUndefined();
     expect(model.fantasy.value).toBe('9');
     expect(model.opponent.value).toBe('Off');
     expect(model.pools.value).toBe('1');
@@ -199,11 +213,55 @@ describe('weekCardModel', () => {
 
   it('renders an em dash for a failed pool count', () => {
     expect(weekCardModel({ ...free, survivorCount: null }).pools).toEqual({
-      label: 'Pools',
+      label: 'Survivor pool',
       value: '\u2014',
       accent: false,
       muted: true,
     });
+  });
+});
+
+describe('week card heading', () => {
+  it('says YOUR WEEK n CARD with the game count on the right', () => {
+    const model = weekCardModel({ ...free, week: 9, gameCount: 6 });
+    expect(model.eyebrow).toBe('YOUR WEEK 9 CARD');
+    expect(model.gameCountLabel).toBe('6 GAMES');
+  });
+
+  it('says 1 GAME, and hides the count while it is unknown', () => {
+    expect(weekCardModel({ ...free, week: 9, gameCount: 1 }).gameCountLabel).toBe('1 GAME');
+    expect(weekCardModel({ ...free, week: 9, gameCount: null }).gameCountLabel).toBeNull();
+    expect(weekCardModel(free).eyebrow).toBe('YOUR WEEK CARD');
+  });
+
+  it('labels the four cells Fantasy, Opponent, Bets & props, and Survivor pool', () => {
+    const model = weekCardModel(free);
+    expect([model.fantasy, model.opponent, model.bets, model.pools].map((c) => c.label)).toEqual([
+      'Fantasy',
+      'Opponent',
+      'Bets & props',
+      'Survivor pool',
+    ]);
+  });
+});
+
+describe('cardGameCount', () => {
+  const games = [
+    { game_id: 'g1', home_team: 'DET', away_team: 'GB' },
+    { game_id: 'g2', home_team: 'KC', away_team: 'BUF' },
+    { game_id: 'g3', home_team: 'SF', away_team: 'SEA' },
+  ];
+
+  it('counts each game once across starters and picks', () => {
+    expect(cardGameCount(['DET', 'gb', 'KC'], ['g1', 'g2'], games)).toBe(2);
+  });
+
+  it('adds games that only have a pick, and skips picks outside the week', () => {
+    expect(cardGameCount(['DET'], ['g3', 'other-week'], games)).toBe(2);
+  });
+
+  it('is zero with no starters or picks, and ignores missing teams', () => {
+    expect(cardGameCount([null, '', undefined], [], games)).toBe(0);
   });
 });
 
