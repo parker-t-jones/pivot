@@ -6,11 +6,12 @@
 
 **Audience:** Cursor, implementing in phases. Each phase is a gated commit set with a baseline, a before/after check, and explicit verification steps.
 
-**Revision (Sept 24, 2026):** corrected against `docs/STAKES-PLAN-RECON.md` (repo at `f1e0963`). Where this plan and the recon disagree on a *fact about the code*, the recon wins. Flag any remaining mismatch instead of guessing.
+**Revision (Sept 24, 2026):** corrected against `docs/STAKES-PLAN-RECON.md` (repo at `f1e0963`). Where this plan and the recon disagree on a _fact about the code_, the recon wins. Flag any remaining mismatch instead of guessing.
 
 **Revision (Sept 27, 2026):** §11.3 live mode mapping (`state1` / `state2`) records Parker's U4 decisions. The V2 mockup's live layout is superseded.
 
 ### Repo facts every phase must use
+
 - **Test command:** `pnpm test` at the repo root (root `vitest.config.ts`). `pnpm --filter app test` and `pnpm -r test` run **zero tests** and exit 0. Never use them as a gate.
 - **Component tests:** the vitest config collects `.ts` only, in a `node` environment. There are no component tests, and adding a React Native testing setup is out of scope unless a phase says so. UI regressions are verified with before/after simulator screenshots.
 - **Type check:** `pnpm typecheck`.
@@ -38,6 +39,7 @@
    - per-game notification collapse (see §3 rules). This is **not** simply re-keying the rate limiter, which would loosen the global cap.
 
    UI phases U1–U3, U5 and M1 do **not** depend on P0. M2 and U7 depend on it indirectly, through stakes Phase 3.
+
 2. **Frozen identifiers are untouched:** bundle ID `com.fantasyfocus.app`, EAS slug `fantasy-focus`, Supabase `project_id: FantasyFocusApp`.
 3. **No production deploys on live-game days** (Thu, Sun, Mon during the NFL season). Unproven data sources and triggers go into `experiments/` first and are validated against real games before they are promoted.
 4. **Nudge vs. reveal classification is mandatory.** Every new trigger must declare `kind: 'NUDGE' | 'REVEAL'`.
@@ -59,16 +61,16 @@
 
 ## 1. Target user segments (priority order)
 
-| # | Segment | What they have riding | Why Pivot fits | Phase |
-|---|---|---|---|---|
-| 1 | Fantasy managers (existing) | Their own roster | Core v1 | Done |
-| 2 | Fantasy managers, opponent view | Opponent's roster in this week's matchup | Low build cost via Sleeper matchups; high emotional value | P2 |
-| 3 | Sportsbook bettors: spreads, totals, moneylines | Team or game outcomes | Late-game leverage moments are the most watch-worthy | P3 |
-| 4 | Survivor / pick'em pool players | One team per week, or a slate of picks | "Your survivor pick is trailing in the 2H" | P3 |
-| 5 | Player-prop & pick'em players (DraftKings, FanDuel, PrizePicks, Underdog) | Player stat thresholds | Threshold-approaching triggers | P4 |
-| 6 | Prediction-market traders (Kalshi) | Game, spread, total, and player contracts | Same stakes, different source; public market data lets users pick a contract instead of typing it | P5 |
-| 7 | DFS players | 8–9 players spread across a slate | Heavy multi-game juggling; ranking matters most | P4 (falls out of prop + roster work) |
-| 8 | Handicappers, content creators, group chats | Shared card of picks | Shareable watchlists that followers import | P6 |
+| #   | Segment                                                                   | What they have riding                     | Why Pivot fits                                                                                    | Phase                                |
+| --- | ------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| 1   | Fantasy managers (existing)                                               | Their own roster                          | Core v1                                                                                           | Done                                 |
+| 2   | Fantasy managers, opponent view                                           | Opponent's roster in this week's matchup  | Low build cost via Sleeper matchups; high emotional value                                         | P2                                   |
+| 3   | Sportsbook bettors: spreads, totals, moneylines                           | Team or game outcomes                     | Late-game leverage moments are the most watch-worthy                                              | P3                                   |
+| 4   | Survivor / pick'em pool players                                           | One team per week, or a slate of picks    | "Your survivor pick is trailing in the 2H"                                                        | P3                                   |
+| 5   | Player-prop & pick'em players (DraftKings, FanDuel, PrizePicks, Underdog) | Player stat thresholds                    | Threshold-approaching triggers                                                                    | P4                                   |
+| 6   | Prediction-market traders (Kalshi)                                        | Game, spread, total, and player contracts | Same stakes, different source; public market data lets users pick a contract instead of typing it | P5                                   |
+| 7   | DFS players                                                               | 8–9 players spread across a slate         | Heavy multi-game juggling; ranking matters most                                                   | P4 (falls out of prop + roster work) |
+| 8   | Handicappers, content creators, group chats                               | Shared card of picks                      | Shareable watchlists that followers import                                                        | P6                                   |
 
 ---
 
@@ -91,36 +93,42 @@ export type StakeSubject =
   | { type: 'GAME'; gameId: string };
 
 export type StakeCondition =
-  | { type: 'ROSTERED' }                                   // fantasy: any involvement matters
-  | { type: 'OPPONENT_ROSTERED' }                          // fantasy: watch to worry
-  | { type: 'STAT_OVER'; stat: StatKey; line: number }     // props, pick'em
+  | { type: 'ROSTERED' } // fantasy: any involvement matters
+  | { type: 'OPPONENT_ROSTERED' } // fantasy: watch to worry
+  | { type: 'STAT_OVER'; stat: StatKey; line: number } // props, pick'em
   | { type: 'STAT_UNDER'; stat: StatKey; line: number }
   | { type: 'MONEYLINE'; side: 'TEAM' }
-  | { type: 'SPREAD'; line: number }                       // from subject team's perspective
+  | { type: 'SPREAD'; line: number } // from subject team's perspective
   | { type: 'TOTAL_OVER'; line: number }
   | { type: 'TOTAL_UNDER'; line: number }
   | { type: 'SURVIVOR' };
 
 export type StatKey =
-  | 'RUSH_YDS' | 'REC_YDS' | 'PASS_YDS' | 'RECEPTIONS'
-  | 'RUSH_ATT' | 'PASS_TD' | 'ANY_TD';
+  | 'RUSH_YDS'
+  | 'REC_YDS'
+  | 'PASS_YDS'
+  | 'RECEPTIONS'
+  | 'RUSH_ATT'
+  | 'PASS_TD'
+  | 'ANY_TD';
 
 export interface Stake {
   id: string;
   userId: string;
   season: number;
   week: number;
-  gameId: string;               // resolved at creation
+  gameId: string; // resolved at creation
   subject: StakeSubject;
   condition: StakeCondition;
   source: StakeSource;
-  sourceRef?: string;           // e.g. Kalshi ticker, Sleeper league id
-  weight: number;               // user-adjustable importance, default 1
+  sourceRef?: string; // e.g. Kalshi ticker, Sleeper league id
+  weight: number; // user-adjustable importance, default 1
   createdAt: string;
 }
 ```
 
 Design notes:
+
 - An existing roster player becomes `subject: PLAYER` + `condition: ROSTERED` + `source: SLEEPER_ROSTER | MANUAL`. **No behavior change for current users.**
 - `gameId` is resolved at creation from the ESPN schedule. A stake is always tied to exactly one game.
 - `weight` feeds ranking (Section 4). Default 1. Set it higher for a starter than a bench player, and higher for a bigger bet if the user chooses.
@@ -145,30 +153,31 @@ interface Trigger {
 
 `leverage` is a 0–1 score.
 
-| Condition | Trigger | Kind | Rule (defaults, all configurable) |
-|---|---|---|---|
-| ROSTERED | `POSSESSION_START` | NUDGE | Existing behavior |
-| ROSTERED | `RED_ZONE` | NUDGE | Existing `FieldGauge` red-zone detection |
-| OPPONENT_ROSTERED | `OPP_RED_ZONE` | NUDGE | Opponent's player's team enters red zone |
-| STAT_OVER | `PROP_NEAR` | REVEAL | Current stat ≥ 80% of line, **or** remaining need ≤ one typical big play (rush 15, rec 25, pass 40 yds) |
-| STAT_OVER | `PROP_LIVE_POSSESSION` | NUDGE | Player's team gains possession while prop is unresolved and near |
-| STAT_UNDER | `PROP_DANGER` | REVEAL | Same thresholds as `PROP_NEAR`, inverted framing |
-| MONEYLINE / SURVIVOR | `ONE_SCORE_LATE` | REVEAL | Q4 or OT, margin ≤ 8 |
-| SURVIVOR | `PICK_TRAILING_2H` | REVEAL | 2H, pick team trailing |
-| SPREAD | `SPREAD_SWING` | REVEAL | Q4, cover margin within ±3 of the line |
-| TOTAL_OVER / UNDER | `TOTAL_SWING` | REVEAL | Q4, points needed to hit total ≤ 7 |
-| any | `GAME_FINAL` | REVEAL | Resolution summary (optional, off by default) |
+| Condition              | Trigger                | Kind   | Rule (defaults, all configurable)                                                                                                                     |
+| ---------------------- | ---------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ROSTERED               | `POSSESSION_START`     | NUDGE  | Existing behavior                                                                                                                                     |
+| ROSTERED               | `RED_ZONE`             | NUDGE  | Existing `FieldGauge` red-zone detection                                                                                                              |
+| OPPONENT_ROSTERED      | `OPP_RED_ZONE`         | NUDGE  | Opponent's player's team enters red zone                                                                                                              |
+| STAT_OVER              | `PROP_NEAR`            | REVEAL | Current stat ≥ 80% of line, **or** remaining need ≤ one typical big play (rush 15, rec 25, pass 40 yds)                                               |
+| STAT_OVER / STAT_UNDER | `PROP_LIVE_POSSESSION` | NUDGE  | The player is active (fantasy rule), whether or not the prop is decided. Gating on "unresolved" would leak the outcome (`docs/P2-PICKS-MODEL.md` §6). |
+| STAT_UNDER             | `PROP_DANGER`          | REVEAL | Same thresholds as `PROP_NEAR`, inverted framing                                                                                                      |
+| MONEYLINE / SURVIVOR   | `ONE_SCORE_LATE`       | REVEAL | Q4 or OT, margin ≤ 8                                                                                                                                  |
+| SURVIVOR               | `PICK_TRAILING_2H`     | REVEAL | 2H, pick team trailing                                                                                                                                |
+| SPREAD                 | `SPREAD_SWING`         | REVEAL | Q4, cover margin within ±3 of the line                                                                                                                |
+| TOTAL_OVER / UNDER     | `TOTAL_SWING`          | REVEAL | Q4, points needed to hit total ≤ 7                                                                                                                    |
+| any                    | `GAME_FINAL`           | REVEAL | Resolution summary (optional, off by default)                                                                                                         |
 
 Rules:
-- Once P0 lands, every REVEAL goes through reveal timing via the resumption watcher. No exceptions and no fixed-delay fallback. (Today the fixed delay is the *only* path. That's why new REVEALs are blocked on P0.)
+
+- Once P0 lands, every REVEAL goes through reveal timing via the resumption watcher. No exceptions and no fixed-delay fallback. (Today the fixed delay is the _only_ path. That's why new REVEALs are blocked on P0.)
 - Gap to resolve before Phase 3/4 ship: the resumption watcher anchors on possession changes. Mid-drive REVEALs (`PROP_NEAR` on a play that doesn't change possession, `SPREAD_SWING` after a field goal) have no possession change to anchor on. Options to decide between:
   - defer those REVEALs to the next resumption point;
   - send them as outcome-free NUDGEs instead ("Taylor's prop is in play — tap to switch");
   - design a new anchor.
-  See Open Question 4.
+    See Open Question 4.
 - NUDGE copy must be outcome-free. Allowed: "Colts have the ball — tap to switch." Not allowed: "Colts have the ball and Taylor needs 9 yds."
 - Dedupe per `(userId, stakeId, code, drive)` so a user gets one `PROP_NEAR` per drive, not one per play.
-- **Per-game collapse (built in P0; it does not exist today).** The rate limiter is keyed by user only (`user_notifications:{user_id}`, 3 per 60s globally). **Keep that global cap.** Add a separate per-`(userId, gameId)` collapse step *before* the rate limiter: triggers from multiple stakes in the same game within one reveal window merge into one notification, and the highest-leverage trigger supplies the copy. Re-keying the limiter itself to `(userId, gameId)` is **not** the fix, because it would allow 3 notifications per game instead of 3 overall.
+- **Per-game collapse (built in P0; it does not exist today).** The rate limiter is keyed by user only (`user_notifications:{user_id}`, 3 per 60s globally). **Keep that global cap.** Add a separate per-`(userId, gameId)` collapse step _before_ the rate limiter: triggers from multiple stakes in the same game within one reveal window merge into one notification, and the highest-leverage trigger supplies the copy. Re-keying the limiter itself to `(userId, gameId)` is **not** the fix, because it would allow 3 notifications per game instead of 3 overall.
 
 ---
 
@@ -188,15 +197,15 @@ gameScore(game) = Σ over user's stakes in game: stake.weight × maxLeverage(act
 
 ## 5. Data sources
 
-| Source | Used for | Status | Notes |
-|---|---|---|---|
-| ESPN summary `plays` | Possession, red zone, score, clock | Live | Existing ingestion |
-| ESPN summary boxscore / player stats | `STAT_*` conditions | **Needs probe** | Validate field names, update cadence, and lag vs. play log in `experiments/` before building evaluators |
-| ESPN scoreboard `odds` (if present) | Prefill spread/total lines | **Needs probe** | Convenience only; the user's own line always wins |
-| Sleeper `/league/{id}/matchups/{week}` | Opponent roster | Needs wiring | Opponent = same `matchup_id`, different `roster_id` |
+| Source                                                  | Used for                                                         | Status          | Notes                                                                                                                                                                  |
+| ------------------------------------------------------- | ---------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ESPN summary `plays`                                    | Possession, red zone, score, clock                               | Live            | Existing ingestion                                                                                                                                                     |
+| ESPN summary boxscore / player stats                    | `STAT_*` conditions                                              | **Needs probe** | Validate field names, update cadence, and lag vs. play log in `experiments/` before building evaluators                                                                |
+| ESPN scoreboard `odds` (if present)                     | Prefill spread/total lines                                       | **Needs probe** | Convenience only; the user's own line always wins                                                                                                                      |
+| Sleeper `/league/{id}/matchups/{week}`                  | Opponent roster                                                  | Needs wiring    | Opponent = same `matchup_id`, different `roster_id`                                                                                                                    |
 | Kalshi public market data (Trade API v2 events/markets) | Let users search and pick an NFL contract; parse it into a Stake | **Needs probe** | Read-only public endpoints; no user auth, no portfolio access. Confirm endpoint paths, ticker format, and how game/player/line are encoded before designing the parser |
-| Manual entry | Everything | Extend | New "Add a stake" flow |
-| Bet-slip screenshot OCR (on-device Vision) | Sportsbook bets without APIs | Later (P6) | Parse on-device; user confirms each parsed stake before saving |
+| Manual entry                                            | Everything                                                       | Extend          | New "Add a stake" flow                                                                                                                                                 |
+| Bet-slip screenshot OCR (on-device Vision)              | Sportsbook bets without APIs                                     | Later (P6)      | Parse on-device; user confirms each parsed stake before saving                                                                                                         |
 
 All new sources go behind interfaces in `@pivot/ingestion`, following the same swap-ready pattern as the ESPN adapter and `BroadcastIdResolver`. Examples: `PlayerStatSource`, `MarketCatalogSource`.
 
@@ -211,6 +220,7 @@ New tables. Existing roster tables are **not dropped**.
 - `shared_lists` (P6 only): owner, slug, and a frozen array of stakes. Readers copy stakes into their own rows. Never subscribe live to someone else's rows.
 
 Migration strategy for Phase 1:
+
 - Write-through. The existing roster writes also upsert matching `ROSTERED` stakes.
 - A one-time backfill script converts current rosters into stakes.
 - The engine reads from `stakes`.
@@ -238,11 +248,13 @@ The full visual redesign (Home, Board | My card, Watchlist, tokens) is specified
 Every phase ends with: all existing tests green, new tests green, on-device check by Parker (Cursor's own success report is not sufficient), and a commit.
 
 ### Phase 1 — Stake model, migration, zero behavior change
+
 - Add `stakes/types.ts`, evaluator interface, and a `ROSTERED` evaluator that reproduces current triggers.
 - Supabase migration + backfill script + write-through.
 - Route the engine through stakes.
 
 **Verify:**
+
 1. Before any edits, run `pnpm test` at the repo root and save the output as the baseline.
 2. Replay a captured `experiments/logs/events-<ISO>.jsonl` fixture (confirmed replayable in P0) through the old path and save the emitted notifications to `baseline-notifications.json`.
 3. After the change, replay the same fixture through the stakes path. Diff against the baseline. **Expect zero differences.**
@@ -250,43 +262,54 @@ Every phase ends with: all existing tests green, new tests green, on-device chec
 5. On device: sign in with a Sleeper account. The roster, game cards, and "Also Flagged" should look identical to before.
 
 ### Phase 2 — Opponent tracking (Sleeper matchups)
+
 - `SLEEPER_OPPONENT` source and `OPPONENT_ROSTERED` evaluator (`OPP_RED_ZONE` only).
 - A toggle on the watchlist: "Also watch my opponent". Default off.
 
 **Verify:**
+
 1. Unit tests with a recorded Sleeper matchups JSON. The opponent is the roster with the same `matchup_id` and a different `roster_id`.
 2. Check the bye-week case: no `matchup_id`. Expect no opponent stakes and no error.
 3. On device with a real league: enable the toggle. Opponent players appear in a separate "Opponent" group, and ranking weights them below the user's own players.
 
 ### Phase 3 — Team & game stakes (spread, total, moneyline, survivor)
+
 - Evaluators for `ONE_SCORE_LATE`, `PICK_TRAILING_2H`, `SPREAD_SWING`, `TOTAL_SWING`.
 - Manual add flows. Optional line prefill only if the ESPN odds probe succeeds.
 
 **Verify:**
+
 1. Build fixture games covering: a blowout (no triggers), a one-score Q4 (trigger), OT, a spread push, and a total landing exactly on the line.
 2. Unit tests for each evaluator's boundary values (margin 8 vs. 9; points needed 7 vs. 8).
 3. Replay a recorded full game. Every emitted trigger must be `REVEAL` and must pass through reveal timing. Assert this in the test, not just by inspection.
 
 ### Phase 4 — Player prop thresholds
+
+**Nov 8, 2026:** the full props, parlays, and live-bets model (#10) is specified in `docs/P2-PICKS-MODEL.md`. It supersedes this phase where they differ.
+
 - **4a (experiments):** `experiments/espn-boxscore-probe.ts` polls summary player stats during a live game. Log per-poll stat values alongside play-log timestamps. Answer three questions: Does the boxscore update on the same poll as the play? Are there lagging corrections? What are the exact field paths?
 - **4b:** `PlayerStatSource` adapter, then the `STAT_OVER` and `STAT_UNDER` evaluators, the `PROP_NEAR`, `PROP_DANGER`, and `PROP_LIVE_POSSESSION` triggers, and per-drive dedupe.
 
 **Verify:**
+
 1. The 4a probe report is committed in `experiments/` with a summary of findings before any 4b code is written.
-2. Unit tests: exactly at 80%, one yard under 80%, a stat correction that *decreases* a total (expect no duplicate fire and no crash), and a player who leaves the game.
+2. Unit tests: exactly at 80%, one yard under 80%, a stat correction that _decreases_ a total (expect no duplicate fire and no crash), and a player who leaves the game.
 3. Replay a game with a known 100+ yd rusher. Expect exactly one `PROP_NEAR` per qualifying drive.
 
 ### Phase 5 — Kalshi market linking (read-only)
+
 - **5a (experiments):** `experiments/kalshi-market-probe.ts` lists the current week's NFL events and markets from the public API. Dump the ticker, title, and rules text for game winner, spread, total, and player markets. Document how team, player, and line are encoded.
 - **5b:** `MarketCatalogSource` + `KalshiMarketCatalog` adapter, and a parser (ticker/rules → `Stake`). Search UI in the add-stake flow. Markets that can't be parsed show "Can't track this market yet" instead of guessing.
 - Out of scope: portfolio import, API keys, order placement, and price alerts.
 
 **Verify:**
+
 1. Parser tests against the saved 5a dump. Every fixture must map to an expected `Stake` or an explicit `UNSUPPORTED`.
 2. Resolve team names to ESPN team IDs. Test all 32 teams, plus any abbreviation mismatches found in 5a.
 3. On device: search "Chiefs", pick the game-winner market, and confirm the stake appears as `MONEYLINE` on the correct game.
 
 ### Phase 6 — Later (not for this handoff)
+
 Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via new ingestion adapters, and Polymarket or other exchanges once their US data access has been verified.
 
 ---
@@ -302,6 +325,7 @@ Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via
 7. Phase 6: are shared watchlists free? (Recommendation: yes. Like opponent tracking, they're a growth lever.)
 
 **Decided (Sept 23–24, 2026):**
+
 - Free bet cap is **3** non-fantasy stakes per week.
 - Opponent tracking is **free** and doesn't count toward any cap.
 - ~~A **Season Pass** is added next to monthly Pro.~~ Reversed Nov 8, 2026: monthly Pro is the only Pro product. A Season Pass may return before the 2027 season (Section 10.3).
@@ -311,26 +335,27 @@ Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via
 - `flare` `#FFC94D` is approved as a live-only exception to the single-accent rule.
 - The stake cap follows the existing **403 + snake_case code** convention (`stake_limit_free`).
 - ~~Pro gating moves to a read-time `isPro` predicate.~~ Parked Nov 8, 2026 with the Season Pass, which was the only reason for it. With monthly only, the webhook-written `subscription_tier` stays the source of truth.
-- Per-game notification collapse is built as a step *before* the unchanged global rate limiter.
+- Per-game notification collapse is built as a step _before_ the unchanged global rate limiter.
 
 ---
 
 ## 10. Monetization (updates `PLAN.md` §3 "Monetization")
 
 ### 10.1 Principles
+
 1. **Gate how much a user tracks, never whether it works.** Spoiler-safe reveal timing, routing nudges, deep links and ranking are identical on Free and Pro.
 2. **The paywall appears only when a cap is hit.** It never appears in onboarding or before the user has seen the product work.
 3. **Opponent stakes ride free.** `SLEEPER_OPPONENT` stakes never count toward any cap, since opponent tracking is how Pivot spreads through a league.
 
 ### 10.2 Tiers
 
-| | Free | Pro |
-|---|---|---|
-| Connected leagues | Max **3** (unchanged) | Unlimited |
-| Watched leagues (Active Lineup) | Exactly **1** (unchanged) | Multi-select |
-| Manual lineup size | Max **9** (unchanged) | Unlimited |
-| Bet / market stakes (survivor picks don't count) | Max **3 per NFL week** (new) | Unlimited |
-| Opponent tracking | Included | Included |
+|                                                  | Free                         | Pro          |
+| ------------------------------------------------ | ---------------------------- | ------------ |
+| Connected leagues                                | Max **3** (unchanged)        | Unlimited    |
+| Watched leagues (Active Lineup)                  | Exactly **1** (unchanged)    | Multi-select |
+| Manual lineup size                               | Max **9** (unchanged)        | Unlimited    |
+| Bet / market stakes (survivor picks don't count) | Max **3 per NFL week** (new) | Unlimited    |
+| Opponent tracking                                | Included                     | Included     |
 
 - **What counts toward the 3:** any stake whose `condition.type` is not `ROSTERED`, `OPPONENT_ROSTERED` or `SURVIVOR`. That covers props, spread, total, moneyline and Kalshi stakes. **Survivor picks never count toward the 3**, so a free user can add one even with the cap full.
 - **When the count resets:** it's scoped to `(user_id, season, week)`. A stake deleted **before its game kicks off** frees its slot. One deleted after kickoff (game `in_progress`/`final`, or `scheduled_start` passed) can still be removed, but its slot stays spent for the week: `DELETE /stakes/:id` writes a row to `stake_spent_slots`, and the cap counts live stakes plus those rows. `GET /stakes` returns the count as `free_slots_spent`. Survivor picks never use a slot. Adding a stake after kickoff is allowed and counts.
@@ -338,6 +363,7 @@ Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via
 - **Where it's enforced:** on the API. `POST /stakes` returns **403** with `code: 'stake_limit_free'` and `details: { limit: 3 }`, matching the existing cap convention. Add `stake_limit_free` to the code list in `app/lib/upgradePrompt.ts` so the paywall opens. Never enforce only on the client.
 
 ### 10.3 Products (RevenueCat)
+
 - `pivot_pro_monthly`: existing, auto-renewing. **This is the only Pro product.** Launched at $4.99/month. The price is set in App Store Connect and read from RevenueCat at runtime; the client never hardcodes it.
 - **No Season Pass (Nov 8, 2026).** The earlier plan for a non-renewing `pivot_pro_season` product is withdrawn: only the monthly product exists in RevenueCat. It may return before the 2027 season. If it does, it needs its own design pass covering an expiry-aware entitlement (a stored expiry plus a read-time Pro check, since a non-renewing product lapses with no inbound event), the paywall layout, and a late-season cutoff.
 - **Entitlement model:** unchanged. `users.subscription_tier` is written only by the RevenueCat webhook (grant and revoke events for the monthly product), and the server gating reads keep reading it.
@@ -347,6 +373,7 @@ Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via
 - Out of scope for now: Season Pass, annual SKU, family sharing and win-back offers.
 
 ### 10.4 Paywall copy and layout
+
 Keep the existing floating Pro card treatment. It's the reference design for the "slip" component (Section 11.2). Update the content:
 
 ```
@@ -365,6 +392,7 @@ Restore purchases                Not now
 - **Context line:** when the cap-hit code is `stake_limit_free`, add a line above the headline: "You've tracked 3 bets this week."
 
 ### 10.5 Verify (Phase M1)
+
 1. **Package resolver:** unit-test `getPackage` with an offering whose only package has a different product id. `getPackage('pivot_pro_monthly')` must return `null`, never that package.
 2. **Stake cap:** as a Free user, add 3 spread stakes. The 4th `POST /stakes` should return `403` with `code: 'stake_limit_free'`, and the paywall should open with the context line.
 3. **Opponent stakes don't count:** as a Free user with opponent tracking on and 14 opponent players, add 3 bet stakes. All succeed. The cap is still hit only on bet #4.
@@ -379,28 +407,31 @@ Reference mockups are on the "Pivot Mid-Week Home Directions" design canvas, row
 **The V2 row's live layout is superseded (Sept 27, 2026).** Live Home (`state1` / `state2`) follows the U4 mapping in §11.3, not that mockup. V2 remains the reference for the pre-game layout. The amber-ladder token row is unchanged.
 
 ### 11.1 Tokens: add the amber ladder to `app/lib/theme.ts`
+
 Additive only. **No existing key or value changes.** If any existing assertion in `theme.test.ts` would need editing, stop and ask. The ladder is built around the **real** accent `#F5A018` (rgb 245,160,24). The design canvas mockups used `#FFB020`, and the difference is imperceptible. Don't port canvas hexes directly.
 
-| Token | Value | Use |
-|---|---|---|
-| `colors.ember` | `rgba(245, 160, 24, 0.05)` | Translucent tint for board rows with a stake |
-| `colors.emberSolid` | `#17120F` | Opaque ember (`ember` composited over `background` `#0B0B0F`), for surfaces that can't be translucent |
-| `colors.brass` | `#A07C38` | Eyebrows, secondary labels, countdowns. **Never body text** (contrast is ~5:1) |
-| `colors.accent` | `#F5A018` (**existing, unchanged**) | Actionable or today: CTAs, stake markers, game-day kickoff times, selected segment |
-| `colors.flare` | `#FFC94D` | **Live only:** LIVE eyebrow dot, Now Active eyebrow, possession marker. A lighter tint of the same hue family, not a second accent (see note) |
-| `colors.well` | `#070709` | Recessed surfaces (board, segmented-control track) |
-| `colors.wellBorder` | `#1E1E25` | Stroke on wells |
-| `colors.rowDivider` | `#16161B` | Hairlines between board rows |
-| `effects.flareGlow` | `{ shadowColor: '#FFC94D', shadowOffset: {width:0,height:0}, shadowOpacity: 0.25, shadowRadius: 24, elevation: 10 }` | Live hero card only. Same shape as `panelGlow` |
+| Token               | Value                                                                                                                | Use                                                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `colors.ember`      | `rgba(245, 160, 24, 0.05)`                                                                                           | Translucent tint for board rows with a stake                                                                                                  |
+| `colors.emberSolid` | `#17120F`                                                                                                            | Opaque ember (`ember` composited over `background` `#0B0B0F`), for surfaces that can't be translucent                                         |
+| `colors.brass`      | `#A07C38`                                                                                                            | Eyebrows, secondary labels, countdowns. **Never body text** (contrast is ~5:1)                                                                |
+| `colors.accent`     | `#F5A018` (**existing, unchanged**)                                                                                  | Actionable or today: CTAs, stake markers, game-day kickoff times, selected segment                                                            |
+| `colors.flare`      | `#FFC94D`                                                                                                            | **Live only:** LIVE eyebrow dot, Now Active eyebrow, possession marker. A lighter tint of the same hue family, not a second accent (see note) |
+| `colors.well`       | `#070709`                                                                                                            | Recessed surfaces (board, segmented-control track)                                                                                            |
+| `colors.wellBorder` | `#1E1E25`                                                                                                            | Stroke on wells                                                                                                                               |
+| `colors.rowDivider` | `#16161B`                                                                                                            | Hairlines between board rows                                                                                                                  |
+| `effects.flareGlow` | `{ shadowColor: '#FFC94D', shadowOffset: {width:0,height:0}, shadowOpacity: 0.25, shadowRadius: 24, elevation: 10 }` | Live hero card only. Same shape as `panelGlow`                                                                                                |
 
 **Note on `flare` vs. the "competing accent colors" decision:** Parker has approved `flare` as a deliberate, scoped exception. It is the accent's highlight, used only while something is live, and never for CTAs, borders or resting states. `accent` stays the single interactive color. Record this in `UI-SPEC.md` when U1 ships.
 
 Color rules (add them to UI-SPEC):
+
 - Amber never means warning or error. Danger stays `#FF5A5A`, and the field gauge's red zone stays red.
 - Flare and its glow appear only when something is live. Stillness means nothing is happening.
 - Team colors are the second accent. Use them only as stripes, bands or washes, never as text color on black.
 
 ### 11.2 New shared components
+
 - **`SegmentedControl`** (`app/components/SegmentedControl.tsx`):
   - Track: 44pt tall, `well` fill, `wellBorder` stroke, radius 12.
   - Selected segment: `surfaceRaised` fill, `accent` label.
@@ -441,7 +472,9 @@ Color rules (add them to UI-SPEC):
   - `RosterStripCard`: segments proportional to starters per game, **with each label rendered inside its own segment's column** so labels align with their bars.
 
 ### 11.3 Home: one screen, two modes, one switch
+
 Home keeps its existing state machine (`resolveHomeBranch` in `app/lib/homeState.ts`, switched on in `app/app/(app)/(tabs)/index.tsx`). The **branch logic** doesn't change, but the **screen's data layer does**. `loadHome` (`index.tsx`, ~110 lines, re-run on a 30s interval and on every WebSocket reconcile) builds all of `HomeData` in one callback. U2 must **not** grow it further:
+
 - Extract the board derivation into pure functions in `app/lib/homeState.ts` (or a new `app/lib/board.ts`), each with unit tests collected by `pnpm test`:
   - `buildBoardRows(weekGames, stakeGameIds, now)`: groups by window, marks stake rows, counts stakes per game;
   - `pickFeaturedGame(...)`: the pre-game ranking rule below;
@@ -450,10 +483,12 @@ Home keeps its existing state machine (`resolveHomeBranch` in `app/lib/homeState
 - `loadHome` only calls them.
 
 **Data inputs (resolves the State 3 vs. 4 split):** `state3` currently renders `lineupGroups` (all stake games this week), and `state4` renders `upcomingGames` (future kickoffs only). In the merged pre-game presentation:
+
 - **The board** uses `weekGames` (already fetched via `fetchGamesWeek`; the full slate). Stake markers come from `lineupGroups`, so games already played this week still show their dots.
 - **The featured card** chooses only from **future kickoffs** (the same filter as `upcomingGames`).
 
 **Pre-game ranking rule** (for `pickFeaturedGame`; `gameScore` and `priority_score` are both live-only and evaluate to nothing pre-game):
+
 1. Most stakes in the game. Before stakes Phase 1, this is starters from `countStakePlayersInGame`. After Phase 1, it's the sum of `stake.weight`.
 2. Tie → earliest kickoff.
 3. Tie → lowest game id (deterministic).
@@ -461,6 +496,7 @@ Home keeps its existing state machine (`resolveHomeBranch` in `app/lib/homeState
 Unit-test all three tie levels.
 
 **Fixed skeleton, top to bottom:**
+
 1. **Header:** mode eyebrow, "Home" title, and a right-side meta block.
 2. **`SegmentedControl`:** `BOARD | MY CARD`.
 3. **Hero slot.**
@@ -470,12 +506,12 @@ Unit-test all three tie levels.
 
 **Mode mapping:**
 
-| Existing state | Mode eyebrow | Header right | Hero slot | Board |
-|---|---|---|---|---|
-| `state1` (active flag) | `● LIVE · {n} GAMES` (flare) | Current time | `NowActiveCard`, exactly as it is today (team-color score blocks, the full `FieldGauge` with yard labels and RED ZONE, the Watch button, and the NOW ACTIVE eyebrow), plus `flareGlow` | See **Live layout** below |
-| `state2` (live, no flag) | `● LIVE · {n} GAMES` (flare) | Current time | The top-ranked live stake game (§4 `gameScore`), in the same `NowActiveCard` visuals **without** the NOW ACTIVE eyebrow, plus `flareGlow`. Not `FeaturedStakeCard` | Same as State 1 |
-| `state3` (pre-game window) and `state4` (off-day) | `WEEK {n} · PRE-GAME` (brass) | "NEXT KICKOFF" + countdown (brass, `accent` within 24h) | `FeaturedStakeCard` for `pickFeaturedGame` (ranking rule above) | Full week's slate grouped by window: THURSDAY NIGHT / SUNDAY · EARLY / SUNDAY · LATE / PRIMETIME / MONDAY |
-| `season_idle` (`off` / `pre`), `no_leagues` | Unchanged | Unchanged | Unchanged | Unchanged. **Do not merge `off` and `pre`** (see the existing docstring and regression test) |
+| Existing state                                    | Mode eyebrow                  | Header right                                            | Hero slot                                                                                                                                                                              | Board                                                                                                     |
+| ------------------------------------------------- | ----------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `state1` (active flag)                            | `● LIVE · {n} GAMES` (flare)  | Current time                                            | `NowActiveCard`, exactly as it is today (team-color score blocks, the full `FieldGauge` with yard labels and RED ZONE, the Watch button, and the NOW ACTIVE eyebrow), plus `flareGlow` | See **Live layout** below                                                                                 |
+| `state2` (live, no flag)                          | `● LIVE · {n} GAMES` (flare)  | Current time                                            | The top-ranked live stake game (§4 `gameScore`), in the same `NowActiveCard` visuals **without** the NOW ACTIVE eyebrow, plus `flareGlow`. Not `FeaturedStakeCard`                     | Same as State 1                                                                                           |
+| `state3` (pre-game window) and `state4` (off-day) | `WEEK {n} · PRE-GAME` (brass) | "NEXT KICKOFF" + countdown (brass, `accent` within 24h) | `FeaturedStakeCard` for `pickFeaturedGame` (ranking rule above)                                                                                                                        | Full week's slate grouped by window: THURSDAY NIGHT / SUNDAY · EARLY / SUNDAY · LATE / PRIMETIME / MONDAY |
+| `season_idle` (`off` / `pre`), `no_leagues`       | Unchanged                     | Unchanged                                               | Unchanged                                                                                                                                                                              | Unchanged. **Do not merge `off` and `pre`** (see the existing docstring and regression test)              |
 
 **Live layout (`state1` / `state2`), U4 decision Sept 27, 2026.** This supersedes the V2 mockup's live layout. Do not build that arrangement. The header (`● LIVE · {n} GAMES`, the clock) and the `BOARD | MY CARD` control are added as in the table above. Under them:
 
@@ -484,12 +520,14 @@ Unit-test all three tie levels.
 3. **The board below** holds everything else: live non-stake games as muted rows (clock and score), then upcoming games grouped by the same windows as the pre-game board.
 
 Rules:
+
 - **The board shows the whole slate, not just stake games.** Games without a stake appear muted. That's what makes it a board. `GET /games?week=` already returns every game in the week, and the client already holds it as `weekGames`, so no new endpoint or fetch is needed. It returns `[]` when `display_phase` is `'off'`, which is harmless because Home never reaches the board then. To exercise it off-season, mock `/state/nfl`.
 - **Mode changes only on real events** (kickoff, final, flag fired or cleared), never on a clock-of-day timer.
 - The countdown ticks every second only while Home is focused. Use `useFocusEffect` from `expo-router` (new usage in this repo), and don't run the interval in the background.
 - "Test notifications" is **already** Settings-only. There's nothing to move. Correct `PLAN.md` §10 State 3, which still describes the link on Home.
 
 **MY CARD segment:**
+
 - Same header. The hero slot and board are replaced by one list.
 - The list shows the user's stake games in kickoff order. Each game is a `well` block with a header row (stripe, time, matchup, network) and one line per stake: a mono type tag (FANTASY / PROP / SPREAD / MARKET / SURVIVOR) in `brass`, a label, and the key value in `accent`.
 - Top right: a "Manage" link that goes to the Watchlist tab.
@@ -497,6 +535,7 @@ Rules:
 - Remember the selected segment per session only. Home always opens on BOARD after a cold start.
 
 ### 11.4 Watchlist tab
+
 - **Rename the "Lineup" tab to "Watchlist" only when stakes Phase 3 ships.** Until then, the Lineup tab and its screens are unchanged.
 - **Layout, top to bottom:**
   1. A "WEEK {n}" eyebrow and "Watchlist" title.
@@ -506,6 +545,7 @@ Rules:
 - The league management actions from today's Lineup screen (connect, sync, edit lineup, disconnect) move into the Fantasy filter view as a header block. They must stay reachable within 2 taps.
 
 ### 11.5 Verify (Phases U1–U4)
+
 1. **Tokens:** run `pnpm test` at the repo root, **not** `pnpm --filter app test`, which runs zero tests. Expect the same passing count as the baseline plus the new token block. Then run `git diff app/lib/theme.ts` and `git diff app/lib/theme.test.ts`: both should show added lines only, and no `-` lines inside existing blocks. Finally run `pnpm typecheck`.
 2. **Paywall regression:** open the paywall before and after the `Slip` refactor, and screenshot both on the same simulator. Expect no pixel-visible change.
 3. **Pre-game Home:** on a Tuesday–Saturday during the season (or with `/state/nfl` mocked to `regular` and no live games), open Home. Expect:
@@ -523,6 +563,7 @@ Rules:
 ## 12. Onboarding and tutorial (updates `PLAN.md` §10 "Onboarding")
 
 ### 12.1 Onboarding flow
+
 Changes to the existing 6 screens are marked **new** or **changed**.
 
 1. **Welcome.** Unchanged.
@@ -544,6 +585,7 @@ Changes to the existing 6 screens are marked **new** or **changed**.
 8. **All set.** Unchanged.
 
 ### 12.2 Tutorial (replayable from Settings)
+
 - **Four cards**, each a `Slip` with a small static illustration built from real components:
   1. **"This is the Board."** The whole week's slate. Gold dots mark games you have a stake in, and the top card is your biggest one. Flip to My card to see just yours.
   2. **"When it's live, Home lights up."** Show the LIVE eyebrow and `NowActiveCard`. When something's worth switching for, the top card tells you where to go.
@@ -563,6 +605,7 @@ Changes to the existing 6 screens are marked **new** or **changed**.
 - **Preference keys:** `following` and `seenCoachMarks` each need the three coordinated edits listed under "Repo facts". Otherwise zod strips them silently and the setting "doesn't persist" with no error. Add a round-trip unit test for each key: parse → serialize → parse keeps the value.
 
 ### 12.3 Verify (Phases U5–U6)
+
 1. **Fresh-install onboarding:** delete the app, reinstall, and sign up. Expect the 8-step flow. Pick only "Bets & props" in step 3 while the stakes Phase 3 flag is off. Step 4 should still offer Connect Sleeper / Add manually, and no bet option should appear.
 2. **Notification denial:** tap Don't Allow at the iOS prompt. Expect the recovery screen, not a second prompt. Then check that iOS Settings → Pivot → Notifications is reachable from the link.
 3. **Demo game day:**
@@ -578,24 +621,25 @@ Changes to the existing 6 screens are marked **new** or **changed**.
 
 The UI and monetization phases don't depend on the stakes phases unless noted. That means they can ship during stakes Phase 1 work. Each phase is still gated, with baseline → change → verify → Parker on-device check → commit.
 
-| Phase | Scope | Depends on | Model |
-|---|---|---|---|
-| **P0** | Production live pipeline: ingestion runner, resumption-watcher timing, silence ceiling, per-game collapse (§0.1). Separate prompt. **Start with a read-only design pass**, since the recon shows this is larger than 4 bullets | — | Opus 5, High, MAX |
-| **U1** | Amber-ladder tokens (11.1) + `Slip` refactor of the paywall (11.2). No perforation | — | Sonnet 5 High |
-| **U2** | Board pure functions + tests, `networkLabel`, `BoardRow`, `FeaturedStakeCard`, Home pre-game mode (11.3) | U1 | Opus 5, High, MAX (touches `loadHome`) |
-| **U3** | `SegmentedControl` + MY CARD, fantasy-only (11.3) | U2 | Sonnet 5 High |
-| **U4** | Home live mode mapping, `state1`/`state2` (11.3) | U2, **P0** | Opus 5, High, MAX |
-| **M1** | Exact-match package resolver, paywall copy (10.3–10.4). No Season Pass (withdrawn Nov 8, 2026) | U1 | Opus 5, High, MAX (billing; real money) |
-| **M2** | Stake cap enforcement, `403 stake_limit_free` (10.2) | Stakes Phase 3 | Sonnet 5 High |
-| **U5** | Onboarding changes + tutorial cards + coach marks + `SlipPerforation` + the two preference keys (12.1–12.2) | U3 | Sonnet 5 High |
-| **U6** | Demo game day (12.2) | U4, U5 | Opus 5, High, MAX (fixture compression, local notifications) |
-| **U7** | Watchlist tab rename + week card + stake-shaped cards (11.4) | Stakes Phase 3, M2 | Sonnet 5 High |
+| Phase  | Scope                                                                                                                                                                                                                          | Depends on         | Model                                                        |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------------------ |
+| **P0** | Production live pipeline: ingestion runner, resumption-watcher timing, silence ceiling, per-game collapse (§0.1). Separate prompt. **Start with a read-only design pass**, since the recon shows this is larger than 4 bullets | —                  | Opus 5, High, MAX                                            |
+| **U1** | Amber-ladder tokens (11.1) + `Slip` refactor of the paywall (11.2). No perforation                                                                                                                                             | —                  | Sonnet 5 High                                                |
+| **U2** | Board pure functions + tests, `networkLabel`, `BoardRow`, `FeaturedStakeCard`, Home pre-game mode (11.3)                                                                                                                       | U1                 | Opus 5, High, MAX (touches `loadHome`)                       |
+| **U3** | `SegmentedControl` + MY CARD, fantasy-only (11.3)                                                                                                                                                                              | U2                 | Sonnet 5 High                                                |
+| **U4** | Home live mode mapping, `state1`/`state2` (11.3)                                                                                                                                                                               | U2, **P0**         | Opus 5, High, MAX                                            |
+| **M1** | Exact-match package resolver, paywall copy (10.3–10.4). No Season Pass (withdrawn Nov 8, 2026)                                                                                                                                 | U1                 | Opus 5, High, MAX (billing; real money)                      |
+| **M2** | Stake cap enforcement, `403 stake_limit_free` (10.2)                                                                                                                                                                           | Stakes Phase 3     | Sonnet 5 High                                                |
+| **U5** | Onboarding changes + tutorial cards + coach marks + `SlipPerforation` + the two preference keys (12.1–12.2)                                                                                                                    | U3                 | Sonnet 5 High                                                |
+| **U6** | Demo game day (12.2)                                                                                                                                                                                                           | U4, U5             | Opus 5, High, MAX (fixture compression, local notifications) |
+| **U7** | Watchlist tab rename + week card + stake-shaped cards (11.4)                                                                                                                                                                   | Stakes Phase 3, M2 | Sonnet 5 High                                                |
 
 When a phase ships, fold its section into `PLAN.md` (§3 for monetization, §10 for UI) and mark the corresponding `UI-SPEC.md` sections as superseded. Same convention as the Sept 18 and Sept 23 status notes.
 
 ---
 
 **Recommended model (defaults):**
+
 - Architectural or novel work (P0; stakes Phases 1 and 5b; U2, U4, U6, M1): **Opus 5, High reasoning, MAX Mode**.
 - Mechanical implementation of an approved design (stakes Phases 2, 3, 4b; U1, U3, U5, U7, M2): **Sonnet 5 High**.
 - Never Auto.
