@@ -1,5 +1,7 @@
 # Stakes-Plan Reconciliation
 
+> **Update (Nov 8, 2026):** the Season Pass (`pivot_pro_season`, $34.99) has been removed from the plan; monthly Pro is the only Pro product, and a Season Pass may return before the 2027 season. Season Pass findings below (§2(e), §2(f), §4, §5) are kept as a record of the Sept 24 pass and no longer describe planned work. See `PIVOT-STAKES-PLAN.md` §10.3.
+
 Read-only reconciliation of `PIVOT-STAKES-PLAN.md` against the repo as of commit `f1e0963` (branch `main`, Sept 24 2026). No source files were edited; this document is the only output.
 
 Scope of the pass: `PIVOT-STAKES-PLAN.md` in full, `PLAN.md` §3 and §10, `UI-SPEC.md`, `app/lib/theme.ts`, `app/lib/theme.test.ts`, `app/components/UpgradeSheet.tsx` (the paywall), plus the API/engine/dispatcher code the plan's assumptions depend on.
