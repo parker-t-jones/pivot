@@ -8,12 +8,18 @@ export interface LocalDemoAlert {
   data: Record<string, unknown>;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 export function localDemoAlertFromDetails(details: unknown): LocalDemoAlert | null {
-  if (typeof details !== 'object' || details === null) return null;
-  const candidate = details as Record<string, unknown>;
-  if (typeof candidate.title !== 'string' || typeof candidate.body !== 'string') return null;
-  if (!isFlagEventPayload(candidate.data)) return null;
-  return { title: candidate.title, body: candidate.body, data: candidate.data };
+  if (!isRecord(details)) return null;
+  if (typeof details.title !== 'string' || typeof details.body !== 'string') return null;
+  // isRecord first so `data` narrows to `Record<string, unknown> & FlagEventPayload`: the
+  // FlagEventPayload interface has no index signature, so on its own it can't be Expo's `data`.
+  const { data } = details;
+  if (!isRecord(data) || !isFlagEventPayload(data)) return null;
+  return { title: details.title, body: details.body, data };
 }
 
 /**

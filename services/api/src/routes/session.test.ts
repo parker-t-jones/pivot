@@ -8,12 +8,13 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { SignJWT } from 'jose';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { PRIMARY_WATCH_MS } from '../lib/primaryWatch.js';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import { ApiError, toErrorBody } from '../lib/errors.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
+import { sleeperClient } from '../providers/sleeper-client.js';
 import servicesPlugin from '../plugins/services.js';
 import sessionRoutes from './session.js';
 
@@ -111,7 +112,8 @@ class FakeSupabase {
                 primary_source: payload.primary_source ?? existing?.primary_source ?? null,
                 primary_priority_score:
                   payload.primary_priority_score ?? existing?.primary_priority_score ?? null,
-                thumbnail_game_ids: payload.thumbnail_game_ids ?? existing?.thumbnail_game_ids ?? [],
+                thumbnail_game_ids:
+                  payload.thumbnail_game_ids ?? existing?.thumbnail_game_ids ?? [],
                 device_info: payload.device_info ?? existing?.device_info ?? {},
                 started_at: payload.started_at ?? existing?.started_at ?? nowIso,
                 last_updated_at: payload.last_updated_at ?? existing?.last_updated_at ?? nowIso,
@@ -145,9 +147,10 @@ class FakeSupabase {
               return apply();
             },
             then<TResult1 = { data: SessionRow | null; error: null }, TResult2 = never>(
-              onfulfilled?: (
-                value: { data: SessionRow | null; error: null },
-              ) => TResult1 | PromiseLike<TResult1>,
+              onfulfilled?: (value: {
+                data: SessionRow | null;
+                error: null;
+              }) => TResult1 | PromiseLike<TResult1>,
               onrejected?: (reason: unknown) => TResult2 | PromiseLike<TResult2>,
             ) {
               return apply().then(onfulfilled, onrejected);
@@ -209,7 +212,11 @@ async function buildTestApp(gameIds: string[] = []): Promise<TestApp> {
   fastify.setErrorHandler((error, _request, reply) => {
     if (hasZodFastifySchemaValidationErrors(error)) {
       return reply.status(400).send({
-        error: { code: 'validation_error', message: 'Request validation failed.', details: error.validation },
+        error: {
+          code: 'validation_error',
+          message: 'Request validation failed.',
+          details: error.validation,
+        },
       });
     }
     if (error instanceof ApiError) {
@@ -247,8 +254,21 @@ async function setLineup(app: TestApp, userId: string): Promise<void> {
 describe('session routes', () => {
   let app: TestApp;
 
+  // buildTestApp seeds the NFL state with a 5-minute TTL. Tests that move the clock past it make
+  // getCurrentNflState fall back to Sleeper's live /state/nfl; answer that locally, never over the network.
+  let sleeperNflState: MockInstance<typeof sleeperClient.getNflState>;
+  beforeEach(() => {
+    sleeperNflState = vi.spyOn(sleeperClient, 'getNflState').mockResolvedValue({
+      season: '2026',
+      previous_season: '2025',
+      week: WEEK,
+      season_type: 'regular',
+    });
+  });
+
   afterEach(async () => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
     await app.fastify.close();
   });
 
@@ -554,6 +574,8 @@ describe('session routes', () => {
         payload: { game_id: GAME_2, source: 'deeplink' },
       });
       expect(switched.json().primary_game_id).toBe(GAME_2);
+      // The 4h jump expired the seeded NFL state, so the Switch read it through the Sleeper stub.
+      expect(sleeperNflState).toHaveBeenCalled();
 
       hold.release();
       await expiredRead;

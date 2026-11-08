@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
@@ -25,6 +25,9 @@ const RECORDING_DIR = path.resolve(
   process.cwd(),
   'experiments/logs/recordings/2026-09-28/401872963',
 );
+// The recording is gitignored (27 MB, 797 snapshots) and lives only on the dev machine, so this
+// suite skips anywhere it is missing, CI included.
+const recordingPresent = existsSync(RECORDING_DIR);
 
 function playsFromRecording(): PlayEvent[] {
   const file = readdirSync(RECORDING_DIR)
@@ -56,7 +59,9 @@ function lineup(input: { week: number; teamId: string; withUnits: boolean }): Us
   const cache: UserLineupCache = {
     userId: 'u-replay',
     week: input.week,
-    teamPositions: new Map([[input.teamId, new Set<'offense' | 'defense'>(['offense', 'defense'])]]),
+    teamPositions: new Map([
+      [input.teamId, new Set<'offense' | 'defense'>(['offense', 'defense'])],
+    ]),
     playerToTeam: new Map([
       ['phi-te', input.teamId],
       ['phi-dst', input.teamId],
@@ -81,7 +86,9 @@ function legacyDiff(
   const wasFlagged = oldState?.flagged ?? false;
   const isFlagged = newState.flagged;
   const make = (type: FlagEvent['type']): FlagEvent => ({
-    id: createHash('sha1').update(`${userId}:${newState.gameId}:${type}:${newState.computedAt}`).digest('hex'),
+    id: createHash('sha1')
+      .update(`${userId}:${newState.gameId}:${type}:${newState.computedAt}`)
+      .digest('hex'),
     userId,
     gameId: newState.gameId,
     type,
@@ -224,7 +231,7 @@ function diffByTimestamp(
   };
 }
 
-describe('PHI @ CHI 2026-09-28 flag replay', () => {
+describe.skipIf(!recordingPresent)('PHI @ CHI 2026-09-28 flag replay', () => {
   it('keeps event type, timestamp, and flagged state when lists are filtered by side of ball', async () => {
     const plays = playsFromRecording();
     const week = plays[0]?.week ?? 0;
@@ -259,10 +266,7 @@ describe('PHI @ CHI 2026-09-28 flag replay', () => {
       starPlayerIds: new Set<string>(),
       ...(withUnits
         ? {
-            playerUnits: new Map([
-              ['phi-te', 'offense'] as const,
-              ['chi-wr', 'offense'] as const,
-            ]),
+            playerUnits: new Map([['phi-te', 'offense'] as const, ['chi-wr', 'offense'] as const]),
           }
         : {}),
     });
