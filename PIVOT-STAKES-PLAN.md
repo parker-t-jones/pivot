@@ -337,7 +337,7 @@ Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via
 - **Where it's enforced:** on the API. `POST /stakes` returns **403** with `code: 'stake_limit_free'` and `details: { limit: 3 }`, matching the existing cap convention. Add `stake_limit_free` to the code list in `app/lib/upgradePrompt.ts` so the paywall opens. Never enforce only on the client.
 
 ### 10.3 Products (RevenueCat)
-- `pivot_pro_monthly`: existing, $9.99/month, auto-renewing.
+- `pivot_pro_monthly`: existing, auto-renewing. Launched at $4.99/month. The price is set in App Store Connect and read from RevenueCat at runtime; the client never hardcodes it.
 - `pivot_pro_season`: **new**, a **non-renewing subscription**. Working price $34.99, which is about 36% off paying monthly from September through the Super Bowl.
   - Expires **the day after the Super Bowl**. For the 2026 season that's Feb 15, 2027; the Super Bowl is Feb 14, 2027. Store the expiry in config per season. Don't hard-code it.
   - Apple requires non-renewing subscriptions to work on all of a user's devices. The Supabase account covers that: the entitlement lives server-side.
@@ -376,7 +376,7 @@ Free covers 3 leagues, 1 Active Lineup and 3 bets a week. Pro removes the caps.
 
 [ Season Pass — $34.99 ]        ← primary, gold
   Through the Super Bowl · Save 36% vs. monthly
-[ $9.99 / month ]               ← secondary
+[ {RevenueCat price} / month ]  ← secondary
 Restore purchases                Not now
 ```
 

@@ -12,8 +12,14 @@ export const PRO_PERKS = [
   'Unlimited manual lineup players',
 ] as const;
 
-/** Shown until RevenueCat returns a store price. */
-export const UPGRADE_PRICE_FALLBACK = '$9.99/month';
+/**
+ * Purchase button label while RevenueCat hasn't returned a store price. Prices only ever come
+ * from RevenueCat; never put a hardcoded price in copy.
+ */
+export const UPGRADE_LABEL_NO_PRICE = 'Upgrade to Pro';
+
+/** Shown when tapping the no-price button retries offerings and they still fail to load. */
+export const UPGRADE_PRICING_UNAVAILABLE = "Couldn't load pricing. Try again in a moment.";
 
 export const UPGRADE_PLAN_LABEL = 'Pivot Pro, monthly';
 
@@ -24,6 +30,7 @@ export const TERMS_OF_USE_URL = 'https://pivot-sports.app/terms';
 
 export const PRIVACY_POLICY_URL = 'https://pivot-sports.app/privacy';
 
-export function upgradePurchaseLabel(priceLabel: string): string {
-  return `Upgrade — ${priceLabel}`;
+/** `priceLabel` is RevenueCat's `priceString`, or `null` when no store price has loaded. */
+export function upgradePurchaseLabel(priceLabel: string | null): string {
+  return priceLabel ? `Upgrade — ${priceLabel}` : UPGRADE_LABEL_NO_PRICE;
 }
