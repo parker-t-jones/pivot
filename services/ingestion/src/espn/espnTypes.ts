@@ -94,6 +94,16 @@ export const espnCompetitorSchema = z.object({
   team: z.object({ abbreviation: z.string().optional() }).optional(),
   /** Running score. The scoreboard sends a string; a number is accepted too. */
   score: z.union([z.string(), z.number()]).optional(),
+  /** Points per period on the summary header (Q1 first, then OT). Read by `parseEspnPlayerStats`. */
+  linescores: z
+    .array(
+      z.object({
+        value: z.number().optional().catch(undefined),
+        displayValue: z.string().optional().catch(undefined),
+      }),
+    )
+    .optional()
+    .catch(undefined),
 });
 
 /**
@@ -143,7 +153,52 @@ export const espnScoreboardSchema = z.object({
   events: z.array(espnScoreboardEventSchema).optional(),
 });
 
+/**
+ * Summary `boxscore.players`: one entry per team, each with stat groups (`passing`, `rushing`, ...)
+ * whose `keys` name the columns of every athlete's `stats` strings. Parsed leniently: a malformed
+ * boxscore is dropped (`catch`) so it can never fail the play poll.
+ */
+export const espnBoxscoreSchema = z.object({
+  players: z
+    .array(
+      z.object({
+        team: z.object({ abbreviation: z.string().optional() }).optional(),
+        statistics: z
+          .array(
+            z.object({
+              name: z.string().optional(),
+              keys: z.array(z.string()).optional(),
+              athletes: z
+                .array(
+                  z.object({
+                    athlete: z.object({
+                      id: z.string(),
+                      displayName: z.string().optional(),
+                    }),
+                    stats: z.array(z.string()).optional(),
+                  }),
+                )
+                .optional(),
+            }),
+          )
+          .optional(),
+      }),
+    )
+    .optional(),
+});
+
+/** Summary `scoringPlays`, in game order. */
+export const espnScoringPlaySchema = z.object({
+  type: z.object({ abbreviation: z.string().optional() }).optional(),
+  scoringType: z.object({ name: z.string().optional() }).optional(),
+  period: z.object({ number: z.number().optional() }).optional(),
+  team: z.object({ abbreviation: z.string().optional() }).optional(),
+  text: z.string().optional(),
+});
+
 export const espnSummarySchema = z.object({
+  boxscore: espnBoxscoreSchema.optional().catch(undefined),
+  scoringPlays: z.array(espnScoringPlaySchema).optional().catch(undefined),
   header: z
     .object({
       /** Week number as a bare number (not an object) — verified on 2025 and 2026 responses. */
@@ -173,5 +228,7 @@ export type EspnPlay = z.infer<typeof espnPlaySchema>;
 export type EspnDrive = z.infer<typeof espnDriveSchema>;
 export type EspnCompetitor = z.infer<typeof espnCompetitorSchema>;
 export type EspnSummary = z.infer<typeof espnSummarySchema>;
+export type EspnBoxscore = z.infer<typeof espnBoxscoreSchema>;
+export type EspnScoringPlay = z.infer<typeof espnScoringPlaySchema>;
 export type EspnScoreboardEvent = z.infer<typeof espnScoreboardEventSchema>;
 export type EspnScoreboard = z.infer<typeof espnScoreboardSchema>;
