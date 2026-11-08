@@ -14,7 +14,7 @@ function browserPrimeWatchUrl(url) {
     if (parsed.hostname === 'www.primevideo.com' && parsed.pathname.indexOf('/splash/') === 0) {
       return PRIME_VIDEO_WEB_STOREFRONT;
     }
-  } catch (e) {
+  } catch {
     return url;
   }
   return url;

@@ -1,6 +1,6 @@
 # Gates on every pull request and on main: tests (against a local Supabase), typecheck, lint.
 # Mirrors CLAUDE.md "Definition of done". Redis integration suites stay skipped (no Redis here),
-# so the expected skip count is exactly 5.
+# and the PHI @ CHI replay needs a gitignored local recording, so the expected skip count is exactly 6.
 name: CI
 
 on:
@@ -66,8 +66,8 @@ jobs:
       - name: Test
         run: pnpm exec vitest run --reporter=default --reporter=json --outputFile=vitest-results.json
 
-      # Fail on any skip beyond the 5 known Redis integration tests, so a suite that silently
-      # stops running is caught, not just a suite that fails.
+      # Fail on any skip beyond the 6 known ones (5 Redis integration tests, 1 local-only recording
+      # replay), so a suite that silently stops running is caught, not just a suite that fails.
       - name: Check skip count
         run: |
           node -e '
@@ -75,5 +75,5 @@ jobs:
             const skipped = (r.numPendingTests ?? 0) + (r.numTodoTests ?? 0);
             console.log(`passed=${r.numPassedTests} failed=${r.numFailedTests} skipped=${skipped}`);
             if (r.numFailedTests !== 0) process.exit(1);
-            if (skipped !== 5) { console.error(`Expected exactly 5 skipped tests, got ${skipped}.`); process.exit(1); }
+            if (skipped !== 6) { console.error(`Expected exactly 6 skipped tests, got ${skipped}.`); process.exit(1); }
           '

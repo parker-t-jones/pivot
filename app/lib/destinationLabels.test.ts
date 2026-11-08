@@ -1,4 +1,3 @@
-import type { FlagEvent } from '@pivot/shared';
 import {
   resolveDestinations,
   type DestinationGame,
@@ -10,6 +9,9 @@ import { describe, expect, it } from 'vitest';
 import { watchBroadcastLabel, watchCta } from './gameDisplay';
 import { watchButtonLabel } from './liveStakeCards';
 import { watchlistPlayerRow } from './watchlistTable';
+
+// The app may not import the root `@pivot/shared` entry (lint), and no subpath exports FlagEvent.
+type FlagEvent = Parameters<typeof notificationBody>[0];
 
 const KICKOFF = new Date('2026-10-04T17:00:00Z');
 

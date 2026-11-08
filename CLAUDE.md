@@ -47,7 +47,7 @@ Runtime gotcha: `@pivot/engine`, `@pivot/dispatcher`, `@pivot/ingestion`, `@pivo
 
 A task is not done until all of these pass, run serially (parallel suites cause timeouts that look like failures):
 
-1. `pnpm test` → **0 failed**. Skips must be only the known integration suites: the two Redis suites (5 skipped tests) always, plus `publicGrants` and `flagEventInsert` when `services/api/.env` does not point `SUPABASE_URL` at a local Supabase. Any other skip, or a new failure, is a fail. With local Supabase running, the expected result is exactly 5 skipped.
+1. `pnpm test` → **0 failed**. Skips must be only the known suites: the two Redis suites (5 skipped tests) always; the local-only `phiChiFlagDiff` replay (1 test) whenever its gitignored recording `experiments/logs/recordings/2026-09-28/401872963` is missing (it exists only on Parker's Mac, so CI and fresh clones skip it); plus `publicGrants` and `flagEventInsert` when `services/api/.env` does not point `SUPABASE_URL` at a local Supabase. Any other skip, or a new failure, is a fail. CI (local Supabase, no recording) expects exactly 6 skipped; on Parker's Mac with local Supabase running, exactly 5.
 2. `pnpm typecheck` → exit 0.
 3. `pnpm lint` → exit 0 (whole repo, not "touched files").
 4. Tests written alongside the change, covering the behavior, not just the happy path. Where a UI bug slipped past unit tests before, add a test of the rendered path.
