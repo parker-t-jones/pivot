@@ -34,12 +34,24 @@ function live(home: number, away: number) {
   return { game_id: 'g1', score: { home, away }, quarter: 2, time_remaining_sec: 300 };
 }
 
-function model(s: PickCardStake, opts: { status?: string; live?: ReturnType<typeof live> } = {}) {
+function model(
+  s: PickCardStake,
+  opts: {
+    status?: string;
+    live?: ReturnType<typeof live>;
+    finalScore?: { home: number; away: number } | null;
+  } = {},
+) {
   return pickCardModel({
     stake: s,
     teams,
     weekGames: [
-      { game_id: 'g1', status: opts.status ?? 'scheduled', scheduled_start: game.scheduled_start },
+      {
+        game_id: 'g1',
+        status: opts.status ?? 'scheduled',
+        scheduled_start: game.scheduled_start,
+        final_score: opts.finalScore ?? null,
+      },
     ],
     liveGames: opts.live ? [opts.live] : [],
     now: NOW,
@@ -122,6 +134,18 @@ describe('pickCardModel phases', () => {
     expect(card.phase).toBe('final');
     expect(card.status).toBe('FINAL');
     expect(card.progress).toBeNull();
+  });
+
+  it('final with a schedule score: "FINAL · away–home", still no outcome', () => {
+    const card = model(stake('SPREAD'), { status: 'final', finalScore: { home: 17, away: 24 } });
+    expect(card.phase).toBe('final');
+    expect(card.status).toBe('FINAL · 24–17');
+    expect(card.progress).toBeNull();
+  });
+
+  it('ignores a final_score on a game that is not final', () => {
+    const card = model(stake('SPREAD'), { status: 'scheduled', finalScore: { home: 1, away: 2 } });
+    expect(card.status).not.toContain('FINAL');
   });
 
   it('unknown type still renders a card with the PICK eyebrow and no bar', () => {

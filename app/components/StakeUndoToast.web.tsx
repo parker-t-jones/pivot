@@ -5,6 +5,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { TextButton } from './TextButton';
 import { getStakeUndoState, subscribeStakeUndo, undoStake } from '../lib/stakeUndoStore';
 import { theme } from '../lib/theme';
+import { useDesktopTier } from '../lib/useDesktopTier';
+
+/** Phone-width web keeps the bottom tab bar; the toast sits above it (same as native). */
+const TAB_BAR_CLEARANCE = theme.spacing.huge + theme.spacing.xl;
 
 /**
  * App-level undo toast. Portaled onto `document.body` with `position: fixed`
@@ -13,11 +17,19 @@ import { theme } from '../lib/theme';
  */
 export function StakeUndoToast(): ReactPortal | null {
   const undo = useSyncExternalStore(subscribeStakeUndo, getStakeUndoState, getStakeUndoState);
+  const tier = useDesktopTier();
   if (typeof document === 'undefined') return null;
   if (undo.pendingId == null && undo.error == null) return null;
 
   return createPortal(
-    <div data-testid="stake-undo-toast" style={dockStyle}>
+    <div
+      data-testid="stake-undo-toast"
+      style={
+        tier === 'companion'
+          ? { ...dockStyle, bottom: theme.spacing.xl + TAB_BAR_CLEARANCE }
+          : dockStyle
+      }
+    >
       <View pointerEvents="auto" style={styles.toast}>
         <Text style={styles.toastText}>{undo.error ?? 'Removed'}</Text>
         {undo.pendingId != null ? (

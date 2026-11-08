@@ -13,6 +13,8 @@ export interface PlayerWeekGame {
   home_team_primary_color: string;
   away_team_primary_color: string;
   airings: readonly { network: string }[];
+  /** Final games only. Older payloads omit it. */
+  final_score?: { home: number; away: number } | null;
 }
 
 export type PlayerGame =
@@ -24,6 +26,8 @@ export type PlayerGame =
       isHome: boolean;
       network: string | null;
       teamColor: string | null;
+      /** Away–home order is applied when formatted. Final games only, when known. */
+      finalScore?: { home: number; away: number } | null;
     };
 
 /**
@@ -58,6 +62,7 @@ export function gameForTeam(
     isHome,
     network: networkLabelFromAirings(game.airings),
     teamColor: colorOrNull(isHome ? game.home_team_primary_color : game.away_team_primary_color),
+    finalScore: game.status === 'final' ? (game.final_score ?? null) : null,
   };
 }
 
@@ -65,7 +70,11 @@ export function gameForTeam(
 export function formatGameLine(result: PlayerGame, now: Date, timeZone: string): string {
   if (result.kind === 'bye') return 'BYE';
   if (result.kind === 'live') return 'LIVE';
-  if (result.kind === 'final') return 'FINAL';
+  if (result.kind === 'final') {
+    return result.finalScore
+      ? `FINAL · ${result.finalScore.away}–${result.finalScore.home}`
+      : 'FINAL';
+  }
 
   const when = sameLocalDay(result.kickoff, now, timeZone)
     ? 'TODAY'

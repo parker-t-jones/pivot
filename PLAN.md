@@ -1272,13 +1272,17 @@ not seeded in v1. Home supplies `week` from this response into `GET /games?week=
       network: string,
       market: 'national' | 'regional' | 'unknown',
       market_confidence: 'national' | 'unknown' | 'in' | 'out'
-    }>
+    }>,
+    final_score: { home: number, away: number } | null  // final games only (issue #14)
   }>
 }
 ```
 
 `week` is required; Home supplies it from `GET /state/nfl`. Schedule catalog only — no live
-score/clock (those live on `GET /games/live`). Broadcasts are watch options computed from
+score/clock (those live on `GET /games/live`). `final_score` is set only when `status` is
+`final`: from `games.home_score` / `away_score` (written by the runner from ESPN's scoreboard when
+it marks the game final), falling back to the Redis `game_state` while that key is alive. It is
+null whenever neither has it; never an invented 0–0. Broadcasts are watch options computed from
 `game_airings` through the carriage map and ranked against the user's services
 (docs/B1-BROADCAST-DESIGN.md §1.6), with **one** `user_app_presence` load reused across the whole
 slate. The ranking is the shared `watchOptionsForGame`, which the dispatcher's `pickBroadcastSource`

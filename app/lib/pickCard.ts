@@ -13,8 +13,8 @@ import { watchlistStatusLabel, type WatchlistTableLive } from './watchlistTable'
  * One Watchlist card per non-fantasy pick (issue #13): a type eyebrow, the pick in
  * accent, matchup + kickoff/status, a live progress bar, and a dimmed final.
  *
- * Final scores are not on the week schedule or the live feed, so a final card says
- * FINAL without an outcome.
+ * A final card shows the score from the week schedule ("FINAL · 24–17"), or FINAL
+ * when the schedule has none. It never states an outcome (covered / lost).
  */
 
 export type PickCardPhase = 'upcoming' | 'live' | 'final';
@@ -37,6 +37,7 @@ export interface PickCardWeekGame {
   game_id: string;
   status: string;
   scheduled_start: string;
+  final_score?: { home: number; away: number } | null;
 }
 
 export interface PickCardModel {
@@ -111,6 +112,7 @@ export function pickCardModel(input: {
     kickoff: kickoffIso == null ? null : new Date(kickoffIso),
     now: input.now,
     live,
+    finalScore: isFinal ? (weekGame?.final_score ?? null) : null,
   }).text;
 
   const score: GameScore | null = phase === 'live' && live ? live.score : null;

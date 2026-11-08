@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   watchlistPlayerRow,
   watchlistStatusLabel,
+  watchlistStakeRow,
   type WatchlistTableGame,
 } from './watchlistTable';
 
@@ -222,5 +223,49 @@ describe('watchlistStatusLabel', () => {
         live: null,
       }),
     ).toEqual({ text: 'FINAL', muted: true });
+  });
+
+  it('shows the final score away–home when the schedule has it', () => {
+    expect(
+      watchlistStatusLabel({
+        bye: false,
+        isFinal: true,
+        inProgress: false,
+        kickoff: now,
+        now,
+        live: null,
+        finalScore: { home: 17, away: 24 },
+      }),
+    ).toEqual({ text: 'FINAL · 24–17', muted: true });
+  });
+
+  it('puts the final score on a pick row from the week game', () => {
+    const row = watchlistStakeRow({
+      id: 's1',
+      slot: 'BET',
+      name: 'DET −3.5',
+      meta: '',
+      gameId: 'g-final',
+      matchup: 'DET @ GB',
+      kickoff: '',
+      weekGames: [
+        {
+          game_id: 'g-final',
+          status: 'final',
+          scheduled_start: now.toISOString(),
+          home_team: 'GB',
+          away_team: 'DET',
+          airings: [],
+          broadcasts: [],
+          final_score: { home: 20, away: 27 },
+        },
+      ],
+      liveGames: [],
+      now,
+      timeZone: 'America/New_York',
+    });
+    expect(row.status).toBe('FINAL · 27–20');
+    expect(row.statusMuted).toBe(true);
+    expect(row.live).toBe(false);
   });
 });

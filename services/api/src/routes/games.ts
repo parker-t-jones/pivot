@@ -1,4 +1,5 @@
 import { buildGameSummary } from '@pivot/dispatcher';
+import type { GameState } from '@pivot/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { loadSubscribedServices, userIsDemo } from '../lib/demoAccount.js';
@@ -38,6 +39,30 @@ function teamFields(home: TeamDisplay | undefined, away: TeamDisplay | undefined
 
 function subscribedServicesFrom(rows: { service: string; has_subscription: boolean }[] | null) {
   return new Set((rows ?? []).filter((row) => row.has_subscription).map((row) => row.service));
+}
+
+/**
+ * `final_score` for a game row: the stored columns once the runner has written them, else the
+ * Redis `game_state` score while that key is alive (games finalized before the columns existed,
+ * or a write that failed). Null for any game that isn't final, and never an invented 0–0.
+ */
+export async function finalScoreFor(
+  game: { id: string; status: string; home_score: number | null; away_score: number | null },
+  gameStates: { getGameState(gameId: string): Promise<GameState | null> },
+): Promise<{ home: number; away: number } | null> {
+  if (game.status !== 'final') return null;
+  if (game.home_score != null && game.away_score != null) {
+    return { home: game.home_score, away: game.away_score };
+  }
+  let state: GameState | null;
+  try {
+    state = await gameStates.getGameState(game.id);
+  } catch {
+    // The schedule must not fail because Redis did. The game just shows FINAL without a score.
+    return null;
+  }
+  if (state?.status !== 'final') return null;
+  return { home: state.scoreHome, away: state.scoreAway };
 }
 
 function urlsByGame(rows: readonly { game_id: string; url: string }[] | null): Map<string, string> {
@@ -87,7 +112,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       const { data: gameRows, error: gamesError } = await fastify.supabase
         .from('games')
-        .select('id, status, scheduled_start, home_team_id, away_team_id')
+        .select('id, status, scheduled_start, home_team_id, away_team_id, home_score, away_score')
         .eq('week', week)
         .eq('season_type', seasonType)
         .order('scheduled_start', { ascending: true });
@@ -101,24 +126,26 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const teamIds = [...new Set(games.flatMap((g) => [g.home_team_id, g.away_team_id]))];
       const gameIds = games.map((g) => g.id);
 
-      const [teamsResult, airingsResult, presenceResult, savedUrls, primeGtis] = await Promise.all([
-        fastify.supabase
-          .from('teams')
-          .select('id, abbreviation, name, primary_color, secondary_color')
-          .in('id', teamIds),
-        fastify.supabase.from('game_airings').select(AIRING_COLUMNS).in('game_id', gameIds),
-        // ONE presence load for the whole week — not per game.
-        fastify.supabase
-          .from('user_app_presence')
-          .select('service, has_subscription')
-          .eq('user_id', user.id),
-        fastify.supabase
-          .from('user_game_links')
-          .select('game_id, url')
-          .eq('user_id', user.id)
-          .in('game_id', gameIds),
-        loadPrimeGtis(fastify.supabase, gameIds),
-      ]);
+      const [teamsResult, airingsResult, presenceResult, savedUrls, primeGtis, finalScores] =
+        await Promise.all([
+          fastify.supabase
+            .from('teams')
+            .select('id, abbreviation, name, primary_color, secondary_color')
+            .in('id', teamIds),
+          fastify.supabase.from('game_airings').select(AIRING_COLUMNS).in('game_id', gameIds),
+          // ONE presence load for the whole week — not per game.
+          fastify.supabase
+            .from('user_app_presence')
+            .select('service, has_subscription')
+            .eq('user_id', user.id),
+          fastify.supabase
+            .from('user_game_links')
+            .select('game_id, url')
+            .eq('user_id', user.id)
+            .in('game_id', gameIds),
+          loadPrimeGtis(fastify.supabase, gameIds),
+          Promise.all(games.map((game) => finalScoreFor(game, fastify.gameStateStore))),
+        ]);
       if (teamsResult.error) throw teamsResult.error;
       if (airingsResult.error) throw airingsResult.error;
       if (presenceResult.error) throw presenceResult.error;
@@ -140,7 +167,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       return {
         week,
-        games: games.map((game) => {
+        games: games.map((game, index) => {
           const home = teamById.get(game.home_team_id);
           const away = teamById.get(game.away_team_id);
           const watch = watchByGameId.get(game.id);
@@ -154,6 +181,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
             broadcasts: watch?.broadcasts ?? [],
             airings: watch?.airings ?? [],
             destination: watch?.destination ?? { kind: 'legacy' },
+            final_score: finalScores[index] ?? null,
           };
         }),
       };

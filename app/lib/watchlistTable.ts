@@ -14,6 +14,7 @@ export interface WatchlistTableGame {
   airings: readonly { network: string }[];
   broadcasts: readonly { preferred: boolean; deep_link_url: string }[];
   destination?: DestinationResolution;
+  final_score?: { home: number; away: number } | null;
 }
 
 export interface WatchlistTableLive {
@@ -52,8 +53,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * Status column. Inside a day, "in 1h 7m". Further out, the Eastern weekday and
  * time from `kickoffLabel`. Live is the score plus the clock when the live feed
- * has them, otherwise "LIVE". Final scores are not on the week schedule or the
- * live feed, so a finished game says FINAL.
+ * has them, otherwise "LIVE". A finished game is "FINAL · 24–17" (away–home, like
+ * the live score) when the week schedule has its `final_score`, otherwise FINAL.
  */
 export function watchlistStatusLabel(input: {
   bye: boolean;
@@ -62,9 +63,15 @@ export function watchlistStatusLabel(input: {
   kickoff: Date | null;
   now: Date;
   live: WatchlistTableLive | null;
+  finalScore?: { home: number; away: number } | null;
 }): { text: string; muted: boolean } {
   if (input.bye) return { text: 'BYE', muted: true };
-  if (input.isFinal) return { text: 'FINAL', muted: true };
+  if (input.isFinal) {
+    return {
+      text: input.finalScore ? `FINAL · ${compactScoreLabel(input.finalScore)}` : 'FINAL',
+      muted: true,
+    };
+  }
   if (input.inProgress) {
     if (!input.live) return { text: 'LIVE', muted: false };
     return {
@@ -132,6 +139,7 @@ export function watchlistStakeRow(input: {
     kickoff,
     now: input.now,
     live,
+    finalScore: game?.final_score ?? null,
   });
   return {
     id: input.id,
@@ -204,6 +212,7 @@ function rowFromGame(input: {
     kickoff,
     now: input.now,
     live,
+    finalScore: input.game.final_score ?? null,
   });
 
   return {

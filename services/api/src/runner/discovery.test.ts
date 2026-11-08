@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { GameState } from '@pivot/shared';
-import { applyDiscovery, type DiscoveryEvent, type SeededGame } from './discovery.js';
+import {
+  applyDiscovery,
+  finalScoreFromEvent,
+  type DiscoveryEvent,
+  type FinalScore,
+  type SeededGame,
+} from './discovery.js';
 
 function game(espnEventId: string, status = 'scheduled'): SeededGame {
   return {
@@ -160,5 +166,71 @@ describe('discovery', () => {
       status: 'in_progress',
       updatedAt: 5_000,
     });
+  });
+
+  it('stores the final score from the scoreboard when a game goes final', async () => {
+    const event: DiscoveryEvent = {
+      id: 'done-1',
+      status: { type: { state: 'post', name: 'STATUS_FINAL', completed: true } },
+      competitions: [
+        {
+          competitors: [
+            { homeAway: 'home', score: '24' },
+            { homeAway: 'away', score: 17 },
+          ],
+        },
+      ],
+    };
+    const writes: { status: string; score: FinalScore | null | undefined }[] = [];
+    const stopped: string[] = [];
+    await applyDiscovery({
+      events: [event],
+      log: () => undefined,
+      games: {
+        findByEspnId: () => Promise.resolve(game('done-1', 'in_progress')),
+        setStatus: (_gameId, status, finalScore) => {
+          writes.push({ status, score: finalScore });
+          return Promise.resolve();
+        },
+      },
+      gameState: {
+        getGameState: () => Promise.resolve(null),
+        setGameState: () => Promise.resolve(),
+      },
+      loops: {
+        isRunning: () => true,
+        start: () => undefined,
+        stop: (gameId) => stopped.push(gameId),
+      },
+    });
+    expect(stopped).toEqual(['game-done-1']);
+    expect(writes).toEqual([{ status: 'final', score: { home: 24, away: 17 } }]);
+  });
+});
+
+describe('finalScoreFromEvent', () => {
+  const withScores = (home: unknown, away: unknown): DiscoveryEvent =>
+    ({
+      id: 'e',
+      competitions: [
+        {
+          competitors: [
+            { homeAway: 'home', score: home },
+            { homeAway: 'away', score: away },
+          ],
+        },
+      ],
+    }) as DiscoveryEvent;
+
+  it('reads string and number scores', () => {
+    expect(finalScoreFromEvent(withScores('31', 0))).toEqual({ home: 31, away: 0 });
+  });
+
+  it('returns null when either side is missing, blank, negative, or fractional', () => {
+    expect(finalScoreFromEvent({ id: 'e' })).toBeNull();
+    expect(finalScoreFromEvent(withScores('21', undefined))).toBeNull();
+    expect(finalScoreFromEvent(withScores('', '3'))).toBeNull();
+    expect(finalScoreFromEvent(withScores('-1', '3'))).toBeNull();
+    expect(finalScoreFromEvent(withScores('2.5', '3'))).toBeNull();
   });
 });

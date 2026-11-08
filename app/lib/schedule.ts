@@ -26,6 +26,13 @@ export interface ScheduleGame {
   airings: GameAiring[];
   /** Present once the API returns the resolver result. Older payloads omit it. */
   destination?: DestinationResolution;
+  /** Final games only (issue #14). Null when unknown; older payloads omit it. */
+  final_score?: FinalScore | null;
+}
+
+export interface FinalScore {
+  home: number;
+  away: number;
 }
 
 export interface GamesWeekResponse {

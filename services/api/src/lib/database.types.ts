@@ -146,7 +146,9 @@ export type Database = {
       }
       games: {
         Row: {
+          away_score: number | null
           away_team_id: string
+          home_score: number | null
           home_team_id: string
           id: string
           scheduled_start: string
@@ -158,7 +160,9 @@ export type Database = {
           week: number
         }
         Insert: {
+          away_score?: number | null
           away_team_id: string
+          home_score?: number | null
           home_team_id: string
           id?: string
           scheduled_start: string
@@ -170,7 +174,9 @@ export type Database = {
           week: number
         }
         Update: {
+          away_score?: number | null
           away_team_id?: string
+          home_score?: number | null
           home_team_id?: string
           id?: string
           scheduled_start?: string

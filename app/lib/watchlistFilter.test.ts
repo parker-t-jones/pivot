@@ -17,8 +17,8 @@ describe('watchlistSections', () => {
     ]);
   });
 
-  it('All shows the lineup, then the opponent section, then bets and pools', () => {
-    expect(watchlistSections('all')).toEqual(['starters', 'opponent', 'bets', 'pools']);
+  it('All shows one card per fantasy league, then bets and pools', () => {
+    expect(watchlistSections('all')).toEqual(['leagueCards', 'bets', 'pools']);
   });
 
   it('Fantasy shows league actions, league chips, starters, and the opponent section', () => {
