@@ -69,7 +69,13 @@ import {
 } from '../../../lib/schedule';
 import { pickCardModel } from '../../../lib/pickCard';
 import { rosterStripInputs, rosterStripModel } from '../../../lib/stakeCards';
-import { formatStakeLabel, stakeTeams, type ManualStake } from '../../../lib/stakes';
+import {
+  formatStakeLabel,
+  removalKeepsFreeSlot,
+  removePickMessage,
+  stakeTeams,
+  type ManualStake,
+} from '../../../lib/stakes';
 import { subscribeAddPickSaved } from '../../../lib/addPickDrawer';
 import { flushStakeUndo, takePendingStakeUndo } from '../../../lib/stakeUndoStore';
 import { supabase } from '../../../lib/supabase';
@@ -183,6 +189,8 @@ export default function LineupScreen() {
   /** Optimistic `watchOpponent` while a preferences PATCH is in flight. */
   const [watchOpponentPending, setWatchOpponentPending] = useState<boolean | null>(null);
   const [bets, setBets] = useState<ManualStake[]>(() => readRememberedWatchlist()?.bets ?? []);
+  /** Free-cap picks removed after kickoff this week. They keep their free slots spent. */
+  const [spentSlots, setSpentSlots] = useState(0);
   /** False until this week's stakes load. A failed request stays false so the week card shows "—", not 0. */
   const [stakesKnown, setStakesKnown] = useState(
     () => readRememberedWatchlist()?.stakesKnown ?? false,
@@ -309,6 +317,7 @@ export default function LineupScreen() {
           try {
             const stakes = await fetchStakes(response.week);
             setBets(stakes.stakes);
+            setSpentSlots(stakes.free_slots_spent ?? 0);
             setStakesKnown(true);
           } catch {
             setBets([]);
@@ -407,6 +416,7 @@ export default function LineupScreen() {
       void fetchStakes(week)
         .then((response) => {
           setBets(response.stakes);
+          setSpentSlots(response.free_slots_spent ?? 0);
           setStakesKnown(true);
         })
         .catch(() => {
@@ -426,6 +436,7 @@ export default function LineupScreen() {
       void fetchStakes(week)
         .then((response) => {
           setBets(response.stakes);
+          setSpentSlots(response.free_slots_spent ?? 0);
           setStakesKnown(true);
         })
         .catch(() => {
@@ -435,16 +446,27 @@ export default function LineupScreen() {
     });
   }, [betsOn, lineup?.week, nflWeek]);
 
+  const dropRemovedStake = (stake: ManualStake) => {
+    setBets((current) => current.filter((row) => row.id !== stake.id));
+    // Same rule as the API: a counted pick removed after kickoff keeps its slot spent.
+    if (removalKeepsFreeSlot(stake, new Date())) {
+      setSpentSlots((current) => current + 1);
+    }
+  };
+
   const commitStakeRemoval = async (stake: ManualStake) => {
     await deleteStake(stake.id);
-    setBets((current) => current.filter((row) => row.id !== stake.id));
+    dropRemovedStake(stake);
   };
 
   const confirmRemoveBet = (stake: ManualStake) => {
     const label = formatStakeLabel(stake, stakeTeams(stake));
     void confirmAsync({
       title: 'Remove this bet?',
-      message: label,
+      message: removePickMessage(stake, label, {
+        isPro: me?.subscription_tier === 'pro',
+        now: new Date(),
+      }),
       confirmLabel: 'Remove',
       cancelLabel: 'Cancel',
       destructive: true,
@@ -453,7 +475,7 @@ export default function LineupScreen() {
       void (async () => {
         try {
           await deleteStake(stake.id);
-          setBets((current) => current.filter((row) => row.id !== stake.id));
+          dropRemovedStake(stake);
         } catch (error) {
           void alertAsync('Could not remove', errorMessage(error));
         }
@@ -571,7 +593,7 @@ export default function LineupScreen() {
     starterCount:
       browsedLeagueReady && weekGames != null ? browsedStarterCount(lineup.slots, weekGames) : null,
     opponentStatus,
-    betCount: stakesKnown ? freeBetCount(bets) : null,
+    betCount: stakesKnown ? freeBetCount(bets, spentSlots) : null,
     survivorCount: stakesKnown ? poolBets.length : null,
     isPro: me?.subscription_tier === 'pro',
     week: headerWeek,
@@ -590,7 +612,7 @@ export default function LineupScreen() {
     filter === 'bets' && stakesKnown
       ? sparseBetPrompt({
           rowCount: propBets.length,
-          betsUsed: freeBetCount(bets),
+          betsUsed: freeBetCount(bets, spentSlots),
           isPro: me?.subscription_tier === 'pro',
         })
       : null;

@@ -12,8 +12,15 @@ export function countsTowardFreeCap(type: string | null | undefined): boolean {
   return type == null || !FANTASY_TYPES.has(type);
 }
 
-export function freeBetCount(stakes: readonly { condition: { type: string } }[]): number {
-  return stakes.filter((stake) => countsTowardFreeCap(stake.condition.type)).length;
+/**
+ * Free slots used this week: live picks that count, plus `spent` picks that were removed
+ * after kickoff (`free_slots_spent` on `GET /stakes`).
+ */
+export function freeBetCount(
+  stakes: readonly { condition: { type: string } }[],
+  spent = 0,
+): number {
+  return stakes.filter((stake) => countsTowardFreeCap(stake.condition.type)).length + spent;
 }
 
 /** Opponent strip for the league currently selected on the chip row. */
