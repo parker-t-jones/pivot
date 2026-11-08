@@ -127,7 +127,12 @@ export function AddPickFlow({
         setStakes(stakePage.stakes);
         setAllowance({
           isPro,
-          freeLeft: isPro ? null : Math.max(0, FREE_BET_ALLOWANCE - freeBetCount(stakePage.stakes)),
+          freeLeft: isPro
+            ? null
+            : Math.max(
+                0,
+                FREE_BET_ALLOWANCE - freeBetCount(stakePage.stakes, stakePage.free_slots_spent),
+              ),
         });
         const leagueId = resolveActiveLeagueId(leagues, me.preferences.watchedLeagueIds);
         if (leagueId == null) return;

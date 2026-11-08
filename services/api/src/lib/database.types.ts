@@ -364,6 +364,41 @@ export type Database = {
         }
         Relationships: []
       }
+      stake_spent_slots: {
+        Row: {
+          created_at: string
+          game_id: string
+          season: number
+          stake_id: string
+          user_id: string
+          week: number
+        }
+        Insert: {
+          created_at?: string
+          game_id: string
+          season: number
+          stake_id: string
+          user_id: string
+          week: number
+        }
+        Update: {
+          created_at?: string
+          game_id?: string
+          season?: number
+          stake_id?: string
+          user_id?: string
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stake_spent_slots_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stake_trigger_log: {
         Row: {
           code: string

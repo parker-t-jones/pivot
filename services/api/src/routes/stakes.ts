@@ -5,7 +5,9 @@ import { isBetCondition } from '../lib/betIndex.js';
 import { demoAccountFixed, userIsDemo } from '../lib/demoAccount.js';
 import { demoStakesResponse } from '../lib/demoFixture.js';
 import { ApiError } from '../lib/errors.js';
+import { gameHasKickedOff } from '../lib/kickoff.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
+import type { SupabaseServiceClient } from '../lib/supabase.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
 
@@ -119,8 +121,38 @@ function stakeResponse(row: StakeRow) {
   };
 }
 
+/**
+ * Free-cap picks removed after kickoff for one week, by stake id. Each one keeps a slot
+ * spent. A stake id that still exists is skipped so a delete that failed after the spent
+ * row was written never counts twice.
+ */
+async function spentSlotIds(
+  supabase: SupabaseServiceClient,
+  userId: string,
+  season: number,
+  week: number,
+  liveStakeIds: ReadonlySet<string>,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('stake_spent_slots')
+    .select('stake_id')
+    .eq('user_id', userId)
+    .eq('season', season)
+    .eq('week', week);
+  if (error) throw error;
+  return ((data ?? []) as { stake_id: string }[])
+    .map((row) => row.stake_id)
+    .filter((id) => !liveStakeIds.has(id));
+}
+
+export interface StakesRoutesOptions {
+  /** Clock for the kickoff check. Tests pin it. */
+  now?: () => Date;
+}
+
 /** Manual spread, total, moneyline, and survivor stakes. Fantasy rows stay on sync. */
-const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
+const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify, opts) => {
+  const now = opts.now ?? (() => new Date());
   fastify.addHook('preHandler', fastify.authenticate);
   fastify.addHook('preHandler', async (request) => {
     if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') {
@@ -205,7 +237,15 @@ const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .eq('id', user.id)
       .single();
     if (userError) throw userError;
-    const counted = owned.filter((stake) => countsTowardFreeCap(stake.condition)).length;
+    const spent = await spentSlotIds(
+      fastify.supabase,
+      user.id,
+      row.season_year,
+      row.week,
+      new Set(owned.map((stake) => stake.id)),
+    );
+    const counted =
+      owned.filter((stake) => countsTowardFreeCap(stake.condition)).length + spent.length;
     if (
       userRow.subscription_tier !== 'pro' &&
       countsTowardFreeCap(condition) &&
@@ -256,7 +296,15 @@ const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .eq('week', week);
     if (error) throw error;
 
-    const stakes = ((data ?? []) as StakeRow[])
+    const weekRows = (data ?? []) as StakeRow[];
+    const spent = await spentSlotIds(
+      fastify.supabase,
+      user.id,
+      season,
+      week,
+      new Set(weekRows.map((stake) => stake.id)),
+    );
+    const stakes = weekRows
       .filter((stake) => !FANTASY_TYPES.has(conditionType(stake.condition) ?? ''))
       .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
@@ -290,6 +338,7 @@ const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
     return {
       week,
+      free_slots_spent: spent.length,
       stakes: stakes.map((stake) => {
         const game = gamesById.get(stake.game_id);
         const home = game ? teamsById.get(game.home_team_id) : undefined;
@@ -334,6 +383,32 @@ const stakesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const type = conditionType(stake.condition);
       if (type !== null && FANTASY_TYPES.has(type)) {
         throw new ApiError(403, 'stake_managed_by_sync', 'This stake is managed by league sync.');
+      }
+
+      // Removing a started pick is allowed, but its free slot stays spent for the week.
+      // The spent row is written first: if the delete then fails, the live row still
+      // wins in spentSlotIds and nothing is counted twice.
+      if (countsTowardFreeCap(stake.condition)) {
+        const { data: game, error: gameError } = await fastify.supabase
+          .from('games')
+          .select('status, scheduled_start')
+          .eq('id', stake.game_id)
+          .maybeSingle();
+        if (gameError) throw gameError;
+        const kickoff = game as { status: string; scheduled_start: string } | null;
+        if (kickoff !== null && gameHasKickedOff(kickoff, now())) {
+          const { error: spentError } = await fastify.supabase.from('stake_spent_slots').upsert(
+            {
+              stake_id: stake.id,
+              user_id: user.id,
+              season: stake.season,
+              week: stake.week,
+              game_id: stake.game_id,
+            },
+            { onConflict: 'stake_id', ignoreDuplicates: true },
+          );
+          if (spentError) throw spentError;
+        }
       }
 
       const { error: deleteError } = await fastify.supabase

@@ -329,11 +329,12 @@ Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via
 | Connected leagues | Max **3** (unchanged) | Unlimited |
 | Watched leagues (Active Lineup) | Exactly **1** (unchanged) | Multi-select |
 | Manual lineup size | Max **9** (unchanged) | Unlimited |
-| Bet / market / pool stakes | Max **3 per NFL week** (new) | Unlimited |
+| Bet / market stakes (survivor picks don't count) | Max **3 per NFL week** (new) | Unlimited |
 | Opponent tracking | Included | Included |
 
-- **What counts toward the 3:** any stake whose `condition.type` is not `ROSTERED` or `OPPONENT_ROSTERED`. That covers props, spread, total, moneyline, survivor and Kalshi stakes.
-- **When the count resets:** it's scoped to `(user_id, season, week)`. A deleted stake frees its slot.
+- **What counts toward the 3:** any stake whose `condition.type` is not `ROSTERED`, `OPPONENT_ROSTERED` or `SURVIVOR`. That covers props, spread, total, moneyline and Kalshi stakes. **Survivor picks never count toward the 3**, so a free user can add one even with the cap full.
+- **When the count resets:** it's scoped to `(user_id, season, week)`. A stake deleted **before its game kicks off** frees its slot. One deleted after kickoff (game `in_progress`/`final`, or `scheduled_start` passed) can still be removed, but its slot stays spent for the week: `DELETE /stakes/:id` writes a row to `stake_spent_slots`, and the cap counts live stakes plus those rows. `GET /stakes` returns the count as `free_slots_spent`. Survivor picks never use a slot. Adding a stake after kickoff is allowed and counts.
+- **Manual lineup kickoff lock (Free and Pro):** `PUT /leagues/:id/lineup` returns **409** `lineup_player_locked` (`details.player_ids`) if it would drop a player whose game has kicked off. Adding players, and dropping players whose games haven't started, still work. Sleeper lineups follow Sleeper.
 - **Where it's enforced:** on the API. `POST /stakes` returns **403** with `code: 'stake_limit_free'` and `details: { limit: 3 }`, matching the existing cap convention. Add `stake_limit_free` to the code list in `app/lib/upgradePrompt.ts` so the paywall opens. Never enforce only on the client.
 
 ### 10.3 Products (RevenueCat)

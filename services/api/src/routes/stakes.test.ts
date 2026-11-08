@@ -31,9 +31,10 @@ class Mem {
   teams: Row[] = [];
   stakes: Row[] = [];
   users: Row[] = [];
+  spent: Row[] = [];
   private next = 1;
 
-  from(table: 'games' | 'teams' | 'stakes' | 'users'): Query {
+  from(table: 'games' | 'teams' | 'stakes' | 'users' | 'stake_spent_slots'): Query {
     const rows =
       table === 'games'
         ? this.games
@@ -41,7 +42,9 @@ class Mem {
           ? this.teams
           : table === 'users'
             ? this.users
-            : this.stakes;
+            : table === 'stake_spent_slots'
+              ? this.spent
+              : this.stakes;
     return new Query(rows, () => {
       const id = `00000000-0000-4000-8000-${String(this.next).padStart(12, '0')}`;
       this.next += 1;
@@ -51,7 +54,8 @@ class Mem {
 }
 
 class Query implements PromiseLike<{ data: unknown; error: null }> {
-  private mode: 'select' | 'insert' | 'delete' = 'select';
+  private mode: 'select' | 'insert' | 'upsert' | 'delete' = 'select';
+  private conflictKey = '';
   private filters: ((row: Row) => boolean)[] = [];
   private payload: Row | null = null;
   private one: 'many' | 'maybe' | 'single' = 'many';
@@ -68,6 +72,13 @@ class Query implements PromiseLike<{ data: unknown; error: null }> {
   insert(row: Row): this {
     this.mode = 'insert';
     this.payload = row;
+    return this;
+  }
+
+  upsert(row: Row, options: { onConflict: string; ignoreDuplicates?: boolean }): this {
+    this.mode = 'upsert';
+    this.payload = row;
+    this.conflictKey = options.onConflict;
     return this;
   }
 
@@ -107,6 +118,13 @@ class Query implements PromiseLike<{ data: unknown; error: null }> {
   }
 
   private execute(): Promise<{ data: unknown; error: null }> {
+    if (this.mode === 'upsert' && this.payload) {
+      const key = this.payload[this.conflictKey];
+      if (!this.rows.some((row) => row[this.conflictKey] === key)) {
+        this.rows.push({ ...this.payload });
+      }
+      return Promise.resolve({ data: null, error: null });
+    }
     if (this.mode === 'insert' && this.payload) {
       const created: Row = {
         id: this.nextId(),
@@ -151,7 +169,11 @@ async function signToken(sub: string): Promise<string> {
     .sign(new TextEncoder().encode(JWT_SECRET));
 }
 
-async function buildApp(mem: Mem) {
+/** Before the fixture game's 2026-10-11 17:00Z kickoff. */
+const BEFORE_KICKOFF = '2026-10-09T16:00:00.000Z';
+const AFTER_KICKOFF = '2026-10-11T17:30:00.000Z';
+
+async function buildApp(mem: Mem, clock: { now: Date }) {
   const lineupCache = new InMemoryLineupCache();
   await lineupCache.setNflState(
     { season: '2026', week: 5, seasonType: 'regular', seasonStartDate: '2026-09-09' },
@@ -171,7 +193,7 @@ async function buildApp(mem: Mem) {
     gameStateStore: new InMemoryGameStateStore(),
     realtimeSubscriber: new InMemoryRealtimeBus(),
   });
-  await fastify.register(stakesRoutes);
+  await fastify.register(stakesRoutes, { now: () => clock.now });
   return fastify;
 }
 
@@ -179,6 +201,7 @@ describe('manual stakes', () => {
   let mem: Mem;
   let app: Awaited<ReturnType<typeof buildApp>>;
   let token: string;
+  let clock: { now: Date };
 
   afterEach(async () => {
     await app.close();
@@ -192,7 +215,8 @@ describe('manual stakes', () => {
       { id: AWAY, abbreviation: 'PHI', name: 'Eagles' },
     ];
     mem.users = [{ id: USER, subscription_tier: 'free' }];
-    app = await buildApp(mem);
+    clock = { now: new Date(BEFORE_KICKOFF) };
+    app = await buildApp(mem, clock);
     token = await signToken(USER);
   }
 
@@ -461,9 +485,9 @@ describe('manual stakes', () => {
   });
 
   async function fillFreeCap() {
-    expect((await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 })).statusCode).toBe(
-      201,
-    );
+    expect(
+      (await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 })).statusCode,
+    ).toBe(201);
     expect((await post({ type: 'TOTAL_OVER', gameId: GAME, line: 47.5 })).statusCode).toBe(201);
     const third = await post({ type: 'MONEYLINE', gameId: GAME, teamId: HOME });
     expect(third.statusCode).toBe(201);
@@ -508,9 +532,9 @@ describe('manual stakes', () => {
 
   it('does not let existing survivor picks use free-bet slots', async () => {
     await setup();
-    expect((await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 })).statusCode).toBe(
-      201,
-    );
+    expect(
+      (await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 })).statusCode,
+    ).toBe(201);
     expect((await post({ type: 'TOTAL_OVER', gameId: GAME, line: 47.5 })).statusCode).toBe(201);
     seedSurvivor(1, HOME);
     seedSurvivor(2, AWAY);
@@ -533,6 +557,129 @@ describe('manual stakes', () => {
     expect(removed.statusCode).toBe(204);
     const again = await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY });
     expect(again.statusCode).toBe(201);
+  });
+
+  async function remove(id: string) {
+    return await app.inject({
+      method: 'DELETE',
+      url: `/stakes/${id}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+  }
+
+  async function list() {
+    return await app.inject({
+      method: 'GET',
+      url: '/stakes?week=5',
+      headers: { authorization: `Bearer ${token}` },
+    });
+  }
+
+  describe('after kickoff', () => {
+    it('keeps the slot spent when a counted pick is removed after its game starts', async () => {
+      await setup();
+      const counted = await fillFreeCap();
+      const id = (counted.json() as { stake: { id: string } }).stake.id;
+      clock.now = new Date(AFTER_KICKOFF);
+
+      expect((await remove(id)).statusCode).toBe(204);
+      expect(mem.stakes.some((stake) => stake['id'] === id)).toBe(false);
+      expect(mem.spent).toEqual([
+        { stake_id: id, user_id: USER, season: 2026, week: 5, game_id: GAME },
+      ]);
+
+      const again = await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY });
+      expect(again.statusCode).toBe(403);
+      expect(again.json().error.code).toBe('stake_limit_free');
+      expect((await list()).json().free_slots_spent).toBe(1);
+    });
+
+    it('treats an in-progress game as started even before its scheduled time', async () => {
+      await setup();
+      const counted = await fillFreeCap();
+      const id = (counted.json() as { stake: { id: string } }).stake.id;
+      const game = mem.games[0];
+      if (game === undefined) throw new Error('missing test game');
+      game['status'] = 'in_progress';
+
+      expect((await remove(id)).statusCode).toBe(204);
+      expect(mem.spent).toHaveLength(1);
+    });
+
+    it('refunds a slot removed before kickoff but not one removed after', async () => {
+      await setup([
+        openGame(),
+        openGame({ id: OTHER_GAME, scheduled_start: '2026-10-12T00:15:00.000Z' }),
+      ]);
+      const early = await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY });
+      const late = await post({ type: 'MONEYLINE', gameId: OTHER_GAME, teamId: HOME });
+      const earlyId = (early.json() as { stake: { id: string } }).stake.id;
+      const lateId = (late.json() as { stake: { id: string } }).stake.id;
+
+      // The late game has not started: removing it refunds the slot.
+      clock.now = new Date(AFTER_KICKOFF);
+      expect((await remove(lateId)).statusCode).toBe(204);
+      // The early game has started: removing it keeps the slot spent.
+      expect((await remove(earlyId)).statusCode).toBe(204);
+      expect(mem.spent.map((row) => row['stake_id'])).toEqual([earlyId]);
+
+      // One slot spent, two free: a live bet on the started game still counts and is allowed.
+      expect((await post({ type: 'TOTAL_OVER', gameId: GAME, line: 47.5 })).statusCode).toBe(201);
+      expect((await post({ type: 'TOTAL_UNDER', gameId: OTHER_GAME, line: 44.5 })).statusCode).toBe(
+        201,
+      );
+      const fourth = await post({ type: 'SPREAD', gameId: OTHER_GAME, teamId: AWAY, line: 2.5 });
+      expect(fourth.statusCode).toBe(403);
+      expect(fourth.json().error.code).toBe('stake_limit_free');
+    });
+
+    it('does not double count a spent row whose pick still exists', async () => {
+      await setup();
+      const counted = await fillFreeCap();
+      const id = (counted.json() as { stake: { id: string } }).stake.id;
+      // A delete that failed after the spent row was written leaves both.
+      mem.spent.push({ stake_id: id, user_id: USER, season: 2026, week: 5, game_id: GAME });
+      expect((await list()).json().free_slots_spent).toBe(0);
+
+      clock.now = new Date(AFTER_KICKOFF);
+      expect((await remove(id)).statusCode).toBe(204);
+      expect(mem.spent).toHaveLength(1);
+      expect((await list()).json().free_slots_spent).toBe(1);
+    });
+
+    it('never spends a slot for a survivor pick removed after kickoff', async () => {
+      await setup();
+      const survivor = await post({ type: 'SURVIVOR', gameId: GAME, teamId: AWAY });
+      const id = (survivor.json() as { stake: { id: string } }).stake.id;
+      clock.now = new Date(AFTER_KICKOFF);
+
+      expect((await remove(id)).statusCode).toBe(204);
+      expect(mem.spent).toEqual([]);
+      await fillFreeCap();
+    });
+
+    it('records the spent slot for a pro user but never caps them', async () => {
+      await setup();
+      asPro();
+      const counted = await fillFreeCap();
+      const id = (counted.json() as { stake: { id: string } }).stake.id;
+      clock.now = new Date(AFTER_KICKOFF);
+
+      expect((await remove(id)).statusCode).toBe(204);
+      expect(mem.spent).toHaveLength(1);
+      expect((await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY })).statusCode).toBe(201);
+      expect((await post({ type: 'TOTAL_UNDER', gameId: GAME, line: 44.5 })).statusCode).toBe(201);
+    });
+
+    it("does not count another week's spent slots", async () => {
+      await setup();
+      mem.spent.push(
+        { stake_id: OTHER, user_id: USER, season: 2026, week: 4, game_id: OTHER_GAME },
+        { stake_id: FOREIGN_ID, user_id: OTHER, season: 2026, week: 5, game_id: GAME },
+      );
+      await fillFreeCap();
+      expect((await list()).json().free_slots_spent).toBe(0);
+    });
   });
 
   it("returns 201 for a pro user's fourth bet", async () => {

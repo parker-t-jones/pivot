@@ -8,6 +8,7 @@ import { DEMO_LEAGUE_ID, demoLeague, demoLineupResponse } from '../lib/demoFixtu
 import { ApiError } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { getOwnedLeagueOrThrow } from '../lib/get-owned-league.js';
+import { assertStartedPlayersKept } from '../lib/lineupKickoffLock.js';
 import {
   buildLineupResponse,
   getLineupSyncContext,
@@ -71,7 +72,13 @@ function leagueSummary(league: {
   };
 }
 
-const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
+export interface LeaguesRoutesOptions {
+  /** Clock for the manual-lineup kickoff lock. Tests pin it. */
+  now?: () => Date;
+}
+
+const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastify, opts) => {
+  const now = opts.now ?? (() => new Date());
   fastify.addHook('preHandler', fastify.authenticate);
   fastify.addHook('preHandler', async (request) => {
     if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') {
@@ -454,6 +461,14 @@ const leaguesRoutes: FastifyPluginAsyncZod = async (fastify) => {
           });
         }
       }
+
+      await assertStartedPlayersKept(fastify.supabase, {
+        leagueId: league.id,
+        season: league.season_year,
+        week,
+        nextPlayerIds: playerIds,
+        now: now(),
+      });
 
       const { error: deleteError } = await fastify.supabase
         .from('lineup_slots')
