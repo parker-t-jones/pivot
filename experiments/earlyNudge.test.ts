@@ -130,7 +130,7 @@ describe('simulateToday + pairChanges', () => {
     expect(change.gainVsFirstSnapMs).toBe(40_000);
   });
 
-  it('kickoff after a TD: the real gate holds the first-snap flag until the second snap', async () => {
+  it('kickoff after a TD: the first-snap flag fires with the kickoff resolution', async () => {
     const { changes } = await replay([
       play('pass', 'PHI', 'PHI', { driveResult: 'Touchdown' }),
       play('kickoff', 'CHI', 'CHI'),
@@ -139,14 +139,15 @@ describe('simulateToday + pairChanges', () => {
     ]);
     const [change] = changes;
     expect(change.kind).toBe('kickoff_after_score');
-    // PHI's flag_removed on the kickoff consumes the resolution, so CHI's flag parks mid-drive.
-    expect(change.today).toMatchObject({ decision: 'held_pending_resumption', pushAtMs: at(160) });
+    // PHI's flag_removed on the kickoff no longer spends the resolution (#22), so CHI's flag fires
+    // on its first snap rather than parking until the second.
+    expect(change.today).toMatchObject({ decision: 'fire_immediately', pushAtMs: at(120) });
     expect(change.early?.index).toBe(1);
-    expect(change.gainMs).toBe(80_000);
+    expect(change.gainMs).toBe(40_000);
     expect(change.gainVsFirstSnapMs).toBe(40_000);
   });
 
-  it('kickoff after a FG: the carry-over fires on the first snap, unless a timeout sits between', async () => {
+  it('kickoff after a FG: the carry-over fires on the first snap, even after a timeout', async () => {
     const clean = await replay([
       play('field_goal', 'PHI', 'PHI', { driveResult: 'Field Goal' }),
       play('kickoff', 'CHI', 'CHI'),
@@ -165,23 +166,24 @@ describe('simulateToday + pairChanges', () => {
       play('run', 'CHI', 'CHI'),
     ]);
     expect(withTimeout.changes[0].today).toMatchObject({
-      decision: 'held_pending_resumption',
-      pushAtMs: at(200),
+      decision: 'fire_immediately',
+      pushAtMs: at(160),
     });
   });
 
   it('caps a mid-drive hold at the silence ceiling', async () => {
+    // The opening kickoff follows no possession, so no window resolves and the first snap's flag
+    // waits mid-drive for the next real play, which arrives after the ceiling.
     const stepS = RESUMPTION_CEILING_MS / 1000 + 60;
-    const { changes } = await replay(
-      [
-        play('pass', 'PHI', 'PHI', { driveResult: 'Touchdown' }),
-        play('kickoff', 'CHI', 'CHI'),
-        play('run', 'CHI', 'CHI'),
-        play('pass', 'CHI', 'CHI'),
-      ],
+    const { today } = await replay(
+      [play('kickoff', 'CHI', 'CHI'), play('run', 'CHI', 'CHI'), play('pass', 'CHI', 'CHI')],
       stepS,
     );
-    expect(changes[0].today?.pushAtMs).toBe(at(3 * stepS) + RESUMPTION_CEILING_MS);
+    expect(today.pushes[0]).toMatchObject({
+      team: 'CHI',
+      decision: 'held_pending_resumption',
+      pushAtMs: at(2 * stepS) + RESUMPTION_CEILING_MS,
+    });
   });
 
   it('end of half: an early nudge for a team that never snaps stays unmatched', async () => {

@@ -263,7 +263,7 @@ export async function simulateToday(
     now = arrival.seenAtMs;
     currentIndex = arrival.index;
     const play = arrival.event;
-    gate.beginPlay(gameId);
+    gate.beginPlay(gameId, play.playType);
     if (classifyPlayType(play.playType) === 'REAL_ACTION') await gate.releaseMidDrive(gameId);
     tracker.observe(play, now);
     await flush();
