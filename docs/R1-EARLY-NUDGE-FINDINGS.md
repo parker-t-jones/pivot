@@ -1,6 +1,6 @@
 # R1 — Firing the possession nudge on the possession-ending play
 
-Issue #6. Experiment only: no production code changed here. The gate bug this replay found (§4) is fixed separately in #22, which this branch is stacked on; "today" below means the runner with that fix, and the pre-fix numbers are kept next to them. Replay: `experiments/replay-early-nudge.ts` (pure logic in `experiments/earlyNudge.ts`, tests in `experiments/earlyNudge.test.ts`).
+Issue #6. Experiment only: no production code changed here. The gate bug this replay found (§4) was fixed separately in #22, now merged to `main`. "Today" below means `main` with that fix (replay rerun on `main` after the merge), and the pre-fix numbers are kept next to them. Replay: `experiments/replay-early-nudge.ts` (pure logic in `experiments/earlyNudge.ts`, tests in `experiments/earlyNudge.test.ts`).
 
 ## Summary
 
@@ -154,7 +154,7 @@ The detection moves to the play that ends the possession, and the possession nud
 2. **`@pivot/engine`.** In `applyPlayToState`, when a non-procedural play's `endPossessionTeamId` differs from the play's possessing team (or, on a kickoff, from the kicking team), set the state after that play to `possessionTeamId = endPossessionTeamId` with `unitOnField = 'offense'`. Suppress this on scoring plays and with 0:10 or less left in Q2/Q4 (§5). This one change handles kickoff drives too: the receiver's offense flag turns on on the kickoff itself, a full play before the first snap, so no kickoff special case is needed downstream. `computeFlagState` and `diffFlagStates` are unchanged. The tracker keeps comparing `possessionTeamId`, so its windows now open on the possession-ending play, which is still what REVEAL timing wants.
 3. **`@pivot/dispatcher`.** A `flag_added` produced by a possession change is a NUDGE, so `ResumptionGatedDispatcher.dispatch` sends it with `fire_immediately` instead of parking it in the window. REVEAL events keep going through the window exactly as today. Two decisions for R2:
    - how to tag the event (a `trigger: 'possession'` on `FlagEvent`, or a reason code);
-   - the §4 gate bug is already fixed separately (#22), so R2 starts from first-snap timing.
+   - the §4 gate bug is already fixed on `main` (#22), so R2 starts from first-snap timing.
 4. **Copy.** The nudge must stay a nudge: "{Team} has the ball", never "after a punt / interception". Even so, it implies the previous drive ended, before some streams show it. Parker accepted that trade on Nov 8, and it is noted here so R2's copy review doesn't rediscover it.
 5. **Revisions.** A nudge can't be recalled. R2 can optionally compare against `situation.possession` from one scoreboard fetch before firing on a turnover or muff. That would have caught the single revised case. That costs one extra request per change and about 0–15s; skip it unless false alarms show up live.
 
