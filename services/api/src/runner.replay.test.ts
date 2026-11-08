@@ -2,11 +2,19 @@ import { gunzipSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { classifyPlayType, computeFlagState, type PlayEvent } from '@pivot/engine';
+import {
+  RESUMPTION_CEILING_MS,
+  classifyPlayType,
+  computeFlagState,
+  type PlayEvent,
+} from '@pivot/engine';
 import {
   espnClient,
+  espnSummarySchema,
   EspnPlaySource,
   countSummaryPlays,
+  mapEspnPlay,
+  resolveGameContext,
   summaryPlayPrefixes,
   translatePlay,
 } from '@pivot/ingestion';
@@ -180,16 +188,21 @@ describe('ATL @ GB replay', () => {
     const stats = await replay({ roster: 'one', active: false, prefixes, airing: TNF_ON_PRIME });
     expect(stats.plays).toBe(playCount);
     expect(Array.isArray(drives) ? drives.length : 0).toBe(21);
+    // Issue #7: 10 flag_added, not 9. The second-half kickoff now nudges GB on the kickoff; before,
+    // GB's first Q3 snap was dropped with the window that halftime aborted.
     expect(stats.enqueued).toEqual({
-      flag_added: 9,
+      flag_added: 10,
       flag_removed: 10,
       priority_increased: 4,
     });
-    expect(stats.rows).toEqual(stats.enqueued);
-    expect(stats.pushes).toBe(9);
+    // One red-zone priority_increased (Q4 1:20) is parked until the next real play, the Q4 1:18
+    // interception. That play now clears GB's flag itself, so delivery drops the older priority
+    // event as superseded (`isStillRelevant`) instead of persisting it.
+    expect(stats.rows).toEqual({ ...stats.enqueued, priority_increased: 3 });
+    expect(stats.pushes).toBe(10);
     expect(stats.rateLimited).toBe(0);
     // TNF is Prime-only and the user has YouTube TV: every push still sends, with no option.
-    expect(stats.pushed).toHaveLength(9);
+    expect(stats.pushed).toHaveLength(10);
     for (const push of stats.pushed) {
       expect(push.action).toEqual(
         expect.objectContaining({ recommended_source: null, deep_link_url: null }),
@@ -200,8 +213,8 @@ describe('ATL @ GB replay', () => {
 
   it('the same plays on a Sunday FOX game carry a YouTube TV deep link', async () => {
     const stats = await replay({ roster: 'one', active: false, prefixes, airing: SUNDAY_ON_FOX });
-    expect(stats.pushes).toBe(9);
-    expect(stats.pushed).toHaveLength(9);
+    expect(stats.pushes).toBe(10);
+    expect(stats.pushed).toHaveLength(10);
     for (const push of stats.pushed) {
       expect(push.action).toEqual(
         expect.objectContaining({
@@ -216,66 +229,332 @@ describe('ATL @ GB replay', () => {
   it('both teams', async () => {
     const stats = await replay({ roster: 'both', active: true, prefixes, airing: TNF_ON_PRIME });
     expect(stats.plays).toBe(playCount);
+    // Issue #7: with both teams rostered, the flag now passes from one offense to the other on the
+    // play that ends the possession, instead of clearing on the kick and coming back on the next
+    // snap. So far fewer clears (4, not 17), and one more add (the second-half kickoff).
     expect(stats.enqueued).toEqual({
-      flag_added: 20,
-      flag_removed: 17,
+      flag_added: 21,
+      flag_removed: 4,
       priority_increased: 9,
       priority_decreased: 1,
     });
     expect(stats.rows).toEqual({
-      flag_added: 20,
-      flag_removed: 11,
-      priority_increased: 9,
+      flag_added: 21,
+      flag_removed: 1,
+      priority_increased: 8,
       priority_decreased: 1,
     });
-    expect(stats.pushes).toBe(20);
+    expect(stats.pushes).toBe(21);
     expect(stats.rateLimited).toBe(0);
   }, 120_000);
 
-  it("pushes a kickoff-started drive's flag on its first snap, not the second", async () => {
-    let fetchIndex = 0;
-    vi.stubGlobal('fetch', () => {
-      const body = prefixes[Math.min(fetchIndex, prefixes.length - 1)];
-      fetchIndex += 1;
-      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
-    });
-    const game = await playGame({
-      roster: 'both',
-      active: true,
-      airing: TNF_ON_PRIME,
-      persistence: new InMemoryFlagEventPersistence(),
-      rateStore: {
-        async countRecentNotifications() {
-          return 0;
-        },
-        recordNotification: () => Promise.resolve(),
-      },
-      clock: { now: 0, last: 0 },
-      notifier: {
-        id: 'none',
-        async sendPush() {
-          return { success: true };
-        },
-      },
-      checkPublished: false,
+  it('pushes the receiving team on the play that ends each possession (issue #7)', async () => {
+    const changes = possessionEndingPlays(summary);
+    // Every way a possession ends in this game: punts, interceptions, a turnover on downs, a blocked
+    // field goal, and the kickoffs (opening, second half, and after each score).
+    expect(countBy(changes.map((change) => change.typeText))).toEqual({
+      Kickoff: 10,
+      Punt: 7,
+      'Pass Interception Return': 2,
+      'Pass Incompletion': 1,
+      'Blocked Field Goal': 1,
     });
 
-    // The opening and second-half kickoffs follow no possession window, so nothing resolves.
-    const kickoffs = game.seen.flatMap((play, index) => {
-      const previous = game.seen[index - 1];
-      if (play.playType !== 'kickoff' || !previous || previous.playType === 'end_half') return [];
-      const snap = game.seen.slice(index + 1).find((next) => OFFENSE_PLAY_TYPES.has(next.playType));
-      const pushed = game.enqueued.find(
-        (item) => item.eventType === 'flag_added' && item.triggeringPlayId === snap?.id,
-      );
-      return [{ kickoff: play.id, firstSnapAt: snap?.at, firedAt: pushed?.scheduledFireAt }];
-    });
-    expect(kickoffs).toHaveLength(8);
-    for (const { kickoff, firstSnapAt, firedAt } of kickoffs) {
-      expect(firedAt, kickoff).toBe(firstSnapAt);
-    }
+    const game = await quietGame(prefixes);
+    expectNudgeOnEveryEndingPlay(game, changes);
+    // Mid-drive plays (including the two fumbles GB recovered itself) hand nothing over, so no
+    // flag_added comes from them: every flag_added is one of the ending plays above.
+    const addedOn = game.enqueued
+      .filter((item) => item.eventType === 'flag_added')
+      .map((item) => item.triggeringPlayId);
+    expect(new Set(addedOn)).toEqual(new Set(changes.map((change) => change.id)));
+  }, 120_000);
+
+  it('pushes the receiving team on a lost fumble', async () => {
+    // The fixture has no lost fumble. This copy makes GB's Q3 own-recovery fumble a lost one:
+    // ESPN type 29 "Fumble Recovery (Opponent)", end.team ATL, and drops the rest of that GB drive
+    // so ATL's drive follows. Everything else is the captured game.
+    const mutated = structuredClone(summary);
+    const fumbleId = loseFumble(mutated, 'Fumble Recovery (Own)');
+    const changes = possessionEndingPlays(mutated);
+    expect(changes.find((change) => change.id === fumbleId)?.typeText).toBe(
+      'Fumble Recovery (Opponent)',
+    );
+
+    const game = await quietGame(prefixesOf(mutated));
+    expectNudgeOnEveryEndingPlay(game, changes);
+  }, 120_000);
+
+  it('falls back to the next snap for a punt with 0:10 or less left in Q2', async () => {
+    // A copy with GB's Q2 0:38 punt moved to 0:06.
+    const mutated = structuredClone(summary);
+    const puntId = retimePlay(mutated, 'Punt', '0:38', '0:06');
+
+    const game = await quietGame(prefixesOf(mutated));
+
+    const index = game.seen.findIndex((play) => play.id === puntId);
+    const atlSnap = game.seen
+      .slice(index + 1)
+      .find((play) => OFFENSE_PLAY_TYPES.has(play.playType));
+    const added = game.enqueued.filter((item) => item.eventType === 'flag_added');
+    expect(added.some((item) => item.triggeringPlayId === puntId)).toBe(false);
+    const fallback = added.find((item) => item.triggeringPlayId === atlSnap?.id);
+    expect(fallback?.scheduledFireAt).toBe(atlSnap?.at);
   }, 120_000);
 });
+
+describe('ATL @ GB replay: silence ceiling', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('fires the nudge on the punt and still releases a held REVEAL when no play follows', async () => {
+    vi.useFakeTimers();
+    const summary = espnSummarySchema.parse(
+      JSON.parse(gunzipSync(readFileSync(FIXTURE)).toString()) as unknown,
+    );
+    const context = resolveGameContext(summary, EVENT_ID);
+    if (!context) throw new Error('fixture has no game context');
+    const all = (summary.drives?.previous ?? []).flatMap((drive) =>
+      (drive.plays ?? []).map((play) =>
+        translatePlay(mapEspnPlay(play, drive, context, false), GAME_ID, ABBR_TO_UUID),
+      ),
+    );
+    // Stop the feed right after GB's first punt (Q1 12:45): the receiving team's snap never arrives.
+    const puntIndex = all.findIndex((play) => play.playType === 'punt');
+    const plays = all.slice(0, puntIndex + 1);
+    const punt = plays[puntIndex];
+    if (!punt) throw new Error('fixture has no punt');
+
+    const now = { value: 0 };
+    const queue = recordingQueue();
+    const gate = new ResumptionGatedDispatcher({
+      queue,
+      clock: () => now.value,
+      onGated: () => undefined,
+    });
+    const gameState = new InMemoryGameStateStore();
+    gameState.addStake(AWAY_ID, USER_ID);
+    const session = createPlaySession({
+      gameId: GAME_ID,
+      gate,
+      ceiling: new ResumptionCeiling({
+        store: new InMemoryResumptionOpenStore(),
+        clock: () => now.value,
+        onFire: () => undefined,
+      }),
+      clock: () => now.value,
+      onPlay: {
+        lineupCache: {
+          async getLineupCache(userId: string, week: number) {
+            return {
+              userId,
+              week,
+              teamPositions: new Map([[AWAY_ID, new Set<'offense' | 'defense'>(['offense'])]]),
+              playerToTeam: new Map([['player-atl', AWAY_ID]]),
+              starPlayerIds: new Set<string>(),
+            };
+          },
+        },
+        gameState,
+        dispatcher: gate,
+        clock: () => now.value,
+      },
+      // A stand-in REVEAL (a bet trigger) on the punt: it must wait for resumption.
+      async runBetPass(play) {
+        if (play.playId !== punt.playId) return;
+        await gate.dispatch(
+          {
+            id: 'reveal',
+            userId: 'bettor',
+            gameId: GAME_ID,
+            type: 'bet_in_play',
+            oldState: null,
+            newState: {
+              gameId: GAME_ID,
+              flagged: true,
+              priorityScore: 9,
+              reasons: [],
+              computedAt: 0,
+            },
+            scheduledFireAt: 0,
+          },
+          play.playId,
+        );
+      },
+    });
+    try {
+      for (const play of plays) {
+        now.value = gameClock(play);
+        await session.handlePlay(play);
+      }
+      const puntAt = now.value;
+      expect(queue.enqueued.filter((item) => item.triggeringPlayId === punt.playId)).toEqual([
+        { scheduledFireAt: puntAt, triggeringPlayId: punt.playId, eventType: 'flag_added' },
+      ]);
+
+      now.value = puntAt + RESUMPTION_CEILING_MS;
+      await vi.advanceTimersByTimeAsync(RESUMPTION_CEILING_MS);
+
+      expect(queue.enqueued.filter((item) => item.eventType === 'bet_in_play')).toEqual([
+        {
+          scheduledFireAt: puntAt + RESUMPTION_CEILING_MS,
+          triggeringPlayId: punt.playId,
+          eventType: 'bet_in_play',
+        },
+      ]);
+    } finally {
+      session.dispose();
+      gate.stop();
+    }
+  });
+});
+
+interface EndingPlay {
+  id: string;
+  typeText: string;
+}
+
+/**
+ * Reads the possession changes straight off ESPN's JSON, independently of the mapper: a play whose
+ * `end.team` is not the team that had the ball going in (the drive's team, or on a kickoff the
+ * kicker), skipping timeouts and period ends, scoring plays, and Q2/Q4 plays at 0:10 or less.
+ */
+function possessionEndingPlays(body: unknown): EndingPlay[] {
+  const out: EndingPlay[] = [];
+  const parsed = isRecord(body) ? body : {};
+  const header = isRecord(parsed['header']) ? parsed['header'] : {};
+  const competitions = Array.isArray(header['competitions']) ? header['competitions'] : [];
+  const competitors =
+    isRecord(competitions[0]) && Array.isArray(competitions[0]['competitors'])
+      ? competitions[0]['competitors'].filter(isRecord)
+      : [];
+  const ids = competitors.map((competitor) => String(competitor['id']));
+  const drives =
+    isRecord(parsed['drives']) && Array.isArray(parsed['drives']['previous'])
+      ? parsed['drives']['previous'].filter(isRecord)
+      : [];
+  let score = '0-0';
+  for (const drive of drives) {
+    const driveTeam = isRecord(drive['team']) ? String(drive['team']['id']) : '';
+    const plays = Array.isArray(drive['plays']) ? drive['plays'].filter(isRecord) : [];
+    for (const play of plays) {
+      const type = isRecord(play['type']) ? play['type'] : {};
+      const typeText = String(type['text'] ?? '');
+      const playScore = `${String(play['homeScore'])}-${String(play['awayScore'])}`;
+      const scored = playScore !== score;
+      score = playScore;
+      if (/timeout|end period|end of half|end of game|two-minute|penalty/i.test(typeText)) continue;
+      const end =
+        isRecord(play['end']) && isRecord(play['end']['team'])
+          ? String(play['end']['team']['id'])
+          : null;
+      const before = typeText === 'Kickoff' ? ids.find((id) => id !== driveTeam) : driveTeam;
+      if (end === null || end === before || scored) continue;
+      const period = isRecord(play['period']) ? Number(play['period']['number']) : 0;
+      const clock = isRecord(play['clock']) ? String(play['clock']['displayValue']) : '';
+      const [minutes, seconds] = clock.split(':').map(Number);
+      const left = (minutes ?? 0) * 60 + (seconds ?? 0);
+      if ((period === 2 || period === 4) && left <= 10) continue;
+      out.push({ id: String(play['id']), typeText });
+    }
+  }
+  return out;
+}
+
+/** Each ending play enqueued a `flag_added` for the receiving team, timed at that play's arrival. */
+function expectNudgeOnEveryEndingPlay(
+  game: { seen: SeenPlay[]; enqueued: Enqueued[] },
+  changes: readonly EndingPlay[],
+): void {
+  for (const change of changes) {
+    const seenAt = game.seen.find((play) => play.id === change.id)?.at;
+    const pushed = game.enqueued.find(
+      (item) => item.eventType === 'flag_added' && item.triggeringPlayId === change.id,
+    );
+    expect(pushed?.scheduledFireAt, `${change.typeText} ${change.id}`).toBe(seenAt);
+  }
+}
+
+function drivesOf(body: unknown): Record<string, unknown>[] {
+  if (!isRecord(body) || !isRecord(body['drives'])) return [];
+  const previous = body['drives']['previous'];
+  return Array.isArray(previous) ? previous.filter(isRecord) : [];
+}
+
+function playsOf(drive: Record<string, unknown>): Record<string, unknown>[] {
+  const plays = drive['plays'];
+  return Array.isArray(plays) ? plays.filter(isRecord) : [];
+}
+
+/** Turns the first play with this type text into a fumble lost to ATL and ends its drive there. */
+function loseFumble(body: unknown, typeText: string): string {
+  for (const drive of drivesOf(body)) {
+    const plays = playsOf(drive);
+    const index = plays.findIndex(
+      (play) => isRecord(play['type']) && play['type']['text'] === typeText,
+    );
+    const play = plays[index];
+    if (!play) continue;
+    play['type'] = { id: '29', text: 'Fumble Recovery (Opponent)' };
+    play['end'] = { team: { id: '1' } };
+    drive['plays'] = plays.slice(0, index + 1);
+    return String(play['id']);
+  }
+  throw new Error(`no ${typeText} play`);
+}
+
+/** Moves the first play with this type text and clock to a new clock. */
+function retimePlay(body: unknown, typeText: string, from: string, to: string): string {
+  for (const drive of drivesOf(body)) {
+    for (const play of playsOf(drive)) {
+      const type = isRecord(play['type']) ? play['type']['text'] : undefined;
+      const clock = isRecord(play['clock']) ? play['clock']['displayValue'] : undefined;
+      if (type !== typeText || clock !== from) continue;
+      play['clock'] = { displayValue: to };
+      return String(play['id']);
+    }
+  }
+  throw new Error(`no ${typeText} at ${from}`);
+}
+
+function prefixesOf(body: unknown): unknown[] {
+  const list = summaryPlayPrefixes(body, countSummaryPlays(body));
+  for (const prefix of list.slice(0, -1)) markInProgress(prefix);
+  return list;
+}
+
+/** One pass with both teams rostered, no rate limit, and a notifier that always succeeds. */
+async function quietGame(
+  gamePrefixes: unknown[],
+): Promise<{ plays: number; seen: SeenPlay[]; enqueued: Enqueued[]; rateLimited: number }> {
+  let fetchIndex = 0;
+  vi.stubGlobal('fetch', () => {
+    const body = gamePrefixes[Math.min(fetchIndex, gamePrefixes.length - 1)];
+    fetchIndex += 1;
+    return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+  });
+  return playGame({
+    roster: 'both',
+    active: true,
+    airing: TNF_ON_PRIME,
+    persistence: new InMemoryFlagEventPersistence(),
+    rateStore: {
+      async countRecentNotifications() {
+        return 0;
+      },
+      recordNotification: () => Promise.resolve(),
+    },
+    clock: { now: 0, last: 0 },
+    notifier: {
+      id: 'none',
+      async sendPush() {
+        return { success: true };
+      },
+    },
+    checkPublished: false,
+  });
+}
 
 async function replay(input: {
   roster: 'one' | 'both';

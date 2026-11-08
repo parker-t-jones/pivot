@@ -2,7 +2,8 @@ import type { PlayEvent } from '@pivot/engine';
 
 /**
  * ESPN abbreviations and the ESPN event id become `teams.id` and `games.id`.
- * An abbreviation with no row is left unchanged. A null possession stays null.
+ * An abbreviation with no row is left unchanged. A null possession stays null. The same goes for
+ * `endPossessionTeamId`; when absent it stays absent.
  */
 export function translatePlay(
   play: PlayEvent,
@@ -15,11 +16,16 @@ export function translatePlay(
     play.possessionTeamId === null
       ? null
       : (abbrToUuid.get(play.possessionTeamId) ?? play.possessionTeamId);
+  const endPossession =
+    play.endPossessionTeamId === undefined || play.endPossessionTeamId === null
+      ? play.endPossessionTeamId
+      : (abbrToUuid.get(play.endPossessionTeamId) ?? play.endPossessionTeamId);
   return {
     ...play,
     gameId: internalGameId,
     homeTeamId: home,
     awayTeamId: away,
     possessionTeamId: possession,
+    ...(endPossession !== undefined ? { endPossessionTeamId: endPossession } : {}),
   };
 }

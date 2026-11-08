@@ -73,6 +73,67 @@ function continuesPreviousPossession(play: PlayEvent, previous: GameState): bool
   return play.playType === 'no_play' && play.possessionTeamId === previous.possessionTeamId;
 }
 
+/** Q2 and Q4 plays starting with this much clock or less never flip possession early. */
+export const END_OF_HALF_GUARD_SECONDS = 10;
+
+/** The team that had the ball going into `play`: the drive's team, or on a kickoff the kicking team. */
+function teamWithBallBefore(play: PlayEvent): string | null {
+  if (play.possessionTeamId === null) return null;
+  if (play.playType !== 'kickoff') return play.possessionTeamId;
+  // ESPN files a kickoff under the receiving team's drive, so the kicker is the other team.
+  if (play.possessionTeamId === play.homeTeamId) return play.awayTeamId;
+  if (play.possessionTeamId === play.awayTeamId) return play.homeTeamId;
+  return null;
+}
+
+/**
+ * The team that takes the ball on this play, when the play itself hands it over: a punt, a turnover
+ * (interception, lost fumble, downs), a missed field goal, or a kickoff. `null` when possession does
+ * not change on this play, when the source didn't say who has the ball afterwards, or when a guard
+ * applies. Issue #7 / docs/R1-EARLY-NUDGE-FINDINGS.md §5 and §7.
+ *
+ * With a team, `applyPlayToState` puts that team's offense on the field right away, one play
+ * before the receiving team's first snap would show it. The resulting `flag_added` is a routing
+ * NUDGE (it names who has the ball, nothing else), so the gate sends it immediately.
+ *
+ * Two guards fall back to the old next-snap behavior. In the R1 replay they removed 6 of its 7
+ * false nudges; the seventh, a muff that ESPN later revised, is accepted:
+ * - **A scoring play.** On a return touchdown the scorer never runs an offensive snap; the kickoff
+ *   that follows hands the ball back. The same holds for a safety. Detected as a score change from
+ *   `previous`, so it needs no provider-specific field.
+ * - **Q2 or Q4 at 0:10 or less** on the play's clock, for every kind of change. The receiving team
+ *   usually never snaps before the half or the game ends.
+ *
+ * Procedural entries (timeouts, period ends) and pre-snap penalties never flip possession.
+ */
+export function possessionChangeAtPlayEnd(
+  previous: GameState | null,
+  play: PlayEvent,
+): string | null {
+  const endTeam = play.endPossessionTeamId ?? null;
+  if (endTeam === null) return null;
+  if (play.possessionTeamId === null || play.playType === 'no_play') return null;
+  if (classifyPlayType(play.playType) !== 'REAL_ACTION') return null;
+  if (endTeam !== play.homeTeamId && endTeam !== play.awayTeamId) return null;
+
+  const before = teamWithBallBefore(play);
+  if (before === null || before === endTeam) return null;
+
+  if (
+    previous !== null &&
+    (previous.scoreHome !== play.scoreHome || previous.scoreAway !== play.scoreAway)
+  ) {
+    return null;
+  }
+  if (
+    (play.quarter === 2 || play.quarter === 4) &&
+    play.secondsRemainingInQuarter <= END_OF_HALF_GUARD_SECONDS
+  ) {
+    return null;
+  }
+  return endTeam;
+}
+
 /**
  * "Who has the ball, and what are they doing with it" — collapsed to null/`'none'` on any play that
  * doesn't already have possession-derived fields it can safely carry forward from `previous` (see
@@ -83,6 +144,19 @@ function continuesPreviousPossession(play: PlayEvent, previous: GameState): bool
  * possession change.
  */
 function possessionFieldsFor(play: PlayEvent, previous: GameState | null): PossessionFields {
+  const receivingTeam = possessionChangeAtPlayEnd(previous, play);
+  if (receivingTeam !== null) {
+    // Field position is unknown until the receiving team's first snap, and stays out of the nudge:
+    // "in the red zone" on a turnover would reveal the return.
+    return {
+      possessionTeamId: receivingTeam,
+      unitOnField: 'offense',
+      yardsToOpponentEndzone: null,
+      down: null,
+      distance: null,
+      inRedZone: false,
+    };
+  }
   if (previous && continuesPreviousPossession(play, previous)) {
     return {
       possessionTeamId: previous.possessionTeamId,

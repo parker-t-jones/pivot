@@ -65,6 +65,15 @@ export const espnPlaySchema = z.object({
    * ESPN's real-time timestamp for this play. A bad value is dropped so logging it cannot fail the poll.
    */
   wallclock: z.string().optional().catch(undefined),
+  /**
+   * Post-play situation. `end.team.id` is the ESPN team id that has the ball once the play is over,
+   * which on a punt, turnover, or kickoff is the receiving team (docs/R1-EARLY-NUDGE-FINDINGS.md §5:
+   * present on 850 of 850 live non-procedural plays). A malformed block is dropped, not fatal.
+   */
+  end: z
+    .object({ team: z.object({ id: z.string().optional() }).optional() })
+    .optional()
+    .catch(undefined),
 });
 
 export const espnDriveSchema = z.object({

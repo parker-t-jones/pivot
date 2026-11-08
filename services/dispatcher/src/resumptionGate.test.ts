@@ -32,7 +32,10 @@ function makeEvent(overrides: Partial<FlagEvent> = {}): FlagEvent {
 const realAction = { outcome: 'REAL_ACTION' } as ResumptionResolution;
 const aborted = { outcome: 'ABORTED' } as ResumptionResolution;
 
-function gate(now: { value: number }): {
+function gate(
+  now: { value: number },
+  fireDelayMs?: (event: FlagEvent) => number | Promise<number>,
+): {
   dispatcher: ResumptionGatedDispatcher;
   queue: InMemoryFlagEventQueue;
   records: GatedEventRecord[];
@@ -43,6 +46,7 @@ function gate(now: { value: number }): {
     queue,
     onGated: (record) => records.push(record),
     clock: () => now.value,
+    ...(fireDelayMs ? { fireDelayMs } : {}),
   });
   return { dispatcher, queue, records };
 }
@@ -410,5 +414,159 @@ describe('ResumptionGatedDispatcher', () => {
     expect(due).toHaveLength(1);
     expect(due[0]?.event.id).toBe('waiting');
     expect(due[0]?.event.scheduledFireAt).toBe(now.value);
+  });
+  describe('possession nudge (issue #7)', () => {
+    function nudge(overrides: Partial<FlagEvent> = {}): FlagEvent {
+      return makeEvent({ id: 'nudge', userId: 'u-receiver', trigger: 'possession', ...overrides });
+    }
+
+    it('fires on the punt play itself, where an untagged flag_added would wait for the next snap', async () => {
+      const now = { value: 10_000 };
+      const { dispatcher, queue, records } = gate(now);
+      dispatcher.beginPlay('g1', 'punt');
+      await dispatcher.dispatch(nudge(), 'play-punt');
+      await dispatcher.dispatch(makeEvent({ id: 'plain', userId: 'u-plain' }), 'play-punt');
+      await dispatcher.endPlay('g1');
+
+      const due = await queue.due(now.value, 10);
+      expect(
+        due.map((item) => [item.event.id, item.triggeringPlayId, item.event.scheduledFireAt]),
+      ).toEqual([['nudge', 'play-punt', 10_000]]);
+      expect(records).toEqual([
+        expect.objectContaining({ decision: 'nudge_immediately', holdMs: 0, resolution: null }),
+      ]);
+    });
+
+    it('fires while a possession window is open, and other events stay parked', async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, queue, records } = gate(now);
+      dispatcher.noteWindowOpened('g1');
+      dispatcher.beginPlay('g1', 'pass');
+      await dispatcher.dispatch(nudge(), 'play-int');
+      await dispatcher.dispatch(
+        makeEvent({ id: 'reveal', userId: 'u-bettor', type: 'bet_in_play' }),
+        'play-int',
+      );
+      await dispatcher.endPlay('g1');
+
+      expect((await queue.due(now.value, 10)).map((item) => item.event.id)).toEqual(['nudge']);
+      expect(records.map((record) => record.decision)).toEqual(['nudge_immediately']);
+
+      await dispatcher.noteResolution('g1', realAction);
+      expect((await queue.due(now.value, 10)).map((item) => item.event.id)).toEqual([
+        'nudge',
+        'reveal',
+      ]);
+    });
+
+    it("leaves the kickoff's resolution for a REVEAL on the first snap", async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, records } = gate(now);
+      dispatcher.beginPlay('g1', 'kickoff');
+      dispatcher.noteWindowOpened('g1');
+      await dispatcher.noteResolution('g1', realAction);
+      await dispatcher.dispatch(nudge(), 'play-kickoff');
+      await dispatcher.endPlay('g1');
+
+      now.value = 2_000;
+      dispatcher.beginPlay('g1', 'run');
+      await dispatcher.releaseMidDrive('g1');
+      await dispatcher.dispatch(
+        makeEvent({ id: 'reveal', userId: 'u-bettor', type: 'bet_in_play' }),
+        'play-snap-1',
+      );
+      await dispatcher.endPlay('g1');
+
+      expect(records.map((r) => [r.event.id, r.decision, r.resolution])).toEqual([
+        ['nudge', 'nudge_immediately', null],
+        ['reveal', 'fire_immediately', realAction],
+      ]);
+    });
+
+    it('collapses to one push per user with the other pushes on its play', async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, queue } = gate(now);
+      dispatcher.beginPlay('g1', 'punt');
+      await dispatcher.dispatch(
+        nudge({ id: 'low', newState: makeFlagState({ priorityScore: 3 }) }),
+        'play-punt',
+      );
+      await dispatcher.dispatch(
+        nudge({ id: 'high', newState: makeFlagState({ priorityScore: 9 }) }),
+        'play-punt',
+      );
+      await dispatcher.endPlay('g1');
+
+      expect((await queue.due(now.value, 10)).map((item) => item.event.id)).toEqual(['high']);
+    });
+
+    it('does not fire a nudge-tagged flag_removed early', async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, queue } = gate(now);
+      dispatcher.beginPlay('g1', 'punt');
+      await dispatcher.dispatch(
+        makeEvent({
+          type: 'flag_removed',
+          trigger: 'possession',
+          newState: makeFlagState({ flagged: false, reasons: [] }),
+        }),
+        'play-punt',
+      );
+      await dispatcher.endPlay('g1');
+
+      expect(queue.size()).toBe(0);
+    });
+
+    it('enqueues straight away when dispatched outside a play', async () => {
+      const now = { value: 7_000 };
+      const { dispatcher, queue } = gate(now);
+      await dispatcher.dispatch(nudge(), 'play-x');
+
+      expect((await queue.due(now.value, 10))[0]?.event.scheduledFireAt).toBe(7_000);
+    });
+
+    it('adds the per-event fire delay to scheduledFireAt, for nudges and released events alike', async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, queue } = gate(now, (event) =>
+        event.userId === 'u-receiver' ? 30_000 : 5_000,
+      );
+      dispatcher.beginPlay('g1', 'punt');
+      await dispatcher.dispatch(nudge(), 'play-punt');
+      await dispatcher.endPlay('g1');
+      dispatcher.noteWindowOpened('g1');
+      await dispatcher.dispatch(makeEvent({ id: 'held', userId: 'u-other' }), 'play-held');
+      await dispatcher.noteResolution('g1', realAction);
+
+      const due = await queue.due(Number.MAX_SAFE_INTEGER, 10);
+      expect(
+        Object.fromEntries(due.map((item) => [item.event.id, item.event.scheduledFireAt])),
+      ).toEqual({
+        nudge: 31_000,
+        held: 6_000,
+      });
+      expect(await queue.due(now.value, 10)).toHaveLength(0);
+    });
+
+    it('still lets the silence ceiling release parked events after a nudge', async () => {
+      vi.useFakeTimers();
+      const now = { value: 3_000 };
+      const { dispatcher, queue } = gate(now);
+      dispatcher.beginPlay('g1', 'punt');
+      await dispatcher.dispatch(nudge(), 'play-punt');
+      await dispatcher.dispatch(
+        makeEvent({ id: 'reveal', userId: 'u-bettor', type: 'bet_in_play' }),
+        'play-punt',
+      );
+      await dispatcher.endPlay('g1');
+      expect((await queue.due(now.value, 10)).map((item) => item.event.id)).toEqual(['nudge']);
+
+      now.value = 3_000 + RESUMPTION_CEILING_MS;
+      await vi.advanceTimersByTimeAsync(RESUMPTION_CEILING_MS);
+
+      expect((await queue.due(now.value, 10)).map((item) => item.event.id)).toEqual([
+        'nudge',
+        'reveal',
+      ]);
+    });
   });
 });

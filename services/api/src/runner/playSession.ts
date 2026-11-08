@@ -2,6 +2,7 @@ import {
   IncrementalResumptionTracker,
   classifyPlayType,
   onPlayEvent,
+  possessionChangeAtPlayEnd,
   type OnPlayEventDeps,
   type PlayEvent,
 } from '@pivot/engine';
@@ -35,6 +36,22 @@ export function createPlaySession(deps: PlaySessionDeps): {
 } {
   const clock = deps.clock ?? Date.now;
   const log = deps.log ?? console.error;
+  /** The last play that handed the ball over early, until the next play that names a team. */
+  let pendingNudge: { playId: string; to: string } | null = null;
+
+  /**
+   * Issue #7: an early possession change can be wrong (a muff ESPN later revises). No correction
+   * push is sent: the next play's flags supersede it. This only logs the case.
+   */
+  function noteOverturn(play: PlayEvent): void {
+    if (pendingNudge === null || play.possessionTeamId === null) return;
+    const nudge = pendingNudge;
+    pendingNudge = null;
+    if (play.playType === 'kickoff' || play.possessionTeamId === nudge.to) return;
+    log(
+      `[runner] possession nudge overturned game=${play.gameId} nudge_play=${nudge.playId} play=${play.playId} nudged=${nudge.to} actual=${play.possessionTeamId}`,
+    );
+  }
   const tracker = new IncrementalResumptionTracker(deps.gameId, {
     onWindowOpened: (gameId, window) => {
       deps.gate.noteWindowOpened(gameId);
@@ -58,6 +75,12 @@ export function createPlaySession(deps: PlaySessionDeps): {
         await deps.gate.releaseMidDrive(play.gameId);
       }
       tracker.observe(play, clock());
+      noteOverturn(play);
+      const before = await deps.onPlay.gameState.getGameState(play.gameId);
+      const nudgedTo = possessionChangeAtPlayEnd(before, play);
+      if (nudgedTo !== null) {
+        pendingNudge = { playId: play.playId, to: nudgedTo };
+      }
       await onPlayEvent(deps.onPlay, play);
       const gameState = await deps.onPlay.gameState.getGameState(play.gameId);
       if (deps.runBetPass && gameState) await deps.runBetPass(play, gameState);

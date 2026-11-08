@@ -68,6 +68,7 @@ const ESPN_TYPE_ID_TO_PLAY_TYPE: Readonly<Record<string, PlayType>> = {
   '53': 'kickoff', // Kickoff
   '59': 'field_goal', // Field Goal Good
   '60': 'field_goal', // Field Goal Missed
+  '18': 'field_goal', // Blocked Field Goal (ATL @ GB 2026-09-25)
 
   // Non-plays.
   '8': 'no_play', // Penalty

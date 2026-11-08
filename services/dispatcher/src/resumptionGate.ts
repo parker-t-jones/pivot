@@ -5,6 +5,10 @@
  * is open waits for the next real play in the game, or the silence ceiling if none arrives
  * (Decision 9). On release, `scheduledFireAt` is the clock's now. `ABORTED` drops a possession
  * window. An event dispatched on the play that resolves a possession window fires with that play.
+ *
+ * Exception: a possession NUDGE (`flag_added` with `trigger: 'possession'`, produced on the play that
+ * hands the ball over) reveals nothing, so it fires with its own play whatever window is open, and
+ * never uses up a resolution that a REVEAL on a later play still needs (issue #7).
  */
 
 import type { EventDispatcher, PlayType, ResumptionResolution } from '@pivot/engine';
@@ -20,7 +24,16 @@ function isSnap(playType: PlayType): boolean {
 }
 
 /** What the gate decided to do with an event at dispatch time. */
-export type GateDecision = 'fire_immediately' | 'held_pending_resumption' | 'dropped_by_abort';
+export type GateDecision =
+  | 'fire_immediately'
+  | 'held_pending_resumption'
+  | 'dropped_by_abort'
+  | 'nudge_immediately';
+
+/** A routing nudge for a possession change: never parked, never spends a resolution. */
+export function isPossessionNudge(event: FlagEvent): boolean {
+  return event.type === 'flag_added' && event.trigger === 'possession';
+}
 
 export interface GatedEventRecord {
   event: FlagEvent;
@@ -40,7 +53,7 @@ interface ParkedEvent {
 interface WindowCandidate {
   event: FlagEvent;
   triggeringPlayId: string | null;
-  decision: 'fire_immediately' | 'held_pending_resumption';
+  decision: 'fire_immediately' | 'held_pending_resumption' | 'nudge_immediately';
   holdMs: number;
   resolution: ResumptionResolution | null;
 }
@@ -50,6 +63,11 @@ export interface ResumptionGatedDispatcherDeps {
   /** Called for every dispatched event once its fate is known, for the events log. */
   onGated: (record: GatedEventRecord) => void;
   clock?: () => number;
+  /**
+   * Extra milliseconds before an event fires, per event (so per user). Every enqueue goes through
+   * it, which is where a per-user / per-service delay (#8) plugs in. Absent → 0.
+   */
+  fireDelayMs?: (event: FlagEvent) => number | Promise<number>;
 }
 
 export class ResumptionGatedDispatcher implements EventDispatcher {
@@ -141,14 +159,18 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
    * Collapses this play's reveal window and enqueues one event per user. The resolution is used up
    * only by a push-eligible event (or an abort): a `flag_removed` on the resolving play — the
    * scoring team's offense leaving the field on the kickoff after a touchdown — must not spend it
-   * before the receiving team's `flag_added` arrives on the next snap.
+   * before the receiving team's `flag_added` arrives on the next snap. A possession nudge doesn't
+   * spend it either: it never used it, and a REVEAL on the first snap still may.
    */
   async endPlay(gameId: string): Promise<void> {
     this.playInProgress.delete(gameId);
     const items = this.resolving.get(gameId) ?? [];
     this.resolving.delete(gameId);
     const playDispatched = items.some(
-      (item) => item.decision === 'fire_immediately' && isPushEligibleEvent(item.event.type),
+      (item) =>
+        item.decision === 'fire_immediately' &&
+        isPushEligibleEvent(item.event.type) &&
+        !isPossessionNudge(item.event),
     );
     const droppedAbort = this.droppedAbort.has(gameId);
     this.droppedAbort.delete(gameId);
@@ -180,6 +202,24 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
 
   async dispatch(event: FlagEvent, triggeringPlayId: string | null = null): Promise<void> {
     const gameId = event.gameId;
+
+    if (isPossessionNudge(event)) {
+      if (this.playInProgress.has(gameId)) {
+        // Joins this play's batch so it still collapses per user with the play's other pushes.
+        const list = this.resolving.get(gameId) ?? [];
+        list.push({
+          event,
+          triggeringPlayId,
+          decision: 'nudge_immediately',
+          holdMs: 0,
+          resolution: null,
+        });
+        this.resolving.set(gameId, list);
+        return;
+      }
+      await this.enqueueNow(event, triggeringPlayId, 'nudge_immediately', 0, null);
+      return;
+    }
 
     if (this.windowOpen.get(gameId) === true) {
       const list = this.parked.get(gameId) ?? [];
@@ -379,9 +419,10 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
   }
 
   /**
-   * Enqueues with `scheduledFireAt` = now, so the real 500ms `runDispatcherTick` picks it up on its
-   * next pass. "Now" is correct rather than lazy: resumption has already been evidenced by this
-   * point, which is the whole premise — there is no further delay left to model.
+   * The one place an event is fired. Enqueues with `scheduledFireAt` = now (plus `fireDelayMs`, 0
+   * by default), so the real 500ms `runDispatcherTick` picks it up on its next pass. "Now" is
+   * correct rather than lazy: resumption has already been evidenced by this point (or, for a
+   * possession nudge, there is nothing to wait for), so there is no further gate delay to model.
    */
   private async enqueueNow(
     event: FlagEvent,
@@ -391,10 +432,11 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
     resolution: ResumptionResolution | null,
   ): Promise<void> {
     const now = this.now();
+    const delayMs = this.deps.fireDelayMs ? await this.deps.fireDelayMs(event) : 0;
     await this.deps.queue.enqueue(
       {
         ...event,
-        scheduledFireAt: now,
+        scheduledFireAt: now + Math.max(0, delayMs),
         enqueuedAt: new Date(now).toISOString(),
       },
       triggeringPlayId,

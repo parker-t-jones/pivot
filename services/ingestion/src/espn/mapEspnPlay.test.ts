@@ -8,6 +8,10 @@ const context: EspnGameContext = {
   week: 4,
   homeTeamId: 'IND',
   awayTeamId: 'DET',
+  teamIdsByEspnId: new Map([
+    ['11', 'IND'],
+    ['8', 'DET'],
+  ]),
 };
 
 /** A Q3 rush, shaped like the real entries in event 401873308. */
@@ -44,6 +48,7 @@ describe('mapEspnPlay', () => {
       down: 1,
       distance: 10,
       isFinalPlay: false,
+      endPossessionTeamId: null,
     });
   });
 
@@ -280,6 +285,10 @@ describe('espnSummarySchema + resolveGameContext', () => {
       week: 4,
       homeTeamId: 'IND',
       awayTeamId: 'DET',
+      teamIdsByEspnId: new Map([
+        ['11', 'IND'],
+        ['8', 'DET'],
+      ]),
     });
   });
 
@@ -298,10 +307,12 @@ describe('espnSummarySchema + resolveGameContext', () => {
       },
     });
 
-    expect(resolveGameContext(summary, 'g1')).toMatchObject({
+    const resolved = resolveGameContext(summary, 'g1');
+    expect(resolved).toMatchObject({
       homeTeamId: 'WAS',
       awayTeamId: 'NYG',
     });
+    expect(resolved?.teamIdsByEspnId.get('28')).toBe('WAS');
   });
 
   it('defaults week to 0 when the header omits it', () => {
@@ -353,5 +364,72 @@ describe('espnSummarySchema + resolveGameContext', () => {
     const summary = espnSummarySchema.parse(raw);
 
     expect(resolveGameContext(summary, 'g1')).toBeNull();
+  });
+});
+
+describe('mapEspnPlay end-of-play possession', () => {
+  const indDrive: EspnDrive = { team: { id: '11', abbreviation: 'IND' } };
+
+  it('maps end.team to the team that has the ball once the play is over', () => {
+    const punt = play({ type: { id: '52', text: 'Punt' }, end: { team: { id: '8' } } });
+
+    const mapped = mapEspnPlay(punt, indDrive, context, false);
+
+    expect(mapped.possessionTeamId).toBe('IND');
+    expect(mapped.endPossessionTeamId).toBe('DET');
+  });
+
+  it('keeps end.team when it names the same team as the drive', () => {
+    const mapped = mapEspnPlay(play({ end: { team: { id: '8' } } }), detDrive, context, false);
+
+    expect(mapped.endPossessionTeamId).toBe('DET');
+  });
+
+  it('is null when end is missing, has no team, or names a team not in this game', () => {
+    expect(mapEspnPlay(play(), detDrive, context, false).endPossessionTeamId).toBeNull();
+    expect(mapEspnPlay(play({ end: {} }), detDrive, context, false).endPossessionTeamId).toBeNull();
+    expect(
+      mapEspnPlay(play({ end: { team: { id: '99' } } }), detDrive, context, false)
+        .endPossessionTeamId,
+    ).toBeNull();
+  });
+
+  it.each([
+    ['74', 'Official Timeout'],
+    ['2', 'End Period'],
+    ['65', 'End of Half'],
+    ['8', 'Penalty'],
+  ])('ignores end.team on a %s (%s) entry', (typeId, text) => {
+    const entry = play({ type: { id: typeId, text }, end: { team: { id: '11' } } });
+
+    expect(mapEspnPlay(entry, detDrive, context, false).endPossessionTeamId).toBeNull();
+  });
+
+  it('applies the WSH → WAS override to end.team', () => {
+    const wasContext: EspnGameContext = {
+      ...context,
+      homeTeamId: 'WAS',
+      awayTeamId: 'NYG',
+      teamIdsByEspnId: new Map([
+        ['28', 'WAS'],
+        ['19', 'NYG'],
+      ]),
+    };
+    const nygDrive: EspnDrive = { team: { id: '19', abbreviation: 'NYG' } };
+    const interception = play({
+      type: { id: '26', text: 'Pass Interception Return' },
+      end: { team: { id: '28' } },
+    });
+
+    expect(mapEspnPlay(interception, nygDrive, wasContext, false).endPossessionTeamId).toBe('WAS');
+  });
+
+  it('parses end.team from a raw summary play and drops a malformed end block', () => {
+    expect(
+      espnPlaySchema.parse({ id: '1', type: { id: '52' }, end: { team: { id: '8' } } }).end,
+    ).toEqual({ team: { id: '8' } });
+    expect(
+      espnPlaySchema.parse({ id: '1', type: { id: '52' }, end: 'garbage' }).end,
+    ).toBeUndefined();
   });
 });

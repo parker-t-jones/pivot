@@ -1,6 +1,6 @@
 import type { FlagEvent, GameState, UserLineupCache } from '@pivot/shared';
 import { defaultClock, type Clock } from './clock.js';
-import { applyPlayToState } from './applyPlayToState.js';
+import { applyPlayToState, possessionChangeAtPlayEnd } from './applyPlayToState.js';
 import { computeFlagState } from './computeFlagState.js';
 import { diffFlagStates } from './diffFlagStates.js';
 import { isInterestingStateChange } from './isInterestingStateChange.js';
@@ -72,6 +72,8 @@ export async function onPlayEvent(deps: OnPlayEventDeps, play: PlayEvent): Promi
   const oldState = await deps.gameState.getGameState(play.gameId);
   const newState = applyPlayToState(oldState, play, clock);
   await deps.gameState.setGameState(play.gameId, newState);
+  // A flag that turns on because this play handed the ball over is a routing nudge (issue #7).
+  const possessionNudge = possessionChangeAtPlayEnd(oldState, play) !== null;
 
   // 2. Filter out non-interesting plays.
   if (!isInterestingStateChange(oldState, newState)) return;
@@ -88,8 +90,12 @@ export async function onPlayEvent(deps: OnPlayEventDeps, play: PlayEvent): Promi
       const oldFlagState = await deps.gameState.getUserFlagState(userId, play.gameId);
       const newFlagState = computeFlagState(lineup, newState, clock);
 
-      const event = diffFlagStates(userId, oldFlagState, newFlagState);
-      if (!event) return;
+      const diffed = diffFlagStates(userId, oldFlagState, newFlagState);
+      if (!diffed) return;
+      const event: FlagEvent =
+        possessionNudge && diffed.type === 'flag_added'
+          ? { ...diffed, trigger: 'possession' }
+          : diffed;
 
       await deps.gameState.setUserFlagState(userId, play.gameId, newFlagState);
       await deps.dispatcher.dispatch(withPlayTiming(event, play), play.playId);
