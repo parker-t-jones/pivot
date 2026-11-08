@@ -1,57 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import {
-  axisPercent,
-  coverOutcomeLabel,
-  type CoverOutcome,
-  type LineScaleModel,
-  type RosterStripSegment,
-  type SurvivorBadgeModel,
-} from '../lib/stakeCards';
+import { axisPercent, type LineScaleModel, type RosterStripSegment } from '../lib/stakeCards';
 import { theme } from '../lib/theme';
-
-interface LineCardProps {
-  label: string;
-  matchup: string;
-  kickoff: string;
-  model: LineScaleModel;
-  axisLabel: string;
-}
-
-/** Spread number line. Cover sits on the positive side of the line. */
-export function SpreadLineCard(props: LineCardProps) {
-  return <LineCard {...props} />;
-}
-
-/** Total number line. The shaded side is Over (above) or Under (below). */
-export function TotalLineCard(props: LineCardProps) {
-  return <LineCard {...props} />;
-}
-
-export function SurvivorBadgeCard({ model }: { model: SurvivorBadgeModel }) {
-  return (
-    <View style={styles.card}>
-      <View style={styles.badgeRow}>
-        <View style={styles.ring}>
-          <Text
-            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-            numberOfLines={1}
-            style={styles.ringLabel}
-          >
-            {model.abbreviation}
-          </Text>
-        </View>
-        <Text
-          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-          numberOfLines={1}
-          style={styles.tag}
-        >
-          {model.status}
-        </Text>
-      </View>
-    </View>
-  );
-}
 
 export function RosterStripCard({ segments }: { segments: readonly RosterStripSegment[] }) {
   if (segments.length === 0) return null;
@@ -82,33 +32,8 @@ export function RosterStripCard({ segments }: { segments: readonly RosterStripSe
   );
 }
 
-function LineCard({ label, matchup, kickoff, model, axisLabel }: LineCardProps) {
-  const meta = [matchup, kickoff].filter((part) => part.length > 0).join(' · ');
-  return (
-    <View style={styles.card}>
-      <Text
-        maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-        numberOfLines={1}
-        style={styles.label}
-      >
-        {label}
-      </Text>
-      {meta.length > 0 ? (
-        <Text
-          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-          numberOfLines={1}
-          style={styles.meta}
-        >
-          {meta}
-        </Text>
-      ) : null}
-      <LineScale axisLabel={axisLabel} model={model} />
-      {model.outcome ? <OutcomeTag outcome={model.outcome} /> : null}
-    </View>
-  );
-}
-
-function LineScale({ model, axisLabel }: { model: LineScaleModel; axisLabel: string }) {
+/** Number line with the cover side shaded and a live marker. Shared with `PickCard`. */
+export function LineScale({ model, axisLabel }: { model: LineScaleModel; axisLabel: string }) {
   const coverLeft = axisPercent(model.coverFrom, model.axisMin, model.axisMax);
   const coverWidth = axisPercent(model.coverTo, model.axisMin, model.axisMax) - coverLeft;
   const lineLeft = axisPercent(model.lineAt, model.axisMin, model.axisMax);
@@ -149,15 +74,6 @@ function LineScale({ model, axisLabel }: { model: LineScaleModel; axisLabel: str
   );
 }
 
-function OutcomeTag({ outcome }: { outcome: CoverOutcome }) {
-  const label = coverOutcomeLabel(outcome);
-  return (
-    <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} numberOfLines={1} style={styles.tag}>
-      {label}
-    </Text>
-  );
-}
-
 const MARKER = 12;
 const SCALE = 16;
 
@@ -177,11 +93,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: theme.spacing.xs,
-  },
-  badgeRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: theme.spacing.md,
   },
   card: {
     backgroundColor: theme.colors.surface,
@@ -203,11 +114,6 @@ const styles = StyleSheet.create({
     fontSize: theme.type.eyebrow.size,
     fontWeight: theme.type.eyebrow.weight,
     letterSpacing: theme.type.eyebrow.letterSpacing,
-  },
-  label: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.type.bodyStrong.size,
-    fontWeight: theme.type.bodyStrong.weight,
   },
   lineMark: {
     backgroundColor: theme.colors.textPrimary,
@@ -232,25 +138,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing.xs,
   },
-  meta: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.type.caption.size,
-  },
-  ring: {
-    alignItems: 'center',
-    borderColor: theme.colors.accent,
-    borderRadius: 28,
-    borderWidth: 2,
-    height: 56,
-    justifyContent: 'center',
-    width: 56,
-  },
-  ringLabel: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.type.eyebrow.fontFamily,
-    fontSize: theme.type.eyebrow.size,
-    fontWeight: theme.type.eyebrow.weight,
-  },
   segment: {
     gap: theme.spacing.xs,
     overflow: 'hidden',
@@ -267,13 +154,6 @@ const styles = StyleSheet.create({
   },
   strip: {
     flexDirection: 'row',
-  },
-  tag: {
-    color: theme.colors.textTertiary,
-    fontFamily: theme.type.eyebrow.fontFamily,
-    fontSize: theme.type.eyebrow.size,
-    fontWeight: theme.type.eyebrow.weight,
-    letterSpacing: theme.type.eyebrow.letterSpacing,
   },
   track: {
     backgroundColor: theme.colors.well,

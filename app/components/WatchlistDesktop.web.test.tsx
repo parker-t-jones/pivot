@@ -70,10 +70,19 @@ const stake: ManualStake = {
 };
 
 const weekCard: WeekCardModel = {
+  eyebrow: 'YOUR WEEK 7 CARD',
+  gameCountLabel: '1 GAME',
   fantasy: { label: 'Fantasy', value: '0', accent: false, muted: false },
   opponent: { label: 'Opponent', value: 'Off', accent: false, muted: false },
-  bets: { label: 'Free bets', value: '2 left', accent: true, muted: false },
-  pools: { label: 'Pools', value: '0', accent: false, muted: false },
+  bets: {
+    label: 'Bets & props',
+    value: '1',
+    note: '2 free left',
+    strip: 'Bets & props 1 \u00b7 2 free left',
+    accent: true,
+    muted: false,
+  },
+  pools: { label: 'Survivor pool', value: '0', accent: false, muted: false },
 };
 
 function press(element: Element): void {
@@ -448,5 +457,109 @@ describe('desktop watchlist opponent section', () => {
     const lineupAgain = document.querySelector('[data-testid="watchlist-lineup"]');
     expect(again?.textContent).toContain('No opponent this week');
     expect(lineupAgain?.textContent).not.toContain('No opponent this week');
+  });
+});
+
+describe('desktop watchlist pick column', () => {
+  let root: Root;
+  let host: HTMLDivElement;
+
+  beforeEach(() => {
+    resetStakeUndoForTests();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    resetStakeUndoForTests();
+  });
+
+  const spread: ManualStake = {
+    ...stake,
+    id: 'spread-1',
+    subject: { type: 'TEAM', teamId: 'jax' },
+    condition: { type: 'SPREAD', line: -3.5 },
+  };
+
+  function renderPicks(status: string): void {
+    const game: ScheduleGame = {
+      game_id: 'game-1',
+      status,
+      scheduled_start: '2026-10-20T00:00:00.000Z',
+      home_team: 'JAX',
+      away_team: 'ZZZ',
+      home_team_name: 'Jaguars',
+      away_team_name: 'Zebras',
+      home_team_primary_color: '#006778',
+      home_team_secondary_color: '#9F792C',
+      away_team_primary_color: '#000000',
+      away_team_secondary_color: '#FFFFFF',
+      broadcasts: [],
+      airings: [],
+    };
+    act(() => {
+      root.render(
+        <WatchlistDesktop
+          benchSlots={[]}
+          betPrompt={null}
+          bottomInset={0}
+          extras={null}
+          filter="bets"
+          liveGames={[]}
+          now={new Date('2026-10-18T12:00:00.000Z')}
+          onAddStake={() => undefined}
+          onFilter={() => undefined}
+          onRefresh={() => undefined}
+          onRemoveStake={() => undefined}
+          onWatchOpponent={() => undefined}
+          opponentSlots={[]}
+          pools={[]}
+          refreshing={false}
+          starterSlots={[]}
+          stakes={[stake, spread]}
+          timeZone="America/New_York"
+          topInset={0}
+          week={6}
+          weekCard={weekCard}
+          weekGames={[game]}
+        />,
+      );
+    });
+  }
+
+  function channels(element: Element | undefined): string {
+    if (!(element instanceof HTMLElement)) throw new Error('missing element');
+    const match = /rgba?\((\d+), (\d+), (\d+)/.exec(getComputedStyle(element).color);
+    return match ? `${match[1]}, ${match[2]}, ${match[3]}` : '';
+  }
+
+  it('puts the type eyebrow above the pick, and the pick in accent', () => {
+    renderPicks('scheduled');
+    const rows = Array.from(document.querySelectorAll('[data-testid="watchlist-row"]'));
+    expect(rows[0]?.textContent).toContain('MONEYLINE');
+    expect(rows[1]?.textContent).toContain('SPREAD');
+    const picks = Array.from(document.querySelectorAll('[data-testid="watchlist-pick"]'));
+    expect(picks.map((node) => node.textContent)).toEqual([STAKE_NAME, 'JAX −3.5']);
+    expect(channels(picks[1])).toBe('245, 160, 24');
+  });
+
+  it('dims the pick on a final game', () => {
+    renderPicks('final');
+    const picks = Array.from(document.querySelectorAll('[data-testid="watchlist-pick"]'));
+    expect(channels(picks[0])).toBe('110, 110, 120');
+    expect(document.querySelector('[data-testid="watchlist-table"]')?.textContent).toContain(
+      'FINAL',
+    );
+  });
+
+  it('shows the free count as {n} free left in the strip', () => {
+    renderPicks('scheduled');
+    expect(document.body.textContent).toContain('2 free left');
+    expect(document.body.textContent).toContain('Survivor pool 0');
   });
 });

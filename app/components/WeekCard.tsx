@@ -16,7 +16,8 @@ interface WeekCardProps {
 }
 
 /**
- * Watchlist week card (PIVOT-STAKES-PLAN.md §11.4): a 2×2 grid, perforation, then Add a pick.
+ * Watchlist week card (PIVOT-STAKES-PLAN.md §11.4, issue #13): "YOUR WEEK n CARD" and the
+ * game count, a labeled 2×2 grid, a card-edge perforation, then Add a pick.
  */
 export function WeekCard({
   model,
@@ -27,6 +28,24 @@ export function WeekCard({
   const { openUpgrade } = useUpgradeSheet();
   return (
     <Slip style={styles.slip}>
+      <View style={styles.head}>
+        <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          numberOfLines={1}
+          style={styles.eyebrow}
+        >
+          {model.eyebrow}
+        </Text>
+        {model.gameCountLabel ? (
+          <Text
+            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+            numberOfLines={1}
+            style={styles.gameCount}
+          >
+            {model.gameCountLabel}
+          </Text>
+        ) : null}
+      </View>
       <View style={styles.grid}>
         <Cell cell={model.fantasy} />
         <Cell
@@ -36,7 +55,7 @@ export function WeekCard({
         <Cell cell={model.bets} onUpgrade={model.bets.upgrade ? () => openUpgrade() : undefined} />
         <Cell cell={model.pools} />
       </View>
-      <SlipPerforation style={styles.perforation} />
+      <SlipPerforation above="background" edge="card" style={styles.perforation} />
       <View style={styles.footer}>
         <PrimaryButton disabled={editsLocked} label="Add a pick" onPress={onAddStake} />
       </View>
@@ -65,10 +84,19 @@ function Cell({
       <Text
         maxFontSizeMultiplier={theme.fontScaleCaps.dense}
         numberOfLines={2}
-        style={[styles.value, cell.accent && styles.valueAccent, cell.muted && styles.valueMuted]}
+        style={[styles.value, cell.muted && styles.valueMuted]}
       >
         {cell.value}
       </Text>
+      {cell.note ? (
+        <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          numberOfLines={1}
+          style={[styles.note, cell.accent && styles.noteAccent]}
+        >
+          {cell.note}
+        </Text>
+      ) : null}
       {onUpgrade ? <TextButton label="Upgrade" onPress={onUpgrade} size="small" /> : null}
     </>
   );
@@ -90,9 +118,24 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
     width: '50%',
   },
+  eyebrow: {
+    color: theme.colors.textPrimary,
+    flexShrink: 1,
+    fontFamily: theme.type.eyebrow.fontFamily,
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
+  },
   footer: {
     paddingBottom: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg,
+  },
+  gameCount: {
+    color: theme.colors.brass,
+    fontFamily: theme.type.eyebrow.fontFamily,
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
   },
   grid: {
     flexDirection: 'row',
@@ -100,6 +143,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
     rowGap: theme.spacing.md,
+  },
+  head: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+  },
+  note: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.caption.size,
+  },
+  noteAccent: {
+    color: theme.colors.accent,
   },
   label: {
     color: theme.colors.brass,
@@ -119,9 +177,6 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     fontSize: theme.type.bodyStrong.size,
     fontWeight: theme.type.bodyStrong.weight,
-  },
-  valueAccent: {
-    color: theme.colors.accent,
   },
   valueMuted: {
     color: theme.colors.textTertiary,
