@@ -27,7 +27,7 @@ import {
   TERMS_OF_USE_URL,
   UPGRADE_HEADLINE,
   UPGRADE_PLAN_LABEL,
-  UPGRADE_PRICE_FALLBACK,
+  UPGRADE_PRICING_UNAVAILABLE,
   UPGRADE_RENEWAL_DISCLOSURE,
   UPGRADE_SUBTITLE,
   upgradePurchaseLabel,
@@ -58,8 +58,10 @@ export function UpgradeSheet() {
   const { user } = useSession();
   const insets = useSafeAreaInsets();
 
-  const [priceLabel, setPriceLabel] = useState(UPGRADE_PRICE_FALLBACK);
+  /** RevenueCat's price string. Null until it loads; there is deliberately no hardcoded fallback. */
   const [storePrice, setStorePrice] = useState<string | null>(null);
+  const [isLoadingPrice, setIsLoadingPrice] = useState(false);
+  const [pricingError, setPricingError] = useState<string | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isPro, setIsPro] = useState(false);
@@ -73,25 +75,46 @@ export function UpgradeSheet() {
     }
   }, []);
 
+  /** Loads the monthly package's store price. Returns it, or null when offerings fail. */
+  const loadPrice = useCallback(async (): Promise<string | null> => {
+    if (!isPurchasesConfigured()) return null;
+    try {
+      const pkg = await getProMonthlyPackage();
+      const price = pkg?.product.priceString || null;
+      if (price) {
+        setStorePrice(price);
+        setPricingError(null);
+      }
+      return price;
+    } catch (error) {
+      console.warn('[upgrade] failed to load offering', error);
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     if (!isOpen) return;
+    setPricingError(null);
     void (async () => {
       if (user?.id) {
         await configurePurchases(user.id);
       }
       await refreshTier();
-      if (!isPurchasesConfigured()) return;
-      try {
-        const pkg = await getProMonthlyPackage();
-        if (pkg?.product.priceString) {
-          setStorePrice(pkg.product.priceString);
-          setPriceLabel(pkg.product.priceString);
-        }
-      } catch (error) {
-        console.warn('[upgrade] failed to load offering', error);
-      }
+      await loadPrice();
     })();
-  }, [isOpen, user?.id, refreshTier]);
+  }, [isOpen, user?.id, refreshTier, loadPrice]);
+
+  /** The no-price button retries offerings instead of buying a product whose price wasn't shown. */
+  const onRetryPrice = async () => {
+    setPricingError(null);
+    setIsLoadingPrice(true);
+    try {
+      const price = await loadPrice();
+      if (!price) setPricingError(UPGRADE_PRICING_UNAVAILABLE);
+    } finally {
+      setIsLoadingPrice(false);
+    }
+  };
 
   const onPurchase = async () => {
     if (!isPurchasesConfigured()) {
@@ -99,6 +122,10 @@ export function UpgradeSheet() {
         'Purchases unavailable',
         'Set EXPO_PUBLIC_REVENUECAT_API_KEY and rebuild a dev client to buy Pro. For local UI testing, set users.subscription_tier to pro in Supabase.',
       );
+      return;
+    }
+    if (!storePrice) {
+      await onRetryPrice();
       return;
     }
     setIsPurchasing(true);
@@ -217,11 +244,18 @@ export function UpgradeSheet() {
                 />
               </>
             ) : (
-              <PrimaryButton
-                label={upgradePurchaseLabel(priceLabel)}
-                loading={isPurchasing}
-                onPress={() => void onPurchase()}
-              />
+              <>
+                <PrimaryButton
+                  label={upgradePurchaseLabel(storePrice)}
+                  loading={isPurchasing || isLoadingPrice}
+                  onPress={() => void onPurchase()}
+                />
+                {pricingError ? (
+                  <Text accessibilityLiveRegion="polite" style={styles.pricingError}>
+                    {pricingError}
+                  </Text>
+                ) : null}
+              </>
             )}
 
             <Text style={styles.disclosure}>{UPGRADE_PLAN_LABEL}</Text>
@@ -343,6 +377,11 @@ const styles = StyleSheet.create({
   perkList: {
     gap: theme.spacing.xs,
     marginTop: theme.spacing.xs,
+  },
+  pricingError: {
+    color: theme.colors.danger,
+    fontSize: theme.type.caption.size,
+    lineHeight: theme.type.caption.size * 1.4,
   },
   perkRow: {
     alignItems: 'flex-start',
