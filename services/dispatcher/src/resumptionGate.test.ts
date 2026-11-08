@@ -242,6 +242,160 @@ describe('ResumptionGatedDispatcher', () => {
     expect(queue.size()).toBe(1);
   });
 
+  describe('kickoff carry-over', () => {
+    /**
+     * A kickoff that resolves the window. After a touchdown the scoring team's offense flag clears
+     * on it; after a field goal it already cleared on the kick, so nothing is dispatched.
+     */
+    async function kickoff(
+      dispatcher: ResumptionGatedDispatcher,
+      after: 'touchdown' | 'field_goal',
+    ): Promise<void> {
+      dispatcher.beginPlay('g1', 'kickoff');
+      dispatcher.noteWindowOpened('g1');
+      await dispatcher.noteResolution('g1', realAction);
+      if (after === 'field_goal') {
+        await dispatcher.endPlay('g1');
+        return;
+      }
+      await dispatcher.dispatch(
+        makeEvent({
+          id: 'scorer-clear',
+          userId: 'u-scorer',
+          type: 'flag_removed',
+          newState: makeFlagState({ flagged: false, reasons: [] }),
+        }),
+        'play-kickoff',
+      );
+      await dispatcher.endPlay('g1');
+    }
+
+    it("does not spend the resolution on a flag_removed, and fires every user's first-snap flag_added", async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, queue, records } = gate(now);
+      await kickoff(dispatcher, 'touchdown');
+
+      now.value = 2_000;
+      dispatcher.beginPlay('g1', 'run');
+      await dispatcher.releaseMidDrive('g1');
+      await dispatcher.dispatch(makeEvent({ id: 'a', userId: 'u-a' }), 'play-snap-1');
+      await dispatcher.dispatch(makeEvent({ id: 'b', userId: 'u-b' }), 'play-snap-1');
+      await dispatcher.endPlay('g1');
+
+      expect(records.map((r) => [r.event.id, r.decision, r.resolution])).toEqual([
+        ['scorer-clear', 'fire_immediately', realAction],
+        ['a', 'fire_immediately', realAction],
+        ['b', 'fire_immediately', realAction],
+      ]);
+      const due = await queue.due(now.value, 10);
+      expect(due.filter((item) => item.triggeringPlayId === 'play-snap-1')).toHaveLength(2);
+      expect(due.find((item) => item.event.id === 'a')?.event.scheduledFireAt).toBe(2_000);
+    });
+
+    it('covers every event on the first snap, not just the first one dispatched', async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, records } = gate(now);
+      await kickoff(dispatcher, 'field_goal');
+
+      dispatcher.beginPlay('g1', 'run');
+      await dispatcher.releaseMidDrive('g1');
+      await dispatcher.dispatch(makeEvent({ id: 'a', userId: 'u-a' }), 'play-snap-1');
+      await dispatcher.dispatch(makeEvent({ id: 'b', userId: 'u-b' }), 'play-snap-1');
+      await dispatcher.endPlay('g1');
+
+      expect(records.map((r) => [r.event.id, r.decision])).toEqual([
+        ['a', 'fire_immediately'],
+        ['b', 'fire_immediately'],
+      ]);
+    });
+
+    it('survives a timeout, a quarter break, and a pre-snap penalty before the first snap', async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, records } = gate(now);
+      await kickoff(dispatcher, 'field_goal');
+
+      dispatcher.beginPlay('g1', 'timeout');
+      await dispatcher.endPlay('g1');
+      dispatcher.beginPlay('g1', 'end_period');
+      await dispatcher.endPlay('g1');
+      dispatcher.beginPlay('g1', 'no_play');
+      await dispatcher.endPlay('g1');
+
+      dispatcher.beginPlay('g1', 'pass');
+      await dispatcher.releaseMidDrive('g1');
+      await dispatcher.dispatch(makeEvent({ id: 'a' }), 'play-snap-1');
+      await dispatcher.endPlay('g1');
+
+      expect(records).toEqual([
+        expect.objectContaining({
+          event: expect.objectContaining({ id: 'a' }),
+          decision: 'fire_immediately',
+          resolution: realAction,
+        }),
+      ]);
+    });
+
+    it('still covers only one real play after the resolving one', async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, queue } = gate(now);
+      await kickoff(dispatcher, 'touchdown');
+
+      // A first snap that clears a flag but pushes nothing uses up the grace play.
+      dispatcher.beginPlay('g1', 'run');
+      await dispatcher.dispatch(
+        makeEvent({
+          id: 'clear-2',
+          type: 'flag_removed',
+          newState: makeFlagState({ flagged: false }),
+        }),
+        'play-snap-1',
+      );
+      await dispatcher.endPlay('g1');
+
+      dispatcher.beginPlay('g1', 'pass');
+      await dispatcher.releaseMidDrive('g1');
+      await dispatcher.dispatch(makeEvent({ id: 'late' }), 'play-snap-2');
+      await dispatcher.endPlay('g1');
+
+      const due = await queue.due(now.value, 10);
+      expect(due.map((item) => item.event.id)).not.toContain('late');
+    });
+
+    it('lets a push-eligible event on the resolving play spend the resolution', async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, queue } = gate(now);
+      dispatcher.beginPlay('g1', 'run');
+      dispatcher.noteWindowOpened('g1');
+      await dispatcher.noteResolution('g1', realAction);
+      await dispatcher.dispatch(makeEvent({ id: 'first-snap' }), 'play-snap-1');
+      await dispatcher.endPlay('g1');
+
+      dispatcher.beginPlay('g1', 'pass');
+      await dispatcher.releaseMidDrive('g1');
+      await dispatcher.dispatch(makeEvent({ id: 'second-snap', userId: 'u2' }), 'play-snap-2');
+      await dispatcher.endPlay('g1');
+
+      const due = await queue.due(now.value, 10);
+      expect(due.map((item) => item.event.id)).toEqual(['first-snap']);
+    });
+
+    it('drops the first snap events when the carried resolution was an abort', async () => {
+      const now = { value: 1_000 };
+      const { dispatcher, queue, records } = gate(now);
+      dispatcher.beginPlay('g1', 'kickoff');
+      dispatcher.noteWindowOpened('g1');
+      await dispatcher.noteResolution('g1', aborted);
+      await dispatcher.endPlay('g1');
+
+      dispatcher.beginPlay('g1', 'run');
+      await dispatcher.dispatch(makeEvent({ id: 'a' }), 'play-snap-1');
+      await dispatcher.endPlay('g1');
+
+      expect(queue.size()).toBe(0);
+      expect(records).toEqual([expect.objectContaining({ decision: 'dropped_by_abort' })]);
+    });
+  });
+
   it('releases a parked mid-drive event from the silence ceiling when no play arrives', async () => {
     vi.useFakeTimers();
     const now = { value: 3_000 };
