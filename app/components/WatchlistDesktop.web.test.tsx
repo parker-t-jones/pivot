@@ -305,10 +305,10 @@ const liveWeekGame = {
       typical_lag_seconds: 0,
       preferred: true,
       network: 'ESPN',
-      market_confidence: 'confirmed',
+      market_confidence: 'national',
     },
   ],
-  airings: [{ network: 'ESPN', market: 'national', market_confidence: 'confirmed' }],
+  airings: [{ network: 'ESPN', market: 'national', market_confidence: 'national' }],
 } as ScheduleGame;
 
 const liveFeed = {

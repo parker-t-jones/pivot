@@ -13,7 +13,7 @@ vi.mock('expo-notifications', () => ({
   },
 }));
 
-import { presentDemoAlertWithoutToken } from './demoLocalAlert';
+import { localDemoAlertFromDetails, presentDemoAlertWithoutToken } from './demoLocalAlert';
 
 const DETAILS = {
   title: 'Sam Hart active',
@@ -54,5 +54,40 @@ describe('presentDemoAlertWithoutToken', () => {
     expect(request.content.title).toBe('Sam Hart active');
     expect(request.content.body).toContain('Chiefs');
     expect(request.content.body).not.toMatch(/Jonathan|Taylor|Colts/);
+  });
+
+  it('passes the fixture payload through to the notification data unchanged', async () => {
+    getPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    await presentDemoAlertWithoutToken(DETAILS);
+    const [request] = scheduleNotificationAsync.mock.calls[0] as [
+      { content: { data: Record<string, unknown> } },
+    ];
+    expect(request.content.data).toBe(DETAILS.data);
+  });
+
+  it('reports unusable details without scheduling anything', async () => {
+    getPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    await expect(presentDemoAlertWithoutToken({ ...DETAILS, data: null })).resolves.toBe(
+      'unusable',
+    );
+    expect(scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe('localDemoAlertFromDetails', () => {
+  it('accepts the fixture alert', () => {
+    expect(localDemoAlertFromDetails(DETAILS)).toEqual(DETAILS);
+  });
+
+  it.each([
+    ['non-object details', 'nope'],
+    ['null details', null],
+    ['a missing title', { ...DETAILS, title: undefined }],
+    ['a non-string body', { ...DETAILS, body: 42 }],
+    ['missing data', { title: DETAILS.title, body: DETAILS.body }],
+    ['string data', { ...DETAILS, data: 'event-1' }],
+    ['data that is not a flag payload', { ...DETAILS, data: { event_id: 'event-1' } }],
+  ])('rejects %s', (_label, details) => {
+    expect(localDemoAlertFromDetails(details)).toBeNull();
   });
 });
