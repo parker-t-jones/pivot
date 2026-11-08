@@ -4,20 +4,18 @@ import type { PickCardModel } from '../lib/pickCard';
 import { theme } from '../lib/theme';
 import { LineScale } from './StakeCards';
 import { TeamBadge } from './TeamBadge';
-import { TextButton } from './TextButton';
 
 interface PickCardProps {
   model: PickCardModel;
-  /** Omitted when edits are locked (demo account). */
-  onRemove?: () => void;
 }
 
 /**
  * One Watchlist card per non-fantasy pick (issue #13). Type eyebrow and the pick in
  * accent on the left, matchup and kickoff/status on the right, a progress bar while
- * live, and a dimmed final.
+ * live, and a dimmed final. Removal is a swipe on the phone Watchlist (`SwipeToRemove`), so the
+ * card has no Remove button (issue #14).
  */
-export function PickCard({ model, onRemove }: PickCardProps) {
+export function PickCard({ model }: PickCardProps) {
   const final = model.phase === 'final';
   const live = model.phase === 'live';
   return (
@@ -63,19 +61,11 @@ export function PickCard({ model, onRemove }: PickCardProps) {
           <LineScale axisLabel={model.axisLabel} model={model.progress} />
         </View>
       ) : null}
-      {onRemove ? (
-        <View style={styles.actions}>
-          <TextButton label="Remove" onPress={onRemove} tone="danger" />
-        </View>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  actions: {
-    alignItems: 'flex-start',
-  },
   at: {
     color: theme.colors.textTertiary,
     fontSize: theme.type.caption.size,

@@ -1,8 +1,9 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   ActionSheetIOS,
   Alert,
+  AppState,
   Platform,
   Pressable,
   RefreshControl,
@@ -15,11 +16,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DemoEditingBanner } from '../../../components/DemoEditingBanner';
+import { FantasyLeagueCard } from '../../../components/FantasyLeagueCard';
 import { ErrorState } from '../../../components/ErrorState';
 import { LoadingState } from '../../../components/LoadingState';
 import { SecondaryButton } from '../../../components/SecondaryButton';
 import { PickCard } from '../../../components/PickCard';
 import { RosterStripCard } from '../../../components/StakeCards';
+import { SwipeToRemove } from '../../../components/SwipeToRemove';
 import { TextButton } from '../../../components/TextButton';
 import { WatchlistDesktop } from '../../../components/WatchlistDesktop';
 import { WatchlistFilters } from '../../../components/WatchlistFilters';
@@ -33,6 +36,12 @@ import {
   watchlistLeagueSelection,
 } from '../../../lib/activeLeague';
 import { ApiRequestError } from '../../../lib/apiClient';
+import {
+  allTabLeagues,
+  fantasyLeagueCardModel,
+  liveTeamAbbrs,
+  useLeagueExpansion,
+} from '../../../lib/fantasyLeagueCard';
 import { alertAsync, confirmAsync } from '../../../lib/confirm';
 import { useFeature } from '../../../lib/useFeature';
 import { SHOW_STAR_TOGGLES } from '../../../lib/flags';
@@ -68,6 +77,7 @@ import {
   type ScheduleGame,
 } from '../../../lib/schedule';
 import { pickCardModel } from '../../../lib/pickCard';
+import { orderPicks } from '../../../lib/pickOrder';
 import { rosterStripInputs, rosterStripModel } from '../../../lib/stakeCards';
 import {
   formatStakeLabel,
@@ -77,7 +87,14 @@ import {
   type ManualStake,
 } from '../../../lib/stakes';
 import { subscribeAddPickSaved } from '../../../lib/addPickDrawer';
-import { flushStakeUndo, takePendingStakeUndo } from '../../../lib/stakeUndoStore';
+import {
+  bindStakeUndoCommit,
+  flushStakeUndo,
+  getStakeUndoState,
+  hideStake,
+  subscribeStakeUndo,
+  takePendingStakeUndo,
+} from '../../../lib/stakeUndoStore';
 import { supabase } from '../../../lib/supabase';
 import { deleteStake, deleteStakeKeepalive, fetchStakes } from '../../../lib/stakesClient';
 import { theme } from '../../../lib/theme';
@@ -202,6 +219,10 @@ export default function LineupScreen() {
   const [watchedStarterTotal, setWatchedStarterTotal] = useState<number | null>(
     () => readRememberedWatchlist()?.watchedStarterTotal ?? null,
   );
+  /** All-tab league cards. Null until the watched leagues' lineups load; a failure stays null. */
+  const [watchedLineups, setWatchedLineups] = useState<LineupResponse[] | null>(null);
+  const [watchedLineupsFailed, setWatchedLineupsFailed] = useState(false);
+  const leagueExpansion = useLeagueExpansion();
   const [filter, selectFilter] = useWatchlistFilter();
   const desktopTier = useDesktopTier();
   const openAddPick = useOpenAddPick();
@@ -389,6 +410,8 @@ export default function LineupScreen() {
     void fetchAllLineups(targets)
       .then((rows) => {
         if (cancelled) return;
+        setWatchedLineups(rows);
+        setWatchedLineupsFailed(false);
         if (targets.length > 0 && rows.length === 0) {
           setWatchedStarterTotal(null);
           return;
@@ -401,7 +424,9 @@ export default function LineupScreen() {
         );
       })
       .catch(() => {
-        if (!cancelled) setWatchedStarterTotal(null);
+        if (cancelled) return;
+        setWatchedStarterTotal(null);
+        setWatchedLineupsFailed(true);
       });
     return () => {
       cancelled = true;
@@ -458,6 +483,34 @@ export default function LineupScreen() {
     await deleteStake(stake.id);
     dropRemovedStake(stake);
   };
+
+  // Phone removal (issue #14): a swipe hides the pick and shows Undo. The DELETE goes out when
+  // the toast expires, another pick is removed, or the user leaves. Same store as desktop.
+  const removal = useSyncExternalStore(subscribeStakeUndo, getStakeUndoState, getStakeUndoState);
+  const betsRef = useRef(bets);
+  betsRef.current = bets;
+  useEffect(() => {
+    bindStakeUndoCommit(async (id) => {
+      if (!betsRef.current.some((row) => row.id === id)) return;
+      await deleteStake(id);
+      setBets((current) => current.filter((row) => row.id !== id));
+    });
+  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      // Leaving Watchlist (another tab, a pushed screen) commits the pending removal.
+      return () => {
+        flushStakeUndo();
+      };
+    }, []),
+  );
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'background') flushStakeUndo();
+    });
+    return () => subscription.remove();
+  }, []);
 
   const confirmRemoveBet = (stake: ManualStake) => {
     const label = formatStakeLabel(stake, stakeTeams(stake));
@@ -564,7 +617,11 @@ export default function LineupScreen() {
     opponentStatus === 'on',
     selectedLeague?.platform !== 'sleeper' && lineup?.opponent != null,
   );
-  const { bets: propBets, pools: poolBets } = splitBets(bets);
+  const split = splitBets(bets);
+  // Live, then upcoming by kickoff, then finals (issue #14; same rule as Home's YOUR PICKS).
+  const propBets = orderPicks(split.bets, weekGames, liveGames);
+  const poolBets = orderPicks(split.pools, weekGames, liveGames);
+  const notHidden = (stake: ManualStake) => !removal.hiddenIds.includes(stake.id);
   const sections = watchlistSections(filter);
   const showLeagueChips = !watchlist || sections.includes('leagueChips');
   const showRoster = !watchlist || sections.includes('starters');
@@ -586,6 +643,29 @@ export default function LineupScreen() {
       ? lineup.opponent.starters.map(opponentStarterSlot).filter((slot) => !isBenchSlot(slot))
       : [];
   const showActions = watchlist && sections.includes('leagueActions');
+  const showLeagueCards = watchlist && sections.includes('leagueCards');
+  const liveTeams = liveTeamAbbrs(weekGames, liveGames);
+  const leagueCards = showLeagueCards
+    ? allTabLeagues(leagues, me?.preferences.watchedLeagueIds ?? knownWatchedRef.current ?? []).map(
+        (league) => {
+          const row = watchedLineups?.find((candidate) => candidate.league_id === league.league_id);
+          const starters = row
+            ? orderLineupSlots(row.slots).filter((slot) => !isBenchSlot(slot))
+            : [];
+          const model = fantasyLeagueCardModel({ league, slots: starters, liveTeams });
+          const summary = row
+            ? model.summary
+            : watchedLineups == null && !watchedLineupsFailed
+              ? 'Loading lineup…'
+              : "Couldn't load this lineup.";
+          return { league, starters, model: { ...model, summary } };
+        },
+      )
+    : [];
+  const seeFullLineup = (leagueId: string) => {
+    selectFilter('fantasy');
+    setSelectedLeagueId(watchlistLeagueSelection({ type: 'chip', leagueId }).selectedLeagueId);
+  };
   const showPropBets = watchlist && sections.includes('bets');
   const showPools = watchlist && sections.includes('pools');
   const headerWeek = watchlist ? (lineup?.week ?? nflWeek) : (lineup?.week ?? null);
@@ -860,6 +940,10 @@ export default function LineupScreen() {
           void onRefresh();
         }}
         betPrompt={betPrompt}
+        leagueCards={leagueCards.map(({ starters, model }) => ({ model, starters }))}
+        isLeagueExpanded={leagueExpansion.isExpanded}
+        onToggleLeague={leagueExpansion.toggle}
+        onSeeFullLineup={seeFullLineup}
         onRemoveStake={(stake) => commitStakeRemoval(stake)}
         onWatchOpponent={(value) => {
           void onWatchOpponent(value);
@@ -1021,6 +1105,35 @@ export default function LineupScreen() {
       ) : null}
 
       <View style={styles.rosterSection}>
+        {leagueCards.map(({ league, starters, model }) => (
+          <FantasyLeagueCard
+            expanded={leagueExpansion.isExpanded(league.league_id)}
+            key={league.league_id}
+            model={model}
+            onSeeFullLineup={() => seeFullLineup(league.league_id)}
+            onToggle={() => leagueExpansion.toggle(league.league_id)}
+          >
+            {starters.length > 0 ? (
+              <View style={styles.rosterWell}>
+                {starters.map((slot, index) => (
+                  <PlayerRow
+                    divided={index > 0}
+                    key={slot.slot_id}
+                    mutedName={false}
+                    now={now}
+                    onToggleStar={() => undefined}
+                    saving
+                    slot={slot}
+                    timeZone={timeZone}
+                    weekGames={weekGames}
+                  />
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.emptyCopy}>No players in this lineup yet.</Text>
+            )}
+          </FantasyLeagueCard>
+        ))}
         {showRoster ? (
           <>
             <View style={styles.rosterHeader}>
@@ -1149,9 +1262,9 @@ export default function LineupScreen() {
                 : undefined
             }
             now={now}
-            onRemove={confirmRemoveBet}
+            onRemove={(stake) => hideStake(stake.id)}
             prompt={betPrompt}
-            stakes={propBets}
+            stakes={propBets.filter(notHidden)}
             title="BETS"
             weekGames={weekGames}
           />
@@ -1162,8 +1275,8 @@ export default function LineupScreen() {
             empty="No pools this week."
             liveGames={liveGames}
             now={now}
-            onRemove={confirmRemoveBet}
-            stakes={poolBets}
+            onRemove={(stake) => hideStake(stake.id)}
+            stakes={poolBets.filter(notHidden)}
             title="POOLS"
             weekGames={weekGames}
           />
@@ -1317,11 +1430,19 @@ function StakeEntry({
   onRemove: (stake: ManualStake) => void;
   editsLocked?: boolean;
 }) {
+  const model = pickCardModel({ stake, teams: stakeTeams(stake), weekGames, liveGames, now });
+  // Demo account: no swipe, matching the desktop table's hidden Remove.
+  if (editsLocked) return <PickCard model={model} />;
   return (
-    <PickCard
-      model={pickCardModel({ stake, teams: stakeTeams(stake), weekGames, liveGames, now })}
-      onRemove={editsLocked ? undefined : () => onRemove(stake)}
-    />
+    <SwipeToRemove
+      accessibilityLabel={[model.eyebrow, model.pick, model.matchup, model.status]
+        .filter((part) => part.length > 0)
+        .join(', ')}
+      onRemove={() => onRemove(stake)}
+      testID={`swipe-pick-${stake.id}`}
+    >
+      <PickCard model={model} />
+    </SwipeToRemove>
   );
 }
 

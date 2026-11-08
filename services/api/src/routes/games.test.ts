@@ -14,7 +14,7 @@ import { ApiError, toErrorBody } from '../lib/errors.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
-import gamesRoutes from './games.js';
+import gamesRoutes, { finalScoreFor } from './games.js';
 
 const JWT_SECRET = 'test-secret-at-least-32-characters-long';
 const GAME_1 = '11111111-1111-4111-8111-111111111111';
@@ -41,6 +41,8 @@ interface GameRow {
   scheduled_start: string;
   home_team_id: string;
   away_team_id: string;
+  home_score?: number | null;
+  away_score?: number | null;
 }
 
 interface TeamRow {
@@ -779,6 +781,133 @@ describe('GET /games?week=', () => {
       primary: { url: 'https://example.com/chiefs' },
     });
     expect(app.fake.linkReads).toBe(1);
+  });
+
+  it('returns final_score from the stored columns on final games and null otherwise', async () => {
+    // Redis disagrees on purpose: the stored columns win.
+    const gameStateStore = new InMemoryGameStateStore();
+    await gameStateStore.setGameState(
+      GAME_1,
+      makeGameState({ gameId: GAME_1, status: 'final', scoreHome: 3, scoreAway: 0 }),
+    );
+    app = await buildTestApp({
+      games: [
+        {
+          id: GAME_1,
+          week: 1,
+          season_type: 'regular',
+          status: 'final',
+          scheduled_start: '2026-09-11T00:15:00Z',
+          home_team_id: TEAM_HOME,
+          away_team_id: TEAM_AWAY,
+          home_score: 17,
+          away_score: 24,
+        },
+        {
+          id: GAME_2,
+          week: 1,
+          season_type: 'regular',
+          status: 'scheduled',
+          scheduled_start: '2026-09-13T17:00:00Z',
+          home_team_id: TEAM_HOME_2,
+          away_team_id: TEAM_AWAY_2,
+        },
+      ],
+      gameStateStore,
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/games?week=1',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.games[0].final_score).toEqual({ home: 17, away: 24 });
+    expect(body.games[1].final_score).toBeNull();
+  });
+
+  it('falls back to the final Redis game_state when the columns are empty', async () => {
+    const gameStateStore = new InMemoryGameStateStore();
+    await gameStateStore.setGameState(
+      GAME_1,
+      makeGameState({ gameId: GAME_1, status: 'final', scoreHome: 20, scoreAway: 23 }),
+    );
+    await gameStateStore.setGameState(
+      GAME_2,
+      // Still in_progress in Redis while the row says final: not trusted as a final score.
+      makeGameState({ gameId: GAME_2, status: 'in_progress', scoreHome: 7, scoreAway: 7 }),
+    );
+    app = await buildTestApp({
+      games: [
+        {
+          id: GAME_1,
+          week: 1,
+          season_type: 'regular',
+          status: 'final',
+          scheduled_start: '2026-09-11T00:15:00Z',
+          home_team_id: TEAM_HOME,
+          away_team_id: TEAM_AWAY,
+          home_score: null,
+          away_score: null,
+        },
+        {
+          id: GAME_2,
+          week: 1,
+          season_type: 'regular',
+          status: 'final',
+          scheduled_start: '2026-09-13T17:00:00Z',
+          home_team_id: TEAM_HOME_2,
+          away_team_id: TEAM_AWAY_2,
+        },
+      ],
+      gameStateStore,
+    });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/games?week=1',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.games[0].final_score).toEqual({ home: 20, away: 23 });
+    expect(body.games[1].final_score).toBeNull();
+  });
+});
+
+describe('finalScoreFor', () => {
+  const row = {
+    id: GAME_1,
+    status: 'final',
+    home_score: null,
+    away_score: null,
+  };
+
+  it('returns null, not an error, when the Redis read throws', async () => {
+    const failing = { getGameState: () => Promise.reject(new Error('redis down')) };
+    await expect(finalScoreFor(row, failing)).resolves.toBeNull();
+  });
+
+  it('never reads Redis for a game that is not final', async () => {
+    let reads = 0;
+    const store = {
+      getGameState: () => {
+        reads += 1;
+        return Promise.resolve(null);
+      },
+    };
+    await expect(finalScoreFor({ ...row, status: 'in_progress' }, store)).resolves.toBeNull();
+    expect(reads).toBe(0);
+  });
+
+  it('needs both stored columns before it trusts them', async () => {
+    const store = { getGameState: () => Promise.resolve(null) };
+    await expect(finalScoreFor({ ...row, home_score: 10 }, store)).resolves.toBeNull();
   });
 });
 

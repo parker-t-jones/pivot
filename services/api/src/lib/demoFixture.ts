@@ -132,6 +132,8 @@ interface SlateDef {
   home: DemoTeam;
   away: DemoTeam;
   kickoffOffsetMs: number;
+  /** Final games only. Returned as `final_score` on `GET /games?week=`. */
+  finalScore?: { home: number; away: number };
 }
 
 const SLATE: readonly SlateDef[] = [
@@ -158,6 +160,7 @@ const SLATE: readonly SlateDef[] = [
     home: COWBOYS,
     away: EAGLES,
     kickoffOffsetMs: -5 * 60 * 60 * 1000,
+    finalScore: { home: 24, away: 20 },
   },
 ];
 
@@ -284,6 +287,7 @@ export function demoWeekResponse(week: number, services: ReadonlySet<string>, no
         broadcasts: options?.broadcasts ?? [],
         airings: options?.airings ?? [],
         destination: options?.destination ?? { kind: 'legacy' as const },
+        final_score: def.status === 'final' ? (def.finalScore ?? null) : null,
       };
     }),
   };

@@ -56,9 +56,20 @@ export interface StaleGame {
   week: number;
 }
 
+/** Final score from the scoreboard, written to `games.home_score` / `away_score`. */
+export interface FinalScore {
+  home: number;
+  away: number;
+}
+
 export interface GameDirectory {
   findByEspnId(espnEventId: string): Promise<SeededGame | null>;
-  setStatus(gameId: string, status: 'in_progress' | 'final'): Promise<void>;
+  /** `finalScore` is only written with `final`. Null or omitted leaves the score columns alone. */
+  setStatus(
+    gameId: string,
+    status: 'in_progress' | 'final',
+    finalScore?: FinalScore | null,
+  ): Promise<void>;
   listInProgress(): Promise<StaleGame[]>;
   /** `scheduled` rows whose `scheduled_start` is before `kickoffBefore` (ISO timestamp). */
   listStaleScheduled(kickoffBefore: string): Promise<StaleGame[]>;
@@ -107,16 +118,36 @@ export function displayClockToSeconds(displayClock: string | undefined): number 
   return Number(match[1] ?? '0') * 60 + Number(match[2] ?? '0');
 }
 
-function competitorScore(
+function parsedCompetitorScore(
   competitors: readonly DiscoveryCompetitor[] | undefined,
   homeAway: 'home' | 'away',
-): number {
+): number | null {
   const raw = competitors?.find((competitor) => competitor.homeAway === homeAway)?.score;
   if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
   if (typeof raw === 'string' && raw.trim() !== '' && Number.isFinite(Number(raw))) {
     return Number(raw);
   }
-  return 0;
+  return null;
+}
+
+function competitorScore(
+  competitors: readonly DiscoveryCompetitor[] | undefined,
+  homeAway: 'home' | 'away',
+): number {
+  return parsedCompetitorScore(competitors, homeAway) ?? 0;
+}
+
+/**
+ * Final score from a scoreboard event. Null unless both sides carry a non-negative integer score:
+ * a missing score is never stored as 0 (a wrong final is worse than none).
+ */
+export function finalScoreFromEvent(event: DiscoveryEvent): FinalScore | null {
+  const competitors = event.competitions?.[0]?.competitors;
+  const home = parsedCompetitorScore(competitors, 'home');
+  const away = parsedCompetitorScore(competitors, 'away');
+  if (home === null || away === null) return null;
+  if (!Number.isInteger(home) || !Number.isInteger(away) || home < 0 || away < 0) return null;
+  return { home, away };
 }
 
 /**
@@ -191,7 +222,7 @@ export async function applyDiscovery(deps: {
           updatedAt: now(),
         });
       }
-      await deps.games.setStatus(game.id, 'final');
+      await deps.games.setStatus(game.id, 'final', finalScoreFromEvent(event));
       continue;
     }
 

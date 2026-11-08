@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import type { FantasyLeagueCardModel } from '../lib/fantasyLeagueCard';
+
 import type { LineupSlot } from '../lib/leagues';
 import type { LiveGame, ScheduleGame } from '../lib/schedule';
 import type { ManualStake } from '../lib/stakes';
@@ -42,6 +44,11 @@ export interface WatchlistDesktopProps {
   onWatchOpponent: (value: boolean) => void;
   /** Deletes the stake. The table hides the row first and calls this when the undo window ends. */
   onRemoveStake: (stake: ManualStake) => void | Promise<void>;
+  /** All tab: one collapsible card per fantasy league (issue #14). Empty on other tabs. */
+  leagueCards?: readonly { model: FantasyLeagueCardModel; starters: readonly LineupSlot[] }[];
+  isLeagueExpanded?: (leagueId: string) => boolean;
+  onToggleLeague?: (leagueId: string) => void;
+  onSeeFullLineup?: (leagueId: string) => void;
   /** Bets-tab prompt. Null when that tab has 3 or more rows, or the free cap is used up. */
   betPrompt: string | null;
   extras: ReactNode;

@@ -75,14 +75,21 @@ const PICKS: Record<string, string> = {
 
 type Phase = 'upcoming' | 'live' | 'final';
 
-function modelFor(kind: string, phase: Phase) {
+function modelFor(kind: string, phase: Phase, finalScore?: { home: number; away: number }) {
   const stake = STAKES[kind];
   if (!stake) throw new Error(`no stake ${kind}`);
   const status = phase === 'upcoming' ? 'scheduled' : phase === 'live' ? 'in_progress' : 'final';
   return pickCardModel({
     stake,
     teams,
-    weekGames: [{ game_id: 'g1', status, scheduled_start: game.scheduled_start }],
+    weekGames: [
+      {
+        game_id: 'g1',
+        status,
+        scheduled_start: game.scheduled_start,
+        final_score: finalScore ?? null,
+      },
+    ],
     liveGames: phase === 'live' ? [liveScore] : [],
     now: NOW,
   });
@@ -115,9 +122,9 @@ describe('PickCard', () => {
     host.remove();
   });
 
-  function render(kind: string, phase: Phase, onRemove?: () => void): void {
+  function render(kind: string, phase: Phase, finalScore?: { home: number; away: number }): void {
     act(() => {
-      root.render(createElement(PickCard, { model: modelFor(kind, phase), onRemove }));
+      root.render(createElement(PickCard, { model: modelFor(kind, phase, finalScore) }));
     });
   }
 
@@ -158,19 +165,21 @@ describe('PickCard', () => {
     });
   }
 
-  it('shows Remove only when a handler is passed', () => {
-    const onRemove = vi.fn();
-    render('SPREAD', 'upcoming', onRemove);
-    const button = Array.from(host.querySelectorAll('[role="button"]')).find(
-      (node) => node.textContent === 'Remove',
-    );
-    expect(button).toBeDefined();
-    act(() => {
-      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(onRemove).toHaveBeenCalledTimes(1);
+  it('shows the final score, dimmed, when the schedule has it', () => {
+    render('SPREAD', 'final', { home: 17, away: 24 });
+    const status = host.querySelector('[data-testid="pick-card-status"]');
+    expect(status?.textContent).toBe('FINAL · 24–17');
+    expect(colorOf(status)).toBe(rgb(theme.colors.textTertiary));
+  });
 
-    render('SPREAD', 'upcoming');
-    expect(host.textContent).not.toContain('Remove');
+  it('has no Remove button or red text; removal is the phone swipe', () => {
+    for (const phase of ['upcoming', 'live', 'final'] as const) {
+      render('SPREAD', phase);
+      expect(host.textContent).not.toContain('Remove');
+      const red = Array.from(host.querySelectorAll('*')).filter(
+        (node) => colorOf(node) === rgb(theme.colors.danger),
+      );
+      expect(red).toEqual([]);
+    }
   });
 });

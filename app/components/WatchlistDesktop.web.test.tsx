@@ -563,3 +563,168 @@ describe('desktop watchlist pick column', () => {
     expect(document.body.textContent).toContain('Survivor pool 0');
   });
 });
+
+describe('desktop watchlist order, finals, and league cards (issue #14)', () => {
+  let root: Root;
+  let host: HTMLDivElement;
+
+  beforeEach(() => {
+    resetStakeUndoForTests();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    resetStakeUndoForTests();
+  });
+
+  function weekGame(
+    id: string,
+    status: string,
+    kickoff: string,
+    extra: Partial<ScheduleGame> = {},
+  ) {
+    return {
+      ...liveWeekGame,
+      game_id: id,
+      status,
+      scheduled_start: kickoff,
+      home_team: 'JAX',
+      away_team: 'ZZZ',
+      ...extra,
+    } as ScheduleGame;
+  }
+
+  function pickOn(id: string, gameId: string, kickoff: string, line: number): ManualStake {
+    return {
+      ...stake,
+      id,
+      game_id: gameId,
+      subject: { type: 'TEAM', teamId: 'jax' },
+      condition: { type: 'SPREAD', line },
+      game: { ...(stake.game as NonNullable<ManualStake['game']>), scheduled_start: kickoff },
+    };
+  }
+
+  function render(props: {
+    stakes?: ManualStake[];
+    pools?: ManualStake[];
+    weekGames?: ScheduleGame[];
+    liveGames?: LiveGame[];
+    leagueCards?: {
+      model: { leagueId: string; eyebrow: string; name: string; summary: string };
+      starters: LineupSlot[];
+    }[];
+    expanded?: (leagueId: string) => boolean;
+    onSeeFullLineup?: (leagueId: string) => void;
+  }): void {
+    act(() => {
+      root.render(
+        <WatchlistDesktop
+          benchSlots={[]}
+          betPrompt={null}
+          bottomInset={0}
+          extras={null}
+          filter="all"
+          isLeagueExpanded={props.expanded}
+          leagueCards={props.leagueCards}
+          liveGames={props.liveGames ?? []}
+          now={new Date('2026-10-18T12:00:00.000Z')}
+          onAddStake={() => undefined}
+          onFilter={() => undefined}
+          onRefresh={() => undefined}
+          onRemoveStake={() => undefined}
+          onSeeFullLineup={props.onSeeFullLineup}
+          onWatchOpponent={() => undefined}
+          opponentSlots={[]}
+          pools={props.pools ?? []}
+          refreshing={false}
+          starterSlots={[]}
+          stakes={props.stakes ?? []}
+          timeZone="America/New_York"
+          topInset={0}
+          week={6}
+          weekCard={weekCard}
+          weekGames={props.weekGames ?? []}
+        />,
+      );
+    });
+  }
+
+  it('lists live first, then upcoming by kickoff, then finals at the bottom', () => {
+    const early = '2026-10-18T17:00:00.000Z';
+    const late = '2026-10-18T20:25:00.000Z';
+    const night = '2026-10-19T00:20:00.000Z';
+    render({
+      stakes: [
+        pickOn('final', 'g-final', early, -1.5),
+        pickOn('night', 'g-night', night, -2.5),
+        pickOn('live', 'g-live', late, -3.5),
+      ],
+      pools: [{ ...pickOn('pool-late', 'g-late', late, 0), condition: { type: 'SURVIVOR' } }],
+      weekGames: [
+        weekGame('g-final', 'final', early, { final_score: { home: 17, away: 24 } }),
+        weekGame('g-night', 'scheduled', night),
+        weekGame('g-live', 'in_progress', late),
+        weekGame('g-late', 'scheduled', late),
+      ],
+    });
+    const rows = Array.from(document.querySelectorAll('[data-testid="watchlist-row"]'));
+    expect(rows).toHaveLength(4);
+    const picks = Array.from(document.querySelectorAll('[data-testid="watchlist-pick"]')).map(
+      (node) => node.textContent,
+    );
+    expect(picks).toEqual(['JAX −3.5', 'JAX', 'JAX −2.5', 'JAX −1.5']);
+    expect(rows[3]?.textContent).toContain('FINAL · 24–17');
+  });
+
+  it('shows one collapsed card per league in All, and the lineup table only when expanded', () => {
+    const cards = [
+      {
+        model: {
+          leagueId: 'l1',
+          eyebrow: 'FANTASY · SLEEPER',
+          name: 'Dynasty Bros',
+          summary: '2 starters · 1 live now',
+        },
+        starters: [lineupSlot('p1', 'Davante', 'Adams'), lineupSlot('p2', 'Brock', 'Bowers')],
+      },
+      {
+        model: {
+          leagueId: 'l2',
+          eyebrow: 'FANTASY · MANUAL',
+          name: 'Office',
+          summary: '1 starter',
+        },
+        starters: [lineupSlot('p3', 'Maxx', 'Crosby')],
+      },
+    ];
+    const onSeeFullLineup = vi.fn();
+    render({
+      leagueCards: cards,
+      expanded: (id) => id === 'l2',
+      onSeeFullLineup,
+      weekGames: [liveWeekGame],
+      liveGames: [liveFeed],
+    });
+    expect(document.body.textContent).toContain('FANTASY · SLEEPER');
+    expect(document.body.textContent).toContain('2 starters · 1 live now');
+    expect(document.querySelector('[data-testid="watchlist-league-l1"]')).toBeNull();
+    const table = document.querySelector('[data-testid="watchlist-league-l2"]');
+    expect(table?.textContent).toContain('Maxx Crosby');
+    expect(document.body.textContent).not.toContain('Davante Adams');
+    const link = Array.from(document.querySelectorAll('[role="button"]')).find(
+      (node) => node.textContent === 'See full lineup',
+    );
+    act(() => {
+      if (link) press(link);
+    });
+    expect(onSeeFullLineup).toHaveBeenCalledWith('l2');
+    expect(document.querySelector('[data-testid="watchlist-lineup"]')).toBeNull();
+  });
+});

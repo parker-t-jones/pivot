@@ -13,7 +13,7 @@ import type { AiringSeedRow, GameAiringsStore, StoredAiringKey } from '@pivot/in
 import { resolvePrimaryWatch } from '../lib/primaryWatch.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import { AIRING_COLUMNS, weekGameAirings } from '../lib/watchOptions.js';
-import type { GameDirectory, StaleGame, SeededGame } from './discovery.js';
+import type { FinalScore, GameDirectory, StaleGame, SeededGame } from './discovery.js';
 
 const ESPN_SEED_PREFIX = 'seed:espn:';
 
@@ -57,8 +57,16 @@ export class SupabaseGameDirectory implements GameDirectory {
     };
   }
 
-  async setStatus(gameId: string, status: 'in_progress' | 'final'): Promise<void> {
-    const { error } = await this.client.from('games').update({ status }).eq('id', gameId);
+  async setStatus(
+    gameId: string,
+    status: 'in_progress' | 'final',
+    finalScore?: FinalScore | null,
+  ): Promise<void> {
+    const update =
+      status === 'final' && finalScore != null
+        ? { status, home_score: finalScore.home, away_score: finalScore.away }
+        : { status };
+    const { error } = await this.client.from('games').update(update).eq('id', gameId);
     if (error) throw new Error(`games status update failed: ${error.message}`);
   }
 

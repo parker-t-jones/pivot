@@ -2,6 +2,7 @@ import type { GameCatalog, GameStateStore, RealtimeBus } from '@pivot/dispatcher
 import type { EspnClient, EspnScoreboardWeek } from '@pivot/ingestion';
 import {
   classifyScoreboardStatus,
+  finalScoreFromEvent,
   type DiscoveryEvent,
   type GameDirectory,
   type StaleGame,
@@ -24,7 +25,8 @@ export const STALE_SCHEDULED_AFTER_MS = 5 * 60 * 60 * 1000;
  *   while it was played. Looked up on its own week's scoreboard only.
  *
  * Week scoreboards are fetched once per week per pass, shared across both kinds. ESPN final →
- * `game_state` final (if one exists), published on the game channel, then the row set to `final`.
+ * `game_state` final (if one exists), published on the game channel, then the row set to `final`
+ * with ESPN's final score.
  * ESPN doesn't have it, or it isn't final → logged and left alone.
  */
 export async function reconcileStaleGames(deps: {
@@ -50,7 +52,12 @@ export async function reconcileStaleGames(deps: {
     return cached;
   };
 
-  const finalize = async (game: StaleGame, label: string, source: string): Promise<boolean> => {
+  const finalize = async (
+    game: StaleGame,
+    event: DiscoveryEvent,
+    label: string,
+    source: string,
+  ): Promise<boolean> => {
     try {
       const existing = await deps.gameState.getGameState(game.id);
       if (existing !== null) {
@@ -67,7 +74,7 @@ export async function reconcileStaleGames(deps: {
           realtime: deps.realtime,
         });
       }
-      await deps.games.setStatus(game.id, 'final');
+      await deps.games.setStatus(game.id, 'final', finalScoreFromEvent(event));
       log(
         `[runner] reconcile: finalized ${label} from the ${source} scoreboard` +
           (existing === null ? ' (no game_state to publish)' : ''),
@@ -109,7 +116,7 @@ export async function reconcileStaleGames(deps: {
       continue;
     }
 
-    if (await finalize(game, label, found.source)) finalized += 1;
+    if (await finalize(game, found.event, label, found.source)) finalized += 1;
   }
 
   const scheduled = await deps.games.listStaleScheduled(
@@ -139,7 +146,7 @@ export async function reconcileStaleGames(deps: {
       continue;
     }
 
-    if (await finalize(game, label, weekLabel(game))) finalized += 1;
+    if (await finalize(game, event, label, weekLabel(game))) finalized += 1;
   }
 
   log(

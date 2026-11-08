@@ -55,6 +55,7 @@ function directory(
 ): Pick<GameDirectory, 'listInProgress' | 'listStaleScheduled' | 'setStatus'> & {
   statuses: Map<string, string>;
   cutoffs: string[];
+  scores: Map<string, { home: number; away: number } | null>;
 } {
   const statuses = new Map<string, string>([
     ...inProgress.map((game) => [game.id, 'in_progress'] as const),
@@ -62,11 +63,14 @@ function directory(
   ]);
   const rows = [...inProgress, ...scheduled];
   const cutoffs: string[] = [];
+  const scores = new Map<string, { home: number; away: number } | null>();
   return {
     statuses,
     cutoffs,
-    setStatus: (gameId, status) => {
+    scores,
+    setStatus: (gameId, status, finalScore) => {
       statuses.set(gameId, status);
+      if (status === 'final') scores.set(gameId, finalScore ?? null);
       return Promise.resolve();
     },
     listInProgress: () =>
@@ -349,5 +353,54 @@ describe('reconcileStaleGames', () => {
       '[runner] reconcile: g-unseeded (ESPN none) has no ESPN id; left scheduled',
       '[runner] reconcile in_progress=0 stale_scheduled=3 finalized=0',
     ]);
+  });
+
+  it("writes ESPN's final score with the final status, for in_progress and stale scheduled rows", async () => {
+    const games = directory(
+      [row('g-live', '401', 3)],
+      [row('g-wk2', '205', 2, '2026-09-20T17:00:00Z')],
+    );
+    const gameState = new InMemoryGameStateStore();
+    // The Redis hash is stale (7–0). The scoreboard's final is what gets stored.
+    await gameState.setGameState('g-live', liveState('g-live'));
+    const competitors = (home: string, away: string) => [
+      {
+        competitors: [
+          { id: 'h', homeAway: 'home' as const, score: home },
+          { id: 'a', homeAway: 'away' as const, score: away },
+        ],
+      },
+    ];
+
+    await reconcileStaleGames({
+      scoreboard: scoreboard({
+        current: [{ id: '401', status: FINAL, competitions: competitors('24', '17') }],
+        '2': [{ id: '205', status: FINAL, competitions: competitors('10', '13') }],
+      }),
+      games,
+      gameState,
+      catalog: new InMemoryGameCatalog(),
+      realtime: new InMemoryRealtimeBus(),
+      now: () => NOW,
+      log: () => undefined,
+    });
+
+    expect(games.scores.get('g-live')).toEqual({ home: 24, away: 17 });
+    expect(games.scores.get('g-wk2')).toEqual({ home: 10, away: 13 });
+  });
+
+  it('finalizes without a score when the scoreboard event has none', async () => {
+    const games = directory([row('g-stale', '401', 3)]);
+    await reconcileStaleGames({
+      scoreboard: scoreboard({ current: [{ id: '401', status: FINAL }] }),
+      games,
+      gameState: new InMemoryGameStateStore(),
+      catalog: new InMemoryGameCatalog(),
+      realtime: new InMemoryRealtimeBus(),
+      now: () => NOW,
+      log: () => undefined,
+    });
+    expect(games.statuses.get('g-stale')).toBe('final');
+    expect(games.scores.get('g-stale')).toBeNull();
   });
 });

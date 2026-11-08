@@ -12,17 +12,13 @@ export type WatchlistFilter = (typeof WATCHLIST_FILTERS)[number]['key'];
 
 /** Sections the Watchlist renders for a pill, in order. */
 export type WatchlistSection =
-  | 'leagueActions'
-  | 'leagueChips'
-  | 'starters'
-  | 'bets'
-  | 'pools'
-  | 'opponent';
+  /** All tab: one collapsed card per fantasy league (issue #14). */
+  'leagueCards' | 'leagueActions' | 'leagueChips' | 'starters' | 'bets' | 'pools' | 'opponent';
 
 export function watchlistSections(filter: WatchlistFilter): readonly WatchlistSection[] {
   switch (filter) {
     case 'all':
-      return ['starters', 'opponent', 'bets', 'pools'];
+      return ['leagueCards', 'bets', 'pools'];
     case 'fantasy':
       return ['leagueActions', 'leagueChips', 'starters', 'opponent'];
     case 'bets':

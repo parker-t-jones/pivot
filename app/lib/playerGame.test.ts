@@ -62,9 +62,9 @@ describe('gameForTeam', () => {
   });
 
   it('treats a blank team color as null', () => {
-    expect(
-      gameForTeam([game({ home_team_primary_color: '' })], 'NYJ', now),
-    ).toMatchObject({ teamColor: null });
+    expect(gameForTeam([game({ home_team_primary_color: '' })], 'NYJ', now)).toMatchObject({
+      teamColor: null,
+    });
   });
 });
 
@@ -88,6 +88,24 @@ describe('formatGameLine', () => {
     expect(formatGameLine(live, slateNow, ET)).toBe('LIVE');
     expect(formatGameLine(final, slateNow, ET)).toBe('FINAL');
     expect(formatGameLine({ kind: 'bye' }, slateNow, ET)).toBe('BYE');
+  });
+
+  it('adds the final score away–home when the schedule has one', () => {
+    const final = gameForTeam(
+      [game({ status: 'final', final_score: { home: 17, away: 24 } })],
+      'NYJ',
+      slateNow,
+    );
+    expect(formatGameLine(final, slateNow, ET)).toBe('FINAL · 24–17');
+  });
+
+  it('never shows a score on a game that is not final', () => {
+    const live = gameForTeam(
+      [game({ status: 'in_progress', final_score: { home: 1, away: 2 } })],
+      'NYJ',
+      slateNow,
+    );
+    expect(formatGameLine(live, slateNow, ET)).toBe('LIVE');
   });
 
   it('uses TODAY only on the same local calendar day, across midnight in America/New_York', () => {

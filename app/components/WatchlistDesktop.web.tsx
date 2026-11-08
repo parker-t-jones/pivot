@@ -15,6 +15,7 @@ import type { LineupSlot } from '../lib/leagues';
 import type { LiveGame, ScheduleGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { pickEyebrow, pickText } from '../lib/pickCard';
+import { orderPicks } from '../lib/pickOrder';
 import { stakeTeams, type ManualStake } from '../lib/stakes';
 import { isBenchSlot } from '../lib/weekCardModel';
 import { webPressState } from '../lib/webPress';
@@ -26,6 +27,7 @@ import {
 import { useSwitching } from '../contexts/SwitchingContext';
 import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
 import { DemoEditingBanner } from './DemoEditingBanner';
+import { FantasyLeagueCard } from './FantasyLeagueCard';
 import { PrimaryButton } from './PrimaryButton';
 import { StreamLinkControl } from './StreamLinkControl';
 import { TextButton } from './TextButton';
@@ -63,6 +65,10 @@ export function WatchlistDesktop({
   betPrompt,
   extras,
   editsLocked = false,
+  leagueCards = [],
+  isLeagueExpanded = () => false,
+  onToggleLeague = () => undefined,
+  onSeeFullLineup = () => undefined,
 }: WatchlistDesktopProps) {
   const { switchToGame } = useSwitching();
   const { openUpgrade } = useUpgradeSheet();
@@ -81,13 +87,13 @@ export function WatchlistDesktop({
         .map((slot) => opponentPlayerRow(slot, games, liveGames, now, timeZone)),
     [games, liveGames, now, opponentSlots, timeZone],
   );
-  const betRows = useMemo(
-    () => [
-      ...stakes.map((stake) => stakeRow(stake, 'BET', games, liveGames, now, timeZone)),
-      ...pools.map((stake) => stakeRow(stake, 'POOL', games, liveGames, now, timeZone)),
-    ],
-    [games, liveGames, now, pools, stakes, timeZone],
-  );
+  // One table: live, then upcoming by kickoff, then finals at the bottom (issue #14).
+  const betRows = useMemo(() => {
+    const poolIds = new Set(pools.map((stake) => stake.id));
+    return orderPicks([...stakes, ...pools], games, liveGames).map((stake) =>
+      stakeRow(stake, poolIds.has(stake.id) ? 'POOL' : 'BET', games, liveGames, now, timeZone),
+    );
+  }, [games, liveGames, now, pools, stakes, timeZone]);
   const removable = useMemo(() => {
     const byId = new Map<string, ManualStake>();
     for (const stake of [...stakes, ...pools]) byId.set(stake.id, stake);
@@ -113,7 +119,7 @@ export function WatchlistDesktop({
   const opponentName = opponentTeamName?.trim() ?? '';
   const showLineup = lineupRows.length > 0;
   const showBets = betRows.length > 0 || betPrompt != null;
-  const showEmpty = !showLineup && !showOpponent && !showBets;
+  const showEmpty = !showLineup && !showOpponent && !showBets && leagueCards.length === 0;
 
   const openRow = (row: WatchlistTableRow) => {
     if (!row.live || !row.gameId || !row.deepLinkUrl) return;
@@ -194,6 +200,23 @@ export function WatchlistDesktop({
         </View>
         <WatchlistFilters onChange={onFilter} value={filter} />
         {extras}
+        {leagueCards.map(({ model, starters }) => (
+          <FantasyLeagueCard
+            expanded={isLeagueExpanded(model.leagueId)}
+            key={model.leagueId}
+            model={model}
+            onSeeFullLineup={() => onSeeFullLineup(model.leagueId)}
+            onToggle={() => onToggleLeague(model.leagueId)}
+          >
+            <SectionTable
+              editsLocked={editsLocked}
+              onOpen={openRow}
+              removable={removable}
+              rows={starters.map((slot) => playerRow(slot, games, liveGames, now, timeZone, false))}
+              testID={`watchlist-league-${model.leagueId}`}
+            />
+          </FantasyLeagueCard>
+        ))}
         {showLineup ? (
           <SectionTable
             editsLocked={editsLocked}
