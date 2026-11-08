@@ -42,9 +42,10 @@ describe('weekCardModel', () => {
     expect(freeBetCount(stakes)).toBe(1);
     // Picks removed after kickoff still use their slots.
     expect(freeBetCount(stakes, 2)).toBe(3);
-    expect(weekCardModel({ ...free, betCount: freeBetCount(stakes, 2) }).bets.value).toBe(
-      'No free bets left',
-    );
+    const spentCell = weekCardModel({ ...free, betCount: freeBetCount(stakes, 2) }).bets;
+    expect(spentCell.value).toBe('3');
+    expect(spentCell.note).toBe('No free bets left');
+    expect(spentCell.upgrade).toBe(true);
     const bets = weekCardModel({ ...free, betCount: freeBetCount(stakes), survivorCount: 2 }).bets;
     expect(bets.value).toBe('1');
     expect(bets.note).toBe('2 free left');
