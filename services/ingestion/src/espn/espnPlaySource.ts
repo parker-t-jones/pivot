@@ -35,6 +35,12 @@ export interface EspnPlaySourceOptions {
    * restarted process does not emit the summary it just seeded.
    */
   initialSeenPlayIds?: Iterable<string>;
+  /**
+   * Called with every summary that validated, before its new plays are handed to `subscribe`'s
+   * handler, so player stats are current when those plays are evaluated. A throw is logged and
+   * never stops the poll.
+   */
+  onSummary?: (summary: EspnSummary, receivedAt: number) => Promise<void> | void;
 }
 
 function isFinal(summary: EspnSummary): boolean {
@@ -140,6 +146,17 @@ export class EspnPlaySource implements PlaySource {
       }
 
       this.consecutiveFailures = 0;
+
+      if (this.options.onSummary) {
+        try {
+          await this.options.onSummary(summary, Date.now());
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          console.error(
+            `[espn-ingestion] onSummary failed event=${this.options.eventId}: ${reason}`,
+          );
+        }
+      }
 
       const gameIsFinal = isFinal(summary);
       const flattened = flattenPlays(summary);

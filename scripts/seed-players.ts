@@ -55,6 +55,8 @@ export interface SleeperPlayer {
   team: string | null;
   active: boolean;
   number: number | null;
+  /** ESPN athlete id; boxscore stats for props are keyed by it. Number or string in the dump. */
+  espn_id?: string | number | null;
 }
 
 export type SleeperPlayersResponse = Record<string, SleeperPlayer>;
@@ -67,6 +69,15 @@ interface PlayerRow {
   team_id: string;
   active: boolean;
   jersey_number: number | null;
+  espn_id: string | null;
+}
+
+/** Sleeper's `espn_id` as a string, or null when missing or not a positive whole number. */
+export function espnIdOf(player: { espn_id?: string | number | null | undefined }): string | null {
+  const raw = player.espn_id;
+  if (raw === null || raw === undefined) return null;
+  const text = String(raw).trim();
+  return /^[1-9][0-9]*$/.test(text) ? text : null;
 }
 
 /**
@@ -133,6 +144,7 @@ export function toPlayerRow(
     team_id: teamId,
     active: true,
     jersey_number: player.number ?? null,
+    espn_id: espnIdOf(player),
   };
 }
 
@@ -148,6 +160,7 @@ export function buildDefensePlayerRows(
     team_id: team.id,
     active: true,
     jersey_number: null,
+    espn_id: null,
   }));
 }
 

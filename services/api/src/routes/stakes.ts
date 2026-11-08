@@ -5,9 +5,16 @@ import { isBetCondition } from '../lib/betIndex.js';
 import { demoAccountFixed, userIsDemo } from '../lib/demoAccount.js';
 import { demoStakesResponse } from '../lib/demoFixture.js';
 import { ApiError } from '../lib/errors.js';
+import {
+  FREE_BET_LIMIT,
+  countFreeSlots,
+  countsTowardFreeCap,
+  slotIdOf,
+  spentSlotIds,
+} from '../lib/freeSlots.js';
 import { gameHasKickedOff } from '../lib/kickoff.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
-import type { SupabaseServiceClient } from '../lib/supabase.js';
+import { isLegacyPick } from '../lib/pickRows.js';
 import { requireUser } from '../plugins/auth.js';
 import '../plugins/services.js';
 
@@ -17,7 +24,6 @@ type ManualStakeType = (typeof STAKE_TYPES)[number];
 const TEAM_TYPES = new Set<ManualStakeType>(['SPREAD', 'MONEYLINE', 'SURVIVOR']);
 const TOTAL_TYPES = new Set<ManualStakeType>(['TOTAL_OVER', 'TOTAL_UNDER']);
 const FANTASY_TYPES = new Set(['ROSTERED', 'OPPONENT_ROSTERED']);
-const FREE_BET_LIMIT = 3;
 
 const postBody = z.object({
   type: z.enum(STAKE_TYPES),
@@ -58,14 +64,11 @@ interface StakeRow {
   source: string;
   weight: number;
   created_at: string;
+  slip_id: string | null;
 }
 
-/** Free weekly slots. Survivor picks do not use one. Fantasy rows do not either. */
-function countsTowardFreeCap(condition: Json): boolean {
-  const type = conditionType(condition);
-  if (type === 'SURVIVOR') return false;
-  return type === null || !FANTASY_TYPES.has(type);
-}
+const STAKE_COLUMNS =
+  'id, user_id, season, week, game_id, subject, condition, source, weight, created_at, slip_id';
 
 function conditionType(condition: Json): string | null {
   if (condition === null || typeof condition !== 'object' || Array.isArray(condition)) return null;
@@ -119,30 +122,6 @@ function stakeResponse(row: StakeRow) {
     weight: row.weight,
     created_at: row.created_at,
   };
-}
-
-/**
- * Free-cap picks removed after kickoff for one week, by stake id. Each one keeps a slot
- * spent. A stake id that still exists is skipped so a delete that failed after the spent
- * row was written never counts twice.
- */
-async function spentSlotIds(
-  supabase: SupabaseServiceClient,
-  userId: string,
-  season: number,
-  week: number,
-  liveStakeIds: ReadonlySet<string>,
-): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('stake_spent_slots')
-    .select('stake_id')
-    .eq('user_id', userId)
-    .eq('season', season)
-    .eq('week', week);
-  if (error) throw error;
-  return ((data ?? []) as { stake_id: string }[])
-    .map((row) => row.stake_id)
-    .filter((id) => !liveStakeIds.has(id));
 }
 
 export interface StakesRoutesOptions {
@@ -210,12 +189,14 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
 
     const { data: existing, error: existingError } = await fastify.supabase
       .from('stakes')
-      .select('id, user_id, season, week, game_id, subject, condition, source, weight, created_at')
+      .select(STAKE_COLUMNS)
       .eq('user_id', user.id)
       .eq('season', row.season_year)
       .eq('week', row.week);
     if (existingError) throw existingError;
-    const owned = (existing ?? []) as StakeRow[];
+    const weekRows = (existing ?? []) as StakeRow[];
+    // Duplicates are checked against full-game singles only; a leg or a 1H line is not the same pick.
+    const owned = weekRows.filter((stake) => isLegacyPick(stake));
 
     if (
       type === 'SURVIVOR' &&
@@ -237,15 +218,10 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
       .eq('id', user.id)
       .single();
     if (userError) throw userError;
-    const spent = await spentSlotIds(
-      fastify.supabase,
-      user.id,
-      row.season_year,
-      row.week,
-      new Set(owned.map((stake) => stake.id)),
+    const { used: counted } = countFreeSlots(
+      weekRows,
+      await spentSlotIds(fastify.supabase, user.id, row.season_year, row.week),
     );
-    const counted =
-      owned.filter((stake) => countsTowardFreeCap(stake.condition)).length + spent.length;
     if (
       userRow.subscription_tier !== 'pro' &&
       countsTowardFreeCap(condition) &&
@@ -271,7 +247,7 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
         source: 'MANUAL',
         weight: 1,
       })
-      .select('id, user_id, season, week, game_id, subject, condition, source, weight, created_at')
+      .select(STAKE_COLUMNS)
       .single();
     if (insertError) throw insertError;
 
@@ -290,23 +266,29 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
 
     const { data, error } = await fastify.supabase
       .from('stakes')
-      .select('id, user_id, season, week, game_id, subject, condition, source, weight, created_at')
+      .select(STAKE_COLUMNS)
       .eq('user_id', user.id)
       .eq('season', season)
       .eq('week', week);
     if (error) throw error;
 
     const weekRows = (data ?? []) as StakeRow[];
-    const spent = await spentSlotIds(
-      fastify.supabase,
-      user.id,
-      season,
-      week,
-      new Set(weekRows.map((stake) => stake.id)),
+    const slots = countFreeSlots(
+      weekRows,
+      await spentSlotIds(fastify.supabase, user.id, season, week),
     );
+    // Old app builds can only show the pre-props shapes. Props, quarter/half lines, and parlay
+    // legs are hidden here and listed by `GET /picks`; their slots fold into free_slots_spent.
     const stakes = weekRows
       .filter((stake) => !FANTASY_TYPES.has(conditionType(stake.condition) ?? ''))
+      .filter((stake) => isLegacyPick(stake))
       .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const shownSlots = new Set(
+      stakes.flatMap((stake) => {
+        const slot = slotIdOf(stake);
+        return slot === null ? [] : [slot];
+      }),
+    ).size;
 
     const gameIds = [...new Set(stakes.map((stake) => stake.game_id))];
     const gamesById = new Map<string, GameRow>();
@@ -338,7 +320,7 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
 
     return {
       week,
-      free_slots_spent: spent.length,
+      free_slots_spent: slots.used - shownSlots,
       stakes: stakes.map((stake) => {
         const game = gamesById.get(stake.game_id);
         const home = game ? teamsById.get(game.home_team_id) : undefined;
@@ -369,9 +351,7 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
       const user = requireUser(request);
       const { data, error } = await fastify.supabase
         .from('stakes')
-        .select(
-          'id, user_id, season, week, game_id, subject, condition, source, weight, created_at',
-        )
+        .select(STAKE_COLUMNS)
         .eq('id', request.params.id)
         .eq('user_id', user.id)
         .maybeSingle();
@@ -383,6 +363,9 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
       const type = conditionType(stake.condition);
       if (type !== null && FANTASY_TYPES.has(type)) {
         throw new ApiError(403, 'stake_managed_by_sync', 'This stake is managed by league sync.');
+      }
+      if (stake.slip_id) {
+        throw new ApiError(409, 'pick_in_slip', 'Remove the whole parlay instead.');
       }
 
       // Removing a started pick is allowed, but its free slot stays spent for the week.

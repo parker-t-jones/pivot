@@ -23,6 +23,7 @@ import {
 import {
   createTcpRedis,
   tcpFiredClaims,
+  tcpGamePlayerStats,
   tcpFlagEventQueue,
   tcpGameState,
   tcpLeaderLock,
@@ -74,6 +75,7 @@ const handle = startLiveRunner({
   lineupCache,
   stakeCache: { supabase, lineupCache },
   firedClaims: tcpFiredClaims(redis),
+  playerStats: tcpGamePlayerStats(redis),
   games: new SupabaseGameDirectory(supabase),
   users: new SupabaseUserDirectory(supabase),
   gameCatalog: new SupabaseGameCatalog(supabase),

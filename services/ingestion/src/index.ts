@@ -13,7 +13,13 @@ export {
   OBSERVED_ESPN_TYPE_IDS,
 } from './espn/espnPlayTypeMap.js';
 
-export { mapEspnPlay, resolveGameContext, type EspnGameContext } from './espn/mapEspnPlay.js';
+export {
+  mapEspnPlay,
+  resolveGameContext,
+  resolveTeamAbbreviation,
+  type EspnGameContext,
+} from './espn/mapEspnPlay.js';
+export { isSummaryFinal, parseEspnPlayerStats } from './espn/parseEspnPlayerStats.js';
 export { translatePlay } from './espn/translatePlay.js';
 export { countSummaryPlays, summaryPlayPrefixes } from './espn/summaryPlayPrefixes.js';
 
