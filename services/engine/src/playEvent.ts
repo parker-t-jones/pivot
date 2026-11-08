@@ -67,6 +67,12 @@ export interface PlayEvent {
   distance: number | null;
   /** True when this play ends the game (drives `status` → `'final'`). */
   isFinalPlay: boolean;
+  /**
+   * Who has the ball once this play is over, when the source knows (ESPN's `end.team`). On a punt,
+   * turnover, or kickoff this names the receiving team one play before `possessionTeamId` does.
+   * `null` or absent when the source has no answer; `applyPlayToState` then behaves as before.
+   */
+  endPossessionTeamId?: TeamId | null;
   /** ESPN's real-time timestamp for this play, when the source provided one. */
   wallclock?: string;
   /** ISO time the runner received the poll that contained this play. */

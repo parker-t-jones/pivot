@@ -66,6 +66,8 @@ export interface EspnGameContext {
   week: number;
   homeTeamId: TeamId;
   awayTeamId: TeamId;
+  /** ESPN team id (`competitor.id`, the id `play.end.team.id` uses) → our team abbreviation. */
+  teamIdsByEspnId: ReadonlyMap<string, TeamId>;
 }
 
 /**
@@ -84,11 +86,20 @@ export function resolveGameContext(summary: EspnSummary, gameId: string): EspnGa
   const away = competitors.find((c) => c.homeAway === 'away')?.team?.abbreviation;
   if (home === undefined || away === undefined) return null;
 
+  const teamIdsByEspnId = new Map<string, TeamId>();
+  for (const competitor of competitors) {
+    const abbreviation = competitor.team?.abbreviation;
+    if (abbreviation !== undefined) {
+      teamIdsByEspnId.set(competitor.id, resolveTeamAbbreviation(abbreviation));
+    }
+  }
+
   return {
     gameId,
     week: summary.header?.week ?? 0,
     homeTeamId: resolveTeamAbbreviation(home),
     awayTeamId: resolveTeamAbbreviation(away),
+    teamIdsByEspnId,
   };
 }
 
@@ -100,6 +111,11 @@ export function resolveGameContext(summary: EspnSummary, gameId: string): EspnGa
  * `start.team` contradicts the drive's offense (see `espnPlayStartSchema`). The drive's team is also
  * the more useful answer on a kickoff, where ESPN files the kick under the *receiving* team's drive —
  * which is who has the ball once the play is over.
+ *
+ * `endPossessionTeamId` is ESPN's `end.team`: who has the ball once this play is over. It is what
+ * lets the engine see a punt, turnover, or kickoff hand the ball over on the play itself
+ * (`possessionChangeAtPlayEnd`). `null` without possession, on a `no_play`, or when ESPN omits it or
+ * names a team that isn't in this game.
  */
 export function mapEspnPlay(
   play: EspnPlay,
@@ -111,6 +127,10 @@ export function mapEspnPlay(
   const driveTeam = drive.team?.abbreviation;
   const hasPossession = !NO_POSSESSION_PLAY_TYPES.has(playType) && driveTeam !== undefined;
   const wallclock = usableWallclock(play.wallclock);
+  // A pre-snap penalty never moves the ball, so its `end.team` is not read.
+  const endTeamEspnId = hasPossession && playType !== 'no_play' ? play.end?.team?.id : undefined;
+  const endPossessionTeamId =
+    endTeamEspnId === undefined ? null : (context.teamIdsByEspnId.get(endTeamEspnId) ?? null);
 
   return {
     playId: play.id,
@@ -129,6 +149,7 @@ export function mapEspnPlay(
     down: hasPossession ? (play.start?.down ?? null) : null,
     distance: hasPossession ? (play.start?.distance ?? null) : null,
     isFinalPlay,
+    endPossessionTeamId,
     ...(wallclock !== undefined ? { wallclock } : {}),
   };
 }

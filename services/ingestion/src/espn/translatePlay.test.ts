@@ -47,4 +47,18 @@ describe('translatePlay', () => {
     expect(translated.homeTeamId).toBe('uuid-gb');
     expect(translated.awayTeamId).toBe('ZZ');
   });
+
+  it('translates the end-of-play possession and keeps null or absent as it was', () => {
+    const abbrToUuid = new Map([
+      ['GB', 'uuid-gb'],
+      ['ATL', 'uuid-atl'],
+    ]);
+    expect(
+      translatePlay(play({ endPossessionTeamId: 'ATL' }), 'g', abbrToUuid).endPossessionTeamId,
+    ).toBe('uuid-atl');
+    expect(
+      translatePlay(play({ endPossessionTeamId: null }), 'g', abbrToUuid).endPossessionTeamId,
+    ).toBeNull();
+    expect(translatePlay(play(), 'g', abbrToUuid)).not.toHaveProperty('endPossessionTeamId');
+  });
 });

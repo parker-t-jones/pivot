@@ -62,6 +62,12 @@ export interface FlagEvent {
   seenAt?: string;
   /** When `resumptionGate` enqueued this event. */
   enqueuedAt?: string;
+  /**
+   * `possession`: a `flag_added` produced on the play that handed the ball to a new team. It is a
+   * routing NUDGE (it reveals no outcome), so `ResumptionGatedDispatcher` sends it immediately
+   * instead of waiting for resumption. Absent on every other event.
+   */
+  trigger?: 'possession';
   /** Set when `type` is `bet_in_play`. */
   stakeId?: string;
   code?: string;

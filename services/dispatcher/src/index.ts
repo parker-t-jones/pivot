@@ -87,6 +87,7 @@ export { QueueingEventDispatcher, type ScheduleFlagEventDeps } from './scheduleF
 
 export {
   ResumptionGatedDispatcher,
+  isPossessionNudge,
   type GateDecision,
   type GatedEventRecord,
   type ResumptionGatedDispatcherDeps,

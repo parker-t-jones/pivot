@@ -260,3 +260,63 @@ function snap(playId: string, possessionTeamId: string, otherTeamId: string): Pl
     playType: 'run',
   });
 }
+
+describe('possession nudge tag (issue #7)', () => {
+  let gameState: InMemoryGameStateProvider;
+  let dispatcher: CapturingEventDispatcher;
+  let lineupCache: StubLineupCache;
+  let deps: OnPlayEventDeps;
+
+  beforeEach(() => {
+    gameState = new InMemoryGameStateProvider();
+    dispatcher = new CapturingEventDispatcher();
+    lineupCache = new StubLineupCache();
+    deps = { lineupCache, gameState, dispatcher, clock };
+    lineupCache.set(lineupWithRbOn('KC', 'kc-fan'));
+    lineupCache.set(lineupWithRbOn('LV', 'lv-fan'));
+    gameState.addStake('KC', 'kc-fan');
+    gameState.addStake('LV', 'lv-fan');
+  });
+
+  it("tags the receiving team's flag_added on the punt that hands it the ball, not the kicker's removal", async () => {
+    await onPlayEvent(deps, makePlay({ playId: 'snap' }));
+    dispatcher.events.length = 0;
+    dispatcher.triggeringPlayIds.length = 0;
+
+    await onPlayEvent(
+      deps,
+      makePlay({ playId: 'punt', playType: 'punt', endPossessionTeamId: 'LV' }),
+    );
+
+    const added = dispatcher.events.find((event) => event.userId === 'lv-fan');
+    const removed = dispatcher.events.find((event) => event.userId === 'kc-fan');
+    expect(added).toMatchObject({ type: 'flag_added', trigger: 'possession' });
+    expect(removed?.type).toBe('flag_removed');
+    expect(removed).not.toHaveProperty('trigger');
+    expect(dispatcher.triggeringPlayIds).toEqual(['punt', 'punt']);
+  });
+
+  it('does not tag a flag_added from an ordinary next-snap possession change', async () => {
+    await onPlayEvent(deps, makePlay({ playId: 'snap' }));
+    await onPlayEvent(deps, makePlay({ playId: 'punt', playType: 'punt' }));
+    dispatcher.events.length = 0;
+
+    await onPlayEvent(deps, makePlay({ playId: 'lv-snap', possessionTeamId: 'LV' }));
+
+    const added = dispatcher.events.find((event) => event.userId === 'lv-fan');
+    expect(added?.type).toBe('flag_added');
+    expect(added).not.toHaveProperty('trigger');
+  });
+
+  it('does not tag when a guard keeps possession where it was (return touchdown)', async () => {
+    await onPlayEvent(deps, makePlay({ playId: 'snap' }));
+    dispatcher.events.length = 0;
+
+    await onPlayEvent(
+      deps,
+      makePlay({ playId: 'pick-six', playType: 'pass', scoreHome: 6, endPossessionTeamId: 'LV' }),
+    );
+
+    expect(dispatcher.events.some((event) => event.trigger === 'possession')).toBe(false);
+  });
+});

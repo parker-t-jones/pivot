@@ -3,7 +3,11 @@ export { evaluateOpponentRostered, evaluateStake, TRIGGER_KIND } from './stakes/
 export type { EvaluatorContext, Stake, Trigger, TriggerCode } from './stakes/index.js';
 export { diffFlagStates } from './diffFlagStates.js';
 export { isInterestingStateChange } from './isInterestingStateChange.js';
-export { applyPlayToState } from './applyPlayToState.js';
+export {
+  applyPlayToState,
+  possessionChangeAtPlayEnd,
+  END_OF_HALF_GUARD_SECONDS,
+} from './applyPlayToState.js';
 export { onPlayEvent, type LineupCacheReader, type OnPlayEventDeps } from './onPlayEvent.js';
 export { type GameStateProvider, InMemoryGameStateProvider } from './gameStateProvider.js';
 export { type EventDispatcher, CapturingEventDispatcher } from './eventDispatcher.js';

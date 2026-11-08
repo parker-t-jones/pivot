@@ -160,6 +160,18 @@ The detection moves to the play that ends the possession, and the possession nud
 
 R2 tests should reuse this replay. Run it with the new mapping and the gate change, and assert that the early column becomes today's column.
 
+### Shipped in #7
+
+#7 implements points 1–3 as described above, with these differences from the text:
+
+- **The tracker does not move.** Point 2 says the tracker's windows "now open on the possession-ending play". They don't: `IncrementalResumptionTracker` compares `PlayEvent.possessionTeamId` (the drive's team), not `GameState`, and #7 leaves `PlayEvent.possessionTeamId` alone. REVEAL timing is therefore exactly what it was. Only the flag (and so the NUDGE) moves to the ending play.
+- **Tagging.** `possessionChangeAtPlayEnd` (`services/engine/src/applyPlayToState.ts`) decides the early change, and `onPlayEvent` marks that play's `flag_added` events `trigger: 'possession'`. `ResumptionGatedDispatcher` sends those with the play (decision `nudge_immediately`), still collapsed per user with that play's other pushes, and never lets them spend a resolution. Every other event goes through the gate as before. A possession change the guards or a missing `end.team` leave on the next snap is untagged and behaves as today.
+- **Guards, as implemented.** No early change on a scoring play, detected as a score change from the previous state (this also covers safeties). No early change on any play in Q2/Q4 starting at 0:10 or less, whatever ended the possession. Timeouts, period ends and pre-snap penalties (`no_play`) never flip possession.
+- **Field position.** The flipped state has no yardline, down or distance until the receiving team's first snap, so a nudge can't say "in the red zone" (which would reveal a return).
+- **Blocked field goals.** ESPN type `18` (Blocked Field Goal) was missing from `espnPlayTypeMap.ts` and mapped to `no_play`; it now maps to `field_goal`, so a blocked kick hands the ball over like a missed one.
+- **Overturns.** When the next play with a team still names the team the ball was taken from, `playSession` logs `possession nudge overturned` and sends nothing extra.
+- **Replay check still to run.** `npx tsx experiments/replay-early-nudge.ts` now sees `end.team` through `mapEspnPlay`, so its "today" column should match its "early" column. It needs the recordings on Parker's Mac.
+
 ## 8. What this does not show
 
 - **Small sample:** 9 games and 108 measured changes, from three slates. 3 games are partly backfilled (Oct 11 started mid-game; 949/950 mostly lost). No safeties, no live onside kick, no overturned turnover.

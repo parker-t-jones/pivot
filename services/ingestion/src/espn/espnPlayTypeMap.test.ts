@@ -36,6 +36,7 @@ describe('espnTypeIdToPlayType', () => {
     ['53', 'Kickoff', 'kickoff'],
     ['59', 'Field Goal Good', 'field_goal'],
     ['60', 'Field Goal Missed', 'field_goal'],
+    ['18', 'Blocked Field Goal', 'field_goal'],
     ['65', 'End of Half', 'end_half'],
     ['66', 'End of Game', 'end_game'],
     ['67', 'Passing Touchdown', 'pass'],
