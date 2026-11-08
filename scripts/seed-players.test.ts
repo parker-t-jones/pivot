@@ -4,6 +4,7 @@ import {
   isEligibleSleeperPlayer,
   resolveTeamAbbreviation,
   toPlayerRow,
+  espnIdOf,
   type SleeperPlayer,
 } from './seed-players.js';
 
@@ -102,9 +103,9 @@ describe('isEligibleSleeperPlayer', () => {
   });
 
   it('rejects a pure DB with no offensive fantasy position', () => {
-    expect(
-      isEligibleSleeperPlayer(makePlayer({ position: 'DB', fantasy_positions: ['DB'] })),
-    ).toBe(false);
+    expect(isEligibleSleeperPlayer(makePlayer({ position: 'DB', fantasy_positions: ['DB'] }))).toBe(
+      false,
+    );
   });
 
   it('falls back to the primary position when fantasy_positions is missing', () => {
@@ -137,7 +138,17 @@ describe('toPlayerRow', () => {
       team_id: 'team-kc-uuid',
       active: true,
       jersey_number: 15,
+      espn_id: null,
     });
+  });
+
+  it("stores Sleeper's ESPN id as a string", () => {
+    expect(toPlayerRow(makePlayer({ espn_id: 3139477 }), teamIdByAbbreviation)?.espn_id).toBe(
+      '3139477',
+    );
+    expect(toPlayerRow(makePlayer({ espn_id: '3139477' }), teamIdByAbbreviation)?.espn_id).toBe(
+      '3139477',
+    );
   });
 
   it('resolves through the team abbreviation override map', () => {
@@ -162,6 +173,16 @@ describe('toPlayerRow', () => {
   });
 });
 
+describe('espnIdOf', () => {
+  it('keeps positive whole numbers and drops anything else', () => {
+    expect(espnIdOf({ espn_id: 42 })).toBe('42');
+    expect(espnIdOf({ espn_id: ' 42 ' })).toBe('42');
+    for (const espn_id of [null, undefined, '', '0', 'abc', -3, 1.5]) {
+      expect(espnIdOf({ espn_id })).toBeNull();
+    }
+  });
+});
+
 describe('buildDefensePlayerRows', () => {
   it('synthesizes one DEF row per team using the team abbreviation as sleeper_id', () => {
     const teams = [
@@ -177,6 +198,7 @@ describe('buildDefensePlayerRows', () => {
         team_id: 'team-ind-uuid',
         active: true,
         jersey_number: null,
+        espn_id: null,
       },
       {
         sleeper_id: 'KC',
@@ -186,6 +208,7 @@ describe('buildDefensePlayerRows', () => {
         team_id: 'team-kc-uuid',
         active: true,
         jersey_number: null,
+        espn_id: null,
       },
     ]);
   });
