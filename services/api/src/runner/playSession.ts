@@ -53,7 +53,7 @@ export function createPlaySession(deps: PlaySessionDeps): {
   return {
     tracker,
     async handlePlay(play: PlayEvent): Promise<void> {
-      deps.gate.beginPlay(play.gameId);
+      deps.gate.beginPlay(play.gameId, play.playType);
       if (classifyPlayType(play.playType) === 'REAL_ACTION') {
         await deps.gate.releaseMidDrive(play.gameId);
       }

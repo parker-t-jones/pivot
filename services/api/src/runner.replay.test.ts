@@ -59,6 +59,14 @@ interface ReplayAiring {
 const TNF_ON_PRIME: ReplayAiring = { network: 'amazon_prime', kickoff: '2026-09-25T00:15:00Z' };
 const SUNDAY_ON_FOX: ReplayAiring = { network: 'fox', kickoff: '2026-09-27T17:00:00Z' };
 
+const OFFENSE_PLAY_TYPES: ReadonlySet<PlayEvent['playType']> = new Set<PlayEvent['playType']>([
+  'pass',
+  'run',
+  'qb_kneel',
+  'qb_spike',
+  'two_point_attempt',
+]);
+
 interface SentPush {
   body: string;
   action: unknown;
@@ -222,6 +230,50 @@ describe('ATL @ GB replay', () => {
     });
     expect(stats.pushes).toBe(20);
     expect(stats.rateLimited).toBe(0);
+  }, 120_000);
+
+  it("pushes a kickoff-started drive's flag on its first snap, not the second", async () => {
+    let fetchIndex = 0;
+    vi.stubGlobal('fetch', () => {
+      const body = prefixes[Math.min(fetchIndex, prefixes.length - 1)];
+      fetchIndex += 1;
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+    });
+    const game = await playGame({
+      roster: 'both',
+      active: true,
+      airing: TNF_ON_PRIME,
+      persistence: new InMemoryFlagEventPersistence(),
+      rateStore: {
+        async countRecentNotifications() {
+          return 0;
+        },
+        recordNotification: () => Promise.resolve(),
+      },
+      clock: { now: 0, last: 0 },
+      notifier: {
+        id: 'none',
+        async sendPush() {
+          return { success: true };
+        },
+      },
+      checkPublished: false,
+    });
+
+    // The opening and second-half kickoffs follow no possession window, so nothing resolves.
+    const kickoffs = game.seen.flatMap((play, index) => {
+      const previous = game.seen[index - 1];
+      if (play.playType !== 'kickoff' || !previous || previous.playType === 'end_half') return [];
+      const snap = game.seen.slice(index + 1).find((next) => OFFENSE_PLAY_TYPES.has(next.playType));
+      const pushed = game.enqueued.find(
+        (item) => item.eventType === 'flag_added' && item.triggeringPlayId === snap?.id,
+      );
+      return [{ kickoff: play.id, firstSnapAt: snap?.at, firedAt: pushed?.scheduledFireAt }];
+    });
+    expect(kickoffs).toHaveLength(8);
+    for (const { kickoff, firstSnapAt, firedAt } of kickoffs) {
+      expect(firedAt, kickoff).toBe(firstSnapAt);
+    }
   }, 120_000);
 });
 

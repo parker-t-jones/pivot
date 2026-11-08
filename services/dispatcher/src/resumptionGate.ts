@@ -7,12 +7,17 @@
  * window. An event dispatched on the play that resolves a possession window fires with that play.
  */
 
-import type { EventDispatcher, ResumptionResolution } from '@pivot/engine';
-import { RESUMPTION_CEILING_MS } from '@pivot/engine';
+import type { EventDispatcher, PlayType, ResumptionResolution } from '@pivot/engine';
+import { RESUMPTION_CEILING_MS, classifyPlayType } from '@pivot/engine';
 import type { FlagEvent } from '@pivot/shared';
 import { collapseByUser, isPushEligibleEvent } from './collapseFlagEvents.js';
 import { formatPushDecisionLog } from './pushDecision.js';
 import type { FlagEventQueue } from './queue.js';
+
+/** A clock stoppage or a pre-snap penalty is not a snap: neither ages the kickoff carry-over. */
+function isSnap(playType: PlayType): boolean {
+  return playType !== 'no_play' && classifyPlayType(playType) !== 'SKIP_AND_WAIT';
+}
 
 /** What the gate decided to do with an event at dispatch time. */
 export type GateDecision = 'fire_immediately' | 'held_pending_resumption' | 'dropped_by_abort';
@@ -62,13 +67,25 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
    * drive's `flag_added` went out via `fire_immediately` with `resolution: null`, silently bypassing
    * resumption-gating for the one play type (`kickoff`) most likely to actually need it.
    *
-   * Deliberately bounded to exactly one extra play, not "last resolution ever": `beginPlay` demotes
-   * whatever is still sitting in `resolutionThisPlay` into this slot, and the NEXT `beginPlay` call
-   * (i.e. two plays after the resolution was set) drops it for good if nothing consumed it by then —
-   * so a resolution can carry forward to cover the immediately-following play's event, but can't keep
-   * misattributing itself to unrelated events several plays later.
+   * Deliberately bounded to exactly one extra real play, not "last resolution ever": `beginPlay`
+   * demotes whatever is still sitting in `resolutionThisPlay` into this slot, and the NEXT real
+   * `beginPlay` call drops it for good if nothing consumed it by then — so a resolution can carry
+   * forward to cover the immediately-following snap's events, but can't keep misattributing itself
+   * to unrelated events several plays later. Entries that are not a snap — clock stoppages
+   * (`SKIP_AND_WAIT`: timeouts, two-minute warnings, period ends) and pre-snap penalties
+   * (`no_play`) — don't count as that play: a TV timeout between a kickoff and the first snap used
+   * to expire the carry-over, parking the first snap's `flag_added` until the second snap (issue #6
+   * replay, docs/R1-EARLY-NUDGE-FINDINGS.md §4).
+   *
+   * The first snap claims it for every event that snap dispatches, not just the first one:
+   * `dispatch` promotes it into `resolutionThisPlay` (see `promotedCarryOver`).
    */
   private readonly carryOverResolution = new Map<string, ResumptionResolution>();
+  /**
+   * gameId -> `resolutionThisPlay` was promoted from `carryOverResolution` on this play, so it has
+   * already had its one extra play and must not be demoted again by the next `beginPlay`.
+   */
+  private readonly promotedCarryOver = new Set<string>();
   /** gameId -> events dispatched while a window was open, awaiting its resolution. */
   private readonly parked = new Map<string, ParkedEvent[]>();
   /** gameId -> beginPlay has run and endPlay has not. */
@@ -100,30 +117,46 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
    * I am currently reacting to" from "a window resolved some plays ago". Demotes an unconsumed
    * resolution from the play that just ended into a one-play grace period (`carryOverResolution`)
    * instead of discarding it outright — see that field's comment for why.
+   *
+   * `playType` lets an entry that is not a snap pass without aging that grace period. Callers that
+   * omit it get the old behavior: every play counts.
    */
-  beginPlay(gameId: string): void {
-    const leftover = this.resolutionThisPlay.get(gameId);
+  beginPlay(gameId: string, playType?: PlayType): void {
+    this.playInProgress.add(gameId);
+    if (playType !== undefined && !isSnap(playType)) return;
+
+    const leftover = this.promotedCarryOver.has(gameId)
+      ? undefined
+      : this.resolutionThisPlay.get(gameId);
+    this.promotedCarryOver.delete(gameId);
     if (leftover) {
       this.carryOverResolution.set(gameId, leftover);
     } else {
       this.carryOverResolution.delete(gameId);
     }
     this.resolutionThisPlay.delete(gameId);
-    this.playInProgress.add(gameId);
   }
 
-  /** Collapses this play's reveal window and enqueues one event per user. */
+  /**
+   * Collapses this play's reveal window and enqueues one event per user. The resolution is used up
+   * only by a push-eligible event (or an abort): a `flag_removed` on the resolving play — the
+   * scoring team's offense leaving the field on the kickoff after a touchdown — must not spend it
+   * before the receiving team's `flag_added` arrives on the next snap.
+   */
   async endPlay(gameId: string): Promise<void> {
     this.playInProgress.delete(gameId);
     const items = this.resolving.get(gameId) ?? [];
     this.resolving.delete(gameId);
-    const playDispatched = items.some((item) => item.decision === 'fire_immediately');
+    const playDispatched = items.some(
+      (item) => item.decision === 'fire_immediately' && isPushEligibleEvent(item.event.type),
+    );
     const droppedAbort = this.droppedAbort.has(gameId);
     this.droppedAbort.delete(gameId);
     await this.enqueueCollapsed(items);
     if (playDispatched || droppedAbort) {
       this.resolutionThisPlay.delete(gameId);
       this.carryOverResolution.delete(gameId);
+      this.promotedCarryOver.delete(gameId);
     }
   }
 
@@ -153,6 +186,15 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
       list.push({ event, parkedAt: this.now(), triggeringPlayId });
       this.parked.set(gameId, list);
       return;
+    }
+
+    const carryOver = this.carryOverResolution.get(gameId);
+    if (this.playInProgress.has(gameId) && !this.resolutionThisPlay.has(gameId) && carryOver) {
+      // The snap after a resolving play (usually the first snap after a kickoff) claims the
+      // carry-over for everything it dispatches, so every user's event fires with this play.
+      this.resolutionThisPlay.set(gameId, carryOver);
+      this.carryOverResolution.delete(gameId);
+      this.promotedCarryOver.add(gameId);
     }
 
     const thisPlayResolution = this.resolutionThisPlay.get(gameId) ?? null;
