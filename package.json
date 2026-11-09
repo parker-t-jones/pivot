@@ -19,7 +19,8 @@
     "backfill:stakes": "tsx scripts/backfill-stakes.ts",
     "compare:caches": "tsx scripts/compare-caches.ts",
     "fetch:nfl-schedule": "tsx scripts/fetch-nfl-schedule.ts",
-    "db:types": "pnpm exec supabase gen types typescript --local > services/api/src/lib/database.types.ts"
+    "db:types": "pnpm exec supabase gen types typescript --local > services/api/src/lib/database.types.ts",
+    "update:ios": "tsx scripts/easUpdate.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

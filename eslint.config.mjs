@@ -10,6 +10,8 @@ export default tseslint.config(
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
+      // `pnpm update:ios` export (gitignored).
+      'app/dist-update/**',
       '**/.expo/**',
       '**/android/**',
       '**/ios/**',

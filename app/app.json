@@ -3,6 +3,9 @@
     "name": "Pivot",
     "slug": "fantasy-focus",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "pivot",
@@ -32,6 +35,11 @@
         "projectId": "63e2ba9a-dc24-48cc-af2b-dc2c27014634"
       }
     },
-    "owner": "parkertjones"
+    "owner": "parkertjones",
+    "updates": {
+      "url": "https://u.expo.dev/63e2ba9a-dc24-48cc-af2b-dc2c27014634",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }
