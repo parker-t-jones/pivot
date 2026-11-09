@@ -4,6 +4,7 @@ import { AccessibilityInfo, Platform, StyleSheet, Text, View } from 'react-nativ
 import { theme } from '../lib/theme';
 import { SlipPerforation } from './SlipPerforation';
 import { TEAM_BADGE_SIZE, TeamBadge } from './TeamBadge';
+import { TextButton } from './TextButton';
 
 const HIGHLIGHT_MS = 600;
 /** Fixed label column. Wide enough for TEAM at xxxLarge; larger type wraps inside it. */
@@ -19,6 +20,14 @@ export interface AddPickSlipPick {
   /** Team abbreviation. A total has no badge. */
   badge: string | null;
   text: string;
+}
+
+/** One saved leg of a parlay, as the slip lists it. */
+export interface AddPickSlipLeg {
+  key: string;
+  away: string;
+  home: string;
+  pick: AddPickSlipPick;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -78,13 +87,76 @@ export function AddPickSlip({
   game,
   pickLabel,
   pick,
+  legs,
+  buildingLeg = false,
+  onRemoveLeg,
 }: {
   typeLabel: string | null;
   game: AddPickSlipGame | null;
   pickLabel: 'PICK' | 'TEAM';
   pick: AddPickSlipPick | null;
+  /**
+   * Parlay: every saved leg gets a row. `game` and `pick` then describe the leg being built,
+   * shown as the next leg while `buildingLeg` is set.
+   */
+  legs?: readonly AddPickSlipLeg[];
+  buildingLeg?: boolean;
+  /** Shown on each saved leg while no leg is being built. */
+  onRemoveLeg?: (key: string) => void;
 }) {
   const gameKey = game ? `${game.away}@${game.home}` : '';
+  if (legs !== undefined) {
+    const nextLeg = legs.length + 1;
+    return (
+      <View style={styles.card} testID="add-pick-slip">
+        <View style={styles.face}>
+          <Text style={styles.cardEyebrow}>YOUR SLIP</Text>
+          <View style={styles.rows} testID="add-pick-slip-rows">
+            <SlipRow filledKey={typeLabel ?? ''} label="TYPE">
+              {typeLabel ? <Text style={styles.value}>{typeLabel}</Text> : <Placeholder />}
+            </SlipRow>
+            {legs.map((leg, index) => (
+              <SlipRow filledKey={leg.key} key={leg.key} label={`LEG ${index + 1}`}>
+                <View style={styles.legValue} testID="add-pick-slip-leg">
+                  <View style={styles.legInfo}>
+                    <SlipPick pick={leg.pick} />
+                    <Text style={styles.detail}>{`${leg.away} @ ${leg.home}`}</Text>
+                  </View>
+                  {onRemoveLeg && !buildingLeg ? (
+                    <TextButton
+                      accessibilityLabel={`Remove leg ${index + 1}, ${leg.pick.text}`}
+                      hitArea="slop"
+                      label="Remove"
+                      onPress={() => onRemoveLeg(leg.key)}
+                      size="smallStrong"
+                      tone="danger"
+                    />
+                  ) : null}
+                </View>
+              </SlipRow>
+            ))}
+            {buildingLeg || legs.length === 0 ? (
+              <SlipRow filledKey={pick?.text ?? gameKey} label={`LEG ${nextLeg}`}>
+                {buildingLeg && pick ? (
+                  <View style={styles.gameValue}>
+                    <SlipPick pick={pick} />
+                    {game ? (
+                      <Text style={styles.detail}>{`${game.away} @ ${game.home}`}</Text>
+                    ) : null}
+                  </View>
+                ) : buildingLeg && game ? (
+                  <SlipGame game={game} />
+                ) : (
+                  <Placeholder />
+                )}
+              </SlipRow>
+            ) : null}
+          </View>
+        </View>
+        <SlipPerforation edge="card" />
+      </View>
+    );
+  }
   return (
     <View style={styles.card} testID="add-pick-slip">
       <View style={styles.face}>
@@ -94,22 +166,7 @@ export function AddPickSlip({
             {typeLabel ? <Text style={styles.value}>{typeLabel}</Text> : <Placeholder />}
           </SlipRow>
           <SlipRow filledKey={gameKey} label="GAME">
-            {game ? (
-              <View style={styles.gameValue}>
-                <View style={styles.gameLine} testID="add-pick-slip-game-line">
-                  <TeamBadge abbr={game.away} size="sm" style={styles.badge} />
-                  <Text style={styles.at}>@</Text>
-                  <TeamBadge abbr={game.home} size="sm" style={styles.badge} />
-                </View>
-                {game.detail.length > 0 ? (
-                  <Text style={styles.detail} testID="add-pick-slip-game-detail">
-                    {game.detail}
-                  </Text>
-                ) : null}
-              </View>
-            ) : (
-              <Placeholder />
-            )}
+            {game ? <SlipGame game={game} /> : <Placeholder />}
           </SlipRow>
           <SlipRow filledKey={pick?.text ?? ''} label={pickLabel}>
             {pick ? (
@@ -126,6 +183,32 @@ export function AddPickSlip({
         </View>
       </View>
       <SlipPerforation edge="card" />
+    </View>
+  );
+}
+
+function SlipGame({ game }: { game: AddPickSlipGame }) {
+  return (
+    <View style={styles.gameValue}>
+      <View style={styles.gameLine} testID="add-pick-slip-game-line">
+        <TeamBadge abbr={game.away} size="sm" style={styles.badge} />
+        <Text style={styles.at}>@</Text>
+        <TeamBadge abbr={game.home} size="sm" style={styles.badge} />
+      </View>
+      {game.detail.length > 0 ? (
+        <Text style={styles.detail} testID="add-pick-slip-game-detail">
+          {game.detail}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function SlipPick({ pick }: { pick: AddPickSlipPick }) {
+  return (
+    <View style={styles.pickValue} testID="add-pick-slip-pick">
+      {pick.badge ? <TeamBadge abbr={pick.badge} size="sm" style={styles.badge} /> : null}
+      <Text style={styles.pickText}>{pick.text}</Text>
     </View>
   );
 }
@@ -207,6 +290,17 @@ const styles = StyleSheet.create({
   highlight: {
     backgroundColor: theme.colors.accentMuted,
     borderRadius: theme.radii.sm,
+  },
+  legInfo: {
+    flex: 1,
+    gap: theme.spacing.xs,
+    minWidth: 0,
+  },
+  legValue: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    justifyContent: 'space-between',
   },
   label: {
     color: theme.colors.textTertiary,

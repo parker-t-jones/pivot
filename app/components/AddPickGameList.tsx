@@ -1,6 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { pickGameStatusLabel, type PickGameAvailability } from '../lib/addPickGames';
+import {
+  pickGameSelectable,
+  pickGameStatusLabel,
+  type PickGameAvailability,
+} from '../lib/addPickGames';
 import { scoreBlockWash } from '../lib/teamColors';
 import { theme } from '../lib/theme';
 import { TeamBadge } from './TeamBadge';
@@ -67,7 +71,7 @@ function GameRow({
   onPickSide: (gameId: string, teamId: string) => void;
   onPickGame: (gameId: string) => void;
 }) {
-  const closed = row.availability !== 'open';
+  const closed = !pickGameSelectable(row.availability);
   const status = pickGameStatusLabel(row.availability);
   const halves = (
     <View style={[styles.halves, closed && styles.closed]}>
@@ -102,7 +106,11 @@ function GameRow({
   const meta = (
     <View style={styles.meta}>
       {row.detail.length > 0 ? <Text style={styles.detail}>{row.detail}</Text> : null}
-      {status ? <Text style={styles.status}>{status}</Text> : null}
+      {status ? (
+        <Text style={[styles.status, row.availability === 'live' && styles.statusLive]}>
+          {status}
+        </Text>
+      ) : null}
       {row.context ? <Text style={styles.context}>{row.context}</Text> : null}
     </View>
   );
@@ -243,5 +251,8 @@ const styles = StyleSheet.create({
     fontWeight: theme.type.bodyStrong.weight,
     lineHeight: theme.type.caption.lineHeight,
     textAlign: 'center',
+  },
+  statusLive: {
+    color: theme.colors.flare,
   },
 });

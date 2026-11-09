@@ -1,7 +1,19 @@
-import type { ManualStakeType } from './stakes';
+import type { TeamMarketKey } from './pickMarkets';
 
-export type PickKind = 'SPREAD' | 'TOTAL' | 'MONEYLINE' | 'SURVIVOR';
-export type PickStep = 'type' | 'game' | 'line' | 'confirm';
+export type PickKind =
+  | 'SPREAD'
+  | 'TOTAL'
+  | 'MONEYLINE'
+  | 'PLAYER_PROP'
+  | 'TEAM_PROP'
+  | 'PARLAY'
+  | 'SURVIVOR';
+
+/** A kind that can be a parlay leg. Survivor is a pool pick, and a parlay can't nest. */
+export type LegKind = Exclude<PickKind, 'SURVIVOR' | 'PARLAY'>;
+
+/** `legs` is the parlay's own screen: the legs so far, Add a leg, and Save. */
+export type PickStep = 'type' | 'player' | 'market' | 'game' | 'line' | 'confirm' | 'legs';
 
 export const PICK_KIND_COPY: readonly {
   kind: PickKind;
@@ -12,14 +24,50 @@ export const PICK_KIND_COPY: readonly {
   { kind: 'TOTAL', label: 'Total', explainer: 'Over or under the combined score' },
   { kind: 'MONEYLINE', label: 'Moneyline', explainer: 'Pick the winner' },
   {
+    kind: 'PLAYER_PROP',
+    label: 'Player prop',
+    explainer: 'Over or under a player stat, or a touchdown scorer',
+  },
+  {
+    kind: 'TEAM_PROP',
+    label: 'Team & game props',
+    explainer: 'Team totals, quarters and halves, first to score, field goals',
+  },
+  {
+    kind: 'PARLAY',
+    label: 'Parlay',
+    explainer: 'Two or more picks saved as one (uses one free bet)',
+  },
+  {
     kind: 'SURVIVOR',
     label: 'Survivor',
     explainer: "Your weekly survivor pool pick (doesn't use a free bet)",
   },
 ];
 
-/** Spread, total, and moneyline spend a free bet. Survivor does not. */
-const CAPPED_KINDS = new Set<PickKind>(['SPREAD', 'TOTAL', 'MONEYLINE']);
+/** The type list inside a parlay: every kind that can be a leg. */
+export const LEG_KIND_COPY = PICK_KIND_COPY.filter(
+  (option) => option.kind !== 'SURVIVOR' && option.kind !== 'PARLAY',
+);
+
+export function isLegKind(kind: PickKind): kind is LegKind {
+  return kind !== 'SURVIVOR' && kind !== 'PARLAY';
+}
+
+/** Every bet spends a free bet, a parlay once for all its legs. Survivor does not. */
+const CAPPED_KINDS = new Set<PickKind>([
+  'SPREAD',
+  'TOTAL',
+  'MONEYLINE',
+  'PLAYER_PROP',
+  'TEAM_PROP',
+  'PARLAY',
+]);
+
+/** Bets can be added on a game in progress (live bets). A survivor pick can't. */
+export function kindAllowsLive(kind: PickKind | null): boolean {
+  return kind !== null && kind !== 'SURVIVOR';
+}
 
 export type PickKindAccess = 'open' | 'upgrade';
 
@@ -32,35 +80,59 @@ export function pickKindAccess(
   return allowance.freeLeft > 0 ? 'open' : 'upgrade';
 }
 
-export function stakeTypeForKind(
-  kind: PickKind,
-  totalSide: 'TOTAL_OVER' | 'TOTAL_UNDER',
-): ManualStakeType {
-  return kind === 'TOTAL' ? totalSide : kind;
-}
-
-export function pickNeedsTeam(kind: PickKind): boolean {
-  return kind !== 'TOTAL';
-}
-
-export function pickNeedsLine(kind: PickKind): boolean {
-  return kind === 'SPREAD' || kind === 'TOTAL';
-}
-
 /**
  * The side is chosen on the game row, so there is no team step.
- * Spread is the long path. Before a type is chosen the eyebrow does not show a total.
+ * A player prop takes its game from the player. Before a type is chosen the eyebrow does not
+ * show a total.
  */
-export function pickSteps(kind: PickKind | null): readonly PickStep[] {
-  if (kind === 'MONEYLINE' || kind === 'SURVIVOR') return ['type', 'game', 'confirm'];
-  return ['type', 'game', 'line', 'confirm'];
+export function pickSteps(
+  kind: PickKind | null,
+  teamMarket: TeamMarketKey | null = null,
+): readonly PickStep[] {
+  switch (kind) {
+    case 'MONEYLINE':
+    case 'SURVIVOR':
+      return ['type', 'game', 'confirm'];
+    case 'PLAYER_PROP':
+      return ['type', 'player', 'market', 'line', 'confirm'];
+    case 'TEAM_PROP':
+      return teamMarket === 'FIRST_TO_SCORE'
+        ? ['type', 'market', 'game', 'confirm']
+        : ['type', 'market', 'game', 'line', 'confirm'];
+    case 'PARLAY':
+      return ['type', 'legs'];
+    default:
+      return ['type', 'game', 'line', 'confirm'];
+  }
 }
 
-export function addPickEyebrow(kind: PickKind | null, step: PickStep): string {
-  if (kind == null) return 'ADD A PICK · STEP 1';
-  const steps = pickSteps(kind);
+const KIND_EYEBROW: Record<PickKind, string> = {
+  SPREAD: 'SPREAD',
+  TOTAL: 'TOTAL',
+  MONEYLINE: 'MONEYLINE',
+  PLAYER_PROP: 'PLAYER PROP',
+  TEAM_PROP: 'TEAM & GAME PROP',
+  PARLAY: 'PARLAY',
+  SURVIVOR: 'SURVIVOR',
+};
+
+/**
+ * `parlayLeg` is the 1-based leg being built inside a parlay. On the parlay's own screen the
+ * eyebrow names the parlay without a step.
+ */
+export function addPickEyebrow(
+  kind: PickKind | null,
+  step: PickStep,
+  options: { teamMarket?: TeamMarketKey | null; parlayLeg?: number | null } = {},
+): string {
+  const leg = options.parlayLeg ?? null;
+  if (step === 'legs') return 'ADD A PICK · PARLAY';
+  const prefix = leg === null ? 'ADD A PICK' : `ADD A PICK · PARLAY · LEG ${leg}`;
+  if (kind == null) return leg === null ? `${prefix} · STEP 1` : prefix;
+  const steps = pickSteps(kind, options.teamMarket ?? null);
   const index = Math.max(1, steps.indexOf(step) + 1);
-  return `ADD A PICK · ${kind} · STEP ${index} OF ${steps.length}`;
+  const name = leg === null ? `${KIND_EYEBROW[kind]} · ` : '';
+  return `${prefix} · ${name}STEP ${index} OF ${steps.length}`;
 }
 
 export function addPickSlipPickLabel(kind: PickKind | null): 'PICK' | 'TEAM' {

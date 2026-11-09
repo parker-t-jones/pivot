@@ -5,6 +5,10 @@ import {
   groupPickGames,
   pickGameAvailability,
   pickGameContextLine,
+  pickGameSelectable,
+  pickGameStatusLabel,
+  playerGame,
+  playerResultSubtitle,
   starterCountsByGame,
 } from './addPickGames';
 
@@ -32,10 +36,59 @@ describe('add a pick game groups', () => {
 });
 
 describe('add a pick game availability', () => {
-  it('keeps started and final games on the slate as closed', () => {
-    expect(pickGameAvailability('scheduled')).toBe('open');
-    expect(pickGameAvailability('in_progress')).toBe('started');
-    expect(pickGameAvailability('final')).toBe('final');
+  it('keeps started and final games on the slate as closed for a survivor pick', () => {
+    expect(pickGameAvailability('scheduled', false)).toBe('open');
+    expect(pickGameAvailability('in_progress', false)).toBe('started');
+    expect(pickGameAvailability('final', false)).toBe('final');
+    expect(pickGameSelectable('started')).toBe(false);
+    expect(pickGameStatusLabel('started')).toBe('Started');
+  });
+
+  it('opens a game in progress to a live bet, labeled Live, and keeps final closed', () => {
+    expect(pickGameAvailability('in_progress', true)).toBe('live');
+    expect(pickGameSelectable('live')).toBe(true);
+    expect(pickGameStatusLabel('live')).toBe('Live');
+    expect(pickGameAvailability('final', true)).toBe('final');
+    expect(pickGameSelectable('final')).toBe(false);
+    expect(pickGameStatusLabel('open')).toBeNull();
+  });
+});
+
+describe('add a pick player game', () => {
+  const games = [
+    { game_id: 'g1', status: 'scheduled', home_team: 'SEA', away_team: 'SF' },
+    { game_id: 'g2', status: 'in_progress', home_team: 'KC', away_team: 'BUF' },
+    { game_id: 'g3', status: 'final', home_team: 'DAL', away_team: 'NYG' },
+  ];
+  const player = (abbreviation: string | null, position = 'TE') => ({
+    position,
+    team: abbreviation === null ? null : { abbreviation },
+  });
+
+  it("finds the player's game from the team abbreviation, home or away", () => {
+    expect(playerGame(player('sf '), games)?.game_id).toBe('g1');
+    expect(playerGame(player('KC'), games)?.game_id).toBe('g2');
+    expect(playerGame(player('MIA'), games)).toBeNull();
+    expect(playerGame(player(null), games)).toBeNull();
+  });
+
+  it('says whether the game is open, live, over, or missing', () => {
+    expect(playerResultSubtitle(player('SF'), playerGame(player('SF'), games))).toEqual({
+      subtitle: 'TE · SF · SF @ SEA',
+      disabled: false,
+    });
+    expect(playerResultSubtitle(player('KC', 'QB'), playerGame(player('KC'), games))).toEqual({
+      subtitle: 'QB · KC · BUF @ KC · Live',
+      disabled: false,
+    });
+    expect(playerResultSubtitle(player('DAL'), playerGame(player('DAL'), games))).toEqual({
+      subtitle: 'TE · DAL · NYG @ DAL · Final',
+      disabled: true,
+    });
+    expect(playerResultSubtitle(player('MIA', 'WR'), null)).toEqual({
+      subtitle: 'WR · MIA · No game this week',
+      disabled: true,
+    });
   });
 });
 

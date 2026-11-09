@@ -14,18 +14,22 @@ export function AddPickTypeStep({
   onChoose,
   onUpgrade,
   disabled = false,
+  options = PICK_KIND_COPY,
 }: {
+  /** Null while loading, and for a parlay leg, which never spends its own free bet. */
   allowance: Allowance | null;
   onChoose: (kind: PickKind) => void;
   onUpgrade: () => void;
   disabled?: boolean;
+  /** A parlay leg chooses from `LEG_KIND_COPY`. */
+  options?: readonly (typeof PICK_KIND_COPY)[number][];
 }) {
   return (
     <View style={styles.stack}>
       {allowance != null && !allowance.isPro && allowance.freeLeft != null ? (
         <Text style={styles.count}>{`${allowance.freeLeft} free bets left this week`}</Text>
       ) : null}
-      {PICK_KIND_COPY.map((option) => {
+      {options.map((option) => {
         const access = allowance == null ? 'open' : pickKindAccess(option.kind, allowance);
         const locked = access === 'upgrade';
         return (
