@@ -308,11 +308,15 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
   /**
    * Account deletion (Settings' Account section "danger zone"). Deletes the `auth.users` row via
-   * the admin API rather than `public.users` directly — every one of this user's rows (`leagues`,
-   * `lineup_slots`, `flag_events`, `viewing_sessions`, `user_app_presence`, and `public.users`
-   * itself) cascades from `public.users.id REFERENCES auth.users (id) ON DELETE CASCADE` (Section 7),
-   * which itself cascades from this single admin delete — no manual multi-table cleanup needed, and
-   * no risk of a route change here drifting out of sync with the FK graph.
+   * the admin API rather than `public.users` directly — every one of this user's rows (`leagues`
+   * and its `lineup_slots`, `flag_events`, `viewing_sessions`, `user_app_presence`, `stakes` and
+   * its `stake_trigger_log`, `web_push_subscriptions`, `user_game_links`, `stake_spent_slots`,
+   * `pick_slips`, and `public.users` itself) cascades from
+   * `public.users.id REFERENCES auth.users (id) ON DELETE CASCADE` (Section 7), which itself
+   * cascades from this single admin delete — no manual multi-table cleanup needed. A new table
+   * only needs its own `user_id ... ON DELETE CASCADE` to join this list automatically; keep the
+   * list current for readers, and keep `accountDeletionCascade.test.ts` (services/api/src/lib/)
+   * current for correctness — it is the thing that actually has to stay true.
    */
   fastify.delete('/me', async (request, reply) => {
     const user = requireUser(request);

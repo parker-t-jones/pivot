@@ -1,0 +1,62 @@
+# App Store Connect privacy labels (issue #33)
+
+Maps `docs/PRIVACY-INVENTORY.md` to Apple's privacy-label categories (App Store Connect → App
+Privacy). Apple's categories are fixed; this is Parker's worksheet for re-entering the label form,
+not a legal document. Flag items marked **[confirm]** with a lawyer or Parker's own judgment before
+submitting — Apple's category boundaries (e.g. what counts as "Sensitive Info" vs. "Other Data")
+are judgment calls this pass can surface but not settle.
+
+Every row says **Used for tracking?** (Apple's definition: linking your data to data from other
+companies' apps/websites for advertising, or sharing with a data broker) — Pivot has no ad SDK, no
+cross-app tracking framework, and does not sell data, so every row below is **No**.
+
+## What changed since launch
+
+The app has been live since before issues #7, #8, #10, #12 shipped (picks model expanded, alert
+timing, Web Push, saved game links). The categories below that are **new since the original
+submission** are marked. If App Store Connect's current labels don't already list these, that's a
+compliance gap independent of this PR — Apple requires the label to reflect current behavior, not
+just behavior at initial submission. Parker should audit the live label against this doc and
+correct it in App Store Connect before/alongside the next build, whether or not this PR's other
+changes ship.
+
+| Apple category | Specific data | Linked to identity? | Used for tracking? | New since launch? | Purpose (Apple's picklist) |
+|---|---|---|---|---|---|
+| **Contact Info** → Email Address | Login email | Yes | No | No | App Functionality (account creation/login) |
+| **Identifiers** → User ID | Supabase user id, used internally everywhere | Yes | No | No | App Functionality |
+| **Identifiers** → Device ID | Expo push token + device id; Web Push subscription endpoint/keys | Yes | No | **Possibly — `web_push_subscriptions` predates issues #7/#8/#10/#12, but postdates the original App Store submission (web wasn't day-one, per CLAUDE.md). Confirm the live label already covers it.** | App Functionality (push delivery) |
+| **Purchases** → Purchase History | Subscription tier (free/pro), billing itself handled by RevenueCat | Yes | No | No | App Functionality |
+| **User Content** → Other User Content | Fantasy league connection (Sleeper league/roster id, league name), lineup slots | Yes | No | No | App Functionality |
+| **User Content** → Other User Content | Picks: spreads, totals, moneylines, survivor | Yes | No | No | App Functionality |
+| **User Content** → Other User Content | Picks: player props, team/game props, parlays, parlay slips | Yes | No | **Yes — issue #10** | App Functionality |
+| **User Content** → Other User Content | Saved stream link per game (pasted URL) | Yes | No | **Yes — `user_game_links`, introduced after launch** | App Functionality |
+| **Usage Data** → Product Interaction | Streaming-service selections (`user_app_presence`) | Yes | No | No | App Functionality (routes the watch link) |
+| **Usage Data** → Product Interaction | Notification preferences (mode, quiet hours, auto-switch, watched leagues) | Yes | No | No | App Functionality |
+| **Usage Data** → Product Interaction | Alert-timing delay settings (default + per-service) | Yes | No | **Yes — issue #8** | App Functionality |
+| **Usage Data** → Product Interaction | Viewing session (current game, device info) | Yes | No | No | App Functionality |
+| **Diagnostics** → Other Diagnostic Data | Flag/notification delivery log (`flag_events`) | Yes | No | No | App Functionality, Analytics (internal only — not shared externally) |
+| **Diagnostics** → Crash Data / Other Diagnostic Data | Sentry error reports | **[confirm]** — currently no user-identifying data flows to Sentry (see inventory); re-check this row if that changes | No | No | App Functionality |
+| — | Bet-slip screenshot image / AI-extracted legs (issue #12) | — | — | — | **Not applicable yet — #12 is unmerged, nothing in the codebase handles this. Do not add a label row for it until it ships**, then add Identifiers/User Content rows for the parsed legs (not the image, which the design says is never stored) |
+
+## Data **not** collected (worth stating explicitly in App Store Connect to avoid over-declaring)
+
+- **Precise or coarse Location** — nothing in the codebase reads device location.
+- **Health & Fitness, Financial Info (payment), Contacts, Browsing History, Search History,
+  Sensitive Info** (Apple's defined sensitive categories: racial/ethnic origin, sexual orientation,
+  pregnancy, disability, religion, biometrics, etc.) — none of these are collected.
+- **[confirm]** Whether betting picks (spreads/props/parlays) should be declared under a more
+  specific category than "Other User Content" — Apple doesn't have a dedicated "gambling-adjacent
+  prediction" category, and Pivot never takes wagers or handles stakes of money, so "Other User
+  Content" under App Functionality is this pass's best fit. Parker/legal should sanity-check this
+  given the "no edge / no betting" positioning rules in `CLAUDE.md`.
+
+## Action items for Parker
+
+1. Compare this table against the live App Store Connect label (Pivot app → App Privacy). Add any
+   row here not already reflected there — in particular **Device ID** for Web Push and **Other
+   User Content** for props/parlays and saved game links, both of which post-date whatever the
+   original submission declared.
+2. Do not add a row for the bet-slip screenshot feature until issue #12 ships.
+3. This worksheet is not a legal filing; it is accurate to what the recon in
+   `docs/PRIVACY-INVENTORY.md` found in the code as of this PR. Re-run that recon (or at least diff
+   `supabase/migrations/` since this PR) before the next time this label needs updating.
