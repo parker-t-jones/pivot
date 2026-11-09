@@ -112,6 +112,7 @@ const preferencesPatchBody = z.object({
   watchOpponent: z.boolean().optional(),
   watchedLeagueIds: z.array(z.string().uuid()).optional(),
   following: z.array(z.enum(FOLLOWING_OPTIONS)).optional(),
+  seenCoachMarks: z.array(z.string()).optional(),
   /** Per-service `null` clears that service's override ("Same as default"). */
   alertTiming: z
     .object({

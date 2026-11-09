@@ -576,6 +576,7 @@ function makeUser(id: string, expoPushToken: string | null): DispatchUser {
       watchedLeagueIds: [],
       alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
       following: [],
+      seenCoachMarks: [],
     },
     expoPushToken,
   };

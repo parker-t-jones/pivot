@@ -486,6 +486,7 @@ describe('GET /me', () => {
         watchedLeagueIds: [],
         alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
         following: [],
+        seenCoachMarks: [],
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
       features: { bets: false },
@@ -540,6 +541,7 @@ describe('GET /me features.bets', () => {
         watchedLeagueIds: [],
         alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
         following: [],
+        seenCoachMarks: [],
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
       is_demo: false,
@@ -620,6 +622,7 @@ describe('PATCH /me/preferences', () => {
       watchedLeagueIds: [],
       alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
       following: [],
+      seenCoachMarks: [],
     });
     expect(response.json().features).toEqual({ bets: false });
   });

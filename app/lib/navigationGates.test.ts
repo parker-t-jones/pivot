@@ -178,11 +178,12 @@ describe('resolveAppGate — push permission', () => {
     });
   });
 
-  it('full new-user chain allowlist: connect → streaming → notifications → all-set stay render', () => {
+  it('full new-user chain allowlist: connect → streaming → notifications → tour → all-set stay render', () => {
     for (const leaf of [
       'connect-team',
       'onboarding-streaming',
       'notifications-permission',
+      'onboarding-tour',
       'onboarding-all-set',
     ]) {
       expect(
@@ -200,7 +201,7 @@ describe('resolveAppGate — push permission', () => {
     }
   });
 
-  it('leave notifications → all-set when onboarding param set', () => {
+  it('leave notifications → tour when onboarding param set', () => {
     expect(
       resolveAppGate({
         ...withLeagues,
@@ -208,7 +209,7 @@ describe('resolveAppGate — push permission', () => {
         pushStatus: 'granted',
         notificationsOnboarding: true,
       }),
-    ).toEqual({ action: 'leave_notifications', destination: 'all-set' });
+    ).toEqual({ action: 'leave_notifications', destination: 'tour' });
   });
 
   it('leave notifications → home when not onboarding (catch-all path)', () => {
@@ -343,6 +344,8 @@ describe('isOnZeroLeaguesAllowlist', () => {
     expect(isOnZeroLeaguesAllowlist('onboarding-streaming')).toBe(true);
     expect(isOnZeroLeaguesAllowlist('notifications-permission')).toBe(true);
     expect(isOnZeroLeaguesAllowlist('onboarding-all-set')).toBe(true);
+    expect(isOnZeroLeaguesAllowlist('onboarding-tour')).toBe(true);
+    expect(isOnZeroLeaguesAllowlist('demo-game-day')).toBe(true);
     expect(isOnZeroLeaguesAllowlist('index')).toBe(false);
   });
 });

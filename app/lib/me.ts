@@ -24,6 +24,8 @@ export interface Preferences {
   alertTiming?: AlertTiming;
   /** Onboarding "What are you following?" (#31). Orders add-paths/filter pills; never gates. */
   following: FollowingOption[];
+  /** Coach marks already shown (#32). Absent on an older server. */
+  seenCoachMarks?: string[];
 }
 
 /** `PATCH /me/preferences` `alertTiming`. A service set to `null` goes back to Same as default. */
@@ -68,6 +70,7 @@ export async function patchPreferences(patch: {
   watchedLeagueIds?: string[];
   alertTiming?: AlertTimingPatch;
   following?: FollowingOption[];
+  seenCoachMarks?: string[];
 }): Promise<MeResponse> {
   const me = await apiClient.patch<MeResponse>('/me/preferences', patch);
   noteMe(me);
