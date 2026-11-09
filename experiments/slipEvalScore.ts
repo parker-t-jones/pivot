@@ -55,7 +55,8 @@ function normalize(value: string | null): string | null {
 
 function same(field: ScoredField, got: SlipLeg | undefined, want: ExpectedLeg): boolean {
   if (got === undefined) return false;
-  if (field === 'player' || field === 'team') return normalize(got[field]) === normalize(want[field]);
+  if (field === 'player' || field === 'team')
+    return normalize(got[field]) === normalize(want[field]);
   return got[field] === want[field];
 }
 

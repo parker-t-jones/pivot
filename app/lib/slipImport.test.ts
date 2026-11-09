@@ -47,7 +47,11 @@ const KITTLE = {
 function ready(pick: PickInput, player: typeof KITTLE | null = null) {
   return { status: 'ready', text: 'as printed', pick, game: GAME, player } satisfies ImportedLeg;
 }
-const team = (condition: BetCondition): PickInput => ({ gameId: 'g-sf-sea', teamId: 'sf-id', condition });
+const team = (condition: BetCondition): PickInput => ({
+  gameId: 'g-sf-sea',
+  teamId: 'sf-id',
+  condition,
+});
 const game = (condition: BetCondition): PickInput => ({ gameId: 'g-sf-sea', condition });
 const player = (condition: BetCondition): PickInput => ({
   gameId: 'g-sf-sea',
@@ -78,7 +82,8 @@ describe('draftFromImportedLeg', () => {
     if (draft === null) return;
     expect(buildPickInput(draft)).toEqual(pick);
     // Every line pick reads back in words; a moneyline has no readout in the steps either.
-    if (pick.condition.type !== 'MONEYLINE') expect(draftReadout(draft)).toEqual(expect.any(String));
+    if (pick.condition.type !== 'MONEYLINE')
+      expect(draftReadout(draft)).toEqual(expect.any(String));
   });
 
   it('gives a player prop the player’s team for the slip badge', () => {
@@ -120,11 +125,15 @@ describe('slip import client', () => {
   });
 
   it('shows the API’s sentence for import errors and a fallback otherwise', () => {
-    const limit = new ApiRequestError(429, 'slip_import_limit', 'You’ve used today’s 5 screenshot imports.');
-    expect(slipImportErrorMessage(limit)).toBe('You’ve used today’s 5 screenshot imports.');
-    expect(slipImportErrorMessage(new ApiRequestError(500, 'internal_error', 'Internal server error.'))).toBe(
-      'We couldn’t import that screenshot. Try again, or add the pick yourself.',
+    const limit = new ApiRequestError(
+      429,
+      'slip_import_limit',
+      'You’ve used today’s 5 screenshot imports.',
     );
+    expect(slipImportErrorMessage(limit)).toBe('You’ve used today’s 5 screenshot imports.');
+    expect(
+      slipImportErrorMessage(new ApiRequestError(500, 'internal_error', 'Internal server error.')),
+    ).toBe('We couldn’t import that screenshot. Try again, or add the pick yourself.');
     expect(slipImportErrorMessage(new Error('x'))).toContain('add the pick yourself');
   });
 });

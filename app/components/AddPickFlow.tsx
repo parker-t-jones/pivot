@@ -454,9 +454,7 @@ export function AddPickFlow({
       setFormError(lineMissingMessage());
       return;
     }
-    if (
-      parlayLegs.some((leg) => leg.key !== editingLegKey && samePickInput(leg.input, input))
-    ) {
+    if (parlayLegs.some((leg) => leg.key !== editingLegKey && samePickInput(leg.input, input))) {
       setFormError(DUPLICATE_LEG);
       return;
     }
@@ -682,9 +680,7 @@ export function AddPickFlow({
                         : null
                     }
                   />
-                  {importing ? (
-                    <Text style={styles.muted}>Reading your bet slip…</Text>
-                  ) : null}
+                  {importing ? <Text style={styles.muted}>Reading your bet slip…</Text> : null}
                   {importError ? (
                     <Text style={styles.error} testID="add-pick-import-error">
                       {importError}
@@ -703,11 +699,7 @@ export function AddPickFlow({
         ) : null}
 
         {step === 'legs' && parlayLegs !== null ? (
-          <AddPickImportFlags
-            disabled={editsLocked}
-            legs={flaggedLegs}
-            onDismiss={dismissFlag}
-          />
+          <AddPickImportFlags disabled={editsLocked} legs={flaggedLegs} onDismiss={dismissFlag} />
         ) : null}
 
         {step === 'legs' && parlayLegs !== null ? (

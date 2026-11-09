@@ -1,11 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  AnthropicSlipReader,
-  SLIP_READ_MODEL,
-  SlipReadError,
-  sniffImageType,
-} from './reader.js';
+import { AnthropicSlipReader, SLIP_READ_MODEL, SlipReadError, sniffImageType } from './reader.js';
 import { SLIP_READ_JSON_SCHEMA, slipReadSchema } from './schema.js';
 import { leg } from './fixtures.test-helper.js';
 
@@ -39,7 +34,10 @@ describe('AnthropicSlipReader', () => {
         {
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: IMAGE.data } },
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/png', data: IMAGE.data },
+            },
             { type: 'text' },
           ],
         },
@@ -77,8 +75,12 @@ describe('AnthropicSlipReader', () => {
 
 describe('SLIP_READ_JSON_SCHEMA', () => {
   it('requires every leg field the zod schema reads', () => {
-    const legSchema = (SLIP_READ_JSON_SCHEMA['properties'] as Record<string, { items: { required: string[] } }>)['legs']!.items;
-    expect([...legSchema.required].sort()).toEqual(Object.keys(slipReadSchema.shape.legs.element.shape).sort());
+    const legSchema = (
+      SLIP_READ_JSON_SCHEMA['properties'] as Record<string, { items: { required: string[] } }>
+    )['legs']!.items;
+    expect([...legSchema.required].sort()).toEqual(
+      Object.keys(slipReadSchema.shape.legs.element.shape).sort(),
+    );
   });
 });
 

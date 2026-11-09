@@ -15,7 +15,12 @@ import {
   SLIP_IMPORT_BODY_LIMIT,
   type SlipImportLimits,
 } from '../lib/slipImport/config.js';
-import { mapSlipLeg, type ImportedLeg, type SlipPlayer, type SlipTeam } from '../lib/slipImport/mapSlip.js';
+import {
+  mapSlipLeg,
+  type ImportedLeg,
+  type SlipPlayer,
+  type SlipTeam,
+} from '../lib/slipImport/mapSlip.js';
 import {
   SLIP_IMPORT_KEY_TTL_SEC,
   slipImportKey,
@@ -75,10 +80,7 @@ function decodeImage(value: string): Buffer | null {
  * Privacy: the image and the model's answer stay in memory for this request. Neither is stored
  * or logged; logs carry counts and error kinds only.
  */
-const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (
-  fastify,
-  opts,
-) => {
+const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (fastify, opts) => {
   const now = opts.now ?? (() => new Date());
   fastify.addHook('preHandler', fastify.authenticate);
 

@@ -100,7 +100,10 @@ describe('buildCondition', () => {
 
   it('keeps quarter and half lines as segments', () => {
     const built = buildCondition(leg({ market: 'SPREAD', line: -0.5, period: 'Q1' }));
-    expect(built).toMatchObject({ ok: true, condition: { type: 'SPREAD', line: -0.5, segment: 'Q1' } });
+    expect(built).toMatchObject({
+      ok: true,
+      condition: { type: 'SPREAD', line: -0.5, segment: 'Q1' },
+    });
   });
 
   it('reads a scorer bet with no side as Yes, and an explicit No as No', () => {
@@ -115,12 +118,24 @@ describe('buildCondition', () => {
   it.each([
     ['an unsupported market', leg({ market: 'OTHER' }), FLAG.unsupported],
     ['a quarter moneyline', leg({ market: 'MONEYLINE', period: 'H1' }), FLAG.unsupported],
-    ['a quarter player prop', leg({ market: 'PLAYER_STAT', stat: 'RUSH_YDS', side: 'OVER', line: 20.5, period: 'Q1' }), FLAG.unsupported],
-    ['a player prop with no stat', leg({ market: 'PLAYER_STAT', side: 'OVER', line: 20.5 }), FLAG.unsupported],
+    [
+      'a quarter player prop',
+      leg({ market: 'PLAYER_STAT', stat: 'RUSH_YDS', side: 'OVER', line: 20.5, period: 'Q1' }),
+      FLAG.unsupported,
+    ],
+    [
+      'a player prop with no stat',
+      leg({ market: 'PLAYER_STAT', side: 'OVER', line: 20.5 }),
+      FLAG.unsupported,
+    ],
     ['a total with no side', leg({ market: 'GAME_TOTAL', line: 44.5 }), FLAG.unclear],
     ['a total with no line', leg({ market: 'GAME_TOTAL', side: 'OVER' }), FLAG.unclear],
     ['a spread with no line', leg({ market: 'SPREAD' }), FLAG.unclear],
-    ['an "N+" under', leg({ market: 'TEAM_TOTAL', side: 'UNDER', line: 20, plus_style: true }), FLAG.unclear],
+    [
+      'an "N+" under',
+      leg({ market: 'TEAM_TOTAL', side: 'UNDER', line: 20, plus_style: true }),
+      FLAG.unclear,
+    ],
   ])('flags %s', (_name, input, reason) => {
     expect(buildCondition(input)).toEqual({ ok: false, reason });
   });
@@ -210,10 +225,7 @@ describe('mapSlipLeg', () => {
   });
 
   it('uses the printed team to tell two players with one name apart', async () => {
-    const both = await mapSlipLeg(
-      leg({ market: 'ANYTIME_TD', player: 'A. Brown' }),
-      lookups(),
-    );
+    const both = await mapSlipLeg(leg({ market: 'ANYTIME_TD', player: 'A. Brown' }), lookups());
     expect(both).toEqual({
       status: 'flagged',
       text: 'leg',
@@ -229,7 +241,10 @@ describe('mapSlipLeg', () => {
   it('flags a player not in this week’s games, and an unknown player', async () => {
     expect(
       await mapSlipLeg(leg({ market: 'ANYTIME_TD', player: 'Travis Kelce' }), lookups()),
-    ).toMatchObject({ status: 'flagged', reason: 'We couldn’t find Travis Kelce in this week’s games.' });
+    ).toMatchObject({
+      status: 'flagged',
+      reason: 'We couldn’t find Travis Kelce in this week’s games.',
+    });
     expect(
       await mapSlipLeg(leg({ market: 'ANYTIME_TD', player: 'Nobody Atall' }), lookups()),
     ).toMatchObject({ status: 'flagged' });
@@ -286,7 +301,10 @@ describe('mapSlipLeg', () => {
         },
       });
     expect(
-      await mapSlipLeg(leg({ market: 'SPREAD', team: 'PHI', line: -80 }), refuse('stake_line_invalid')),
+      await mapSlipLeg(
+        leg({ market: 'SPREAD', team: 'PHI', line: -80 }),
+        refuse('stake_line_invalid'),
+      ),
     ).toMatchObject({ status: 'flagged', reason: FLAG.line });
     expect(
       await mapSlipLeg(leg({ market: 'MONEYLINE', team: 'PHI' }), refuse('stake_game_invalid')),

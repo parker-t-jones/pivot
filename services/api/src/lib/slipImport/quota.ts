@@ -21,7 +21,10 @@ export class InMemoryUsageCounter implements UsageCounter {
   async increment(key: string, ttlSec: number): Promise<number> {
     const current = this.counts.get(key);
     const live = current && current.expiresAt > this.now() ? current : undefined;
-    const next = { count: (live?.count ?? 0) + 1, expiresAt: live?.expiresAt ?? this.now() + ttlSec * 1000 };
+    const next = {
+      count: (live?.count ?? 0) + 1,
+      expiresAt: live?.expiresAt ?? this.now() + ttlSec * 1000,
+    };
     this.counts.set(key, next);
     return next.count;
   }

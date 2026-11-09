@@ -11,7 +11,11 @@ export function isImageFile(file: File): boolean {
 }
 
 /** Width and height that fit `max` on the long edge, never scaled up. */
-export function fitWithin(width: number, height: number, max: number): { width: number; height: number } {
+export function fitWithin(
+  width: number,
+  height: number,
+  max: number,
+): { width: number; height: number } {
   const scale = Math.min(1, max / Math.max(width, height));
   return { width: Math.round(width * scale), height: Math.round(height * scale) };
 }

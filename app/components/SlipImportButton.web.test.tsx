@@ -5,7 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-native', () => import('react-native-web'));
 vi.mock('../lib/fonts', () => ({
-  fonts: { monoBold: 'system', monoMedium: 'system', monoSemiBold: 'system', sansBold: 'system', sansSemiBold: 'system', teamNickname: 'system' },
+  fonts: {
+    monoBold: 'system',
+    monoMedium: 'system',
+    monoSemiBold: 'system',
+    sansBold: 'system',
+    sansSemiBold: 'system',
+    teamNickname: 'system',
+  },
 }));
 const web = vi.hoisted(() => ({
   pickSlipImage: vi.fn<() => Promise<string | null>>(),
@@ -106,7 +113,8 @@ describe('SlipImportButton (web)', () => {
 
 describe('fitWithin', () => {
   it('scales a tall phone screenshot to the long-edge limit and never scales up', async () => {
-    const actual = await vi.importActual<typeof import('../lib/slipImage.web')>('../lib/slipImage.web');
+    const actual =
+      await vi.importActual<typeof import('../lib/slipImage.web')>('../lib/slipImage.web');
     expect(actual.fitWithin(1290, 2796, 2000)).toEqual({ width: 923, height: 2000 });
     expect(actual.fitWithin(800, 600, 2000)).toEqual({ width: 800, height: 600 });
   });

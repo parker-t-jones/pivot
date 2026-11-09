@@ -72,7 +72,9 @@ export function SlipImportButton({
       testID="slip-import-drop-zone"
     >
       <SecondaryButton
-        caption={onLocked ? 'No free bets left · Upgrade' : 'Choose a file, or drop a screenshot here'}
+        caption={
+          onLocked ? 'No free bets left · Upgrade' : 'Choose a file, or drop a screenshot here'
+        }
         disabled={disabled}
         label={SLIP_IMPORT_LABEL}
         loading={loading}

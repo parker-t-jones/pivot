@@ -67,8 +67,10 @@ function teamIdFor(leg: { pick: PickInput; game: DraftGame; player: DraftPlayer 
   if (leg.pick.teamId) return leg.pick.teamId;
   const abbreviation = leg.player?.team?.abbreviation.trim().toUpperCase();
   if (!abbreviation) return null;
-  if (leg.game.home_team.trim().toUpperCase() === abbreviation) return leg.game.home_team_id ?? null;
-  if (leg.game.away_team.trim().toUpperCase() === abbreviation) return leg.game.away_team_id ?? null;
+  if (leg.game.home_team.trim().toUpperCase() === abbreviation)
+    return leg.game.home_team_id ?? null;
+  if (leg.game.away_team.trim().toUpperCase() === abbreviation)
+    return leg.game.away_team_id ?? null;
   return null;
 }
 
@@ -109,7 +111,12 @@ export function draftFromImportedLeg(
     case 'TOTAL_UNDER':
       draft =
         segment === null
-          ? { ...base, kind: 'TOTAL', totalRole: overUnderRole(condition.type), lineText: magnitude }
+          ? {
+              ...base,
+              kind: 'TOTAL',
+              totalRole: overUnderRole(condition.type),
+              lineText: magnitude,
+            }
           : {
               ...base,
               kind: 'TEAM_PROP',

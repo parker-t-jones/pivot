@@ -23,7 +23,9 @@ async function main(): Promise<void> {
   const dir = process.argv[2] ?? 'experiments/slip-eval';
   const reader = new AnthropicSlipReader(key);
   const tally = emptyTally();
-  const names = (await readdir(dir)).filter((name) => IMAGE_EXTENSIONS.has(extname(name).toLowerCase()));
+  const names = (await readdir(dir)).filter((name) =>
+    IMAGE_EXTENSIONS.has(extname(name).toLowerCase()),
+  );
   if (names.length === 0) {
     console.log(`No screenshots in ${dir}. See experiments/slip-eval/README.md.`);
     return;
@@ -36,7 +38,9 @@ async function main(): Promise<void> {
       console.log(`${name}: not an image the reader takes, skipped`);
       continue;
     }
-    const expected = JSON.parse(await readFile(join(dir, `${base}.expected.json`), 'utf8')) as ExpectedSlip;
+    const expected = JSON.parse(
+      await readFile(join(dir, `${base}.expected.json`), 'utf8'),
+    ) as ExpectedSlip;
     try {
       const read = await reader.read({ mediaType, data: bytes.toString('base64') });
       scoreSlip(tally, read, expected);

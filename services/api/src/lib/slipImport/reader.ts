@@ -76,7 +76,10 @@ export class AnthropicSlipReader implements SlipReader {
       });
     } catch (error) {
       if (error instanceof Anthropic.APIError) {
-        throw new SlipReadError('upstream', typeof error.status === 'number' ? error.status : undefined);
+        throw new SlipReadError(
+          'upstream',
+          typeof error.status === 'number' ? error.status : undefined,
+        );
       }
       throw new SlipReadError('upstream');
     }

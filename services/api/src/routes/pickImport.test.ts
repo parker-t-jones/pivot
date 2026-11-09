@@ -266,10 +266,26 @@ describe('POST /picks/import', () => {
   });
 
   it.each([
-    ['an image that is not a slip', { is_bet_slip: false, bet_count: 0, legs: [] }, 'slip_import_unreadable'],
-    ['a slip with no legs', { is_bet_slip: true, bet_count: 1, legs: [] }, 'slip_import_unreadable'],
-    ['several bets', { is_bet_slip: true, bet_count: 2, legs: [RUSH_LEG, RUSH_LEG] }, 'slip_import_multiple_bets'],
-    ['more legs than a parlay holds', { is_bet_slip: true, bet_count: 1, legs: Array.from({ length: 13 }, () => RUSH_LEG) }, 'slip_import_too_many_legs'],
+    [
+      'an image that is not a slip',
+      { is_bet_slip: false, bet_count: 0, legs: [] },
+      'slip_import_unreadable',
+    ],
+    [
+      'a slip with no legs',
+      { is_bet_slip: true, bet_count: 1, legs: [] },
+      'slip_import_unreadable',
+    ],
+    [
+      'several bets',
+      { is_bet_slip: true, bet_count: 2, legs: [RUSH_LEG, RUSH_LEG] },
+      'slip_import_multiple_bets',
+    ],
+    [
+      'more legs than a parlay holds',
+      { is_bet_slip: true, bet_count: 1, legs: Array.from({ length: 13 }, () => RUSH_LEG) },
+      'slip_import_too_many_legs',
+    ],
   ])('answers 422 for %s', async (_name, read, code) => {
     const h = await harness({ reader: new FakeReader(read as SlipRead) });
     const response = await h.post({ image: PNG });

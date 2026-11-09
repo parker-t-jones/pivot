@@ -51,7 +51,13 @@ export const PLAYERS: SlipPlayer[] = [
   { id: WILLIAMS, first_name: 'Caleb', last_name: 'Williams', position: 'QB', team_id: CHI },
   { id: BROWN_PHI, first_name: 'A.J.', last_name: 'Brown', position: 'WR', team_id: PHI },
   { id: BROWN_CHI, first_name: 'Austin', last_name: 'Brown', position: 'WR', team_id: CHI },
-  { id: SMITH_NJIGBA, first_name: 'Jaxon', last_name: 'Smith-Njigba', position: 'WR', team_id: NYJ },
+  {
+    id: SMITH_NJIGBA,
+    first_name: 'Jaxon',
+    last_name: 'Smith-Njigba',
+    position: 'WR',
+    team_id: NYJ,
+  },
   // Kansas City has no game this week.
   { id: KELCE, first_name: 'Travis', last_name: 'Kelce', position: 'TE', team_id: KC },
 ];

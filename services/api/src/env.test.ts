@@ -42,9 +42,9 @@ describe('PUSH_DRIVER env', () => {
   it('treats a blank WEB_DEV_ORIGIN as unset and rejects a non-URL', async () => {
     const { loadAndValidateEnv } = await loadEnvModule();
     expect(loadAndValidateEnv({ ...required, WEB_DEV_ORIGIN: '' }).WEB_DEV_ORIGIN).toBeUndefined();
-    expect(loadAndValidateEnv({ ...required, WEB_DEV_ORIGIN: 'http://127.0.0.1:8081' }).WEB_DEV_ORIGIN).toBe(
-      'http://127.0.0.1:8081',
-    );
+    expect(
+      loadAndValidateEnv({ ...required, WEB_DEV_ORIGIN: 'http://127.0.0.1:8081' }).WEB_DEV_ORIGIN,
+    ).toBe('http://127.0.0.1:8081');
     expect(() => loadAndValidateEnv({ ...required, WEB_DEV_ORIGIN: 'not-a-url' })).toThrow(
       /WEB_DEV_ORIGIN/,
     );
