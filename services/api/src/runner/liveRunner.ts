@@ -12,6 +12,7 @@ import {
   type GameAiringsStore,
 } from '@pivot/ingestion';
 import {
+  createAlertDelay,
   ResumptionCeiling,
   ResumptionGatedDispatcher,
   runDispatcherTick,
@@ -157,6 +158,7 @@ async function runLeader(
   const gate = new ResumptionGatedDispatcher({
     queue: deps.queue,
     onGated: () => undefined,
+    fireDelayMs: createAlertDelay({ users: deps.users, broadcasts: deps.broadcasts }),
   });
   const betCache = createBetStakeCache();
   const ceiling = new ResumptionCeiling({

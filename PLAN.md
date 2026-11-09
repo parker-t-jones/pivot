@@ -393,7 +393,7 @@ Single Fly.io app for v1. Three processes: API server (handles REST + WebSocket)
 | `updated_at`        | timestamptz | default `now()`                                               |
 
 
-> **Sprint 5 addition:** `preferences` — jsonb, parsed via `preferencesSchema` in `shared/src/types/preferences.ts`. Shape: `{ notificationMode: 'all' | 'high_leverage_only' | 'off', quietHours: { enabled, startHour, endHour, timezone }, autoSwitch: boolean, watchedLeagueIds: string[] }`. `watchedLeagueIds` drives Home Active Players / upcoming cards and the engine lineup cache rebuild across watched leagues only. Free: at most one id; Pro: any subset. All fields default; existing `'{}'` rows parse to defaults.
+> **Sprint 5 addition:** `preferences` — jsonb, parsed via `preferencesSchema` in `shared/src/types/preferences.ts`. Shape: `{ notificationMode: 'all' | 'high_leverage_only' | 'off', quietHours: { enabled, startHour, endHour, timezone }, autoSwitch: boolean, watchedLeagueIds: string[] }`. `watchedLeagueIds` drives Home Active Players / upcoming cards and the engine lineup cache rebuild across watched leagues only. Free: at most one id; Pro: any subset. All fields default; existing `'{}'` rows parse to defaults. Later additions: `watchOpponent: boolean` (opponent red-zone nudges) and `alertTiming: { defaultDelaySeconds, serviceDelaySeconds: { [service]: seconds } }` (issue #8: Settings → Alert timing, 0–90s in 5s steps; the gate's `fireDelayMs` adds it per user, keyed on the service the alert routes to).
 
 
 

@@ -49,6 +49,7 @@ const freeUser: DispatchUser = {
     autoSwitch: false,
     watchOpponent: false,
     watchedLeagueIds: [],
+    alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
   },
   expoPushToken: null, // push isn't this file's concern — see delivery.test.ts's "push" block
 };
