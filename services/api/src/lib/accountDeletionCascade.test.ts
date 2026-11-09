@@ -211,7 +211,7 @@ describe.skipIf(!localReady)('account deletion cascades through every user-data 
 
     const presence = await client.from('user_app_presence').insert({
       user_id: userId,
-      service: 'fox',
+      service: 'youtube_tv',
       has_subscription: true,
     });
     if (presence.error) throw presence.error;
