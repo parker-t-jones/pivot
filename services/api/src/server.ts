@@ -7,6 +7,7 @@ import {
 import { Redis as UpstashRedis } from '@upstash/redis';
 import websocketPlugin from '@fastify/websocket';
 import Fastify from 'fastify';
+import type { Redis } from 'ioredis';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -34,6 +35,14 @@ import sessionRoutes from './routes/session.js';
 import sleeperRoutes from './routes/sleeper.js';
 import stakesRoutes from './routes/stakes.js';
 import picksRoutes from './routes/picks.js';
+import pickImportRoutes from './routes/pickImport.js';
+import {
+  InMemoryUsageCounter,
+  TcpUsageCounter,
+  UpstashUsageCounter,
+  type UsageCounter,
+} from './lib/slipImport/quota.js';
+import { AnthropicSlipReader, type SlipReader } from './lib/slipImport/reader.js';
 import { readGamePlayerStats } from './lib/gamePlayerStats.js';
 import { sleeperClient } from './providers/sleeper-client.js';
 import stateRoutes from './routes/state.js';
@@ -43,6 +52,20 @@ export interface BuildServerDeps {
   lineupCache?: LineupCacheProvider;
   gameStateStore?: GameStateStore;
   realtimeSubscriber?: RealtimeSubscriber;
+  /** Bet slip import. Defaults to Claude when `ANTHROPIC_API_KEY` is set, else off. */
+  slipReader?: SlipReader | null;
+  slipImportCounter?: UsageCounter;
+}
+
+/** Daily import counts live in the same Redis as everything else; in memory for local dev. */
+function slipImportCounter(env: Env, commandRedis: Redis | undefined): UsageCounter {
+  if (commandRedis) return new TcpUsageCounter(commandRedis);
+  if (env.CACHE_DRIVER === 'redis' && env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
+    return new UpstashUsageCounter(
+      new UpstashRedis({ url: env.UPSTASH_REDIS_REST_URL, token: env.UPSTASH_REDIS_REST_TOKEN }),
+    );
+  }
+  return new InMemoryUsageCounter();
 }
 
 /** Same Redis the runner writes. TCP when this process already has that client; otherwise Upstash REST. */
@@ -137,6 +160,16 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
   await fastify.register(gamesRoutes);
   await fastify.register(stakesRoutes);
   await fastify.register(picksRoutes);
+  await fastify.register(pickImportRoutes, {
+    reader:
+      deps.slipReader !== undefined
+        ? deps.slipReader
+        : env.ANTHROPIC_API_KEY
+          ? new AnthropicSlipReader(env.ANTHROPIC_API_KEY)
+          : null,
+    counter: deps.slipImportCounter ?? slipImportCounter(env, commandRedis),
+    limits: { free: env.SLIP_IMPORT_DAILY_FREE, pro: env.SLIP_IMPORT_DAILY_PRO },
+  });
   await fastify.register(gameLinksRoutes);
   await fastify.register(sessionRoutes);
   await fastify.register(meRoutes);

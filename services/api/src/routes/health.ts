@@ -1,6 +1,7 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
+import { slipImportStatus } from '../lib/slipImport/config.js';
 import { webPushStatus } from '../lib/vapidConfig.js';
 
 /**
@@ -18,6 +19,8 @@ const healthRoutes: FastifyPluginAsyncZod = async (fastify) => {
             ok: z.literal(true),
             version: z.string(),
             webPush: z.enum(['enabled', 'disabled']),
+            /** Bet slip screenshot import (#12). The app hides the button when disabled. */
+            slipImport: z.enum(['enabled', 'disabled']),
           }),
         },
       },
@@ -26,6 +29,7 @@ const healthRoutes: FastifyPluginAsyncZod = async (fastify) => {
       ok: true as const,
       version: process.env['GIT_SHA'] ?? 'dev',
       webPush: webPushStatus(process.env),
+      slipImport: slipImportStatus(process.env),
     }),
   );
 };
