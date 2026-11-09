@@ -99,7 +99,8 @@ import {
   subscribeWeekGamesRefresh,
   takePendingWeekGamesRefresh,
 } from '../../../lib/weekGamesRefresh';
-import { fetchStakes } from '../../../lib/stakesClient';
+import { fetchWatchPicks } from '../../../lib/picksClient';
+import { flattenParlays } from '../../../lib/watchPicks';
 import type { ManualStake } from '../../../lib/stakes';
 import { resolveFlaggedTeamDisplay, type PlayerTeamMap } from '../../../lib/teamDisplay';
 import { theme } from '../../../lib/theme';
@@ -361,8 +362,9 @@ export default function HomeScreen() {
    */
   const loadManualStakes = useCallback(async (week: number) => {
     try {
-      const response = await fetchStakes(week);
-      setManualStakes(response.stakes);
+      const response = await fetchWatchPicks(week);
+      // Home is per game, so each parlay leg sits on its own game's row.
+      setManualStakes(flattenParlays(response.stakes));
     } catch (error) {
       console.warn('[home] failed to load stakes', error);
       setManualStakes([]);

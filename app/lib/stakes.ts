@@ -1,3 +1,4 @@
+import type { PickProgress, SlipSummary } from '@pivot/shared/picks';
 import type { StakeTeam } from '@pivot/shared/stakeLabel';
 
 import { countsTowardFreeCap } from './weekCardModel';
@@ -33,8 +34,30 @@ export interface ManualStake {
   source: string;
   weight: number;
   subject: { type: string; teamId?: string; gameId?: string };
-  condition: { type: string; line?: number; side?: string };
+  condition: { type: string; line?: number; side?: string; segment?: string };
   game: ManualStakeGame | null;
+  /** `GET /picks`: the pick as the API labels it ("G. Kittle over 60.5 rec yds"). */
+  label?: string;
+  /** `GET /picks`: live progress from the runner's stats snapshot, or the settled result. */
+  progress?: PickProgress;
+  /**
+   * A parlay row (`condition.type === 'PARLAY'`, built from a `GET /picks` slip). `id` is the
+   * slip id, `game_id` / `game` are the leg the row is ordered by, and `legs` are its picks.
+   */
+  legs?: ManualStake[];
+  summary?: SlipSummary;
+}
+
+export const PARLAY_TYPE = 'PARLAY';
+
+export function isParlay(stake: { condition: { type: string } }): boolean {
+  return stake.condition.type === PARLAY_TYPE;
+}
+
+/** Every game a row covers: one for a pick, each leg's game for a parlay. */
+export function stakeGameIds(stake: ManualStake): string[] {
+  if (stake.legs && stake.legs.length > 0) return stake.legs.map((leg) => leg.game_id);
+  return [stake.game_id];
 }
 
 export interface StakesResponse {
@@ -167,6 +190,10 @@ export const REMOVE_STARTED_PICK_NOTE =
  * scheduled start has passed.
  */
 export function stakeGameHasKickedOff(stake: ManualStake, now: Date): boolean {
+  // A parlay has kicked off once any leg's game has (docs/P2-PICKS-MODEL.md §3).
+  if (stake.legs && stake.legs.length > 0) {
+    return stake.legs.some((leg) => stakeGameHasKickedOff(leg, now));
+  }
   const game = stake.game;
   if (game === null) return false;
   if (game.status === 'in_progress' || game.status === 'final') return true;

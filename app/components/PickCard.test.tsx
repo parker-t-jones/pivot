@@ -182,4 +182,120 @@ describe('PickCard', () => {
       expect(red).toEqual([]);
     }
   });
+
+  function renderStake(stake: PickCardStake, live: boolean): void {
+    act(() => {
+      root.render(
+        createElement(PickCard, {
+          model: pickCardModel({
+            stake,
+            teams,
+            weekGames: [
+              {
+                game_id: 'g1',
+                status: live ? 'in_progress' : 'scheduled',
+                scheduled_start: game.scheduled_start,
+              },
+            ],
+            liveGames: live ? [liveScore] : [],
+            now: NOW,
+          }),
+        }),
+      );
+    });
+  }
+
+  const liveGame = { ...game, status: 'in_progress' };
+  const prop: PickCardStake = {
+    id: 'p1',
+    game_id: 'g1',
+    subject: { type: 'PLAYER', teamId: 'det' },
+    condition: { type: 'STAT_OVER', stat: 'REC_YDS', line: 60.5 },
+    label: 'S. LaPorta over 60.5 rec yds',
+    progress: { status: 'live', current: 42, line: 60.5, needed: 19 },
+    game: liveGame,
+  };
+
+  it('shows a player prop with its label and live progress, and no score bar', () => {
+    renderStake(prop, true);
+    expect(host.textContent).toContain('PLAYER PROP');
+    expect(host.querySelector('[data-testid="pick-card-pick"]')?.textContent).toBe(
+      'S. LaPorta over 60.5 rec yds',
+    );
+    expect(host.querySelector('[data-testid="pick-card-detail"]')?.textContent).toBe(
+      '42 rec yds · 19 to go',
+    );
+    expect(host.querySelector('[data-testid="pick-card-progress"]')).toBeNull();
+  });
+
+  it('uses the progress line, not the full-game bar, for a half spread', () => {
+    renderStake(
+      {
+        game_id: 'g1',
+        subject: { type: 'TEAM', teamId: 'det' },
+        condition: { type: 'SPREAD', line: -3.5, segment: 'H1' },
+        label: 'DET 1H \u22123.5',
+        progress: { status: 'live', current: 3.5 },
+        game: liveGame,
+      },
+      true,
+    );
+    expect(host.textContent).toContain('DET 1H \u22123.5');
+    expect(host.querySelector('[data-testid="pick-card-detail"]')?.textContent).toBe(
+      'Covering by 3.5',
+    );
+    expect(host.querySelector('[data-testid="pick-card-progress"]')).toBeNull();
+  });
+
+  it('lists every parlay leg with its state under the parlay summary', () => {
+    const later = {
+      ...game,
+      game_id: 'g2',
+      scheduled_start: '2026-11-09T01:20:00.000Z',
+      home_team_id: 'kc',
+      away_team_id: 'buf',
+      home_team: 'KC',
+      away_team: 'BUF',
+    };
+    renderStake(
+      {
+        id: 'slip-1',
+        game_id: 'g1',
+        subject: { type: 'SLIP' },
+        condition: { type: 'PARLAY' },
+        label: '2-leg parlay',
+        game: liveGame,
+        summary: { status: 'live', legs: 2, hit: 0, alive: 2, lost: 0, refunded: 0 },
+        legs: [
+          {
+            id: 'leg-b',
+            game_id: 'g2',
+            subject: { type: 'TEAM', teamId: 'kc' },
+            condition: { type: 'MONEYLINE' },
+            label: 'KC ML',
+            progress: { status: 'pending' },
+            game: later,
+          },
+          { ...prop, id: 'leg-a' },
+        ],
+      },
+      true,
+    );
+    expect(host.textContent).toContain('PARLAY');
+    expect(host.querySelector('[data-testid="pick-card-pick"]')?.textContent).toBe('2-leg parlay');
+    expect(host.querySelector('[data-testid="pick-card-detail"]')?.textContent).toBe(
+      '0 of 2 legs hit · 2 still open',
+    );
+    const legs = Array.from(host.querySelectorAll('[data-testid="pick-card-leg"]')).map(
+      (leg) => leg.textContent,
+    );
+    // Kickoff order: the live leg first.
+    expect(legs[0]).toContain('LEG 1');
+    expect(legs[0]).toContain('Live');
+    expect(legs[0]).toContain('S. LaPorta over 60.5 rec yds');
+    expect(legs[0]).toContain('42 rec yds · 19 to go');
+    expect(legs[1]).toContain('KC ML');
+    expect(legs[1]).toContain('BUF @ KC');
+    expect(host.textContent?.toLowerCase()).not.toContain('push');
+  });
 });

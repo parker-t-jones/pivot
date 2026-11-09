@@ -31,7 +31,8 @@ export function PickCard({ model }: PickCardProps) {
           </Text>
           <Text
             maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-            numberOfLines={1}
+            // A prop label ("P. Mahomes under 274.5 pass yds") can need a second line on a phone.
+            numberOfLines={2}
             style={[styles.pick, final && styles.pickFinal]}
             testID="pick-card-pick"
           >
@@ -56,6 +57,47 @@ export function PickCard({ model }: PickCardProps) {
           </Text>
         </View>
       </View>
+      {model.detail ? (
+        <Text
+          maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+          style={[styles.detail, final && styles.statusFinal]}
+          testID="pick-card-detail"
+        >
+          {model.detail}
+        </Text>
+      ) : null}
+      {model.legs.length > 0 ? (
+        <View style={styles.legs} testID="pick-card-legs">
+          {model.legs.map((leg, index) => (
+            <View key={leg.key} style={styles.leg} testID="pick-card-leg">
+              <View style={styles.legTop}>
+                <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.legLabel}>
+                  {`LEG ${index + 1}`}
+                </Text>
+                {leg.state ? (
+                  <Text
+                    maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                    style={[styles.legState, leg.state === 'Live' && styles.statusLive]}
+                  >
+                    {leg.state}
+                  </Text>
+                ) : null}
+              </View>
+              <Text
+                maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+                style={[styles.legPick, final && styles.pickFinal]}
+              >
+                {leg.pick}
+              </Text>
+              <Text maxFontSizeMultiplier={theme.fontScaleCaps.dense} style={styles.legMeta}>
+                {[leg.matchup, leg.status, leg.detail]
+                  .filter((part): part is string => part != null && part.length > 0)
+                  .join(' · ')}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
       {live && model.progress ? (
         <View testID="pick-card-progress">
           <LineScale axisLabel={model.axisLabel} model={model.progress} />
@@ -85,10 +127,52 @@ const styles = StyleSheet.create({
     fontWeight: theme.type.eyebrow.weight,
     letterSpacing: theme.type.eyebrow.letterSpacing,
   },
+  detail: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.small.size,
+    lineHeight: theme.type.small.lineHeight,
+  },
   gameCol: {
     alignItems: 'flex-end',
     flexShrink: 0,
     gap: theme.spacing.xs,
+  },
+  leg: {
+    borderColor: theme.colors.border,
+    borderTopWidth: theme.effects.panelBorderWidth,
+    gap: theme.spacing.xs,
+    paddingTop: theme.spacing.sm,
+  },
+  legLabel: {
+    color: theme.colors.textTertiary,
+    fontFamily: theme.type.eyebrow.fontFamily,
+    fontSize: theme.type.eyebrow.size,
+    fontWeight: theme.type.eyebrow.weight,
+    letterSpacing: theme.type.eyebrow.letterSpacing,
+  },
+  legMeta: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.caption.size,
+    lineHeight: theme.type.caption.lineHeight,
+  },
+  legPick: {
+    color: theme.colors.accent,
+    fontSize: theme.type.bodyStrong.size,
+    fontWeight: theme.type.bodyStrong.weight,
+    lineHeight: theme.type.bodyStrong.lineHeight,
+  },
+  legState: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.type.ticker.fontFamily,
+    fontSize: theme.type.ticker.size,
+  },
+  legTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  legs: {
+    gap: theme.spacing.sm,
   },
   matchup: {
     alignItems: 'center',
