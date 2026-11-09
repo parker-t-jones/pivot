@@ -88,8 +88,11 @@ They carry old product names on purpose. Do not "tidy" them.
 
 ## Safety rules — production, data, secrets
 
-- **Never touch production unless the task explicitly says so and Parker has approved it in that task.** That includes: `fly deploy`, `fly secrets`, `fly scale`, `eas build`, `eas submit`, `eas env:*`, `supabase db push` / `link` / any hosted-project command, Cloudflare dashboard settings, App Store Connect, and RevenueCat. Prepare the change and give Parker the exact commands instead.
+- **Never touch production unless the task explicitly says so and Parker has approved it in that task.** That includes: `fly deploy`, `fly secrets`, `fly scale`, `eas build`, `eas submit`, `eas update` / `pnpm update:ios`, `eas env:*`, `supabase db push` / `link` / any hosted-project command, Cloudflare dashboard settings, App Store Connect, and RevenueCat. Prepare the change and give Parker the exact commands instead.
 - **Merging to `main` deploys the web app** (Cloudflare Pages builds `origin/main`). Work on a branch and open a PR. Never push to `main` directly.
+- **EAS Update ships JS straight to installed iPhones** (`docs/EAS-UPDATE-RUNBOOK.md`). Sessions never run `eas update`, `pnpm update:ios`, `eas update:republish`, or `eas update:roll-back-to-embedded`. Every PR that touches `app/` or `shared/` says which it is:
+  - **update-safe:** JS, copy, or assets only, so Parker can publish an update.
+  - **needs a build:** a native package, `app/modules/*/ios`, a native `app.json` field, `app/eas.json`, or an SDK bump. When unsure, compare `npx expo-updates runtimeversion:resolve --platform ios` (run in `app/`) before and after the change; a different runtime means a build.
 - **Never modify Parker's real account or any real user's data** (stakes, players, leagues, preferences, password). Manual checks use the local stack and the local test user.
 - **Seeds** refuse non-localhost Supabase unless `--allow-remote`; never pass it without explicit approval. `seed:broadcasts` never runs against hosted.
 - **Env files** (`.env`, `.env.local`, `.env.production`, `app/.env*`, `services/api/.env*`) are gitignored and hold real keys. Never commit them, never print secret values, never overwrite one you didn't create. In a new git worktree, **copy** env files (`cp`), never symlink: a write through a symlink once overwrote the production app env.
@@ -113,6 +116,7 @@ They carry old product names on purpose. Do not "tidy" them.
 - `UI-SPEC.md` — visual language ("sportsbook lounge"); a sidecar, not the source of truth. Its accent hex is stale.
 - `docs/WEB-PLAN.md` — the web app's decisions, deploy, and Pro-entitlement notes.
 - `docs/D1-DEPLOY-RUNBOOK.md`, `docs/W9-PAGES-RUNBOOK.md` — Fly and Pages deploy references.
+- `docs/EAS-UPDATE-RUNBOOK.md` — update vs build, publishing JS-only fixes to iPhones, rollback.
 - `RUNBOOK.md` — local dev startup (paths stale). `TESTING-RULES.md` — live-gameday harness procedure.
 - `.cursorrules` — older Cursor rules; superseded by this file where they disagree (e.g. web may use browser storage as above; PLAN.md is no longer the only spec).
 

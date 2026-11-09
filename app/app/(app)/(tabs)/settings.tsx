@@ -43,6 +43,8 @@ import {
   type MeResponse,
 } from '../../../lib/me';
 import { requestWeekGamesRefresh } from '../../../lib/weekGamesRefresh';
+import { runningUpdate } from '../../../lib/runningUpdate';
+import { updateLabel } from '../../../lib/updateLabel';
 import { unregisterPushNotificationsAsync } from '../../../lib/pushNotifications';
 import { revokeDesktopAlerts } from '../../../lib/webPush';
 import {
@@ -685,6 +687,7 @@ function DesktopAlertsButton() {
 
 function AboutSection() {
   const version = Constants.expoConfig?.version ?? '0.0.0';
+  const updateLine = updateLabel(runningUpdate());
   const [isSendingTest, setIsSendingTest] = useState(false);
 
   const onSendTestNotification = async () => {
@@ -705,6 +708,7 @@ function AboutSection() {
   return (
     <SectionCard title="About">
       <Text style={styles.rowSubtext}>Pivot v{version}</Text>
+      {updateLine ? <Text style={styles.rowSubtext}>{updateLine}</Text> : null}
       <TextButton
         accessibilityRole="link"
         label="Contact support"
