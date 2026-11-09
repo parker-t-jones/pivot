@@ -14,6 +14,7 @@ import { MemSupabase, type Row } from '../lib/memSupabase.test-helper.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
+import { unreachableNflStateSource } from '../lib/nflStateSource.test-helper.js';
 import picksRoutes from './picks.js';
 import stakesRoutes from './stakes.js';
 
@@ -155,6 +156,7 @@ async function setup(): Promise<Harness> {
   await app.register(servicesPlugin, {
     supabase: db as unknown as SupabaseServiceClient,
     lineupCache,
+    nflStateSource: unreachableNflStateSource,
     gameStateStore: gameStates,
     realtimeSubscriber: new InMemoryRealtimeBus(),
     readGamePlayerStats: async (gameId) => stats.get(gameId) ?? null,

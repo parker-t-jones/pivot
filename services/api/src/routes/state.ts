@@ -17,7 +17,7 @@ const stateRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
   fastify.get('/state/nfl', async (request) => {
     const user = requireUser(request);
-    const nflState = await getCurrentNflState(fastify.lineupCache);
+    const nflState = await getCurrentNflState(fastify);
     const openers = await derivePhaseOpeners(fastify.supabase);
     // Missing schedule seed → deriveDisplayPhase falls back to Sleeper season_type (unreliable
     // for display). Keep the endpoint resilient for Home; surface the degraded path in logs.

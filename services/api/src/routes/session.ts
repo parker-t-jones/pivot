@@ -126,7 +126,7 @@ async function computeCurrentPriorityScore(
   userId: string,
   gameId: string,
 ): Promise<number> {
-  const nflState = await getCurrentNflState(fastify.lineupCache);
+  const nflState = await getCurrentNflState(fastify);
   const lineup = await fastify.lineupCache.getLineupCache(userId, nflState.week);
   if (!lineup) return 0;
 

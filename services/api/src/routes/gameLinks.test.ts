@@ -13,6 +13,7 @@ import { apiErrorHandler } from '../lib/errors.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
+import { unreachableNflStateSource } from '../lib/nflStateSource.test-helper.js';
 import gameLinksRoutes from './gameLinks.js';
 
 const JWT_SECRET = 'test-secret-at-least-32-characters-long';
@@ -155,6 +156,7 @@ async function buildApp(mem: Mem) {
   await fastify.register(servicesPlugin, {
     supabase: mem as unknown as SupabaseServiceClient,
     lineupCache,
+    nflStateSource: unreachableNflStateSource,
     gameStateStore: new InMemoryGameStateStore(),
     realtimeSubscriber: new InMemoryRealtimeBus(),
   });

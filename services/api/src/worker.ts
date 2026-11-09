@@ -1,6 +1,7 @@
 import { createLineupCacheProvider } from './cache/index.js';
 import { env } from './env.js';
 import { createSupabaseServiceClient } from './lib/supabase.js';
+import { sleeperClient } from './providers/sleeper-client.js';
 import { runWorkerCycle, type WorkerCycleState } from './lib/worker-cycle.js';
 import { memoryCacheRefusal, productionRedisRefusal } from './runner/redisGuard.js';
 
@@ -28,6 +29,7 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000;
 const deps = {
   supabase: createSupabaseServiceClient(env),
   lineupCache: createLineupCacheProvider(env),
+  nflStateSource: sleeperClient,
 };
 
 let state: WorkerCycleState = { lastDailySyncAt: null };

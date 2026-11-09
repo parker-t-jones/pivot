@@ -253,6 +253,7 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
           const syncContext = await getLineupSyncContext({
             supabase: fastify.supabase,
             lineupCache: fastify.lineupCache,
+            nflStateSource: fastify.nflStateSource,
           });
           await rebuildUserLineupCache(
             { supabase: fastify.supabase, lineupCache: fastify.lineupCache },

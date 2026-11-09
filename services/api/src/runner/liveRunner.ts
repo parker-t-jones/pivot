@@ -37,7 +37,7 @@ import type {
 } from '@pivot/dispatcher';
 import type { LineupCacheProvider } from '../cache/index.js';
 import type { FireClaimRedis } from '../lib/fireClaim.js';
-import { getCurrentNflState } from '../lib/nfl-state.js';
+import { getCurrentNflState, type NflStateSource } from '../lib/nfl-state.js';
 import { deriveDisplayPhaseNow, derivePhaseOpeners, type NflPhase } from '../lib/phase-openers.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import { nextAiringsDelayMs, runAiringsCycle, type AiringsCycleDeps } from './airingsCycle.js';
@@ -99,10 +99,12 @@ export interface LiveRunnerDeps {
   primeGtiFor?: (gameId: string) => Promise<string | null>;
   scoreboard?: EspnClient;
   owner?: string;
-  /** Postgres + the Redis lineup cache. Rebuilt when this process becomes leader. */
+  /** Postgres + the Redis lineup cache. Rebuilt when this process becomes leader. The NFL-state
+   *  source answers week/phase lookups on a cache miss (Sleeper in production). */
   stakeCache: {
     supabase: SupabaseServiceClient;
     lineupCache: LineupCacheProvider;
+    nflStateSource: NflStateSource;
   };
   /** `stake_fired:{stakeId}:{code}` cache in front of `stake_trigger_log`. */
   firedClaims: FireClaimRedis;
@@ -399,7 +401,7 @@ async function pollWhileLeader(
 async function displayPhase(stakeCache: LiveRunnerDeps['stakeCache']): Promise<NflPhase> {
   const [openers, nflState] = await Promise.all([
     derivePhaseOpeners(stakeCache.supabase),
-    getCurrentNflState(stakeCache.lineupCache),
+    getCurrentNflState(stakeCache),
   ]);
   return deriveDisplayPhaseNow(openers, nflState.seasonType);
 }

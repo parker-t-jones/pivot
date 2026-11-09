@@ -91,7 +91,7 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
   fastify.get('/leagues', async (request) => {
     const user = requireUser(request);
     if (await userIsDemo(fastify.supabase, user.id)) {
-      const nfl = await getCurrentNflState(fastify.lineupCache);
+      const nfl = await getCurrentNflState(fastify);
       const season = Number(nfl.season);
       return {
         leagues: [demoLeague(Number.isInteger(season) ? season : new Date().getFullYear())],
@@ -200,6 +200,7 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
         const syncContext = await getLineupSyncContext({
           supabase: fastify.supabase,
           lineupCache: fastify.lineupCache,
+          nflStateSource: fastify.nflStateSource,
         });
         await syncLeagueLineup(
           { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
@@ -268,6 +269,7 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
         const syncContext = await getLineupSyncContext({
           supabase: fastify.supabase,
           lineupCache: fastify.lineupCache,
+          nflStateSource: fastify.nflStateSource,
         });
         await rebuildUserLineupCache(
           { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
@@ -334,6 +336,7 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
       const syncContext = await getLineupSyncContext({
         supabase: fastify.supabase,
         lineupCache: fastify.lineupCache,
+        nflStateSource: fastify.nflStateSource,
       });
       const result = await syncLeagueLineup(
         { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
@@ -367,13 +370,14 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
             `No league found with id "${request.params.id}".`,
           );
         }
-        const nfl = await getCurrentNflState(fastify.lineupCache);
+        const nfl = await getCurrentNflState(fastify);
         return demoLineupResponse(request.query.week ?? nfl.week);
       }
       const league = await getOwnedLeagueOrThrow(fastify.supabase, user.id, request.params.id);
       const syncContext = await getLineupSyncContext({
         supabase: fastify.supabase,
         lineupCache: fastify.lineupCache,
+        nflStateSource: fastify.nflStateSource,
       });
       const week = request.query.week ?? syncContext.week;
       return await buildLineupResponse(
@@ -502,6 +506,7 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
       const syncContext = await getLineupSyncContext({
         supabase: fastify.supabase,
         lineupCache: fastify.lineupCache,
+        nflStateSource: fastify.nflStateSource,
       });
       return await buildLineupResponse(
         fastify.supabase,

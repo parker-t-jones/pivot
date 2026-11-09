@@ -104,7 +104,7 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
 
   fastify.post('/picks', { schema: { body: postPicksBodySchema } }, async (request, reply) => {
     const user = requireUser(request);
-    const nfl = await getCurrentNflState(fastify.lineupCache);
+    const nfl = await getCurrentNflState(fastify);
     const season = Number(nfl.season);
     if (!Number.isInteger(season)) {
       throw new ApiError(400, 'stake_game_invalid', 'That game is not open for a pick.');
@@ -239,7 +239,7 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
 
   fastify.get('/picks', { schema: { querystring: weekQuery } }, async (request) => {
     const user = requireUser(request);
-    const nfl = await getCurrentNflState(fastify.lineupCache);
+    const nfl = await getCurrentNflState(fastify);
     const season = Number(nfl.season);
     const week = request.query.week ?? nfl.week;
     if (await userIsDemo(fastify.supabase, user.id)) {

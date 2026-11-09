@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
+import { unreachableNflStateSource } from '../lib/nflStateSource.test-helper.js';
 import { createNoStakeWarner, NO_STAKE_WARNING, rebuildStakeCache } from './stakeCache.js';
 
 const LEAGUE = '11111111-1111-4111-8111-111111111111';
@@ -152,6 +153,7 @@ describe('rebuildStakeCache', () => {
     const result = await rebuildStakeCache({
       supabase: supabaseForWatchedStarters(),
       lineupCache,
+      nflStateSource: unreachableNflStateSource,
       log: (line) => logs.push(line),
     });
     expect(result).toEqual({ users: 2, teams: 2 });
@@ -201,6 +203,7 @@ describe('rebuildStakeCache', () => {
         },
       ]),
       lineupCache,
+      nflStateSource: unreachableNflStateSource,
     });
 
     expect(await lineupCache.getUsersWithBet(live)).toEqual([USER_A]);
@@ -234,6 +237,7 @@ describe('rebuildStakeCache', () => {
         },
       ]),
       lineupCache,
+      nflStateSource: unreachableNflStateSource,
     });
     expect(lineupCache.betWrites).toBe(0);
     expect(await lineupCache.getUsersWithBet('game-rostered')).toEqual([]);

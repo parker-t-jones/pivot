@@ -6,7 +6,7 @@ import { ApiError } from './errors.js';
 import { assembleUserLineupCache, type CachePlayerRow } from './lineupCacheAssemble.js';
 import { resolveOpponentStakeSlots, type OpponentStakeSlot } from './opponentStakes.js';
 import { gameIdByTeam } from './rosteredStakes.js';
-import { getCurrentNflState } from './nfl-state.js';
+import { getCurrentNflState, type NflStateSource } from './nfl-state.js';
 import { deriveDisplayPhaseNow, derivePhaseOpeners, type NflPhase } from './phase-openers.js';
 import type { Json } from './database.types.js';
 import type { SupabaseServiceClient } from './supabase.js';
@@ -52,9 +52,15 @@ export interface SyncLeagueLineupResult {
 
 const IMPOSSIBLE_UUID = '00000000-0000-0000-0000-000000000000';
 
+export interface LineupSyncContextDeps extends SyncLeagueLineupDeps {
+  nflStateSource: NflStateSource;
+}
+
 /** Resolve week + schedule-derived `display_phase` for sync / worker cadence. */
-export async function getLineupSyncContext(deps: SyncLeagueLineupDeps): Promise<LineupSyncContext> {
-  const nflState = await getCurrentNflState(deps.lineupCache);
+export async function getLineupSyncContext(
+  deps: LineupSyncContextDeps,
+): Promise<LineupSyncContext> {
+  const nflState = await getCurrentNflState(deps);
   const openers = await derivePhaseOpeners(deps.supabase);
   const displayPhase = deriveDisplayPhaseNow(openers, nflState.seasonType);
   return {

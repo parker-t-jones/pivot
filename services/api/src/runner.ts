@@ -11,6 +11,7 @@ import { SupabasePrimeGtiLookup } from './runner/primeEventGti.js';
 import { SupabaseSavedGameLinkLookup } from './runner/savedGameLinks.js';
 import { SupabaseWebPushSubscriptionStore } from './runner/webPushSubscriptions.js';
 import { guardRunnerStart } from './runner/redisGuard.js';
+import { sleeperClient } from './providers/sleeper-client.js';
 import { SupabaseFlagEventPersistence } from './runner/supabaseFlagEventPersistence.js';
 import {
   SupabaseBroadcastCatalog,
@@ -73,7 +74,7 @@ const handle = startLiveRunner({
   rateLimit: tcpRateLimit(redis),
   realtime: tcpRealtimeBus(redis),
   lineupCache,
-  stakeCache: { supabase, lineupCache },
+  stakeCache: { supabase, lineupCache, nflStateSource: sleeperClient },
   firedClaims: tcpFiredClaims(redis),
   playerStats: tcpGamePlayerStats(redis),
   games: new SupabaseGameDirectory(supabase),

@@ -14,6 +14,7 @@ import { InMemoryLineupCache } from '../cache/in-memory.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
+import { unreachableNflStateSource } from '../lib/nflStateSource.test-helper.js';
 import realtimeRoutes, { type RealtimeRoutesOptions } from './realtime.js';
 
 const JWT_SECRET = 'test-secret-at-least-32-characters-long';
@@ -48,6 +49,7 @@ async function buildTestApp(routeOptions: RealtimeRoutesOptions = {}): Promise<T
   await fastify.register(servicesPlugin, {
     supabase: {} as SupabaseServiceClient,
     lineupCache: new InMemoryLineupCache(),
+    nflStateSource: unreachableNflStateSource,
     gameStateStore,
     realtimeSubscriber: realtimeBus,
   });

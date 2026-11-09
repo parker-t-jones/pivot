@@ -1,6 +1,6 @@
 import type { LineupCacheProvider } from '../cache/index.js';
 import { syncUserBetGames } from '../lib/betIndex.js';
-import { getCurrentNflState } from '../lib/nfl-state.js';
+import { getCurrentNflState, type NflStateSource } from '../lib/nfl-state.js';
 import { rebuildUserLineupCache } from '../lib/lineup-sync.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 
@@ -20,9 +20,10 @@ interface LiveTeams {
 export async function rebuildStakeCache(deps: {
   supabase: SupabaseServiceClient;
   lineupCache: LineupCacheProvider;
+  nflStateSource: NflStateSource;
   log?: (line: string) => void;
 }): Promise<{ users: number; teams: number }> {
-  const state = await getCurrentNflState(deps.lineupCache);
+  const state = await getCurrentNflState(deps);
   const { data, error } = await deps.supabase.from('users').select('id');
   if (error) throw new Error(error.message);
 

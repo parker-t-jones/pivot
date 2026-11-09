@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { unreachableNflStateSource } from './nflStateSource.test-helper.js';
 import type { SupabaseServiceClient } from './supabase.js';
 
 const { getLineupSyncContext } = vi.hoisted(() => ({ getLineupSyncContext: vi.fn() }));
@@ -36,7 +37,8 @@ const league = (id: string): FakeLeagueRow => ({
 });
 
 describe('runWorkerCycle', () => {
-  const lineupCache = {} as never;
+  // getLineupSyncContext is mocked, so neither dependency is read.
+  const caches = { lineupCache: {} as never, nflStateSource: unreachableNflStateSource };
 
   beforeEach(() => {
     getLineupSyncContext.mockReset();
@@ -53,7 +55,7 @@ describe('runWorkerCycle', () => {
     syncLeagueLineup.mockResolvedValue({ slotCount: 9, lineupSource: 'matchup', week: 10 });
     const supabase = makeSupabase([league('a'), league('b')]);
 
-    const result = await runWorkerCycle({ supabase, lineupCache }, { lastDailySyncAt: NOON }, NOON);
+    const result = await runWorkerCycle({ ...caches, supabase }, { lastDailySyncAt: NOON }, NOON);
 
     expect(result.ran).toBe(true);
     expect(result.syncedLeagueCount).toBe(2);
@@ -77,7 +79,7 @@ describe('runWorkerCycle', () => {
     syncLeagueLineup.mockResolvedValue({ slotCount: 9, lineupSource: 'matchup', week: 19 });
     const supabase = makeSupabase([league('a')]);
 
-    const result = await runWorkerCycle({ supabase, lineupCache }, { lastDailySyncAt: null }, NOON);
+    const result = await runWorkerCycle({ ...caches, supabase }, { lastDailySyncAt: null }, NOON);
 
     expect(result.ran).toBe(true);
     expect(result.syncedLeagueCount).toBe(1);
@@ -97,7 +99,7 @@ describe('runWorkerCycle', () => {
     });
     const supabase = makeSupabase([league('a')]);
 
-    const result = await runWorkerCycle({ supabase, lineupCache }, { lastDailySyncAt: null }, NOON);
+    const result = await runWorkerCycle({ ...caches, supabase }, { lastDailySyncAt: null }, NOON);
 
     expect(result.ran).toBe(true);
     expect(result.nextState).toEqual({ lastDailySyncAt: NOON });
@@ -119,7 +121,7 @@ describe('runWorkerCycle', () => {
     const oneHourAgo = NOON - 60 * 60 * 1000;
 
     const result = await runWorkerCycle(
-      { supabase, lineupCache },
+      { ...caches, supabase },
       { lastDailySyncAt: oneHourAgo },
       NOON,
     );
@@ -146,7 +148,7 @@ describe('runWorkerCycle', () => {
     const twentyFiveHoursAgo = NOON - 25 * 60 * 60 * 1000;
 
     const result = await runWorkerCycle(
-      { supabase, lineupCache },
+      { ...caches, supabase },
       { lastDailySyncAt: twentyFiveHoursAgo },
       NOON,
     );
@@ -166,7 +168,7 @@ describe('runWorkerCycle', () => {
     const oneHourAgo = NOON - 60 * 60 * 1000;
 
     const result = await runWorkerCycle(
-      { supabase, lineupCache },
+      { ...caches, supabase },
       { lastDailySyncAt: oneHourAgo },
       NOON,
     );
@@ -186,7 +188,7 @@ describe('runWorkerCycle', () => {
     const oneHourAgo = NOON - 60 * 60 * 1000;
 
     const result = await runWorkerCycle(
-      { supabase, lineupCache },
+      { ...caches, supabase },
       { lastDailySyncAt: oneHourAgo },
       NOON,
     );
@@ -207,7 +209,7 @@ describe('runWorkerCycle', () => {
       .mockResolvedValueOnce({ slotCount: 9, lineupSource: 'matchup', week: 10 });
     const supabase = makeSupabase([league('a'), league('b')]);
 
-    const result = await runWorkerCycle({ supabase, lineupCache }, { lastDailySyncAt: null }, NOON);
+    const result = await runWorkerCycle({ ...caches, supabase }, { lastDailySyncAt: null }, NOON);
 
     expect(result.ran).toBe(true);
     expect(result.syncedLeagueCount).toBe(1);
