@@ -7,7 +7,12 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import healthRoutes from './health.js';
 
-const VAPID_NAMES = ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'] as const;
+const VAPID_NAMES = [
+  'VAPID_PUBLIC_KEY',
+  'VAPID_PRIVATE_KEY',
+  'VAPID_SUBJECT',
+  'ANTHROPIC_API_KEY',
+] as const;
 
 describe('GET /health', () => {
   const apps: ReturnType<typeof Fastify>[] = [];
@@ -46,7 +51,12 @@ describe('GET /health', () => {
     const response = await app.inject({ method: 'GET', url: '/health' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true, version: 'dev', webPush: 'disabled' });
+    expect(response.json()).toEqual({
+      ok: true,
+      version: 'dev',
+      webPush: 'disabled',
+      slipImport: 'disabled',
+    });
   });
 
   it('returns GIT_SHA as version when set', async () => {
@@ -55,7 +65,12 @@ describe('GET /health', () => {
     const response = await app.inject({ method: 'GET', url: '/health' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true, version: 'abc1234', webPush: 'disabled' });
+    expect(response.json()).toEqual({
+      ok: true,
+      version: 'abc1234',
+      webPush: 'disabled',
+      slipImport: 'disabled',
+    });
   });
 
   it('reports webPush enabled only when all three VAPID variables are set', async () => {
@@ -67,6 +82,20 @@ describe('GET /health', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ webPush: 'enabled' });
+  });
+
+  it('reports slipImport enabled only when ANTHROPIC_API_KEY is set, without exposing it', async () => {
+    process.env['ANTHROPIC_API_KEY'] = '   ';
+    const blank = await buildApp();
+    expect((await blank.inject({ method: 'GET', url: '/health' })).json()).toMatchObject({
+      slipImport: 'disabled',
+    });
+
+    process.env['ANTHROPIC_API_KEY'] = 'sk-ant-test-value';
+    const app = await buildApp();
+    const response = await app.inject({ method: 'GET', url: '/health' });
+    expect(response.json()).toMatchObject({ slipImport: 'enabled' });
+    expect(response.body).not.toContain('sk-ant-test-value');
   });
 
   it('does not require Authorization', async () => {

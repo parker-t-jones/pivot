@@ -121,10 +121,17 @@ export function resolveTeam(text: string | null, teams: readonly SlipTeam[]): Sl
     const byAbbreviation = unique(teams.filter((team) => abbreviationsOf(team).includes(joined)));
     if (byAbbreviation) return byAbbreviation;
   }
+  // "Eagles", "Philadelphia Eagles", or "PHI Eagles": only the team's own city, city initials,
+  // or abbreviation may come before the nickname.
   const byNickname = unique(
     teams.filter((team) => {
       const name = words(team.name).join(' ');
-      return name.length > 0 && (joined === name || joined.endsWith(` ${name}`));
+      if (name.length === 0) return false;
+      const city = words(team.city);
+      // "NY Giants", "LA Rams", "TB Buccaneers": the initials of a two-word city.
+      const initials = city.length > 1 ? [city.map((word) => word[0]).join('')] : [];
+      const prefixes = ['', city.join(' '), ...initials, ...abbreviationsOf(team)];
+      return prefixes.some((prefix) => joined === (prefix ? `${prefix} ${name}` : name));
     }),
   );
   if (byNickname) return byNickname;

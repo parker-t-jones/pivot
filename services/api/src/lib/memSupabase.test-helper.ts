@@ -1,6 +1,6 @@
 // Test-only in-memory Supabase for the picks tests. Supports the query shapes the picks code
 // uses: select (columns ignored), insert (one row or many), upsert, update, delete, eq, in, is,
-// single, maybeSingle. Deleting a `pick_slips` row cascades to its `stakes` legs, as the FK does.
+// single, maybeSingle, ilike (`%` wildcards), limit. Deleting a `pick_slips` row cascades to its `stakes` legs, as the FK does.
 
 export type Row = Record<string, unknown>;
 
@@ -52,6 +52,7 @@ class MemQuery implements PromiseLike<Result> {
   private payload: Row | Row[] | null = null;
   private conflictKey = '';
   private one: 'many' | 'maybe' | 'single' = 'many';
+  private max = Infinity;
 
   constructor(
     private readonly db: MemSupabase,
@@ -94,6 +95,22 @@ class MemQuery implements PromiseLike<Result> {
   in(column: string, values: readonly unknown[]): this {
     const allowed = new Set(values);
     this.filters.push((row) => allowed.has(row[column]));
+    return this;
+  }
+
+  /** Case-insensitive LIKE with `%` wildcards. Escapes are not interpreted. */
+  ilike(column: string, pattern: string): this {
+    const source = pattern
+      .split('%')
+      .map((part) => part.replace(/\\(.)/g, '$1').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('.*');
+    const regex = new RegExp(`^${source}$`, 'i');
+    this.filters.push((row) => typeof row[column] === 'string' && regex.test(row[column]));
+    return this;
+  }
+
+  limit(count: number): this {
+    this.max = count;
     return this;
   }
 
@@ -149,7 +166,9 @@ class MemQuery implements PromiseLike<Result> {
       rows.push(created);
       return Promise.resolve({ data: [created], error: null });
     }
-    const matched = rows.filter((row) => this.filters.every((keep) => keep(row)));
+    const matched = rows
+      .filter((row) => this.filters.every((keep) => keep(row)))
+      .slice(0, this.mode === 'select' ? this.max : undefined);
     if (this.mode === 'update' && this.payload && !Array.isArray(this.payload)) {
       for (const row of matched) Object.assign(row, this.payload);
       return Promise.resolve(this.shape(matched));
