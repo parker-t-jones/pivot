@@ -430,4 +430,18 @@ describe('password recovery stays off the app gate', () => {
       }),
     ).toEqual({ action: 'render' });
   });
+
+  it('does not pull add-stake back to connect-team with zero leagues', () => {
+    expect(isOnZeroLeaguesAllowlist('add-stake')).toBe(true);
+    expect(
+      resolveAppGate({
+        leaguesStatus: 'ready',
+        leagueCount: 0,
+        connectDeferred: false,
+        routeLeaf: 'add-stake',
+        pushStatus: 'granted',
+        notificationsOnboarding: false,
+      }),
+    ).toEqual({ action: 'render' });
+  });
 });

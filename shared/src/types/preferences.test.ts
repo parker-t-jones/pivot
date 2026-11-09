@@ -25,6 +25,23 @@ describe('watchOpponent', () => {
   });
 });
 
+describe('following', () => {
+  it('keeps the selection through parse, serialize, and parse', () => {
+    const parsed = parsePreferences({ following: ['bets', 'survivor'] });
+    const again = parsePreferences(JSON.parse(JSON.stringify(parsed)));
+    expect(again.following).toEqual(['bets', 'survivor']);
+  });
+
+  it('is empty when the key is absent', () => {
+    expect(parsePreferences({}).following).toEqual([]);
+    expect(parsePreferences(undefined).following).toEqual([]);
+  });
+
+  it('rejects an option that is not fantasy, bets, or survivor', () => {
+    expect(() => parsePreferences({ following: ['prediction_markets'] })).toThrow();
+  });
+});
+
 describe('alertTiming', () => {
   it('defaults to On time with no overrides', () => {
     expect(parsePreferences({}).alertTiming).toEqual({

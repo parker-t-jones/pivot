@@ -61,6 +61,7 @@ function me(watchedLeagueIds: string[]): MeResponse {
       autoSwitch: false,
       watchOpponent: false,
       watchedLeagueIds,
+      following: [],
     },
     app_presence: [],
   };
@@ -87,15 +88,19 @@ describe('ActiveLineupPicker', () => {
   it('labels the control and shows the league name with the platform', () => {
     act(() => {
       root.render(
-        <ActiveLineupPicker leagues={leagues} me={me(['lg-sleeper'])} onMeUpdated={() => undefined} />,
+        <ActiveLineupPicker
+          leagues={leagues}
+          me={me(['lg-sleeper'])}
+          onMeUpdated={() => undefined}
+        />,
       );
     });
     expect(host.textContent).toContain('Active lineup');
     expect(host.textContent).toContain('Test League');
     expect(host.textContent).toContain('Sleeper');
-    expect(host.querySelector('[data-testid="active-lineup-trigger"]')?.getAttribute('aria-label')).toBe(
-      'Active lineup',
-    );
+    expect(
+      host.querySelector('[data-testid="active-lineup-trigger"]')?.getAttribute('aria-label'),
+    ).toBe('Active lineup');
   });
 
   it('still saves the tapped league as the only watched lineup', () => {
@@ -111,9 +116,9 @@ describe('ActiveLineupPicker', () => {
     });
     expect(document.body.textContent).toContain('Office');
     expect(document.querySelector('[data-testid="active-lineup-sheet"]')).toBeTruthy();
-    const office = Array.from(document.querySelectorAll('[data-testid="active-lineup-option"]')).find(
-      (node) => node.textContent?.includes('Office'),
-    );
+    const office = Array.from(
+      document.querySelectorAll('[data-testid="active-lineup-option"]'),
+    ).find((node) => node.textContent?.includes('Office'));
     act(() => {
       (office as HTMLElement | undefined)?.click();
     });
@@ -124,7 +129,11 @@ describe('ActiveLineupPicker', () => {
     tier.value = 'wide';
     act(() => {
       root.render(
-        <ActiveLineupPicker leagues={leagues} me={me(['lg-sleeper'])} onMeUpdated={() => undefined} />,
+        <ActiveLineupPicker
+          leagues={leagues}
+          me={me(['lg-sleeper'])}
+          onMeUpdated={() => undefined}
+        />,
       );
     });
     act(() => {

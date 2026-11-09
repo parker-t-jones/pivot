@@ -45,6 +45,9 @@ export const ZERO_LEAGUES_ALLOWLIST = new Set([
   'notifications-permission',
   'onboarding-all-set',
   'change-password',
+  // "Add a pick" (#31 step 4) must work with zero leagues — bets, props and survivor
+  // picks aren't tied to a fantasy league.
+  'add-stake',
 ]);
 
 /**

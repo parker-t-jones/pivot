@@ -10,6 +10,8 @@ export default defineConfig({
       '@pivot/shared/lineupOrder': new URL('./shared/src/lineupOrder.ts', import.meta.url).pathname,
       '@pivot/shared/stakeLabel': new URL('./shared/src/stakeLabel.ts', import.meta.url).pathname,
       '@pivot/shared/picks': new URL('./shared/src/types/picks.ts', import.meta.url).pathname,
+      '@pivot/shared/preferences': new URL('./shared/src/types/preferences.ts', import.meta.url)
+        .pathname,
       '@pivot/shared': new URL('./shared/src/index.ts', import.meta.url).pathname,
       '@pivot/engine': new URL('./services/engine/src/index.ts', import.meta.url).pathname,
       '@pivot/dispatcher': new URL('./services/dispatcher/src/index.ts', import.meta.url).pathname,

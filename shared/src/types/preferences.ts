@@ -30,6 +30,14 @@ export const DEFAULT_ALERT_TIMING: AlertTiming = {
 };
 
 /**
+ * Onboarding "What are you following?" (issue #31 / PIVOT-STAKES-PLAN.md §12.1, no prediction
+ * markets option — not built). Multi-select; at least one is required to leave that step, but the
+ * key itself defaults to empty so an existing row (or a row from a skipped step) still parses.
+ */
+export const FOLLOWING_OPTIONS = ['fantasy', 'bets', 'survivor'] as const;
+export type FollowingOption = (typeof FOLLOWING_OPTIONS)[number];
+
+/**
  * `users.preferences` jsonb shape (PLAN.md Section 7).
  *
  * `watchedLeagueIds` — leagues the engine + Home stake from. Free: at most one.
@@ -50,6 +58,8 @@ export const preferencesSchema = z.object({
   watchOpponent: z.boolean().default(false),
   watchedLeagueIds: z.array(z.string().uuid()).default([]),
   alertTiming: alertTimingSchema.default(DEFAULT_ALERT_TIMING),
+  /** It only orders add-paths and filter pills; it never gates a feature. */
+  following: z.array(z.enum(FOLLOWING_OPTIONS)).default([]),
 });
 
 export type Preferences = z.infer<typeof preferencesSchema>;

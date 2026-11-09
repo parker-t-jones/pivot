@@ -63,6 +63,7 @@ const freeUser: DispatchUser = {
     watchOpponent: false,
     watchedLeagueIds: [],
     alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
+    following: [],
   },
   expoPushToken: null, // push isn't this pipeline test's concern — see delivery.test.ts's "push" block
 };

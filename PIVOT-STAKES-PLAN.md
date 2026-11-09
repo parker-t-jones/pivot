@@ -567,6 +567,14 @@ Rules:
 
 ### 12.1 Onboarding flow
 
+**Superseded (Nov 9, 2026, issue #31):** step 3 drops Prediction markets (not built) and stores
+`preferences.following: ('fantasy' | 'bets' | 'survivor')[]`; step 4's copy is "Add your first
+picks" (never "stakes" in user copy) and offers Connect Sleeper / Add manually / Add a pick, in
+that order; "Import a bet slip" is withheld until issue #12 ships and the server reports it
+configured — there is no such signal yet. Step 6's copy no longer claims alerts never precede the
+stream (false since issue #7's early nudge); see the issue for the replacement copy. Step 7 (quick
+tour) stays skipped until issue #32 ships.
+
 Changes to the existing 6 screens are marked **new** or **changed**.
 
 1. **Welcome.** Unchanged.

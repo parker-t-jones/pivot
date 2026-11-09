@@ -1,6 +1,7 @@
 import {
   alertDelaySecondsSchema,
   parsePreferences,
+  FOLLOWING_OPTIONS,
   FREE_MAX_WATCHED_LEAGUES,
   USER_SERVICES,
   type AlertTiming,
@@ -33,9 +34,12 @@ const PLATFORMS = ['ios', 'android'] as const;
 
 const webPushSubscriptionBody = z.object({
   deviceId: z.string().uuid(),
-  endpoint: z.string().url().refine((value) => value.startsWith('https://'), {
-    message: 'endpoint must be https',
-  }),
+  endpoint: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith('https://'), {
+      message: 'endpoint must be https',
+    }),
   p256dh: z.string().min(1),
   auth: z.string().min(1),
   userAgent: z.string().max(512).optional(),
@@ -107,6 +111,7 @@ const preferencesPatchBody = z.object({
   autoSwitch: z.boolean().optional(),
   watchOpponent: z.boolean().optional(),
   watchedLeagueIds: z.array(z.string().uuid()).optional(),
+  following: z.array(z.enum(FOLLOWING_OPTIONS)).optional(),
   /** Per-service `null` clears that service's override ("Same as default"). */
   alertTiming: z
     .object({
@@ -186,94 +191,93 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
    * which also backfills any key an older stored row predates (Section 7's "every existing row
    * parses to the defaults" invariant, extended to a merge instead of a fresh parse).
    */
-  fastify.patch(
-    '/me/preferences',
-    { schema: { body: preferencesPatchBody } },
-    async (request) => {
-      const user = requireUser(request);
-      await rejectIfDemo(fastify.supabase, user.id);
+  fastify.patch('/me/preferences', { schema: { body: preferencesPatchBody } }, async (request) => {
+    const user = requireUser(request);
+    await rejectIfDemo(fastify.supabase, user.id);
 
-      const { data: existingRow, error: existingError } = await fastify.supabase
-        .from('users')
-        .select('preferences, subscription_tier')
-        .eq('id', user.id)
-        .single();
-      if (existingError) throw existingError;
+    const { data: existingRow, error: existingError } = await fastify.supabase
+      .from('users')
+      .select('preferences, subscription_tier')
+      .eq('id', user.id)
+      .single();
+    if (existingError) throw existingError;
 
-      const current = parsePreferences(existingRow.preferences);
-      let nextWatched = request.body.watchedLeagueIds ?? current.watchedLeagueIds;
+    const current = parsePreferences(existingRow.preferences);
+    let nextWatched = request.body.watchedLeagueIds ?? current.watchedLeagueIds;
 
-      if (request.body.watchedLeagueIds !== undefined) {
-        const { data: owned, error: ownedError } = await fastify.supabase
-          .from('leagues')
-          .select('id')
-          .eq('user_id', user.id);
-        if (ownedError) throw ownedError;
-        const ownedIds = new Set((owned ?? []).map((l) => l.id));
-        const invalid = request.body.watchedLeagueIds.filter((id) => !ownedIds.has(id));
-        if (invalid.length > 0) {
-          throw new ApiError(
-            400,
-            'invalid_watched_league',
-            'watchedLeagueIds must refer to leagues you own.',
-            { league_ids: invalid },
-          );
-        }
-        nextWatched = request.body.watchedLeagueIds;
-        if (
-          existingRow.subscription_tier !== 'pro' &&
-          nextWatched.length > FREE_MAX_WATCHED_LEAGUES
-        ) {
-          throw new ApiError(
-            403,
-            'watched_league_limit_free',
-            `Free accounts can watch ${FREE_MAX_WATCHED_LEAGUES} league at a time. Upgrade to Pro to watch multiple.`,
-          );
-        }
-      }
-
-      const merged = parsePreferences({
-        ...current,
-        ...request.body,
-        quietHours: { ...current.quietHours, ...request.body.quietHours },
-        alertTiming: mergeAlertTiming(current.alertTiming, request.body.alertTiming),
-        watchedLeagueIds: nextWatched,
-      });
-
-      const { data, error } = await fastify.supabase
-        .from('users')
-        .update({ preferences: merged })
-        .eq('id', user.id)
-        .select('id, email, preferences, subscription_tier')
-        .single();
-      if (error) throw error;
-
-      if (request.body.watchedLeagueIds !== undefined) {
-        try {
-          const syncContext = await getLineupSyncContext({
-            supabase: fastify.supabase,
-            lineupCache: fastify.lineupCache,
-            nflStateSource: fastify.nflStateSource,
-          });
-          await rebuildUserLineupCache(
-            { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
-            user.id,
-            syncContext.week,
-          );
-        } catch (rebuildError) {
-          fastify.log.warn({ err: rebuildError, userId: user.id }, 'Cache rebuild after watch change failed');
-        }
-      }
-
-      const { data: presenceRows, error: presenceError } = await fastify.supabase
-        .from('user_app_presence')
-        .select('service, has_subscription')
+    if (request.body.watchedLeagueIds !== undefined) {
+      const { data: owned, error: ownedError } = await fastify.supabase
+        .from('leagues')
+        .select('id')
         .eq('user_id', user.id);
-      if (presenceError) throw presenceError;
+      if (ownedError) throw ownedError;
+      const ownedIds = new Set((owned ?? []).map((l) => l.id));
+      const invalid = request.body.watchedLeagueIds.filter((id) => !ownedIds.has(id));
+      if (invalid.length > 0) {
+        throw new ApiError(
+          400,
+          'invalid_watched_league',
+          'watchedLeagueIds must refer to leagues you own.',
+          { league_ids: invalid },
+        );
+      }
+      nextWatched = request.body.watchedLeagueIds;
+      if (
+        existingRow.subscription_tier !== 'pro' &&
+        nextWatched.length > FREE_MAX_WATCHED_LEAGUES
+      ) {
+        throw new ApiError(
+          403,
+          'watched_league_limit_free',
+          `Free accounts can watch ${FREE_MAX_WATCHED_LEAGUES} league at a time. Upgrade to Pro to watch multiple.`,
+        );
+      }
+    }
 
-      return meResponse(data, presenceRows ?? []);
-    },
-  );
+    const merged = parsePreferences({
+      ...current,
+      ...request.body,
+      quietHours: { ...current.quietHours, ...request.body.quietHours },
+      alertTiming: mergeAlertTiming(current.alertTiming, request.body.alertTiming),
+      watchedLeagueIds: nextWatched,
+    });
+
+    const { data, error } = await fastify.supabase
+      .from('users')
+      .update({ preferences: merged })
+      .eq('id', user.id)
+      .select('id, email, preferences, subscription_tier')
+      .single();
+    if (error) throw error;
+
+    if (request.body.watchedLeagueIds !== undefined) {
+      try {
+        const syncContext = await getLineupSyncContext({
+          supabase: fastify.supabase,
+          lineupCache: fastify.lineupCache,
+          nflStateSource: fastify.nflStateSource,
+        });
+        await rebuildUserLineupCache(
+          { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
+          user.id,
+          syncContext.week,
+        );
+      } catch (rebuildError) {
+        fastify.log.warn(
+          { err: rebuildError, userId: user.id },
+          'Cache rebuild after watch change failed',
+        );
+      }
+    }
+
+    const { data: presenceRows, error: presenceError } = await fastify.supabase
+      .from('user_app_presence')
+      .select('service, has_subscription')
+      .eq('user_id', user.id);
+    if (presenceError) throw presenceError;
+
+    return meResponse(data, presenceRows ?? []);
+  });
 
   /**
    * Upserts one or more streaming-service presence rows (Settings' "Streaming services" section
