@@ -65,7 +65,8 @@ export interface ResumptionGatedDispatcherDeps {
   clock?: () => number;
   /**
    * Extra milliseconds before an event fires, per event (so per user). Every enqueue goes through
-   * it, which is where a per-user / per-service delay (#8) plugs in. Absent → 0.
+   * it. Production passes `createAlertDelay` (the user's Settings → Alert timing for the service the
+   * alert routes to, issue #8). Absent → 0. A negative value or a thrown error counts as 0.
    */
   fireDelayMs?: (event: FlagEvent) => number | Promise<number>;
 }
@@ -378,6 +379,11 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
       if (isPushEligibleEvent(item.event.type)) eligible.push(item);
       else bypass.push(item);
     }
+    const winners = collapseByUser(eligible);
+    // One play can fire for many users. Their delay lookups run side by side here, so the last
+    // user's enqueue doesn't wait on everyone else's settings read.
+    const delays = new Map<WindowCandidate, Promise<number>>();
+    for (const item of [...bypass, ...winners]) delays.set(item, this.fireDelayFor(item.event));
     for (const item of bypass) {
       await this.enqueueNow(
         item.event,
@@ -385,9 +391,9 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
         item.decision,
         item.holdMs,
         item.resolution,
+        delays.get(item),
       );
     }
-    const winners = collapseByUser(eligible);
     const winnerByUser = new Map(winners.map((winner) => [winner.event.userId, winner]));
     for (const item of eligible) {
       const winner = winnerByUser.get(item.event.userId);
@@ -414,15 +420,30 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
         winner.decision,
         winner.holdMs,
         winner.resolution,
+        delays.get(winner),
       );
     }
   }
 
+  /** The user's alert delay for this event (issue #8). Never negative; a failed lookup is 0. */
+  private async fireDelayFor(event: FlagEvent): Promise<number> {
+    if (!this.deps.fireDelayMs) return 0;
+    try {
+      return Math.max(0, await this.deps.fireDelayMs(event));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'lookup failed';
+      console.warn(`[gate] fire delay failed user=${event.userId} game=${event.gameId}: ${reason}`);
+      return 0;
+    }
+  }
+
   /**
-   * The one place an event is fired. Enqueues with `scheduledFireAt` = now (plus `fireDelayMs`, 0
-   * by default), so the real 500ms `runDispatcherTick` picks it up on its next pass. "Now" is
-   * correct rather than lazy: resumption has already been evidenced by this point (or, for a
-   * possession nudge, there is nothing to wait for), so there is no further gate delay to model.
+   * The one place an event is fired. Enqueues with `scheduledFireAt` = now plus the user's alert
+   * delay (`fireDelayMs`, 0 by default), so `runDispatcherTick` picks it up once that time passes;
+   * rate limiting, relevance, and delivery (iOS push, Web Push, the in-app banner) all happen then.
+   * "Now" is correct rather than lazy: resumption has already been evidenced by this point (or, for
+   * a possession nudge, there is nothing to wait for), so the only further wait is the user's own.
+   * `delay` is a lookup `enqueueCollapsed` already started for this event.
    */
   private async enqueueNow(
     event: FlagEvent,
@@ -430,13 +451,14 @@ export class ResumptionGatedDispatcher implements EventDispatcher {
     decision: GateDecision,
     holdMs: number,
     resolution: ResumptionResolution | null,
+    delay: Promise<number> = this.fireDelayFor(event),
   ): Promise<void> {
+    const delayMs = await delay;
     const now = this.now();
-    const delayMs = this.deps.fireDelayMs ? await this.deps.fireDelayMs(event) : 0;
     await this.deps.queue.enqueue(
       {
         ...event,
-        scheduledFireAt: now + Math.max(0, delayMs),
+        scheduledFireAt: now + delayMs,
         enqueuedAt: new Date(now).toISOString(),
       },
       triggeringPlayId,

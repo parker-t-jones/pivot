@@ -1,4 +1,33 @@
 import { z } from 'zod';
+import { USER_SERVICES } from '../broadcast/types.js';
+
+/** Alert timing stepper (issue #8): On time (0) to +90s, in 5s steps. Delays only. */
+export const ALERT_DELAY_MAX_SECONDS = 90;
+export const ALERT_DELAY_STEP_SECONDS = 5;
+
+export const alertDelaySecondsSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(ALERT_DELAY_MAX_SECONDS)
+  .multipleOf(ALERT_DELAY_STEP_SECONDS);
+
+/**
+ * How long to hold a user's alerts. `defaultDelaySeconds` covers every service; a key in
+ * `serviceDelaySeconds` overrides it for alerts that route to that service. A missing key is
+ * "Same as default".
+ */
+export const alertTimingSchema = z.object({
+  defaultDelaySeconds: alertDelaySecondsSchema.default(0),
+  serviceDelaySeconds: z.partialRecord(z.enum(USER_SERVICES), alertDelaySecondsSchema).default({}),
+});
+
+export type AlertTiming = z.infer<typeof alertTimingSchema>;
+
+export const DEFAULT_ALERT_TIMING: AlertTiming = {
+  defaultDelaySeconds: 0,
+  serviceDelaySeconds: {},
+};
 
 /**
  * `users.preferences` jsonb shape (PLAN.md Section 7).
@@ -20,6 +49,7 @@ export const preferencesSchema = z.object({
   /** Opponent red-zone nudges on Home. Off until the client turns them on. */
   watchOpponent: z.boolean().default(false),
   watchedLeagueIds: z.array(z.string().uuid()).default([]),
+  alertTiming: alertTimingSchema.default(DEFAULT_ALERT_TIMING),
 });
 
 export type Preferences = z.infer<typeof preferencesSchema>;
@@ -27,6 +57,27 @@ export type Preferences = z.infer<typeof preferencesSchema>;
 /** Parses a `users.preferences` jsonb value (or `undefined`/`{}`) into a fully-defaulted `Preferences`. */
 export function parsePreferences(raw: unknown): Preferences {
   return preferencesSchema.parse(raw ?? {});
+}
+
+/**
+ * Seconds to hold one alert for a user whose alert routes to `service` (the destination the
+ * dispatcher resolves; `null` when none resolves). The service's override wins; otherwise the
+ * default. Never negative: nothing makes an alert earlier than detection.
+ */
+export function alertDelaySecondsFor(timing: AlertTiming, service: string | null): number {
+  const override =
+    service === null
+      ? undefined
+      : (timing.serviceDelaySeconds as Partial<Record<string, number>>)[service];
+  return Math.max(0, override ?? timing.defaultDelaySeconds);
+}
+
+/** True when no setting can add a delay, so callers can skip resolving the destination. */
+export function alertTimingIsOnTime(timing: AlertTiming): boolean {
+  return (
+    timing.defaultDelaySeconds === 0 &&
+    Object.values(timing.serviceDelaySeconds).every((seconds) => seconds === 0)
+  );
 }
 
 /** Free-tier entitlement caps (PLAN.md Active Lineup + Pro). */

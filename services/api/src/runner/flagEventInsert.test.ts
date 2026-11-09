@@ -199,6 +199,7 @@ describe.skipIf(!localReady)('local flag_events insert', () => {
         autoSwitch: false,
         watchOpponent: false,
         watchedLeagueIds: [],
+        alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
       },
       expoPushToken: 'ExponentPushToken[p0-6-local]',
     };

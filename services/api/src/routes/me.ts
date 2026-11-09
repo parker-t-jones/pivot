@@ -1,4 +1,10 @@
-import { parsePreferences, FREE_MAX_WATCHED_LEAGUES, USER_SERVICES } from '@pivot/shared';
+import {
+  alertDelaySecondsSchema,
+  parsePreferences,
+  FREE_MAX_WATCHED_LEAGUES,
+  USER_SERVICES,
+  type AlertTiming,
+} from '@pivot/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { sendDemoAccountAlert } from '../lib/demoAlert.js';
@@ -101,7 +107,35 @@ const preferencesPatchBody = z.object({
   autoSwitch: z.boolean().optional(),
   watchOpponent: z.boolean().optional(),
   watchedLeagueIds: z.array(z.string().uuid()).optional(),
+  /** Per-service `null` clears that service's override ("Same as default"). */
+  alertTiming: z
+    .object({
+      defaultDelaySeconds: alertDelaySecondsSchema.optional(),
+      serviceDelaySeconds: z
+        .partialRecord(z.enum(USER_SERVICES), alertDelaySecondsSchema.nullable())
+        .optional(),
+    })
+    .optional(),
 });
+
+type AlertTimingPatch = z.infer<typeof preferencesPatchBody>['alertTiming'];
+
+/** Merges an `alertTiming` patch over the stored value. A `null` service entry removes it. */
+function mergeAlertTiming(current: AlertTiming, patch: AlertTimingPatch): AlertTiming {
+  if (!patch) return current;
+  const merged: Partial<Record<string, number | null>> = {
+    ...current.serviceDelaySeconds,
+    ...patch.serviceDelaySeconds,
+  };
+  return {
+    defaultDelaySeconds: patch.defaultDelaySeconds ?? current.defaultDelaySeconds,
+    serviceDelaySeconds: Object.fromEntries(
+      Object.entries(merged).filter(
+        (entry): entry is [string, number] => typeof entry[1] === 'number',
+      ),
+    ),
+  };
+}
 
 const appPresenceBody = z.object({
   services: z
@@ -202,6 +236,7 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
         ...current,
         ...request.body,
         quietHours: { ...current.quietHours, ...request.body.quietHours },
+        alertTiming: mergeAlertTiming(current.alertTiming, request.body.alertTiming),
         watchedLeagueIds: nextWatched,
       });
 

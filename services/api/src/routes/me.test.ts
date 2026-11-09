@@ -482,6 +482,7 @@ describe('GET /me', () => {
         autoSwitch: false,
         watchOpponent: false,
         watchedLeagueIds: [],
+        alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
       features: { bets: false },
@@ -534,6 +535,7 @@ describe('GET /me features.bets', () => {
         autoSwitch: false,
         watchOpponent: false,
         watchedLeagueIds: [],
+        alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
       is_demo: false,
@@ -612,6 +614,7 @@ describe('PATCH /me/preferences', () => {
       autoSwitch: true, // untouched by this PATCH
       watchOpponent: false,
       watchedLeagueIds: [],
+      alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
     });
     expect(response.json().features).toEqual({ bets: false });
   });
@@ -675,6 +678,101 @@ describe('PATCH /me/preferences', () => {
     expect(fetched.statusCode).toBe(200);
     expect(fetched.json().preferences.watchOpponent).toBe(true);
     expect(Object.hasOwn(fetched.json().preferences, 'notAPreference')).toBe(false);
+  });
+});
+
+describe('PATCH /me/preferences alertTiming', () => {
+  let app: TestApp;
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  async function patch(payload: unknown, stored: unknown = {}) {
+    app = await buildTestApp({}, { 'user-1': { preferences: stored } });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    return app.fastify.inject({
+      method: 'PATCH',
+      url: '/me/preferences',
+      headers: { authorization: `Bearer ${token}` },
+      payload: payload as Record<string, unknown>,
+    });
+  }
+
+  it('round-trips a default and an override through PATCH and GET /me', async () => {
+    const patched = await patch({
+      alertTiming: { defaultDelaySeconds: 15, serviceDelaySeconds: { youtube_tv: 40 } },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().preferences.alertTiming).toEqual({
+      defaultDelaySeconds: 15,
+      serviceDelaySeconds: { youtube_tv: 40 },
+    });
+
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+    const fetched = await app.fastify.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(fetched.json().preferences.alertTiming).toEqual({
+      defaultDelaySeconds: 15,
+      serviceDelaySeconds: { youtube_tv: 40 },
+    });
+  });
+
+  it('changes one override without touching the default or the other overrides', async () => {
+    const response = await patch(
+      { alertTiming: { serviceDelaySeconds: { peacock: 0 } } },
+      {
+        alertTiming: { defaultDelaySeconds: 30, serviceDelaySeconds: { youtube_tv: 40 } },
+      },
+    );
+    expect(response.statusCode).toBe(200);
+    expect(response.json().preferences.alertTiming).toEqual({
+      defaultDelaySeconds: 30,
+      serviceDelaySeconds: { youtube_tv: 40, peacock: 0 },
+    });
+  });
+
+  it('clears an override back to "Same as default" with null', async () => {
+    const response = await patch(
+      { alertTiming: { serviceDelaySeconds: { youtube_tv: null } } },
+      {
+        alertTiming: {
+          defaultDelaySeconds: 30,
+          serviceDelaySeconds: { youtube_tv: 40, peacock: 10 },
+        },
+      },
+    );
+    expect(response.statusCode).toBe(200);
+    expect(response.json().preferences.alertTiming).toEqual({
+      defaultDelaySeconds: 30,
+      serviceDelaySeconds: { peacock: 10 },
+    });
+  });
+
+  it('leaves alertTiming alone when a PATCH does not mention it', async () => {
+    const response = await patch(
+      { notificationMode: 'off' },
+      { alertTiming: { defaultDelaySeconds: 45, serviceDelaySeconds: { fubo: 90 } } },
+    );
+    expect(response.statusCode).toBe(200);
+    expect(response.json().preferences.alertTiming).toEqual({
+      defaultDelaySeconds: 45,
+      serviceDelaySeconds: { fubo: 90 },
+    });
+  });
+
+  it.each([
+    ['a negative delay', { defaultDelaySeconds: -5 }],
+    ['more than 90s', { defaultDelaySeconds: 95 }],
+    ['a value off the 5s step', { defaultDelaySeconds: 7 }],
+    ['an override off the 5s step', { serviceDelaySeconds: { youtube_tv: 12 } }],
+    ['an unknown service', { serviceDelaySeconds: { not_a_service: 10 } }],
+  ])('rejects %s with 400', async (_label, alertTiming) => {
+    const response = await patch({ alertTiming });
+    expect(response.statusCode).toBe(400);
   });
 });
 

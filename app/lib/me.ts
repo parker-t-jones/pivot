@@ -1,4 +1,5 @@
 import type { UserService } from '@pivot/shared/broadcast';
+import type { AlertTiming } from './alertTiming';
 import { apiClient } from './apiClient';
 import { noteMeFeatures } from './featureGate';
 import { noteServerTier } from './subscriptionPlan';
@@ -18,6 +19,14 @@ export interface Preferences {
   watchOpponent: boolean;
   /** Leagues Home + the engine stake from. Free: at most one. */
   watchedLeagueIds: string[];
+  /** Settings → Alert timing. Absent on an older server. */
+  alertTiming?: AlertTiming;
+}
+
+/** `PATCH /me/preferences` `alertTiming`. A service set to `null` goes back to Same as default. */
+export interface AlertTimingPatch {
+  defaultDelaySeconds?: number;
+  serviceDelaySeconds?: Partial<Record<UserService, number | null>>;
 }
 
 export interface AppPresenceEntry {
@@ -54,6 +63,7 @@ export async function patchPreferences(patch: {
   autoSwitch?: boolean;
   watchOpponent?: boolean;
   watchedLeagueIds?: string[];
+  alertTiming?: AlertTimingPatch;
 }): Promise<MeResponse> {
   const me = await apiClient.patch<MeResponse>('/me/preferences', patch);
   noteMe(me);

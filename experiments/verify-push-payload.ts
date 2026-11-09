@@ -121,6 +121,7 @@ async function main(): Promise<void> {
       autoSwitch: false,
       watchOpponent: false,
       watchedLeagueIds: [],
+      alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
     },
     expoPushToken: 'ExponentPushToken[verify]',
   };

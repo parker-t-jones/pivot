@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { UserService } from '@pivot/shared/broadcast';
 
+import { AlertTimingSection } from '../../../components/AlertTimingSection';
 import { DemoEditingBanner } from '../../../components/DemoEditingBanner';
 import { ErrorState } from '../../../components/ErrorState';
 import { LoadingState } from '../../../components/LoadingState';
@@ -24,6 +25,7 @@ import { useSession } from '../../../contexts/SessionContext';
 import { useUpgradeSheet } from '../../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../../lib/apiClient';
 import { presentDemoAlertWithoutToken } from '../../../lib/demoLocalAlert';
+import { alertTimingServices } from '../../../lib/alertTiming';
 import { alertAsync, confirmAsync } from '../../../lib/confirm';
 import { desktopAlertCopy, lastDesktopAlertState } from '../../../lib/desktopAlerts';
 import { clearRememberedWatchlist } from '../../../lib/lineupLoading';
@@ -200,15 +202,35 @@ export default function SettingsScreen() {
       onDeleteAccount={onDeleteAccount}
     />
   );
+  const alertTiming = me.preferences.alertTiming;
   const notifications = (
-    <NotificationsSection
-      editsLocked={me.is_demo === true}
-      preferences={me.preferences}
-      onChange={async (patch) => {
-        const updated = await patchPreferences(patch);
-        setMe(updated);
-      }}
-    />
+    <>
+      <NotificationsSection
+        editsLocked={me.is_demo === true}
+        preferences={me.preferences}
+        onChange={async (patch) => {
+          const updated = await patchPreferences(patch);
+          setMe(updated);
+        }}
+      />
+      {alertTiming ? (
+        <SectionCard title="Alert timing">
+          {me.is_demo === true ? <DemoEditingBanner /> : null}
+          <AlertTimingSection
+            alertTiming={alertTiming}
+            services={alertTimingServices(me.app_presence)}
+            editsLocked={me.is_demo === true}
+            onChange={async (patch) => {
+              const updated = await patchPreferences({ alertTiming: patch });
+              setMe(updated);
+            }}
+            onError={(error) => {
+              void alertAsync('Could not save', errorMessage(error));
+            }}
+          />
+        </SectionCard>
+      ) : null}
+    </>
   );
   const streaming = (
     <StreamingServicesSection

@@ -547,6 +547,56 @@ describe('ResumptionGatedDispatcher', () => {
       expect(await queue.due(now.value, 10)).toHaveLength(0);
     });
 
+    it('fires on time, and logs, when the fire delay throws or is negative', async () => {
+      const now = { value: 2_000 };
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { dispatcher, queue, records } = gate(now, (event) => {
+        if (event.userId === 'u-broken') throw new Error('prefs read failed');
+        return -10_000;
+      });
+      dispatcher.beginPlay('g1', 'punt');
+      await dispatcher.dispatch(nudge(), 'play-punt');
+      await dispatcher.dispatch(
+        makeEvent({ id: 'broken', userId: 'u-broken', trigger: 'possession' }),
+        'play-punt',
+      );
+      await dispatcher.endPlay('g1');
+
+      const due = await queue.due(now.value, 10);
+      expect(due.map((item) => [item.event.id, item.event.scheduledFireAt])).toEqual([
+        ['nudge', 2_000],
+        ['broken', 2_000],
+      ]);
+      expect(records).toHaveLength(2);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('prefs read failed'));
+      warn.mockRestore();
+    });
+
+    it("looks up every user's delay on a play side by side", async () => {
+      const now = { value: 1_000 };
+      let inFlight = 0;
+      let maxInFlight = 0;
+      const { dispatcher, queue } = gate(now, async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return 10_000;
+      });
+      dispatcher.beginPlay('g1', 'punt');
+      for (const userId of ['a', 'b', 'c']) {
+        await dispatcher.dispatch(
+          makeEvent({ id: userId, userId, trigger: 'possession' }),
+          'play-punt',
+        );
+      }
+      await dispatcher.endPlay('g1');
+
+      expect(maxInFlight).toBe(3);
+      const due = await queue.due(Number.MAX_SAFE_INTEGER, 10);
+      expect(due.map((item) => item.event.scheduledFireAt)).toEqual([11_000, 11_000, 11_000]);
+    });
+
     it('still lets the silence ceiling release parked events after a nudge', async () => {
       vi.useFakeTimers();
       const now = { value: 3_000 };

@@ -33,6 +33,7 @@ export {
   type BroadcastCatalog,
   type LikelyBroadcast,
 } from './broadcastLag.js';
+export { ALERT_DELAY_CACHE_TTL_MS, createAlertDelay, type AlertDelayDeps } from './alertDelay.js';
 
 export {
   InMemoryRateLimitStore,
