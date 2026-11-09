@@ -69,7 +69,17 @@ import { fetchGamesWeek, type ScheduleGame } from '../lib/schedule';
 import { stakeRequestError } from '../lib/stakesClient';
 import { theme } from '../lib/theme';
 import { promptUpgradeForCapError } from '../lib/upgradePrompt';
+import {
+  IMPORT_EDIT_REASON,
+  draftFromImportedLeg,
+  fetchSlipImportEnabled,
+  importSlip,
+  slipImportErrorMessage,
+  type FlaggedLeg,
+  type SlipImportResult,
+} from '../lib/slipImport';
 import { AddPickGameList, type AddPickGameGroupModel } from './AddPickGameList';
+import { AddPickImportFlags } from './AddPickImportFlags';
 import { AddPickLineEntry } from './AddPickLineEntry';
 import { AddPickParlay, PARLAY_MAX_LEGS } from './AddPickParlay';
 import { AddPickReview } from './AddPickReview';
@@ -80,6 +90,7 @@ import { ErrorState } from './ErrorState';
 import { ListRow } from './ListRow';
 import { LoadingState } from './LoadingState';
 import { PlayerSearchField } from './PlayerSearchField';
+import { SlipImportButton } from './SlipImportButton';
 import { TextButton } from './TextButton';
 
 interface Allowance {
@@ -95,6 +106,8 @@ interface ParlayLeg {
   game: DraftGame;
   text: string;
   badge: string | null;
+  /** The steps' choices for this leg, so Edit reopens them filled in. */
+  draft: PickDraft;
 }
 
 const DUPLICATE_LEG = 'That leg is already in this parlay.';
@@ -133,6 +146,25 @@ export function AddPickFlow({
   const [picks, setPicks] = useState<PicksPageRow[]>([]);
   const [slots, setSlots] = useState<LineupSlot[]>([]);
   const [editsLocked, setEditsLocked] = useState(false);
+  /** The server has a model key (`/health`). Off hides Import from screenshot. */
+  const [importEnabled, setImportEnabled] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  /** Set after a screenshot import: the review asks the user to check what was read. */
+  const [imported, setImported] = useState(false);
+  const [flaggedLegs, setFlaggedLegs] = useState<FlaggedLeg[]>([]);
+  /** The parlay leg being edited. Its replacement takes its place. */
+  const [editingLegKey, setEditingLegKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchSlipImportEnabled().then((enabled) => {
+      if (!cancelled) setImportEnabled(enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -214,7 +246,7 @@ export function AddPickFlow({
   };
 
   const discardParlay = async (): Promise<boolean> => {
-    if (parlayLegs === null || parlayLegs.length === 0) return true;
+    if (parlayLegs === null || (parlayLegs.length === 0 && flaggedLegs.length === 0)) return true;
     return await confirmAsync({
       title: 'Discard this parlay?',
       message: 'The legs you added will be removed.',
@@ -230,6 +262,8 @@ export function AddPickFlow({
       void discardParlay().then((discard) => {
         if (!discard) return;
         setParlayLegs(null);
+        setFlaggedLegs([]);
+        setImported(false);
         setDraft(EMPTY_DRAFT);
         setStep('type');
       });
@@ -238,6 +272,7 @@ export function AddPickFlow({
     if (step === 'type') {
       if (inParlay) {
         setDraft(EMPTY_DRAFT);
+        setEditingLegKey(null);
         setStep('legs');
         return;
       }
@@ -251,6 +286,8 @@ export function AddPickFlow({
   const chooseKind = (next: PickKind) => {
     if (editsLocked) return;
     setFormError(null);
+    setImportError(null);
+    if (!inParlay) setImported(false);
     if (next === 'PARLAY') {
       setParlayLegs([]);
       setDraft(EMPTY_DRAFT);
@@ -417,25 +454,111 @@ export function AddPickFlow({
       setFormError(lineMissingMessage());
       return;
     }
-    if (parlayLegs.some((leg) => samePickInput(leg.input, input))) {
+    if (
+      parlayLegs.some((leg) => leg.key !== editingLegKey && samePickInput(leg.input, input))
+    ) {
       setFormError(DUPLICATE_LEG);
       return;
     }
-    legKey.current += 1;
-    setParlayLegs([
-      ...parlayLegs,
-      {
-        key: `leg-${legKey.current}`,
-        input,
-        game: draft.game,
-        // No per-leg TYPE row, so use the full label ("KC ML", not "KC").
-        text: pickInputLabel(input, draft.game, draft.player),
-        badge: draftPickBadge(draft),
-      },
-    ]);
+    const built = {
+      input,
+      game: draft.game,
+      // No per-leg TYPE row, so use the full label ("KC ML", not "KC").
+      text: pickInputLabel(input, draft.game, draft.player),
+      badge: draftPickBadge(draft),
+      draft,
+    };
+    if (editingLegKey !== null && parlayLegs.some((leg) => leg.key === editingLegKey)) {
+      setParlayLegs(
+        parlayLegs.map((leg) => (leg.key === editingLegKey ? { ...built, key: leg.key } : leg)),
+      );
+    } else {
+      legKey.current += 1;
+      setParlayLegs([...parlayLegs, { ...built, key: `leg-${legKey.current}` }]);
+    }
+    setEditingLegKey(null);
     setDraft(EMPTY_DRAFT);
     setFormError(null);
     setStep('legs');
+  };
+
+  /** Reopens a leg's steps with its choices filled in, at the line (or the review). */
+  const editLeg = (key: string) => {
+    const leg = parlayLegs?.find((candidate) => candidate.key === key);
+    if (!leg || editsLocked) return;
+    const legSteps = pickSteps(leg.draft.kind, leg.draft.teamMarket);
+    setDraft(leg.draft);
+    setEditingLegKey(key);
+    setFormError(null);
+    setStep(legSteps.includes('line') ? 'line' : 'confirm');
+  };
+
+  const dismissFlag = (key: string) => {
+    setFlaggedLegs((current) => current.filter((leg) => leg.key !== key));
+  };
+
+  /** Puts an import into the normal review: a single pick at its review, a parlay's legs on the slip. */
+  const applyImport = (result: SlipImportResult) => {
+    const ready: ParlayLeg[] = [];
+    const flagged: FlaggedLeg[] = [];
+    for (const leg of result.legs) {
+      legKey.current += 1;
+      const key = `leg-${legKey.current}`;
+      if (leg.status === 'flagged') {
+        flagged.push({ key, text: leg.text, reason: leg.reason });
+        continue;
+      }
+      const legDraft = draftFromImportedLeg(leg);
+      if (legDraft === null) {
+        flagged.push({ key, text: leg.text, reason: IMPORT_EDIT_REASON });
+        continue;
+      }
+      ready.push({
+        key,
+        input: leg.pick,
+        game: leg.game,
+        text: pickInputLabel(leg.pick, leg.game, leg.player),
+        badge: draftPickBadge(legDraft),
+        draft: legDraft,
+      });
+    }
+
+    const [only] = ready;
+    if (result.kind === 'single' && only !== undefined) {
+      setParlayLegs(null);
+      setFlaggedLegs([]);
+      setDraft(only.draft);
+      setImported(true);
+      setStep('confirm');
+      return;
+    }
+    if (result.kind === 'single') {
+      const [problem] = flagged;
+      setImportError(
+        problem ? `We read “${problem.text}”. ${problem.reason}` : slipImportErrorMessage(null),
+      );
+      return;
+    }
+    setParlayLegs(ready);
+    setFlaggedLegs(flagged);
+    setDraft(EMPTY_DRAFT);
+    setImported(true);
+    setStep('legs');
+  };
+
+  const importImage = (image: string) => {
+    if (editsLocked || importing) return;
+    setImporting(true);
+    setImportError(null);
+    void (async () => {
+      try {
+        applyImport(await importSlip(image));
+      } catch (error) {
+        setImportError(slipImportErrorMessage(error));
+      } finally {
+        setImporting(false);
+      }
+    })();
   };
 
   const removeLeg = (key: string) => {
@@ -472,6 +595,7 @@ export function AddPickFlow({
       buildingLeg={step !== 'legs'}
       game={slipGameFor(draft.game)}
       legs={slipLegs}
+      onEditLeg={editsLocked ? undefined : editLeg}
       onRemoveLeg={editsLocked ? undefined : removeLeg}
       pick={slipPick}
       pickLabel="PICK"
@@ -539,17 +663,56 @@ export function AddPickFlow({
               options={LEG_KIND_COPY}
             />
           ) : (
-            <AddPickTypeStep
-              allowance={allowance}
-              disabled={editsLocked}
-              onChoose={chooseKind}
-              onUpgrade={() => openUpgrade('stake_limit_free')}
-            />
+            <View style={styles.stack}>
+              <AddPickTypeStep
+                allowance={allowance}
+                disabled={editsLocked}
+                onChoose={chooseKind}
+                onUpgrade={() => openUpgrade('stake_limit_free')}
+              />
+              {importEnabled && !editsLocked ? (
+                <View style={styles.importBlock} testID="add-pick-import">
+                  <SlipImportButton
+                    loading={importing}
+                    onError={setImportError}
+                    onImage={importImage}
+                    onLocked={
+                      allowance !== null && !allowance.isPro && allowance.freeLeft === 0
+                        ? () => openUpgrade('stake_limit_free')
+                        : null
+                    }
+                  />
+                  {importing ? (
+                    <Text style={styles.muted}>Reading your bet slip…</Text>
+                  ) : null}
+                  {importError ? (
+                    <Text style={styles.error} testID="add-pick-import-error">
+                      {importError}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
           )
+        ) : null}
+
+        {step === 'legs' && parlayLegs !== null && imported ? (
+          <Text style={styles.muted}>
+            Check each leg we read from your screenshot. Edit or remove any that are wrong.
+          </Text>
+        ) : null}
+
+        {step === 'legs' && parlayLegs !== null ? (
+          <AddPickImportFlags
+            disabled={editsLocked}
+            legs={flaggedLegs}
+            onDismiss={dismissFlag}
+          />
         ) : null}
 
         {step === 'legs' && parlayLegs !== null ? (
           <AddPickParlay
+            saveBlocked={flaggedLegs.length > 0}
             disabled={editsLocked}
             error={formError}
             legCount={parlayLegs.length}
@@ -660,6 +823,12 @@ export function AddPickFlow({
           />
         ) : null}
 
+        {step === 'confirm' && kind && imported && !inParlay ? (
+          <Text style={styles.muted}>
+            Check the pick we read from your screenshot. Tap Back to change it.
+          </Text>
+        ) : null}
+
         {step === 'confirm' && kind ? (
           <AddPickReview
             disabled={editsLocked}
@@ -668,7 +837,9 @@ export function AddPickFlow({
             onSubmit={inParlay ? addLeg : () => void submitSingle()}
             readout={readout}
             saving={saving}
-            submitLabel={inParlay ? 'Add to parlay' : 'Add a pick'}
+            submitLabel={
+              inParlay ? (editingLegKey !== null ? 'Update leg' : 'Add to parlay') : 'Add a pick'
+            }
           />
         ) : null}
       </ScrollView>
@@ -710,6 +881,15 @@ const styles = StyleSheet.create({
   content: {
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg2,
+  },
+  error: {
+    color: theme.colors.danger,
+    fontSize: theme.type.body.size,
+    lineHeight: theme.type.body.lineHeight,
+  },
+  importBlock: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
   },
   eyebrow: {
     color: theme.colors.brass,
