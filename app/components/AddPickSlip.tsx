@@ -90,6 +90,7 @@ export function AddPickSlip({
   legs,
   buildingLeg = false,
   onRemoveLeg,
+  onEditLeg,
 }: {
   typeLabel: string | null;
   game: AddPickSlipGame | null;
@@ -103,6 +104,8 @@ export function AddPickSlip({
   buildingLeg?: boolean;
   /** Shown on each saved leg while no leg is being built. */
   onRemoveLeg?: (key: string) => void;
+  /** Shown next to Remove: reopens the leg's steps with its choices filled in. */
+  onEditLeg?: (key: string) => void;
 }) {
   const gameKey = game ? `${game.away}@${game.home}` : '';
   if (legs !== undefined) {
@@ -122,6 +125,15 @@ export function AddPickSlip({
                     <SlipPick pick={leg.pick} />
                     <Text style={styles.detail}>{`${leg.away} @ ${leg.home}`}</Text>
                   </View>
+                  {onEditLeg && !buildingLeg ? (
+                    <TextButton
+                      accessibilityLabel={`Edit leg ${index + 1}, ${leg.pick.text}`}
+                      hitArea="slop"
+                      label="Edit"
+                      onPress={() => onEditLeg(leg.key)}
+                      size="smallStrong"
+                    />
+                  ) : null}
                   {onRemoveLeg && !buildingLeg ? (
                     <TextButton
                       accessibilityLabel={`Remove leg ${index + 1}, ${leg.pick.text}`}

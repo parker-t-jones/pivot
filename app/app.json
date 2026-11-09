@@ -27,6 +27,14 @@
         {
           "faceIDPermission": "Confirm it's you before changing your password."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pivot reads the bet slip screenshot you choose so you can add its picks.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
       ]
     ],
     "extra": {

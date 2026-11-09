@@ -42,12 +42,26 @@ describe('PUSH_DRIVER env', () => {
   it('treats a blank WEB_DEV_ORIGIN as unset and rejects a non-URL', async () => {
     const { loadAndValidateEnv } = await loadEnvModule();
     expect(loadAndValidateEnv({ ...required, WEB_DEV_ORIGIN: '' }).WEB_DEV_ORIGIN).toBeUndefined();
-    expect(loadAndValidateEnv({ ...required, WEB_DEV_ORIGIN: 'http://127.0.0.1:8081' }).WEB_DEV_ORIGIN).toBe(
-      'http://127.0.0.1:8081',
-    );
+    expect(
+      loadAndValidateEnv({ ...required, WEB_DEV_ORIGIN: 'http://127.0.0.1:8081' }).WEB_DEV_ORIGIN,
+    ).toBe('http://127.0.0.1:8081');
     expect(() => loadAndValidateEnv({ ...required, WEB_DEV_ORIGIN: 'not-a-url' })).toThrow(
       /WEB_DEV_ORIGIN/,
     );
+  });
+
+  it('leaves slip import off without ANTHROPIC_API_KEY and defaults its daily limits to 5 and 30', async () => {
+    const { loadAndValidateEnv } = await loadEnvModule();
+    const env = loadAndValidateEnv({ ...required, ANTHROPIC_API_KEY: ' ' });
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.SLIP_IMPORT_DAILY_FREE).toBe(5);
+    expect(env.SLIP_IMPORT_DAILY_PRO).toBe(30);
+    const custom = loadAndValidateEnv({
+      ...required,
+      SLIP_IMPORT_DAILY_FREE: '3',
+      SLIP_IMPORT_DAILY_PRO: '50',
+    });
+    expect([custom.SLIP_IMPORT_DAILY_FREE, custom.SLIP_IMPORT_DAILY_PRO]).toEqual([3, 50]);
   });
 
   it('accepts expo without EXPO_ACCESS_TOKEN and still constructs ExpoPushNotifier', async () => {

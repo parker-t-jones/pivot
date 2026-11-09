@@ -36,6 +36,17 @@ const envSchema = z.object({
    * allowlist of user ids. Parsed once at startup; an invalid value is logged and treated as `off`.
    */
   FEATURE_BETS: z.string().optional(),
+  /**
+   * Claude API key for bet slip screenshot import (#12). Missing means import is off: `/health`
+   * reports it disabled and the app hides the button.
+   */
+  ANTHROPIC_API_KEY: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().min(1).optional(),
+  ),
+  /** Screenshot imports per user per day (US Eastern), free and Pro. Bounds the model cost. */
+  SLIP_IMPORT_DAILY_FREE: z.coerce.number().int().min(0).default(5),
+  SLIP_IMPORT_DAILY_PRO: z.coerce.number().int().min(0).default(30),
   PORT: z.coerce.number().int().positive().default(3000),
   /**
    * Extra browser origin allowed to call this API, for local Expo web (`http://localhost:8081`).

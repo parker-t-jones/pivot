@@ -26,6 +26,7 @@ export function AddPickParlay({
   error,
   saving,
   disabled = false,
+  saveBlocked = false,
   onAddLeg,
   onSave,
 }: {
@@ -34,6 +35,8 @@ export function AddPickParlay({
   error: string | null;
   saving: boolean;
   disabled?: boolean;
+  /** Imported legs still need a check (added by hand or dismissed). */
+  saveBlocked?: boolean;
   onAddLeg: () => void;
   onSave: () => void;
 }) {
@@ -51,7 +54,7 @@ export function AddPickParlay({
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <PrimaryButton
-        disabled={disabled || legCount < PARLAY_MIN_LEGS}
+        disabled={disabled || saveBlocked || legCount < PARLAY_MIN_LEGS}
         label="Save parlay"
         loading={saving}
         onPress={onSave}
