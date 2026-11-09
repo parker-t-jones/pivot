@@ -28,6 +28,12 @@
       "types": "./dist/stakeLabel.d.ts",
       "default": "./dist/stakeLabel.js"
     },
+    "./picks": {
+      "react-native": "./src/types/picks.ts",
+      "browser": "./src/types/picks.ts",
+      "types": "./dist/types/picks.d.ts",
+      "default": "./dist/types/picks.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

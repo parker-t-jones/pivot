@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { theme } from '../lib/theme';
 import { spreadReadout } from '../lib/addPickLine';
+import { draftLineConfig, EMPTY_DRAFT, type LineConfig, type PickDraft } from '../lib/pickDraft';
 import { AddPickLineEntry } from './AddPickLineEntry';
 
 vi.mock('react-native', () => import('react-native-web'));
@@ -19,20 +20,25 @@ vi.mock('../lib/fonts', () => ({
   },
 }));
 
+function config(draft: Partial<PickDraft>): LineConfig {
+  const result = draftLineConfig({ ...EMPTY_DRAFT, ...draft });
+  if (result === null) throw new Error('draft has no line step');
+  return result;
+}
+
 function renderEntry(root: Root, props: Partial<ComponentProps<typeof AddPickLineEntry>> = {}) {
   act(() => {
     root.render(
       <AddPickLineEntry
         canContinue={false}
+        config={config({ kind: 'SPREAD' })}
         error={null}
-        kind="SPREAD"
         magnitude=""
         onContinue={() => undefined}
         onMagnitude={() => undefined}
         onRole={() => undefined}
         onStep={() => undefined}
         readout={null}
-        role={null}
         {...props}
       />,
     );
@@ -72,7 +78,7 @@ describe('add a pick line entry', () => {
   });
 
   it('uses 44.5 as the total placeholder', () => {
-    renderEntry(root, { kind: 'TOTAL' });
+    renderEntry(root, { config: config({ kind: 'TOTAL' }) });
     expect(host.querySelector('input')?.getAttribute('placeholder')).toBe('44.5');
   });
 
@@ -97,7 +103,11 @@ describe('add a pick line entry', () => {
 
   it('shows the readout as a full sentence in secondary text', () => {
     const sentence = spreadReadout('Seahawks', 'favorite', 3);
-    renderEntry(root, { magnitude: '3', readout: sentence, role: 'favorite' });
+    renderEntry(root, {
+      config: config({ kind: 'SPREAD', spreadRole: 'favorite' }),
+      magnitude: '3',
+      readout: sentence,
+    });
     const readout = host.querySelector('[data-testid="add-pick-line-readout"]');
     const stack = host.querySelector('[data-testid="add-pick-line"]');
     expect(sentence).toBe(
@@ -109,5 +119,67 @@ describe('add a pick line entry', () => {
       'rgba(154,154,163,1.00)',
     );
     expect(getComputedStyle(stack as Element).gap).toBe(`${theme.spacing.lg}px`);
+  });
+
+  it('shows a period control for a quarter or half market and reports the choice', () => {
+    const onPeriod = vi.fn();
+    renderEntry(root, {
+      config: config({ kind: 'TEAM_PROP', teamMarket: 'SEGMENT_TOTAL' }),
+      onPeriod,
+      period: undefined,
+    });
+    const tabs = Array.from(host.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent);
+    expect(tabs).toEqual(['1Q', '2Q', '3Q', '4Q', '1H', '2H', 'Over', 'Under']);
+    expect(host.querySelector('input')?.getAttribute('placeholder')).toBe('10.5');
+    const half = Array.from(host.querySelectorAll('[role="tab"]')).find(
+      (tab) => tab.textContent === '1H',
+    );
+    act(() => {
+      (half as HTMLElement).click();
+    });
+    expect(onPeriod).toHaveBeenCalledWith('H1');
+  });
+
+  it('offers the full game first on a team total', () => {
+    renderEntry(root, {
+      config: config({ kind: 'TEAM_PROP', teamMarket: 'TEAM_TOTAL' }),
+      period: null,
+    });
+    const first = host.querySelector('[role="tab"]');
+    expect(first?.textContent).toBe('Game');
+    expect(host.querySelector('input')?.getAttribute('placeholder')).toBe('21.5');
+  });
+
+  it('asks only yes or no for a touchdown prop, with no number to enter', () => {
+    const onRole = vi.fn();
+    renderEntry(root, {
+      config: config({ kind: 'PLAYER_PROP', playerMarket: 'ANYTIME_TD' }),
+      onRole,
+    });
+    const tabs = Array.from(host.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent);
+    expect(tabs).toEqual(['Yes', 'No']);
+    expect(host.querySelector('input')).toBeNull();
+    expect(host.querySelector('[data-testid="add-pick-step-up"]')).toBeNull();
+    act(() => {
+      (host.querySelector('[role="tab"]') as HTMLElement).click();
+    });
+    expect(onRole).toHaveBeenCalledWith('yes');
+  });
+
+  it('uses the stat baseline and range for a player prop', () => {
+    renderEntry(root, {
+      config: config({ kind: 'PLAYER_PROP', playerMarket: 'REC_YDS', totalRole: 'over' }),
+      magnitude: '400',
+    });
+    expect(host.querySelector('input')?.getAttribute('placeholder')).toBe('49.5');
+    expect(
+      host.querySelector('[data-testid="add-pick-step-up"]')?.getAttribute('aria-disabled'),
+    ).toBe('true');
+  });
+
+  it('lets the line field shrink so both steppers fit a 390 phone column on web', () => {
+    renderEntry(root);
+    const field = host.querySelector('[data-testid="add-pick-line-field"]');
+    expect(getComputedStyle(field as Element).minWidth).toBe('0px');
   });
 });

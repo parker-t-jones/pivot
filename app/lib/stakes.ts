@@ -133,6 +133,18 @@ export function stakeErrorCopy(code: string): string {
       return 'You already added this bet.';
     case 'stake_managed_by_sync':
       return 'This bet is managed by your league sync.';
+    case 'stake_player_invalid':
+      return 'Pick a player in that game.';
+    case 'stake_type_invalid':
+      return "That pick type can't be added here.";
+    case 'slip_leg_invalid':
+      return "A survivor pick can't be a parlay leg.";
+    case 'slip_week_mismatch':
+      return 'Every leg of a parlay must be in the same week.';
+    case 'slip_duplicate_leg':
+      return 'That parlay has the same leg twice.';
+    case 'demo_account_fixed':
+      return "The demo account's picks can't be changed.";
     default:
       return 'Could not save that bet.';
   }

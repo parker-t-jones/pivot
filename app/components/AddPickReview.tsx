@@ -11,6 +11,7 @@ export function AddPickReview({
   saving,
   onSubmit,
   disabled = false,
+  submitLabel = 'Add a pick',
 }: {
   readout: string | null;
   note: string | null;
@@ -18,6 +19,8 @@ export function AddPickReview({
   saving: boolean;
   onSubmit: () => void;
   disabled?: boolean;
+  /** "Add to parlay" while building a parlay leg. */
+  submitLabel?: string;
 }) {
   return (
     <View style={styles.stack} testID="add-pick-review">
@@ -32,7 +35,7 @@ export function AddPickReview({
         </Text>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <PrimaryButton disabled={disabled} label="Add a pick" loading={saving} onPress={onSubmit} />
+      <PrimaryButton disabled={disabled} label={submitLabel} loading={saving} onPress={onSubmit} />
     </View>
   );
 }
