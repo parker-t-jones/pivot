@@ -144,7 +144,7 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
   fastify.post('/stakes', { schema: { body: postBody } }, async (request, reply) => {
     const user = requireUser(request);
     const { type, gameId, teamId, line } = request.body;
-    const nfl = await getCurrentNflState(fastify.lineupCache);
+    const nfl = await getCurrentNflState(fastify);
     const season = Number(nfl.season);
     if (!Number.isInteger(season)) {
       throw new ApiError(400, 'stake_game_invalid', 'That game is not open for a bet.');
@@ -257,7 +257,7 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
 
   fastify.get('/stakes', { schema: { querystring: weekQuery } }, async (request) => {
     const user = requireUser(request);
-    const nfl = await getCurrentNflState(fastify.lineupCache);
+    const nfl = await getCurrentNflState(fastify);
     const season = Number(nfl.season);
     const week = request.query.week ?? nfl.week;
     if (await userIsDemo(fastify.supabase, user.id)) {

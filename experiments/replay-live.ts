@@ -312,7 +312,13 @@ async function main(): Promise<void> {
     createSupabaseServiceClient: (env: unknown) => SupabaseClient;
   };
   const { getCurrentNflState } = (await import(mod('lib/nfl-state.js'))) as {
-    getCurrentNflState: (cache: unknown) => Promise<{ week: number; seasonType: string }>;
+    getCurrentNflState: (deps: {
+      lineupCache: unknown;
+      nflStateSource: unknown;
+    }) => Promise<{ week: number; seasonType: string }>;
+  };
+  const { sleeperClient } = (await import(mod('providers/sleeper-client.js'))) as {
+    sleeperClient: unknown;
   };
   const { TcpLineupCache } = (await import(mod('cache/tcp.js'))) as {
     TcpLineupCache: new (redis: RedisClient) => unknown;
@@ -381,7 +387,7 @@ async function main(): Promise<void> {
         `scheduled_start='${recorded.date}', status='final' where id='${gameId}';`,
     );
   }
-  const nflState = await getCurrentNflState(lineupCache);
+  const nflState = await getCurrentNflState({ lineupCache, nflStateSource: sleeperClient });
 
   const notified = new Map<string, Set<string>>();
   async function clearReplayState(): Promise<void> {
@@ -532,7 +538,7 @@ async function main(): Promise<void> {
     rateLimit,
     realtime,
     lineupCache,
-    stakeCache: { supabase, lineupCache },
+    stakeCache: { supabase, lineupCache, nflStateSource: sleeperClient },
     firedClaims: tcp.tcpFiredClaims(redis),
     games,
     users: new catalogs.SupabaseUserDirectory(supabase),

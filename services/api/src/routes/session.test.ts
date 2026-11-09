@@ -8,14 +8,14 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { SignJWT } from 'jose';
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PRIMARY_WATCH_MS } from '../lib/primaryWatch.js';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import { ApiError, toErrorBody } from '../lib/errors.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
-import { sleeperClient } from '../providers/sleeper-client.js';
 import servicesPlugin from '../plugins/services.js';
+import { fakeNflStateSource } from '../lib/nflStateSource.test-helper.js';
 import sessionRoutes from './session.js';
 
 const JWT_SECRET = 'test-secret-at-least-32-characters-long';
@@ -193,6 +193,7 @@ interface TestApp {
   lineupCache: InMemoryLineupCache;
   gameStateStore: InMemoryGameStateStore;
   supabase: FakeSupabase;
+  nflStateSource: ReturnType<typeof fakeNflStateSource>;
 }
 
 async function buildTestApp(gameIds: string[] = []): Promise<TestApp> {
@@ -201,6 +202,8 @@ async function buildTestApp(gameIds: string[] = []): Promise<TestApp> {
     { season: '2026', week: WEEK, seasonType: 'regular', seasonStartDate: null },
     300,
   );
+  // Tests that move the clock past the seeded state's 5-minute TTL read through this fake.
+  const nflStateSource = fakeNflStateSource({ week: WEEK });
   const gameStateStore = new InMemoryGameStateStore();
   const supabase = new FakeSupabase(gameIds);
 
@@ -232,12 +235,13 @@ async function buildTestApp(gameIds: string[] = []): Promise<TestApp> {
   await fastify.register(servicesPlugin, {
     supabase: supabase as unknown as SupabaseServiceClient,
     lineupCache,
+    nflStateSource,
     gameStateStore,
     realtimeSubscriber: new InMemoryRealtimeBus(),
   });
   await fastify.register(sessionRoutes);
 
-  return { fastify, lineupCache, gameStateStore, supabase };
+  return { fastify, lineupCache, gameStateStore, supabase, nflStateSource };
 }
 
 async function setLineup(app: TestApp, userId: string): Promise<void> {
@@ -253,18 +257,6 @@ async function setLineup(app: TestApp, userId: string): Promise<void> {
 
 describe('session routes', () => {
   let app: TestApp;
-
-  // buildTestApp seeds the NFL state with a 5-minute TTL. Tests that move the clock past it make
-  // getCurrentNflState fall back to Sleeper's live /state/nfl; answer that locally, never over the network.
-  let sleeperNflState: MockInstance<typeof sleeperClient.getNflState>;
-  beforeEach(() => {
-    sleeperNflState = vi.spyOn(sleeperClient, 'getNflState').mockResolvedValue({
-      season: '2026',
-      previous_season: '2025',
-      week: WEEK,
-      season_type: 'regular',
-    });
-  });
 
   afterEach(async () => {
     vi.useRealTimers();
@@ -574,8 +566,8 @@ describe('session routes', () => {
         payload: { game_id: GAME_2, source: 'deeplink' },
       });
       expect(switched.json().primary_game_id).toBe(GAME_2);
-      // The 4h jump expired the seeded NFL state, so the Switch read it through the Sleeper stub.
-      expect(sleeperNflState).toHaveBeenCalled();
+      // The 4h jump expired the seeded NFL state, so the Switch read it through the injected source.
+      expect(app.nflStateSource.getNflState).toHaveBeenCalled();
 
       hold.release();
       await expiredRead;

@@ -17,6 +17,7 @@ import { ApiError, toErrorBody } from '../lib/errors.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
+import { unreachableNflStateSource } from '../lib/nflStateSource.test-helper.js';
 import flagsRoutes from './flags.js';
 import { toRecommendedAction } from './flags.js';
 import type { Action } from '@pivot/dispatcher';
@@ -330,6 +331,7 @@ async function buildTestApp(
   await fastify.register(servicesPlugin, {
     supabase: makeSupabase(fixtures, queriedTables),
     lineupCache,
+    nflStateSource: unreachableNflStateSource,
     gameStateStore,
     realtimeSubscriber: new InMemoryRealtimeBus(),
     ...(options?.readRunnerHeartbeat

@@ -101,7 +101,7 @@ const gamesRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       // Scope week slate by schedule-derived display_phase (not Sleeper season_type, which runs
       // ahead of actual games). During 'off' there is no active phase slate — return empty.
-      const nflState = await getCurrentNflState(fastify.lineupCache);
+      const nflState = await getCurrentNflState(fastify);
       const openers = await derivePhaseOpeners(fastify.supabase);
       const displayPhase = deriveDisplayPhaseNow(openers, nflState.seasonType);
       if (displayPhase === 'off') {

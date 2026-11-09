@@ -1,21 +1,33 @@
 import type { LineupCacheProvider, NflState } from '../cache/index.js';
-import { sleeperClient } from '../providers/sleeper-client.js';
+import type { SleeperNflState } from '../providers/sleeper-client.js';
 
 const NFL_STATE_CACHE_TTL_SEC = 5 * 60;
+
+/** Where a cache miss reads the live NFL state from. Production passes `sleeperClient`; tests pass
+ *  a local fake, so a test that outlives the cache TTL can never reach Sleeper over the network. */
+export interface NflStateSource {
+  getNflState(): Promise<SleeperNflState>;
+}
+
+export interface NflStateDeps {
+  lineupCache: LineupCacheProvider;
+  nflStateSource: NflStateSource;
+}
 
 /**
  * Current NFL week/season, sourced from Sleeper's `/v1/state/nfl` (Sprint 3 substitute for
  * Sportradar — see PLAN.md Section 11 Sprint 3 note). Cached for 5 minutes so callers don't
  * hit Sleeper on every request (Section 7 `current_nfl_state`).
  */
-export async function getCurrentNflState(lineupCache: LineupCacheProvider): Promise<NflState> {
+export async function getCurrentNflState(deps: NflStateDeps): Promise<NflState> {
+  const { lineupCache, nflStateSource } = deps;
   const cached = await lineupCache.getNflState();
   if (cached) {
     // Older cache entries (pre–Sprint 10) may omit `seasonStartDate` — normalize to null.
     return { ...cached, seasonStartDate: cached.seasonStartDate ?? null };
   }
 
-  const raw = await sleeperClient.getNflState();
+  const raw = await nflStateSource.getNflState();
   // Pass through whatever Sleeper gives: empty/missing `season_start_date` → null. Do not invent a
   // date. Field is phase-relative (see PLAN Known Issues) — clients must not treat it as the
   // regular-season opener.

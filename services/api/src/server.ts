@@ -35,6 +35,7 @@ import sleeperRoutes from './routes/sleeper.js';
 import stakesRoutes from './routes/stakes.js';
 import picksRoutes from './routes/picks.js';
 import { readGamePlayerStats } from './lib/gamePlayerStats.js';
+import { sleeperClient } from './providers/sleeper-client.js';
 import stateRoutes from './routes/state.js';
 
 export interface BuildServerDeps {
@@ -119,6 +120,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
   await fastify.register(servicesPlugin, {
     supabase,
     lineupCache,
+    nflStateSource: sleeperClient,
     gameStateStore,
     realtimeSubscriber,
     readRunnerHeartbeat: () => readKey(RUNNER_HEARTBEAT_KEY),

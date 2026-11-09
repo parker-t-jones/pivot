@@ -40,7 +40,7 @@ const gameLinksRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
   fastify.get('/game-links', { schema: { querystring: weekQuery } }, async (request) => {
     const user = requireUser(request);
-    const nfl = await getCurrentNflState(fastify.lineupCache);
+    const nfl = await getCurrentNflState(fastify);
     const season = Number(nfl.season);
     const week = request.query.week ?? nfl.week;
 

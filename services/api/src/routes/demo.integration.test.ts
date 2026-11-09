@@ -21,6 +21,7 @@ import { apiErrorHandler } from '../lib/errors.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
+import { unreachableNflStateSource } from '../lib/nflStateSource.test-helper.js';
 import gamesRoutes from './games.js';
 import meRoutes from './me.js';
 
@@ -165,6 +166,7 @@ async function buildApp(user: UserRow, presence: { service: string; has_subscrip
   await fastify.register(servicesPlugin, {
     supabase: new FakeSupabase(user, [REAL_GAME], presence) as unknown as SupabaseServiceClient,
     lineupCache,
+    nflStateSource: unreachableNflStateSource,
     gameStateStore: new InMemoryGameStateStore(),
     realtimeSubscriber: realtimeBus,
   });

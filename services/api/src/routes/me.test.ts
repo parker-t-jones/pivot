@@ -14,6 +14,7 @@ import { FEATURE_BETS_INVALID, loadFeatureBets } from '../lib/features.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
+import { unreachableNflStateSource } from '../lib/nflStateSource.test-helper.js';
 import meRoutes from './me.js';
 
 const JWT_SECRET = 'test-secret-at-least-32-characters-long';
@@ -243,6 +244,7 @@ async function buildTestApp(
   await fastify.register(servicesPlugin, {
     supabase: supabase as unknown as SupabaseServiceClient,
     lineupCache: new InMemoryLineupCache(),
+    nflStateSource: unreachableNflStateSource,
     gameStateStore: new InMemoryGameStateStore(),
     realtimeSubscriber: new InMemoryRealtimeBus(),
   });

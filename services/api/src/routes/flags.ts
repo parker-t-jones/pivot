@@ -83,7 +83,7 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       return state;
     };
 
-    const nflState = await getCurrentNflState(fastify.lineupCache);
+    const nflState = await getCurrentNflState(fastify);
     const { data: userRow, error: userError } = await fastify.supabase
       .from('users')
       .select('subscription_tier, preferences')

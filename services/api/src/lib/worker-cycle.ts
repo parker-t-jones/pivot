@@ -1,4 +1,5 @@
 import type { LineupCacheProvider } from '../cache/index.js';
+import type { NflStateSource } from './nfl-state.js';
 import {
   getLineupSyncContext,
   syncLeagueLineup,
@@ -11,6 +12,7 @@ const DAILY_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export interface WorkerCycleDeps {
   supabase: SupabaseServiceClient;
   lineupCache: LineupCacheProvider;
+  nflStateSource: NflStateSource;
 }
 
 export interface WorkerCycleState {
