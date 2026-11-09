@@ -131,3 +131,23 @@ Migration `20261109120000_picks_props_parlays.sql`:
 - `stake_spent_slots.slot_kind` (`stake` | `slip`).
 
 Shared types live in `shared/src/types/picks.ts`. The engine's `stakes/types.ts` re-exports them.
+
+## 9. Screenshot import (#12)
+
+"Add a pick" → **Import from screenshot** reads a bet slip screenshot into legs the user reviews and saves through the normal flow. Bet sync (SharpSports) stays off the table.
+
+**Flow.** iOS opens the system photo picker (`expo-image-picker`); web opens a file picker or takes a dropped file, scaled to 2000px on the long edge in the browser. The app sends the image to `POST /picks/import`. A single pick opens at its review (Back reaches the line step to change it). A parlay opens on the parlay screen with its legs on the slip; each leg has Edit (reopens its steps filled in) and Remove. Nothing saves until the user taps Add a pick or Save parlay, which go through `POST /picks`, so the free cap, kickoff lock, and duplicate checks are unchanged.
+
+**Server.** `POST /picks/import` (`services/api/src/routes/pickImport.ts`) takes `{ image }` (base64 or a data URL, at most 5 MB decoded; the type is read from the bytes). It sends the image to Claude (`lib/slipImport/reader.ts`, behind the `SlipReader` interface) with a strict JSON schema (`lib/slipImport/schema.ts`): market, stat, player, team, matchup, side, line, "N+" style, period, date, and odds as text (odds are read only to keep them apart from the line, and are dropped). Code, not the model, then matches each leg (`lib/slipImport/mapSlip.ts`) to exactly one player (name plus team, this week's games only), team (abbreviation, nickname, city plus nickname, or a city only one team has), and game, and runs the same `validatePick` check as `POST /picks`. Anything that does not match exactly one is returned as a flagged leg with a reason, never guessed. "N+" becomes an over at N − 0.5. A scorer bet with no "No" printed is read as Yes. One bet per screenshot: several bets, or more than 12 legs, are refused with a message.
+
+**Flagged legs** are listed under the parlay with what the slip printed and why. Save stays off until each one is added by hand (Add a leg) or dismissed, so no leg is dropped unseen. A single flagged pick shows the reason on the type step.
+
+**Limits.** Each import counts toward a per-user daily limit (US Eastern day) in Redis: `SLIP_IMPORT_DAILY_FREE` (default 5) and `SLIP_IMPORT_DAILY_PRO` (default 30). Over the limit the API answers 429 `slip_import_limit` with a sentence the app shows. An import the Claude API fails on is given back; an unreadable screenshot is not. A free account with no free bets left gets the upgrade sheet from the button instead of the picker. The demo account is refused (`demo_account_fixed`) and does not see the button.
+
+**Configuration.** The Claude API key is the Fly secret `ANTHROPIC_API_KEY`, read only by the API process. `/health` reports `slipImport: enabled | disabled`; the app hides the button when it is disabled or `/health` fails.
+
+**Privacy.** The image and the model's answer stay in memory for the request: neither is stored or logged. Logs carry leg counts and error kinds only. Images go to Anthropic's API for processing under Anthropic's commercial terms.
+
+**Guardrails.** Pivot only reads the slip: no sportsbook branding, promo codes, or links in the UI, and imported picks are ordinary picks (no odds shown or stored).
+
+**Later.** An iOS share extension ("Share to Pivot" from the sportsbook app) is not built.
