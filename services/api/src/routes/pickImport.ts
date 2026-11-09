@@ -172,7 +172,7 @@ const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (
         );
       }
 
-      const nfl = await getCurrentNflState(fastify.lineupCache);
+      const nfl = await getCurrentNflState(fastify);
       const season = Number(nfl.season);
       const { data: gameData, error: gamesError } = await fastify.supabase
         .from('games')

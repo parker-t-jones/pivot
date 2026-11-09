@@ -25,6 +25,7 @@ import type { SlipRead } from '../lib/slipImport/schema.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
+import { unreachableNflStateSource } from '../lib/nflStateSource.test-helper.js';
 import pickImportRoutes from './pickImport.js';
 
 const JWT_SECRET = 'test-secret-at-least-32-characters-long';
@@ -103,6 +104,7 @@ async function setup(
   await app.register(servicesPlugin, {
     supabase: db as unknown as SupabaseServiceClient,
     lineupCache,
+    nflStateSource: unreachableNflStateSource,
     gameStateStore: new InMemoryGameStateStore(),
     realtimeSubscriber: new InMemoryRealtimeBus(),
   });
