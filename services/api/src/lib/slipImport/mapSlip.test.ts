@@ -40,7 +40,11 @@ function lookups(overrides: Partial<SlipLookups> = {}): SlipLookups & { validate
   };
 }
 
-const named = (name: string) => PLAYERS.find((p) => p.id === name) ?? PLAYERS[0]!;
+function named(id: string) {
+  const player = PLAYERS.find((p) => p.id === id);
+  if (!player) throw new Error(`no player ${id}`);
+  return player;
+}
 
 describe('resolveTeam', () => {
   it.each([

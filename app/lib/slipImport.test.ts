@@ -91,7 +91,7 @@ describe('draftFromImportedLeg', () => {
       ready(player({ type: 'STAT_OVER', stat: 'REC_YDS', line: 59.5 }), KITTLE),
     );
     expect(draft?.teamId).toBe('sf-id');
-    expect(draftReadout(draft!)).toBe('Kittle needs 60 or more receiving yards');
+    expect(draft && draftReadout(draft)).toBe('Kittle needs 60 or more receiving yards');
   });
 
   it('returns null when the steps could not rebuild the same pick', () => {

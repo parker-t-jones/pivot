@@ -35,5 +35,5 @@ props, spreads, totals, and a quarter or half line.
 Run (costs one Claude API call per screenshot):
 
 ```bash
-ANTHROPIC_API_KEY=... pnpm exec tsx experiments/slip-import-eval.ts
+ANTHROPIC_API_KEY=... pnpm --filter @pivot/api exec tsx src/slipImportEval.ts ../../experiments/slip-eval
 ```

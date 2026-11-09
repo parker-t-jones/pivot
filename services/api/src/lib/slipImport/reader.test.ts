@@ -75,9 +75,10 @@ describe('AnthropicSlipReader', () => {
 
 describe('SLIP_READ_JSON_SCHEMA', () => {
   it('requires every leg field the zod schema reads', () => {
-    const legSchema = (
-      SLIP_READ_JSON_SCHEMA['properties'] as Record<string, { items: { required: string[] } }>
-    )['legs']!.items;
+    const properties = SLIP_READ_JSON_SCHEMA['properties'] as {
+      legs: { items: { required: string[] } };
+    };
+    const legSchema = properties.legs.items;
     expect([...legSchema.required].sort()).toEqual(
       Object.keys(slipReadSchema.shape.legs.element.shape).sort(),
     );

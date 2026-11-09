@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SlipLeg } from '../services/api/src/lib/slipImport/schema.js';
-import { emptyTally, formatTally, scoreSlip, type ExpectedLeg } from './slipEvalScore';
+import type { SlipLeg } from './schema.js';
+import { emptyTally, formatTally, scoreSlip, type ExpectedLeg } from './evalScore.js';
 
 const want: ExpectedLeg = {
   market: 'PLAYER_STAT',

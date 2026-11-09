@@ -1,9 +1,9 @@
 /**
- * THROWAWAY harness — experiments only. Measures how well the bet slip reader (#12) reads real
+ * Eval harness, not part of the API server. Measures how well the bet slip reader (#12) reads real
  * screenshots, field by field. It calls the Claude API once per image, so it costs money: run it
  * on Parker's Mac with `ANTHROPIC_API_KEY` set, never in CI.
  *
- *   ANTHROPIC_API_KEY=... pnpm exec tsx experiments/slip-import-eval.ts [dir]
+ *   ANTHROPIC_API_KEY=... pnpm --filter @pivot/api exec tsx src/slipImportEval.ts ../../experiments/slip-eval
  *
  * `dir` (default `experiments/slip-eval`) holds screenshots with personal details blurred, each
  * with a hand-written `<name>.expected.json` (see `experiments/slip-eval/README.md`). Prints
@@ -12,15 +12,20 @@
  */
 import { readFile, readdir } from 'node:fs/promises';
 import { extname, join } from 'node:path';
-import { AnthropicSlipReader, sniffImageType } from '../services/api/src/lib/slipImport/reader.js';
-import { emptyTally, formatTally, scoreSlip, type ExpectedSlip } from './slipEvalScore';
+import { AnthropicSlipReader, sniffImageType } from './lib/slipImport/reader.js';
+import {
+  emptyTally,
+  formatTally,
+  scoreSlip,
+  type ExpectedSlip,
+} from './lib/slipImport/evalScore.js';
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 
 async function main(): Promise<void> {
   const key = process.env['ANTHROPIC_API_KEY'];
   if (!key) throw new Error('Set ANTHROPIC_API_KEY to run the slip import eval.');
-  const dir = process.argv[2] ?? 'experiments/slip-eval';
+  const dir = process.argv[2] ?? '../../experiments/slip-eval';
   const reader = new AnthropicSlipReader(key);
   const tally = emptyTally();
   const names = (await readdir(dir)).filter((name) =>

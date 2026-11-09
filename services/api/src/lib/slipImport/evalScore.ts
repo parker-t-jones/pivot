@@ -1,8 +1,8 @@
 /**
  * Scoring for the bet slip import eval (#12). Pure, so it is unit tested; the runner is
- * `slip-import-eval.ts`.
+ * `services/api/src/slipImportEval.ts`.
  */
-import type { SlipLeg, SlipRead } from '../services/api/src/lib/slipImport/schema.js';
+import type { SlipLeg, SlipRead } from './schema.js';
 
 /** The fields a reviewer writes in `<name>.expected.json`. Text and odds are not scored. */
 export const SCORED_FIELDS = [
