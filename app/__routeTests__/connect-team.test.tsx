@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import ConnectTeamScreen from './connect-team';
+import ConnectTeamScreen from '../app/(app)/connect-team';
 
 vi.mock('react-native', () => import('react-native-web'));
 vi.mock('react-native-safe-area-context', () => ({
@@ -26,13 +26,13 @@ const leaguesGate = vi.hoisted(() => ({
   deferConnect: vi.fn(),
   refreshLeagues: vi.fn(async () => []),
 }));
-vi.mock('../../contexts/LeaguesGateContext', () => ({
+vi.mock('../contexts/LeaguesGateContext', () => ({
   useLeaguesGate: () => leaguesGate,
 }));
-vi.mock('../../contexts/UpgradeSheetContext', () => ({
+vi.mock('../contexts/UpgradeSheetContext', () => ({
   useUpgradeSheet: () => ({ openUpgrade: vi.fn() }),
 }));
-vi.mock('../../lib/apiClient', () => ({
+vi.mock('../lib/apiClient', () => ({
   ApiRequestError: class ApiRequestError extends Error {
     constructor(
       readonly status: number,
@@ -43,17 +43,17 @@ vi.mock('../../lib/apiClient', () => ({
     }
   },
 }));
-vi.mock('../../lib/leagues', () => ({
+vi.mock('../lib/leagues', () => ({
   connectManualLeague: vi.fn(),
   connectSleeperLeague: vi.fn(),
   fetchLineup: vi.fn(),
   fetchSleeperLeagues: vi.fn(),
   putManualLineup: vi.fn(),
 }));
-vi.mock('../../lib/navigateAfterConnect', () => ({
+vi.mock('../lib/navigateAfterConnect', () => ({
   navigateAfterConnect: vi.fn(),
 }));
-vi.mock('../../lib/upgradePrompt', () => ({
+vi.mock('../lib/upgradePrompt', () => ({
   promptUpgradeForCapError: vi.fn(() => false),
 }));
 
@@ -61,7 +61,7 @@ const me = vi.hoisted(() => ({
   fetchMe: vi.fn(),
   patchPreferences: vi.fn(async (patch: unknown) => patch),
 }));
-vi.mock('../../lib/me', () => ({
+vi.mock('../lib/me', () => ({
   fetchMe: me.fetchMe,
   patchPreferences: me.patchPreferences,
   FREE_MAX_MANUAL_LINEUP_SLOTS: 9,

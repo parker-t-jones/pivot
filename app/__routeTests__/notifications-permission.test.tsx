@@ -3,14 +3,14 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import NotificationsPermissionScreen from './notifications-permission';
+import NotificationsPermissionScreen from '../app/(app)/notifications-permission';
 
 vi.mock('react-native', () => import('react-native-web'));
 
 vi.mock('expo-router', () => ({
   useRouter: () => ({ replace: vi.fn() }),
 }));
-vi.mock('../../contexts/PushPermissionContext', () => ({
+vi.mock('../contexts/PushPermissionContext', () => ({
   usePushPermission: () => ({ requestAndRegister: vi.fn() }),
 }));
 
