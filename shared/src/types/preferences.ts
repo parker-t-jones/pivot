@@ -38,6 +38,19 @@ export const FOLLOWING_OPTIONS = ['fantasy', 'bets', 'survivor'] as const;
 export type FollowingOption = (typeof FOLLOWING_OPTIONS)[number];
 
 /**
+ * One-time coach-mark ids (issue #32 / PIVOT-STAKES-PLAN.md §12.2): the Home segmented control,
+ * the Watchlist week card, and the Settings "Replay tour" link. Stored as plain strings (not a
+ * zod enum) so a coach mark added later doesn't need a migration — an unrecognized id here just
+ * never matches a screen's own check.
+ */
+export const COACH_MARK_IDS = [
+  'home-segmented-control',
+  'watchlist-week-card',
+  'settings-replay-tour',
+] as const;
+export type CoachMarkId = (typeof COACH_MARK_IDS)[number];
+
+/**
  * `users.preferences` jsonb shape (PLAN.md Section 7).
  *
  * `watchedLeagueIds` — leagues the engine + Home stake from. Free: at most one.
@@ -60,6 +73,8 @@ export const preferencesSchema = z.object({
   alertTiming: alertTimingSchema.default(DEFAULT_ALERT_TIMING),
   /** It only orders add-paths and filter pills; it never gates a feature. */
   following: z.array(z.enum(FOLLOWING_OPTIONS)).default([]),
+  /** Coach marks already shown (#32 / §12.2). Ids outside `COACH_MARK_IDS` are kept, not stripped. */
+  seenCoachMarks: z.array(z.string()).default([]),
 });
 
 export type Preferences = z.infer<typeof preferencesSchema>;
@@ -88,6 +103,15 @@ export function alertTimingIsOnTime(timing: AlertTiming): boolean {
     timing.defaultDelaySeconds === 0 &&
     Object.values(timing.serviceDelaySeconds).every((seconds) => seconds === 0)
   );
+}
+
+export function hasSeenCoachMark(seen: readonly string[], id: CoachMarkId): boolean {
+  return seen.includes(id);
+}
+
+/** Adds `id` if it isn't already there. Returns the same array reference when it is. */
+export function withCoachMarkSeen(seen: readonly string[], id: CoachMarkId): string[] {
+  return hasSeenCoachMark(seen, id) ? [...seen] : [...seen, id];
 }
 
 /** Free-tier entitlement caps (PLAN.md Active Lineup + Pro). */

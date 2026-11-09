@@ -123,6 +123,7 @@ async function main(): Promise<void> {
       watchedLeagueIds: [],
       alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
       following: [],
+      seenCoachMarks: [],
     },
     expoPushToken: 'ExponentPushToken[verify]',
   };

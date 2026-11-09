@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   alertDelaySecondsFor,
   alertTimingIsOnTime,
+  hasSeenCoachMark,
   parsePreferences,
+  withCoachMarkSeen,
   type AlertTiming,
 } from './preferences.js';
 
@@ -39,6 +41,30 @@ describe('following', () => {
 
   it('rejects an option that is not fantasy, bets, or survivor', () => {
     expect(() => parsePreferences({ following: ['prediction_markets'] })).toThrow();
+  });
+});
+
+describe('seenCoachMarks', () => {
+  it('keeps the list through parse, serialize, and parse', () => {
+    const parsed = parsePreferences({ seenCoachMarks: ['home-segmented-control'] });
+    const again = parsePreferences(JSON.parse(JSON.stringify(parsed)));
+    expect(again.seenCoachMarks).toEqual(['home-segmented-control']);
+  });
+
+  it('is empty when the key is absent', () => {
+    expect(parsePreferences({}).seenCoachMarks).toEqual([]);
+    expect(parsePreferences(undefined).seenCoachMarks).toEqual([]);
+  });
+
+  it('withCoachMarkSeen adds an id once', () => {
+    const once = withCoachMarkSeen([], 'home-segmented-control');
+    expect(once).toEqual(['home-segmented-control']);
+    expect(withCoachMarkSeen(once, 'home-segmented-control')).toEqual(['home-segmented-control']);
+  });
+
+  it('hasSeenCoachMark reads the list', () => {
+    expect(hasSeenCoachMark(['watchlist-week-card'], 'watchlist-week-card')).toBe(true);
+    expect(hasSeenCoachMark(['watchlist-week-card'], 'settings-replay-tour')).toBe(false);
   });
 });
 

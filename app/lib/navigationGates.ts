@@ -44,10 +44,14 @@ export const ZERO_LEAGUES_ALLOWLIST = new Set([
   'onboarding-streaming',
   'notifications-permission',
   'onboarding-all-set',
+  // Onboarding step 7 (#32): the quick tour, shown before all-set.
+  'onboarding-tour',
   'change-password',
   // "Add a pick" (#31 step 4) must work with zero leagues — bets, props and survivor
   // picks aren't tied to a fantasy league.
   'add-stake',
+  // Demo game day (#32) is local-only and never reads the caller's leagues.
+  'demo-game-day',
 ]);
 
 /**
@@ -75,7 +79,7 @@ export type AppGateDecision =
   | { action: 'leagues_error' }
   | { action: 'redirect_connect' }
   | { action: 'redirect_notifications' }
-  | { action: 'leave_notifications'; destination: 'home' | 'all-set' }
+  | { action: 'leave_notifications'; destination: 'home' | 'tour' }
   | { action: 'render' };
 
 /**
@@ -85,7 +89,7 @@ export type AppGateDecision =
  * 1. Wait while leagues or push status is still checking
  * 2. Leagues error → error surface (no redirect)
  * 3. Zero leagues + not deferred + not allowlisted → connect-team
- * 4. On notifications-permission with push answered → leave (all-set if onboarding, else Home)
+ * 4. On notifications-permission with push answered → leave (tour if onboarding, else Home)
  * 5. Has leagues + undetermined + on Home → notifications catch-all,
  *    only when web push is configured and the prompt is not snoozed
  * 6. Otherwise render the stack
@@ -132,7 +136,7 @@ export function resolveAppGate(input: {
   if (onPermissionScreen && input.pushStatus !== 'undetermined') {
     return {
       action: 'leave_notifications',
-      destination: input.notificationsOnboarding ? 'all-set' : 'home',
+      destination: input.notificationsOnboarding ? 'tour' : 'home',
     };
   }
 

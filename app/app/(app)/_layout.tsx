@@ -69,8 +69,8 @@ function AppNavigator() {
         router.replace('/(app)/notifications-permission');
         break;
       case 'leave_notifications':
-        if (decision.destination === 'all-set') {
-          router.replace('/(app)/onboarding-all-set');
+        if (decision.destination === 'tour') {
+          router.replace('/(app)/onboarding-tour?onboarding=1');
         } else {
           resetToHomeRoot(router);
         }
@@ -125,7 +125,9 @@ function AppNavigator() {
       <Stack.Screen name="edit-manual-lineup" />
       <Stack.Screen name="add-stake" />
       <Stack.Screen name="onboarding-streaming" />
+      <Stack.Screen name="onboarding-tour" />
       <Stack.Screen name="onboarding-all-set" />
+      <Stack.Screen name="demo-game-day" />
       <Stack.Screen name="change-password" />
     </Stack>
   );

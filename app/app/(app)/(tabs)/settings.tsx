@@ -15,12 +15,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { UserService } from '@pivot/shared/broadcast';
 
 import { AlertTimingSection } from '../../../components/AlertTimingSection';
+import { CoachMark } from '../../../components/CoachMark';
 import { DemoEditingBanner } from '../../../components/DemoEditingBanner';
 import { ErrorState } from '../../../components/ErrorState';
 import { LoadingState } from '../../../components/LoadingState';
 import { SecondaryButton } from '../../../components/SecondaryButton';
 import { TextButton } from '../../../components/TextButton';
 import { usePushPermission } from '../../../contexts/PushPermissionContext';
+import { pickCoachMarkToShow, withCoachMarkSeen } from '../../../lib/coachMarks';
 import { useSession } from '../../../contexts/SessionContext';
 import { useUpgradeSheet } from '../../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../../lib/apiClient';
@@ -85,6 +87,7 @@ const SETTINGS_SECTIONS = [
   { key: 'account', label: 'Account' },
   { key: 'notifications', label: 'Notifications' },
   { key: 'streaming', label: 'Streaming' },
+  { key: 'help', label: 'Help' },
   { key: 'about', label: 'About' },
 ] as const;
 
@@ -247,11 +250,21 @@ export default function SettingsScreen() {
       }}
     />
   );
+  const help = (
+    <HelpSection
+      onCoachMarkSeen={() => {
+        const next = withCoachMarkSeen(me.preferences.seenCoachMarks ?? [], 'settings-replay-tour');
+        void patchPreferences({ seenCoachMarks: next }).then(setMe);
+      }}
+      seenCoachMarks={me.preferences.seenCoachMarks ?? []}
+    />
+  );
   const about = <AboutSection />;
   const sectionBody = {
     account,
     notifications,
     streaming,
+    help,
     about,
   }[settingsSection];
 
@@ -319,6 +332,7 @@ export default function SettingsScreen() {
       {account}
       {notifications}
       {streaming}
+      {help}
       {about}
     </ScrollView>
   );
@@ -688,22 +702,6 @@ function DesktopAlertsButton() {
 function AboutSection() {
   const version = Constants.expoConfig?.version ?? '0.0.0';
   const updateLine = updateLabel(runningUpdate());
-  const [isSendingTest, setIsSendingTest] = useState(false);
-
-  const onSendTestNotification = async () => {
-    setIsSendingTest(true);
-    try {
-      await scheduleTestFlagNotificationAsync();
-    } catch (error) {
-      if (error instanceof NotificationsDisabledError) {
-        promptEnableNotifications();
-      } else {
-        void alertAsync('Could not send test notification', errorMessage(error));
-      }
-    } finally {
-      setIsSendingTest(false);
-    }
-  };
 
   return (
     <SectionCard title="About">
@@ -736,9 +734,63 @@ function AboutSection() {
         size="small"
         style={styles.aboutLink}
       />
-      {Platform.OS === 'web' ? (
-        <DesktopAlertsButton />
-      ) : (
+      {Platform.OS === 'web' ? <DesktopAlertsButton /> : null}
+    </SectionCard>
+  );
+}
+
+/**
+ * Settings → Help (§12.2): "Replay tour", "Try a demo game day", and "Send test notification"
+ * (moved here from About, same behavior). Shows the one-time `settings-replay-tour` coach mark
+ * on a visitor's first look at this section.
+ */
+function HelpSection({
+  seenCoachMarks,
+  onCoachMarkSeen,
+}: {
+  seenCoachMarks: string[];
+  onCoachMarkSeen: () => void;
+}) {
+  const router = useRouter();
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const coachMark = pickCoachMarkToShow(['settings-replay-tour'], seenCoachMarks);
+
+  const onSendTestNotification = async () => {
+    setIsSendingTest(true);
+    try {
+      await scheduleTestFlagNotificationAsync();
+    } catch (error) {
+      if (error instanceof NotificationsDisabledError) {
+        promptEnableNotifications();
+      } else {
+        void alertAsync('Could not send test notification', errorMessage(error));
+      }
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
+  return (
+    <SectionCard title="Help">
+      {coachMark === 'settings-replay-tour' ? (
+        <CoachMark
+          onDismiss={onCoachMarkSeen}
+          text="Need a refresher? Replay the quick tour any time, or try a demo game day."
+        />
+      ) : null}
+      <TextButton
+        label="Replay tour"
+        onPress={() => router.push('/(app)/onboarding-tour')}
+        size="small"
+        style={styles.aboutLink}
+      />
+      <TextButton
+        label="Try a demo game day"
+        onPress={() => router.push('/(app)/demo-game-day')}
+        size="small"
+        style={styles.aboutLink}
+      />
+      {Platform.OS === 'web' ? null : (
         <TextButton
           disabled={isSendingTest}
           label={isSendingTest ? 'Sending in 2s…' : 'Send test notification'}

@@ -575,6 +575,10 @@ configured — there is no such signal yet. Step 6's copy no longer claims alert
 stream (false since issue #7's early nudge); see the issue for the replacement copy. Step 7 (quick
 tour) stays skipped until issue #32 ships.
 
+**Superseded (Nov 9, 2026, issue #32):** step 7 now shows the quick tour (12.2), skippable, right
+after the notifications primer and before "All set". It ends with "Try a demo game day" or "Go to
+Home".
+
 Changes to the existing 6 screens are marked **new** or **changed**.
 
 1. **Welcome.** Unchanged.
@@ -597,23 +601,52 @@ Changes to the existing 6 screens are marked **new** or **changed**.
 
 ### 12.2 Tutorial (replayable from Settings)
 
-- **Four cards**, each a `Slip` with a small static illustration built from real components:
-  1. **"This is the Board."** The whole week's slate. Gold dots mark games you have a stake in, and the top card is your biggest one. Flip to My card to see just yours.
-  2. **"When it's live, Home lights up."** Show the LIVE eyebrow and `NowActiveCard`. When something's worth switching for, the top card tells you where to go.
-  3. **"Alerts land at the right moment."** Pivot waits until the play is about to reach your screen, so you're never spoiled. Tap an alert to jump to the right channel.
-  4. **"Your Watchlist."** Everything you've got riding, in one place. Free covers 3 bets a week.
-- **Demo game day** (**new**):
-  - A local-only sandbox that replays a bundled, trimmed fixture. Take one real drive sequence from a captured `experiments/logs/events-<ISO>.jsonl`, after confirming it contains replayable plays, compress it to about 90 seconds, and bundle it at `app/assets/demo/demo-game.json`. `app/assets/` doesn't exist yet, so create it.
-  - The fixture drives Home through PRE-GAME → LIVE with a flag → a local notification. The notification is sent with `expo-notifications` `scheduleNotificationAsync`. No server calls.
+**Superseded (Nov 9, 2026, issue #32):**
+
+- **Four cards** (`app/lib/tourCards.ts`), each a `Slip` with a small static illustration built
+  from real components (`HomeSegmentRow`, `TeamBadge`, `ListRow`):
+  1. **"This is the Board."** Matches today's Home, not the old "Board \| My card" wording: the
+     whole week's slate, YOUR PICKS marked on games you've got something riding on, the top card
+     is your biggest one. Flip to MY CARD to see just yours.
+  2. **"When it's live, Home lights up."** The LIVE eyebrow; when something's worth switching
+     for, the top card tells you exactly where to go.
+  3. **"Alerts land at the right moment."** Does **not** say "never spoiled" (false since issue
+     #7's early nudge). Says Pivot sends you to the game before the drive starts, and points to
+     Settings → Alert timing.
+  4. **"Your Watchlist."** Describes the Watchlist as shipped (week card, a card per pick,
+     fantasy leagues collapsed in All). Free covers 3 picks a week; a parlay counts as one.
+  - Reachable as onboarding step 7 (`?onboarding=1`, ends at "All set") and from Settings → Help
+    → "Replay tour" (ends by going back).
+- **Demo game day** (`app/lib/demoGameDay.ts`, `app/app/(app)/demo-game-day.tsx`):
+  - Recon before building: `services/api/src/lib/demoFixture.ts` (the App Store reviewer demo)
+    cannot be reused client-side — it's server-only code (`node:crypto`, `@pivot/dispatcher`'s
+    Supabase-backed types, `SupabaseServiceClient`) and its slate uses real NFL teams, which this
+    demo must not. It also wasn't reused as a data *source*: this PR had no captured
+    `experiments/logs/events-<ISO>.jsonl` available (gitignored, Parker's Mac only), so the demo
+    ships a synthetic, fictional-team fixture instead of a compressed real drive. Swapping in a
+    real captured drive later is future work.
+  - A local-only sandbox: a plain elapsed-time state machine (`demoPhaseAtElapsed`) drives a
+    dedicated screen through PRE-GAME → LIVE with a flag → a local notification
+    (`expo-notifications` `scheduleNotificationAsync`, same pattern as "Send test notification").
+    No server calls anywhere in the screen.
   - A persistent `DEMO` banner, with an Exit button, stays on screen the whole time.
-  - The demo uses fake stakes that are **never written** to `stakes` or `lineup_slots`.
-  - Don't use real team names from the fixture in notification copy, and label the demo clearly, so a demo alert can never be mistaken for a real one.
+  - The demo uses fake stakes (`DEMO_STAKES`) that are **never written** to `stakes` or
+    `lineup_slots` — there is no write path in this screen at all.
+  - The fixture's teams are fictional ("Comets" / "Harbor"); the notification copy names no team
+    at all and leads with "Demo alert", so it can't be mistaken for a real one.
 - **Coach marks:**
-  - One-time tooltips on the first visit to Home (the segmented control), the Watchlist (the week card) and Settings (Replay tour).
-  - Track them in `preferences.seenCoachMarks: string[]`.
-  - Never show more than one coach mark per screen visit.
-- **Settings → Help:** "Replay tour", "Try a demo game day", and the existing "Test notifications" action (already in Settings; regroup it under Help).
-- **Preference keys:** `following` and `seenCoachMarks` each need the three coordinated edits listed under "Repo facts". Otherwise zod strips them silently and the setting "doesn't persist" with no error. Add a round-trip unit test for each key: parse → serialize → parse keeps the value.
+  - One-time tooltips, tracked in `preferences.seenCoachMarks: string[]` via `pickCoachMarkToShow`
+    / `withCoachMarkSeen` (`app/lib/coachMarks.ts`), capped at one per screen visit.
+  - **Shipped in this PR:** Settings → Help ("Replay tour"). **Not yet wired:** Home's segmented
+    control and the Watchlist week card — both ids exist in `COACH_MARK_IDS` and the shared
+    `CoachMark` component is ready, but wiring them means threading `preferences` through Home's
+    and Watchlist's existing data-loading components, which this PR left alone rather than risk a
+    change to the live Home pipeline for an onboarding feature. Follow-up task.
+- **Settings → Help:** "Replay tour", "Try a demo game day", and "Send test notification" (moved
+  here from About; same behavior, Platform.OS !== 'web' only — web keeps "Enable desktop alerts").
+- **Preference keys:** `following` (#31) and `seenCoachMarks` (#32) each got the three coordinated
+  edits listed under "Repo facts" (`shared/src/types/preferences.ts`, `app/lib/me.ts`,
+  `services/api/src/routes/me.ts`'s PATCH allow-list), plus a round-trip unit test.
 
 ### 12.3 Verify (Phases U5–U6)
 
