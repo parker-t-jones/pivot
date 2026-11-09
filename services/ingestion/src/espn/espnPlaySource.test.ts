@@ -110,6 +110,62 @@ describe('EspnPlaySource', () => {
     expect(first?.seenAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
+  it('hands each summary to onSummary before its plays reach the handler', async () => {
+    const final = summary({
+      drives: {
+        previous: [{ team: { abbreviation: 'IND' }, plays: [{ id: 'p1', type: { id: '53' } }] }],
+      },
+      header: finalHeader(),
+    });
+    const { client } = makeFakeClient([{ ok: true, data: final }]);
+    const order: string[] = [];
+    const source = new EspnPlaySource({
+      eventId: '401873308',
+      pollIntervalMs: 0,
+      client,
+      onSummary: (received) => {
+        expect(received).toBe(final);
+        order.push('summary');
+      },
+    });
+    await source.subscribe(async (play) => {
+      order.push(play.playId);
+    });
+    expect(order).toEqual(['summary', 'p1']);
+  });
+
+  it('keeps emitting plays when onSummary throws', async () => {
+    const { client } = makeFakeClient([
+      {
+        ok: true,
+        data: summary({
+          drives: {
+            previous: [
+              { team: { abbreviation: 'IND' }, plays: [{ id: 'p1', type: { id: '53' } }] },
+            ],
+          },
+          header: finalHeader(),
+        }),
+      },
+    ]);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const seen: string[] = [];
+    const source = new EspnPlaySource({
+      eventId: '401873308',
+      pollIntervalMs: 0,
+      client,
+      onSummary: () => {
+        throw new Error('redis down');
+      },
+    });
+    await source.subscribe(async (play) => {
+      seen.push(play.playId);
+    });
+    expect(seen).toEqual(['p1']);
+    expect(errors).toHaveBeenCalledWith(expect.stringContaining('onSummary failed'));
+    errors.mockRestore();
+  });
+
   it('never re-emits a play id already seen in an earlier poll', async () => {
     const { client } = makeFakeClient([
       {

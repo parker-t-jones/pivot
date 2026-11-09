@@ -1,4 +1,5 @@
 import type { GameStateStore, RealtimeSubscriber } from '@pivot/dispatcher';
+import type { GamePlayerStats } from '@pivot/shared';
 import fp from 'fastify-plugin';
 import type { LineupCacheProvider } from '../cache/index.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
@@ -14,6 +15,8 @@ declare module 'fastify' {
     realtimeSubscriber: RealtimeSubscriber;
     /** `runner_heartbeat` value (ISO timestamp), or null when the key is missing. */
     readRunnerHeartbeat: () => Promise<string | null>;
+    /** `game_player_stats:{gameId}`, the runner's latest parsed summary, or null. */
+    readGamePlayerStats: (gameId: string) => Promise<GamePlayerStats | null>;
   }
 }
 
@@ -24,6 +27,8 @@ interface ServicesPluginOptions {
   realtimeSubscriber: RealtimeSubscriber;
   /** Omitted in tests that do not care about the live-feed heartbeat. Missing key reads as null. */
   readRunnerHeartbeat?: () => Promise<string | null>;
+  /** Omitted in tests that do not care about live prop stats. Reads as null. */
+  readGamePlayerStats?: (gameId: string) => Promise<GamePlayerStats | null>;
 }
 
 /** Decorates the Fastify instance with the shared Supabase service client, lineup cache, and the
@@ -36,6 +41,13 @@ export default fp<ServicesPluginOptions>(async (fastify, options) => {
   fastify.decorate(
     'readRunnerHeartbeat',
     options.readRunnerHeartbeat ??
+      (async () => {
+        return null;
+      }),
+  );
+  fastify.decorate(
+    'readGamePlayerStats',
+    options.readGamePlayerStats ??
       (async () => {
         return null;
       }),

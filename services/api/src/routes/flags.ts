@@ -101,6 +101,7 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
             userId: user.id,
             week: nflState.week,
             gameIds: indexedBetGames,
+            getPlayerStats: (gameId) => fastify.readGamePlayerStats(gameId),
           });
     const decideActionUser = {
       subscriptionTier: userRow.subscription_tier === 'pro' ? ('pro' as const) : ('free' as const),

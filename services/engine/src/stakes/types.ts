@@ -1,4 +1,10 @@
-import type { GameState, UserLineupCache } from '@pivot/shared';
+import type {
+  GamePlayerStats,
+  GameState,
+  LineupUnit,
+  StakeCondition,
+  UserLineupCache,
+} from '@pivot/shared';
 
 export type StakeSource =
   | 'SLEEPER_ROSTER'
@@ -12,25 +18,7 @@ export type StakeSubject =
   | { type: 'TEAM'; teamId: string }
   | { type: 'GAME'; gameId: string };
 
-export type StakeCondition =
-  | { type: 'ROSTERED' } // fantasy: any involvement matters
-  | { type: 'OPPONENT_ROSTERED' } // fantasy: watch to worry
-  | { type: 'STAT_OVER'; stat: StatKey; line: number } // props, pick'em
-  | { type: 'STAT_UNDER'; stat: StatKey; line: number }
-  | { type: 'MONEYLINE'; side: 'TEAM' }
-  | { type: 'SPREAD'; line: number } // from subject team's perspective
-  | { type: 'TOTAL_OVER'; line: number }
-  | { type: 'TOTAL_UNDER'; line: number }
-  | { type: 'SURVIVOR' };
-
-export type StatKey =
-  | 'RUSH_YDS'
-  | 'REC_YDS'
-  | 'PASS_YDS'
-  | 'RECEPTIONS'
-  | 'RUSH_ATT'
-  | 'PASS_TD'
-  | 'ANY_TD';
+export type { GamePlayerStats, PlayerEvent, Segment, StakeCondition, StatKey } from '@pivot/shared';
 
 export interface Stake {
   id: string;
@@ -44,6 +32,8 @@ export interface Stake {
   sourceRef?: string; // e.g. Kalshi ticker, Sleeper league id
   weight: number; // user-adjustable importance, default 1
   createdAt: string;
+  /** Parlay this stake is a leg of. */
+  slipId?: string;
 }
 
 export type TriggerCode =
@@ -53,6 +43,7 @@ export type TriggerCode =
   | 'PROP_NEAR'
   | 'PROP_DANGER'
   | 'PROP_LIVE_POSSESSION'
+  | 'TEAM_PROP_POSSESSION'
   | 'ONE_SCORE_LATE'
   | 'PICK_TRAILING_2H'
   | 'SPREAD_SWING'
@@ -78,6 +69,7 @@ export const TRIGGER_KIND: Record<TriggerCode, TriggerKind> = {
   PROP_NEAR: 'REVEAL',
   PROP_DANGER: 'REVEAL',
   PROP_LIVE_POSSESSION: 'NUDGE',
+  TEAM_PROP_POSSESSION: 'NUDGE',
   ONE_SCORE_LATE: 'REVEAL',
   PICK_TRAILING_2H: 'REVEAL',
   SPREAD_SWING: 'REVEAL',
@@ -91,7 +83,20 @@ export interface EvaluatorContext {
   lineup: UserLineupCache;
   /** Opponent starters, same shape as `lineup`. Built in S2c. Absent until then. */
   opponent?: UserLineupCache;
-  playerStats?: unknown; // reserved for S4
+  /** Latest parsed ESPN summary for this game. Player and team props read it. */
+  playerStats?: GamePlayerStats;
+  /** For PLAYER subjects: who the stake's player is, resolved by the runner from `players`. */
+  player?: PropPlayer;
+}
+
+export interface PropPlayer {
+  playerId: string;
+  teamId: string;
+  /** Side of the ball for the fantasy activity rule. Every position but `DEF` is offense. */
+  unit: LineupUnit;
+  espnId: string | null;
+  firstName: string;
+  lastName: string;
 }
 
 export type StakeEvaluator = (stake: Stake, ctx: EvaluatorContext) => Trigger[];

@@ -1,19 +1,12 @@
 import * as engine from '@pivot/engine';
-import type { Stake } from '@pivot/engine';
-import { formatStakeLabel, type StakeTeam } from '@pivot/shared/stakeLabel';
-import type { GameState, UserLineupCache } from '@pivot/shared';
+import type { PropPlayer, Stake } from '@pivot/engine';
+import { formatPickLabel, shortPlayerName, type StakeTeam } from '@pivot/shared/stakeLabel';
+import type { GamePlayerStats, GameState, UserLineupCache } from '@pivot/shared';
 import type { GameSummaryInfo } from '@pivot/dispatcher';
 import { isBetCondition } from './betIndex.js';
-import type { Json } from './database.types.js';
+import { STAKE_ROW_COLUMNS, toStake, type StakeRowLike } from './pickRows.js';
+import { loadPropPlayers } from './propPlayers.js';
 import type { SupabaseServiceClient } from './supabase.js';
-
-const STAKE_SOURCES = new Set<Stake['source']>([
-  'SLEEPER_ROSTER',
-  'SLEEPER_OPPONENT',
-  'MANUAL',
-  'KALSHI_MARKET',
-  'SHARED_LIST',
-]);
 
 const EMPTY_LINEUP: UserLineupCache = {
   userId: '',
@@ -40,19 +33,6 @@ export interface WeekBets {
   games: Map<string, BetGameView>;
 }
 
-interface StakeRow {
-  id: string;
-  user_id: string;
-  season: number;
-  week: number;
-  game_id: string;
-  subject: Json;
-  condition: Json;
-  source: string;
-  weight: number;
-  created_at: string;
-}
-
 interface GameRow {
   id: string;
   home_team_id: string;
@@ -71,25 +51,43 @@ export function betPriorityScore(leverage: number): number {
   return Math.max(1, Math.round(leverage * 12));
 }
 
+/** A parlay leg that is not the slip's last open leg ranks at this share (docs §4). */
+export const SLIP_OTHER_LEG_FACTOR = 0.8;
+
+/**
+ * Ranking factor for a parlay leg: 0 once the slip has lost, 1 when this is its only open leg,
+ * 0.8 otherwise. In-app ranking only; the nudge itself never depends on it.
+ */
+export function slipLegFactor(
+  legs: readonly { stakeId: string; open: boolean; lost: boolean }[],
+  stakeId: string,
+): number {
+  if (legs.some((leg) => leg.lost)) return 0;
+  const open = legs.filter((leg) => leg.open);
+  return open.length === 1 && open[0]?.stakeId === stakeId ? 1 : SLIP_OTHER_LEG_FACTOR;
+}
+
 export async function loadWeekBets(input: {
   supabase: SupabaseServiceClient;
   getGameState: (gameId: string) => Promise<GameState | null>;
   userId: string;
   week: number;
   gameIds: readonly string[];
+  /** Latest parsed summary per game (Redis). Omitted, player and team props show no activity. */
+  getPlayerStats?: (gameId: string) => Promise<GamePlayerStats | null>;
 }): Promise<WeekBets | null> {
   const wanted = new Set(input.gameIds);
   if (wanted.size === 0) return null;
 
   const { data, error } = await input.supabase
     .from('stakes')
-    .select('id, user_id, season, week, game_id, subject, condition, source, weight, created_at')
+    .select(STAKE_ROW_COLUMNS)
     .eq('user_id', input.userId)
     .eq('week', input.week)
     .in('game_id', [...wanted]);
   if (error) throw new Error(error.message);
 
-  const stakes = ((data ?? []) as StakeRow[])
+  const stakes = ((data ?? []) as StakeRowLike[])
     .filter(
       (row) =>
         row.user_id === input.userId &&
@@ -139,13 +137,61 @@ export async function loadWeekBets(input: {
   const byGame = new Map<string, { leverage: number; bets: BetChip[] }>();
   const views = new Map<string, BetGameView>();
   const stateByGame = new Map<string, GameState | null>();
+  const statsByGame = new Map<string, GamePlayerStats | null>();
+  const players = await loadPropPlayers(
+    input.supabase,
+    stakes.flatMap((stake) => (stake.subject.type === 'PLAYER' ? [stake.subject.playerId] : [])),
+  );
+
+  const stateFor = async (gameId: string): Promise<GameState | null> => {
+    let gameState = stateByGame.get(gameId);
+    if (gameState === undefined) {
+      gameState = await input.getGameState(gameId);
+      stateByGame.set(gameId, gameState);
+    }
+    return gameState;
+  };
+  const statsFor = async (gameId: string): Promise<GamePlayerStats | null> => {
+    if (!input.getPlayerStats) return null;
+    let stats = statsByGame.get(gameId);
+    if (stats === undefined) {
+      stats = await input.getPlayerStats(gameId);
+      statsByGame.set(gameId, stats);
+    }
+    return stats;
+  };
+  const contextFor = async (stake: Stake, gameState: GameState) => {
+    const stats = await statsFor(stake.gameId);
+    const player =
+      stake.subject.type === 'PLAYER' ? players.get(stake.subject.playerId) : undefined;
+    return {
+      gameId: stake.gameId,
+      game: gameState,
+      lineup: EMPTY_LINEUP,
+      ...(stats ? { playerStats: stats } : {}),
+      ...(player ? { player } : {}),
+    };
+  };
+
+  // Every leg of each slip, so a leg's ranking knows whether the slip is alive.
+  const slipLegs = new Map<string, { stakeId: string; open: boolean; lost: boolean }[]>();
+  for (const stake of stakes) {
+    if (stake.slipId === undefined) continue;
+    const gameState = await stateFor(stake.gameId);
+    const progress = gameState
+      ? engine.pickProgress(stake, await contextFor(stake, gameState))
+      : { status: 'pending' as const };
+    const legs = slipLegs.get(stake.slipId) ?? [];
+    legs.push({
+      stakeId: stake.id,
+      open: !engine.isDecided(progress),
+      lost: progress.status === 'lost' || progress.status === 'missed',
+    });
+    slipLegs.set(stake.slipId, legs);
+  }
 
   for (const stake of stakes) {
-    let gameState = stateByGame.get(stake.gameId);
-    if (gameState === undefined) {
-      gameState = await input.getGameState(stake.gameId);
-      stateByGame.set(stake.gameId, gameState);
-    }
+    const gameState = await stateFor(stake.gameId);
     if (!gameState || gameState.status === 'final') continue;
 
     const game = games.get(stake.gameId);
@@ -153,23 +199,25 @@ export async function loadWeekBets(input: {
       views.set(stake.gameId, { gameState, info: summaryInfo(game, teams) });
     }
 
-    const triggers = engine.evaluateStake(stake, {
-      gameId: stake.gameId,
-      game: gameState,
-      lineup: EMPTY_LINEUP,
-    });
+    const triggers = engine.evaluateStake(stake, await contextFor(stake, gameState));
     if (triggers.length === 0 || !views.has(stake.gameId)) continue;
 
-    const leverage = Math.max(...triggers.map((trigger) => trigger.leverage));
+    const factor =
+      stake.slipId === undefined ? 1 : slipLegFactor(slipLegs.get(stake.slipId) ?? [], stake.id);
+    // A game's score is the max over its picks, so a slip counts once per game, never per leg.
+    const leverage = factor * Math.max(...triggers.map((trigger) => trigger.leverage));
+    const player: PropPlayer | undefined =
+      stake.subject.type === 'PLAYER' ? players.get(stake.subject.playerId) : undefined;
     const chip: BetChip = {
       stake_id: stake.id,
-      label: formatStakeLabel(
+      label: formatPickLabel(
         {
           condition: stake.condition,
           subject: {
             type: stake.subject.type,
             teamId: stake.subject.type === 'TEAM' ? stake.subject.teamId : null,
           },
+          playerName: player ? shortPlayerName(player.firstName, player.lastName) : null,
         },
         labelTeams,
       ),
@@ -236,48 +284,4 @@ function summaryInfo(game: GameRow, teams: ReadonlyMap<string, TeamRow>): GameSu
     awayTeamPrimaryColor: away?.primary_color ?? '',
     awayTeamSecondaryColor: away?.secondary_color ?? '',
   };
-}
-
-function toStake(row: StakeRow): Stake | null {
-  if (!STAKE_SOURCES.has(row.source as Stake['source'])) return null;
-  const subject = toSubject(row.subject, row.game_id);
-  const condition = toCondition(row.condition);
-  if (subject === null || condition === null) return null;
-  return {
-    id: row.id,
-    userId: row.user_id,
-    season: row.season,
-    week: row.week,
-    gameId: row.game_id,
-    subject,
-    condition,
-    source: row.source as Stake['source'],
-    weight: row.weight,
-    createdAt: row.created_at,
-  };
-}
-
-function toSubject(value: Json, gameId: string): Stake['subject'] | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const type = value['type'];
-  if (type === 'GAME') return { type: 'GAME', gameId };
-  const teamId = value['teamId'];
-  if (type === 'TEAM' && typeof teamId === 'string') return { type: 'TEAM', teamId };
-  return null;
-}
-
-function toCondition(value: Json): Stake['condition'] | null {
-  if (!isBetCondition(value)) return null;
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const type = value['type'];
-  if (type === 'MONEYLINE') return { type: 'MONEYLINE', side: 'TEAM' };
-  if (type === 'SURVIVOR') return { type: 'SURVIVOR' };
-  const line = value['line'];
-  if (
-    (type === 'SPREAD' || type === 'TOTAL_OVER' || type === 'TOTAL_UNDER') &&
-    typeof line === 'number'
-  ) {
-    return { type, line };
-  }
-  return null;
 }

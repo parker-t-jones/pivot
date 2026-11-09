@@ -1,6 +1,7 @@
 export * from './types/fantasy.js';
 export * from './types/lineup-cache.js';
 export * from './types/preferences.js';
+export * from './types/picks.js';
 export * from './engine/types.js';
 export * from './engine/possessionAbbreviation.js';
 export * from './etCalendarDate.js';

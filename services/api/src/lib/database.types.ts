@@ -308,9 +308,54 @@ export type Database = {
           },
         ]
       }
+      pick_slips: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          result: string | null
+          season: number
+          settled_at: string | null
+          source: string
+          user_id: string
+          week: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: string
+          result?: string | null
+          season: number
+          settled_at?: string | null
+          source?: string
+          user_id: string
+          week: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          result?: string | null
+          season?: number
+          settled_at?: string | null
+          source?: string
+          user_id?: string
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pick_slips_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           active: boolean
+          espn_id: string | null
           first_name: string
           id: string
           jersey_number: number | null
@@ -322,6 +367,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          espn_id?: string | null
           first_name: string
           id?: string
           jersey_number?: number | null
@@ -333,6 +379,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          espn_id?: string | null
           first_name?: string
           id?: string
           jersey_number?: number | null
@@ -375,6 +422,7 @@ export type Database = {
           created_at: string
           game_id: string
           season: number
+          slot_kind: string
           stake_id: string
           user_id: string
           week: number
@@ -383,6 +431,7 @@ export type Database = {
           created_at?: string
           game_id: string
           season: number
+          slot_kind?: string
           stake_id: string
           user_id: string
           week: number
@@ -391,6 +440,7 @@ export type Database = {
           created_at?: string
           game_id?: string
           season?: number
+          slot_kind?: string
           stake_id?: string
           user_id?: string
           week?: number
@@ -448,11 +498,17 @@ export type Database = {
           id: string
           /** Fantasy team name for OPPONENT_ROSTERED rows. Display only. */
           opponent_team_name: string | null
+          /** Final result, written by the runner at game final. */
+          result: string | null
+          result_value: number | null
           season: number
           /** Lineup slot string (`RB1`, `FLEX`). Display only; null on ROSTERED rows. */
           slot_label: string | null
           /** Index in that week's opponent starters. Display only; null on ROSTERED rows. */
           slot_index: number | null
+          settled_at: string | null
+          /** Parlay this row is a leg of. */
+          slip_id: string | null
           source: string
           source_ref: string | null
           subject: Json
@@ -466,7 +522,11 @@ export type Database = {
           game_id: string
           id?: string
           opponent_team_name?: string | null
+          result?: string | null
+          result_value?: number | null
           season: number
+          settled_at?: string | null
+          slip_id?: string | null
           slot_label?: string | null
           slot_index?: number | null
           source: string
@@ -482,7 +542,11 @@ export type Database = {
           game_id?: string
           id?: string
           opponent_team_name?: string | null
+          result?: string | null
+          result_value?: number | null
           season?: number
+          settled_at?: string | null
+          slip_id?: string | null
           slot_label?: string | null
           slot_index?: number | null
           source?: string
@@ -493,6 +557,13 @@ export type Database = {
           weight?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "stakes_slip_id_fkey"
+            columns: ["slip_id"]
+            isOneToOne: false
+            referencedRelation: "pick_slips"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "stakes_user_id_fkey"
             columns: ["user_id"]

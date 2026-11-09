@@ -295,4 +295,57 @@ describe('followGame', () => {
       `[runner] play failed ${EVENT_ID} X: boom`,
     ]);
   });
+
+  it('hands the seed and every later summary to onSummary, a final seed included', async () => {
+    const seen = new InMemorySeenPlaySet();
+    const finalSeed = summary(['p1'], true);
+    const received: EspnSummary[] = [];
+    await followGame({
+      eventId: EVENT_ID,
+      getSummary: scripted([finalSeed]).getSummary,
+      seen,
+      signal: new AbortController().signal,
+      pollIntervalMs: 0,
+      onPlayEvent: async () => undefined,
+      onSummary: (data) => {
+        received.push(data);
+      },
+    });
+    expect(received).toEqual([finalSeed]);
+
+    const live: EspnSummary[] = [];
+    const later = summary(['p1', 'p2'], true);
+    await followGame({
+      eventId: '401873309',
+      getSummary: scripted([summary(['p1']), later]).getSummary,
+      seen,
+      signal: new AbortController().signal,
+      pollIntervalMs: 0,
+      onPlayEvent: async () => undefined,
+      onSummary: (data) => {
+        live.push(data);
+      },
+    });
+    expect(live).toHaveLength(2);
+    expect(live[1]).toBe(later);
+  });
+
+  it('keeps following when onSummary throws on the seed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const handled: string[] = [];
+    await followGame({
+      eventId: EVENT_ID,
+      getSummary: scripted([summary(['p1']), summary(['p1', 'p2'], true)]).getSummary,
+      seen: new InMemorySeenPlaySet(),
+      signal: new AbortController().signal,
+      pollIntervalMs: 0,
+      onPlayEvent: async (play) => {
+        handled.push(play.playId);
+      },
+      onSummary: () => {
+        throw new Error('boom');
+      },
+    });
+    expect(handled).toEqual(['p2']);
+  });
 });

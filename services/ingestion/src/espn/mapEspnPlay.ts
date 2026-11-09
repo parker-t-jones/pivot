@@ -19,7 +19,7 @@ const ESPN_TEAM_ABBREVIATION_OVERRIDES: Readonly<Record<string, string>> = {
   WSH: 'WAS',
 };
 
-function resolveTeamAbbreviation(espnAbbreviation: string): TeamId {
+export function resolveTeamAbbreviation(espnAbbreviation: string): TeamId {
   return ESPN_TEAM_ABBREVIATION_OVERRIDES[espnAbbreviation] ?? espnAbbreviation;
 }
 

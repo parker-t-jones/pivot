@@ -55,7 +55,9 @@ import {
 } from './heartbeat.js';
 import { LEADER_KEY, leaderOwner, type LeaderLockRedis } from './leaderLock.js';
 import { startLeaderLoop, type LeaderLoopHandle } from './leaderLoop.js';
+import type { GamePlayerStatsWriter } from '../lib/gamePlayerStats.js';
 import { createBetStakeCache, runBetPass } from './betPass.js';
+import { createGameStatsRecorder } from './gameStats.js';
 import { createPlaySession } from './playSession.js';
 import { publishLiveGame } from './publishLiveGame.js';
 import { reconcileStaleGames } from './reconcile.js';
@@ -103,6 +105,8 @@ export interface LiveRunnerDeps {
   };
   /** `stake_fired:{stakeId}:{code}` cache in front of `stake_trigger_log`. */
   firedClaims: FireClaimRedis;
+  /** `game_player_stats:{gameId}` writes. Omitted, props get no live stats and never settle. */
+  playerStats?: GamePlayerStatsWriter;
 }
 
 export function startLiveRunner(deps: LiveRunnerDeps): LeaderLoopHandle {
@@ -195,6 +199,17 @@ async function runLeader(
   };
 
   async function followOne(game: SeededGame, gameSignal: AbortSignal): Promise<void> {
+    const stats = deps.playerStats
+      ? createGameStatsRecorder({
+          gameId: game.id,
+          homeTeamId: game.homeTeamId,
+          awayTeamId: game.awayTeamId,
+          abbrToUuid: game.abbrToUuid,
+          redis: deps.playerStats,
+          supabase: deps.stakeCache.supabase,
+          getGameState: (gameId) => deps.gameState.getGameState(gameId),
+        })
+      : null;
     const session = createPlaySession({
       gameId: game.id,
       gate,
@@ -211,6 +226,7 @@ async function runLeader(
           redis: deps.firedClaims,
           dispatcher: gate,
           cache: betCache,
+          ...(stats ? { playerStats: () => stats.latest() } : {}),
         }),
     });
     trackers.set(game.id, session.tracker);
@@ -221,6 +237,7 @@ async function runLeader(
         getSummary: (eventId) => scoreboard.getSummary(eventId),
         seen: deps.seen,
         signal: gameSignal,
+        ...(stats ? { onSummary: (summary, receivedAt) => stats.record(summary, receivedAt) } : {}),
         onPlayEvent: async (raw) => {
           const play = withGameWeek(translatePlay(raw, game.id, game.abbrToUuid), game.week);
           await session.handlePlay(play);
