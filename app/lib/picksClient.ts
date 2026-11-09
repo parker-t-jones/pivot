@@ -1,6 +1,9 @@
 import type { StakeCondition } from '@pivot/shared/picks';
 
 import { apiClient } from './apiClient';
+import { isParlay, type ManualStake, type StakesResponse } from './stakes';
+import { deleteStake, deleteStakeKeepalive } from './stakesClient';
+import { watchPicksResponse, type PicksApiResponse } from './watchPicks';
 
 /** A condition the app can add. Fantasy rows come from league sync, never from here. */
 export type BetCondition = Exclude<
@@ -48,4 +51,37 @@ export async function createSlip(legs: readonly PickInput[]): Promise<unknown> {
 export function freePicksLeft(page: PicksPage, isPro: boolean): number | null {
   if (isPro) return null;
   return Math.max(0, page.free_limit - page.free_slots_used);
+}
+
+/** The Watchlist and Home read of `GET /picks`, shaped like `GET /stakes` (see `watchPicks`). */
+export async function fetchWatchPicks(week: number): Promise<StakesResponse> {
+  return watchPicksResponse(await apiClient.get<PicksApiResponse>(`/picks?week=${week}`));
+}
+
+export async function deleteSlip(id: string): Promise<void> {
+  await apiClient.delete(`/picks/slips/${id}`);
+}
+
+/** A single pick is removed with `DELETE /stakes/:id`, a parlay with `DELETE /picks/slips/:id`. */
+export async function deleteWatchPick(stake: ManualStake): Promise<void> {
+  if (isParlay(stake)) {
+    await deleteSlip(stake.id);
+    return;
+  }
+  await deleteStake(stake.id);
+}
+
+/** Tab-close delete for either kind of row. See `deleteStakeKeepalive`. */
+export function deleteWatchPickKeepalive(stake: ManualStake, accessToken: string): void {
+  if (!isParlay(stake)) {
+    deleteStakeKeepalive(stake.id, accessToken);
+    return;
+  }
+  const base = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (!base || accessToken.length === 0) return;
+  void fetch(`${base}/picks/slips/${stake.id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    keepalive: true,
+  });
 }

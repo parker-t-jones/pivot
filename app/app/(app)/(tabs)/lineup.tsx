@@ -80,9 +80,9 @@ import { pickCardModel } from '../../../lib/pickCard';
 import { orderPicks } from '../../../lib/pickOrder';
 import { rosterStripInputs, rosterStripModel } from '../../../lib/stakeCards';
 import {
-  formatStakeLabel,
   removalKeepsFreeSlot,
   removePickMessage,
+  stakeGameIds,
   stakeTeams,
   type ManualStake,
 } from '../../../lib/stakes';
@@ -96,7 +96,12 @@ import {
   takePendingStakeUndo,
 } from '../../../lib/stakeUndoStore';
 import { supabase } from '../../../lib/supabase';
-import { deleteStake, deleteStakeKeepalive, fetchStakes } from '../../../lib/stakesClient';
+import {
+  deleteWatchPick,
+  deleteWatchPickKeepalive,
+  fetchWatchPicks,
+} from '../../../lib/picksClient';
+import { watchPickLabel } from '../../../lib/watchPicks';
 import { theme } from '../../../lib/theme';
 import { useOpenAddPick } from '../../../lib/useOpenAddPick';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
@@ -240,7 +245,8 @@ export default function LineupScreen() {
         return;
       }
       const id = takePendingStakeUndo();
-      if (id) deleteStakeKeepalive(id, token);
+      const stake = id ? betsRef.current.find((row) => row.id === id) : undefined;
+      if (stake) deleteWatchPickKeepalive(stake, token);
     };
     window.addEventListener('beforeunload', onLeave);
     return () => {
@@ -336,7 +342,7 @@ export default function LineupScreen() {
         setLineup(response);
         if (betsOn) {
           try {
-            const stakes = await fetchStakes(response.week);
+            const stakes = await fetchWatchPicks(response.week);
             setBets(stakes.stakes);
             setSpentSlots(stakes.free_slots_spent ?? 0);
             setStakesKnown(true);
@@ -438,7 +444,7 @@ export default function LineupScreen() {
       if (!betsOn) return;
       const week = lineup?.week ?? nflWeek;
       if (week == null) return;
-      void fetchStakes(week)
+      void fetchWatchPicks(week)
         .then((response) => {
           setBets(response.stakes);
           setSpentSlots(response.free_slots_spent ?? 0);
@@ -458,7 +464,7 @@ export default function LineupScreen() {
     return subscribeAddPickSaved(() => {
       const week = lineup?.week ?? nflWeek;
       if (!betsOn || week == null) return;
-      void fetchStakes(week)
+      void fetchWatchPicks(week)
         .then((response) => {
           setBets(response.stakes);
           setSpentSlots(response.free_slots_spent ?? 0);
@@ -479,8 +485,11 @@ export default function LineupScreen() {
     }
   };
 
+  const dropRemovedStakeRef = useRef(dropRemovedStake);
+  dropRemovedStakeRef.current = dropRemovedStake;
+
   const commitStakeRemoval = async (stake: ManualStake) => {
-    await deleteStake(stake.id);
+    await deleteWatchPick(stake);
     dropRemovedStake(stake);
   };
 
@@ -491,9 +500,11 @@ export default function LineupScreen() {
   betsRef.current = bets;
   useEffect(() => {
     bindStakeUndoCommit(async (id) => {
-      if (!betsRef.current.some((row) => row.id === id)) return;
-      await deleteStake(id);
-      setBets((current) => current.filter((row) => row.id !== id));
+      const stake = betsRef.current.find((row) => row.id === id);
+      if (!stake) return;
+      // A parlay goes to DELETE /picks/slips/:id. Either way, a started pick keeps its slot.
+      await deleteWatchPick(stake);
+      dropRemovedStakeRef.current(stake);
     });
   }, []);
   useFocusEffect(
@@ -513,7 +524,7 @@ export default function LineupScreen() {
   }, []);
 
   const confirmRemoveBet = (stake: ManualStake) => {
-    const label = formatStakeLabel(stake, stakeTeams(stake));
+    const label = watchPickLabel(stake);
     void confirmAsync({
       title: 'Remove this bet?',
       message: removePickMessage(stake, label, {
@@ -527,7 +538,7 @@ export default function LineupScreen() {
       if (!confirmed) return;
       void (async () => {
         try {
-          await deleteStake(stake.id);
+          await deleteWatchPick(stake);
           dropRemovedStake(stake);
         } catch (error) {
           void alertAsync('Could not remove', errorMessage(error));
@@ -683,7 +694,7 @@ export default function LineupScreen() {
             browsedLeagueReady
               ? starterSlots.map((slot) => slot.player.team?.abbreviation ?? null)
               : [],
-            bets.map((stake) => stake.game_id),
+            bets.flatMap(stakeGameIds),
             weekGames,
           )
         : null,
@@ -1305,7 +1316,7 @@ export default function LineupScreen() {
                       maxFontSizeMultiplier={theme.fontScaleCaps.dense}
                       style={styles.playerName}
                     >
-                      {formatStakeLabel(stake, stakeTeams(stake))}
+                      {watchPickLabel(stake)}
                     </Text>
                     <Text
                       maxFontSizeMultiplier={theme.fontScaleCaps.dense}
@@ -1435,7 +1446,13 @@ function StakeEntry({
   if (editsLocked) return <PickCard model={model} />;
   return (
     <SwipeToRemove
-      accessibilityLabel={[model.eyebrow, model.pick, model.matchup, model.status]
+      accessibilityLabel={[
+        model.eyebrow,
+        model.pick,
+        model.matchup,
+        model.status,
+        model.detail ?? '',
+      ]
         .filter((part) => part.length > 0)
         .join(', ')}
       onRemove={() => onRemove(stake)}

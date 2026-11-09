@@ -29,7 +29,7 @@ export { groupWindow };
 /**
  * One stake riding on one game. `teamId` is the team abbreviation, matching
  * `ScheduleGame.home_team`/`away_team`. Fantasy refs come from `lineupGroups` (one per active
- * starter). Bet refs (`kind: 'bet'`) come from `GET /stakes`; a total leaves `teamId` empty
+ * starter). Bet refs (`kind: 'bet'`) come from `GET /picks` (parlay legs flattened); a total leaves `teamId` empty
  * so it does not pull the stripe to either side.
  */
 export interface StakeRef {
@@ -42,7 +42,7 @@ export interface StakeRef {
   eyebrow?: 'BET' | 'POOL';
 }
 
-/** A live `/flags/current` bet chip. `stake_id` matches `GET /stakes` `id`. */
+/** A live `/flags/current` bet chip. `stake_id` matches a `GET /picks` pick or leg `id`. */
 export interface LiveBetEntry {
   stake_id: string;
   gameId: string;
@@ -78,13 +78,17 @@ function betRefForStake(stake: ManualStake, game: ScheduleGame): StakeRef {
     stakeId: stake.id,
     gameId: stake.game_id,
     teamId,
-    label: formatStakeLabel(
-      {
-        condition: stake.condition,
-        subject: { type: stake.subject.type, teamId: stake.subject.teamId ?? null },
-      },
-      teams,
-    ),
+    // `GET /picks` labels every type, props included. Older rows fall back to this client's label.
+    label:
+      stake.label && stake.label.length > 0
+        ? stake.label
+        : formatStakeLabel(
+            {
+              condition: stake.condition,
+              subject: { type: stake.subject.type, teamId: stake.subject.teamId ?? null },
+            },
+            teams,
+          ),
     eyebrow: stakeLineEyebrow(stake.condition.type),
   };
 }

@@ -101,6 +101,7 @@ They carry old product names on purpose. Do not "tidy" them.
 
 1. **Recon first.** Read the relevant code and docs, then state what you found (files, current behavior, root cause) before editing. If the task's description of the code doesn't match the code, stop and say so; the code wins, and the mismatch is worth reporting.
 2. **Branch per task** off `main`. Small, focused commits.
+   Always branch from and open PRs against main. Never stack a PR on another PR's branch.
 3. **Build and test together**, then run the gates.
 4. **Report** in this shape: what changed (and why, for bugs: the root cause), anything you deliberately left alone, gate results with numbers, and manual check steps Parker can follow, each with the exact action and the expected result. Say plainly what you could not verify (e.g. native layout, live-game behavior, anything needing a device).
 5. Stop at the PR. Parker reviews and merges.

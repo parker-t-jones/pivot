@@ -16,7 +16,14 @@ import type { LiveGame, ScheduleGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { pickEyebrow, pickText } from '../lib/pickCard';
 import { orderPicks } from '../lib/pickOrder';
+import {
+  isLegacyPick,
+  legStateLabel,
+  parlaySummaryLine,
+  pickProgressLine,
+} from '../lib/pickProgressLine';
 import { stakeTeams, type ManualStake } from '../lib/stakes';
+import { watchPickLabel } from '../lib/watchPicks';
 import { isBenchSlot } from '../lib/weekCardModel';
 import { webPressState } from '../lib/webPress';
 import {
@@ -424,7 +431,8 @@ function TableRow({
           {row.name}
         </Text>
         {row.meta.length > 0 ? (
-          <Text numberOfLines={1} style={styles.meta}>
+          // A parlay's meta lists its legs, so give it room.
+          <Text numberOfLines={row.eyebrow === 'PARLAY' ? 3 : 1} style={styles.meta}>
             {row.meta}
           </Text>
         ) : null}
@@ -559,7 +567,7 @@ function stakeRow(
       id: stake.id,
       slot,
       name: pickText(stake, stakeTeams(stake)),
-      meta: '',
+      meta: stakeMeta(stake),
       gameId: stake.game_id,
       matchup,
       kickoff,
@@ -569,8 +577,26 @@ function stakeRow(
       timeZone,
     }),
     muted: false,
-    eyebrow: pickEyebrow(stake.condition.type),
+    eyebrow: pickEyebrow(stake.condition.type, stake.subject.type),
   };
+}
+
+/**
+ * Props and quarter/half lines: the progress line. A parlay: its summary, then every leg, so
+ * one table row shows the whole slip.
+ */
+function stakeMeta(stake: ManualStake): string {
+  if (stake.legs && stake.legs.length > 0) {
+    const legs = stake.legs.map((leg) => {
+      const state = legStateLabel(leg.progress);
+      const label = watchPickLabel(leg);
+      return state ? `${label} (${state})` : label;
+    });
+    return [parlaySummaryLine(stake.summary), ...legs]
+      .filter((part): part is string => part != null && part.length > 0)
+      .join(' · ');
+  }
+  return isLegacyPick(stake) ? '' : (pickProgressLine(stake) ?? '');
 }
 
 function stakeKickoff(stake: ManualStake): string {

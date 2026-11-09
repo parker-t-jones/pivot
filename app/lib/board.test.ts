@@ -16,6 +16,7 @@ import type { GameAiring, GameBroadcast } from './gameDisplay';
 import { resolveHomeBranch, type HomeBranch, type LineupGameGroup } from './homeState';
 import type { ScheduleGame } from './schedule';
 import type { ManualStake } from './stakes';
+import { flattenParlays } from './watchPicks';
 import { AIRING_NETWORKS } from '@pivot/shared/broadcast';
 
 function airing(network: string): GameAiring {
@@ -339,9 +340,9 @@ describe('pickPregameHero', () => {
       now,
     );
     expect(choice).toEqual({ row: expect.objectContaining({ gameId: 'g1' }), kind: 'up_next' });
-    expect(
-      new Date(slate[0]?.scheduled_start ?? 0).getTime() - now.getTime(),
-    ).toBeLessThanOrEqual(UP_NEXT_WINDOW_MS);
+    expect(new Date(slate[0]?.scheduled_start ?? 0).getTime() - now.getTime()).toBeLessThanOrEqual(
+      UP_NEXT_WINDOW_MS,
+    );
   });
 
   it('keeps the biggest stake when every staked kickoff is beyond 12 hours', () => {
@@ -646,7 +647,9 @@ describe('buildMyCardGames', () => {
   });
 });
 
-function manualStake(overrides: Partial<ManualStake> & Pick<ManualStake, 'id' | 'game_id'>): ManualStake {
+function manualStake(
+  overrides: Partial<ManualStake> & Pick<ManualStake, 'id' | 'game_id'>,
+): ManualStake {
   return {
     season: 2026,
     week: 3,
@@ -805,5 +808,56 @@ describe('boardStakeRefs', () => {
     expect(rows[0]?.status).toBe('final');
     expect(rows[0]?.stakeCount).toBe(1);
     expect(rows[0]?.stripeSide).toBe('away');
+  });
+});
+
+describe('boardStakeRefs with GET /picks rows', () => {
+  const sfSea = game('sf-sea', '2026-11-15T21:25:00Z', {
+    away_team: 'SF',
+    home_team: 'SEA',
+    away_team_id: 'sf-id',
+    home_team_id: 'sea-id',
+  });
+  const bufKc = game('buf-kc', '2026-11-16T01:20:00Z', {
+    away_team: 'BUF',
+    home_team: 'KC',
+    away_team_id: 'buf-id',
+    home_team_id: 'kc-id',
+  });
+
+  it('labels a prop and each flattened parlay leg with the API label, on its own game', () => {
+    const prop = manualStake({
+      id: 'prop',
+      game_id: 'sf-sea',
+      subject: { type: 'PLAYER', teamId: 'sf-id' },
+      condition: { type: 'STAT_OVER', line: 60.5 },
+      label: 'G. Kittle over 60.5 rec yds',
+    });
+    const leg = manualStake({
+      id: 'leg',
+      game_id: 'buf-kc',
+      subject: { type: 'TEAM', teamId: 'kc-id' },
+      condition: { type: 'MONEYLINE' },
+      label: 'KC ML',
+    });
+    const refs = boardStakeRefs({
+      fantasyRefs: [],
+      stakes: flattenParlays([
+        prop,
+        manualStake({
+          id: 'slip',
+          game_id: 'buf-kc',
+          subject: { type: 'SLIP' },
+          condition: { type: 'PARLAY' },
+          legs: [leg],
+        }),
+      ]),
+      weekGames: [sfSea, bufKc],
+      liveBets: [],
+    });
+    expect(refs.map((ref) => [ref.gameId, ref.label, ref.teamId])).toEqual([
+      ['sf-sea', 'G. Kittle over 60.5 rec yds', 'SF'],
+      ['buf-kc', 'KC ML', 'KC'],
+    ]);
   });
 });

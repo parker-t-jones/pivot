@@ -128,6 +128,7 @@ describe('desktop watchlist remove', () => {
     onRemoveStake: (stake: ManualStake) => void,
     showTable = true,
     editsLocked = false,
+    stakes: ManualStake[] = [stake],
   ): void {
     const table: ReactNode = showTable ? (
       <WatchlistDesktop
@@ -148,7 +149,7 @@ describe('desktop watchlist remove', () => {
         pools={[]}
         refreshing={false}
         starterSlots={[]}
-        stakes={[stake]}
+        stakes={stakes}
         timeZone="America/New_York"
         topInset={0}
         week={6}
@@ -213,6 +214,52 @@ describe('desktop watchlist remove', () => {
     expect(deleteStake).toHaveBeenCalledTimes(1);
     expect(deleteStake).toHaveBeenCalledWith(stake);
     expect(document.querySelector('[data-testid="stake-undo-toast"]')).toBeNull();
+  });
+
+  it('shows a parlay as one row with its legs, and removes the whole parlay after Undo expires', () => {
+    const leg = (id: string, label: string, status: 'live' | 'hit'): ManualStake => ({
+      ...stake,
+      id,
+      condition: { type: 'STAT_OVER' },
+      subject: { type: 'PLAYER' },
+      label,
+      progress: { status },
+    });
+    const parlay: ManualStake = {
+      ...stake,
+      id: 'slip-1',
+      subject: { type: 'SLIP' },
+      condition: { type: 'PARLAY' },
+      label: '2-leg parlay',
+      legs: [leg('l1', 'G. Kittle over 60.5 rec yds', 'hit'), leg('l2', 'ZZZ ML', 'live')],
+      summary: { status: 'live', legs: 2, hit: 1, alive: 1, lost: 0, refunded: 0 },
+    };
+    const onRemove = vi.fn();
+    renderTable(onRemove, true, false, [parlay]);
+
+    const table = document.querySelector('[data-testid="watchlist-table"]');
+    expect(table?.textContent).toContain('PARLAY');
+    expect(table?.textContent).toContain('2-leg parlay');
+    expect(table?.textContent).toContain('1 of 2 legs hit · 1 still open');
+    expect(table?.textContent).toContain('G. Kittle over 60.5 rec yds (Hit)');
+
+    act(() => {
+      press(removeButton());
+    });
+    expect(table?.textContent).not.toContain('2-leg parlay');
+    act(() => {
+      press(undoButton());
+    });
+    expect(table?.textContent).toContain('2-leg parlay');
+
+    act(() => {
+      press(removeButton());
+    });
+    act(() => {
+      vi.advanceTimersByTime(STAKE_UNDO_MS);
+    });
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenCalledWith(parlay);
   });
 
   it('keeps Remove visible when the pointer moves from the row onto the button', () => {

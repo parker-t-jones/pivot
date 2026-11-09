@@ -7,6 +7,14 @@ import {
   type GameScore,
   type LineScaleModel,
 } from './stakeCards';
+import type { PickProgress, SlipSummary } from '@pivot/shared/picks';
+
+import {
+  isLegacyPick,
+  legStateLabel,
+  parlaySummaryLine,
+  pickProgressLine,
+} from './pickProgressLine';
 import { watchlistStatusLabel, type WatchlistTableLive } from './watchlistTable';
 
 /**
@@ -14,15 +22,23 @@ import { watchlistStatusLabel, type WatchlistTableLive } from './watchlistTable'
  * accent, matchup + kickoff/status, a live progress bar, and a dimmed final.
  *
  * A final card shows the score from the week schedule ("FINAL · 24–17"), or FINAL
- * when the schedule has none. It never states an outcome (covered / lost).
+ * when the schedule has none. The four original types never state an outcome (covered / lost).
+ * Props, quarter and half lines, and parlays add a `detail` line from `GET /picks` progress,
+ * which does name results in-app (docs/P2-PICKS-MODEL.md §6: in-app only, never pushed).
  */
 
 export type PickCardPhase = 'upcoming' | 'live' | 'final';
 
 export interface PickCardStake {
+  id?: string;
   game_id: string;
   subject: { type: string; teamId?: string };
-  condition: { type: string; line?: number };
+  condition: { type: string; line?: number; stat?: string; segment?: string };
+  /** `GET /picks` label. Used for every type the four old cards don't describe. */
+  label?: string;
+  progress?: PickProgress;
+  legs?: PickCardStake[];
+  summary?: SlipSummary;
   game: {
     scheduled_start: string;
     status: string;
@@ -56,6 +72,22 @@ export interface PickCardModel {
   progress: LineScaleModel | null;
   /** Axis end label for `progress`, e.g. "14". */
   axisLabel: string;
+  /** Props, quarter and half lines, and parlays: live progress or the result, in words. */
+  detail: string | null;
+  /** A parlay's legs, in kickoff order. Empty for a single pick. */
+  legs: PickCardLeg[];
+}
+
+export interface PickCardLeg {
+  key: string;
+  pick: string;
+  matchup: string;
+  /** Kickoff, live score and clock, or FINAL, like a pick card. */
+  status: string;
+  /** "Live", "Hit", "Refunded"… Null before the game. */
+  state: string | null;
+  /** The leg's progress line, as on a single pick card. */
+  detail: string | null;
 }
 
 const EYEBROWS: Record<string, string> = {
@@ -64,9 +96,20 @@ const EYEBROWS: Record<string, string> = {
   TOTAL_UNDER: 'TOTAL',
   MONEYLINE: 'MONEYLINE',
   SURVIVOR: 'SURVIVOR',
+  STAT_OVER: 'PLAYER PROP',
+  STAT_UNDER: 'PLAYER PROP',
+  PLAYER_EVENT: 'PLAYER PROP',
+  TEAM_TOTAL_OVER: 'TEAM PROP',
+  TEAM_TOTAL_UNDER: 'TEAM PROP',
+  FIRST_TO_SCORE: 'TEAM PROP',
+  PARLAY: 'PARLAY',
 };
 
-export function pickEyebrow(type: string): string {
+/** Field-goal totals are a team prop on one team and a game prop on both. */
+export function pickEyebrow(type: string, subjectType?: string): string {
+  if (type === 'FG_OVER' || type === 'FG_UNDER') {
+    return subjectType === 'TEAM' ? 'TEAM PROP' : 'GAME PROP';
+  }
   return EYEBROWS[type] ?? 'PICK';
 }
 
@@ -76,6 +119,7 @@ function magnitude(line: number): string {
 
 /** Short pick text for the accent line. Spread uses a true minus (`formatStakeLabel`). */
 export function pickText(stake: PickCardStake, teams: readonly StakeTeam[]): string {
+  if (!isLegacyPick(stake) && stake.label && stake.label.length > 0) return stake.label;
   const type = stake.condition.type;
   const line = stake.condition.line;
   if (type === 'TOTAL_OVER' || type === 'TOTAL_UNDER') {
@@ -116,10 +160,46 @@ export function pickCardModel(input: {
   }).text;
 
   const score: GameScore | null = phase === 'live' && live ? live.score : null;
-  const { progress, axisLabel } = progressFor(stake, score);
+  // The score bar is full-game; a quarter or half line or a prop uses the progress line instead.
+  const { progress, axisLabel } = isLegacyPick(stake)
+    ? progressFor(stake, score)
+    : { progress: null, axisLabel: '14' };
+
+  if (stake.legs && stake.legs.length > 0) {
+    const legs = stake.legs
+      .map((leg) => ({
+        leg,
+        model: pickCardModel({ ...input, stake: leg, teams: legTeams(leg) }),
+      }))
+      .sort((a, b) => kickoffOf(a.leg) - kickoffOf(b.leg));
+    const anyLive = legs.some(({ model }) => model.phase === 'live');
+    const allFinal = legs.every(({ model }) => model.phase === 'final');
+    return {
+      eyebrow: pickEyebrow(type),
+      pick: stake.label && stake.label.length > 0 ? stake.label : `${legs.length}-leg parlay`,
+      awayTeam: null,
+      homeTeam: null,
+      matchup: '',
+      // The leg the row is ordered by: its kickoff, live clock, or final.
+      status,
+      phase: anyLive ? 'live' : allFinal ? 'final' : 'upcoming',
+      progress: null,
+      axisLabel,
+      detail: parlaySummaryLine(stake.summary),
+      legs: legs.map(({ leg, model }, index) => ({
+        key: leg.id ?? `${leg.game_id}-${index}`,
+        // Each leg carries the API's label; a leg has no type row of its own.
+        pick: leg.label && leg.label.length > 0 ? leg.label : model.pick,
+        matchup: model.matchup,
+        status: model.status,
+        state: legStateLabel(leg.progress),
+        detail: model.detail,
+      })),
+    };
+  }
 
   return {
-    eyebrow: pickEyebrow(type),
+    eyebrow: pickEyebrow(type, stake.subject.type),
     pick: pickText(stake, input.teams),
     awayTeam: stake.game?.away_team ?? null,
     homeTeam: stake.game?.home_team ?? null,
@@ -128,7 +208,22 @@ export function pickCardModel(input: {
     phase,
     progress,
     axisLabel,
+    detail: isLegacyPick(stake) ? null : pickProgressLine(stake),
+    legs: [],
   };
+}
+
+function legTeams(leg: PickCardStake): StakeTeam[] {
+  if (!leg.game) return [];
+  return [
+    { teamId: leg.game.home_team_id, abbreviation: leg.game.home_team },
+    { teamId: leg.game.away_team_id, abbreviation: leg.game.away_team },
+  ];
+}
+
+function kickoffOf(leg: PickCardStake): number {
+  const at = leg.game ? Date.parse(leg.game.scheduled_start) : Number.NaN;
+  return Number.isFinite(at) ? at : Number.MAX_SAFE_INTEGER;
 }
 
 /**
