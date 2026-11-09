@@ -41,9 +41,9 @@ export default function NotificationsPermissionScreen() {
       <View style={styles.card}>
         <Text style={styles.title}>Never miss the moment</Text>
         <Text style={styles.body}>
-          Pivot watches every game your players are in. When one of them takes the field — or a big
-          play changes who has the ball — we&apos;ll send you a notification so you can switch over
-          before you miss it.
+          Pivot tells you when a game you care about is worth switching to, so you can get there
+          before the drive starts. If alerts reach you too early or too late, change Alert timing in
+          Settings.
         </Text>
         <Text style={styles.body}>You can turn these off any time in Settings.</Text>
         {detail ? <Text style={styles.body}>{detail}</Text> : null}

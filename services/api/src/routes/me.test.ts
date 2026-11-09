@@ -485,6 +485,7 @@ describe('GET /me', () => {
         watchOpponent: false,
         watchedLeagueIds: [],
         alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
+        following: [],
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
       features: { bets: false },
@@ -538,6 +539,7 @@ describe('GET /me features.bets', () => {
         watchOpponent: false,
         watchedLeagueIds: [],
         alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
+        following: [],
       },
       app_presence: [{ service: 'peacock', has_subscription: true }],
       is_demo: false,
@@ -617,6 +619,7 @@ describe('PATCH /me/preferences', () => {
       watchOpponent: false,
       watchedLeagueIds: [],
       alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
+      following: [],
     });
     expect(response.json().features).toEqual({ bets: false });
   });
@@ -680,6 +683,41 @@ describe('PATCH /me/preferences', () => {
     expect(fetched.statusCode).toBe(200);
     expect(fetched.json().preferences.watchOpponent).toBe(true);
     expect(Object.hasOwn(fetched.json().preferences, 'notAPreference')).toBe(false);
+  });
+
+  it('accepts following and returns it from GET /me', async () => {
+    app = await buildTestApp({}, { 'user-1': { preferences: {} } });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const patched = await app.fastify.inject({
+      method: 'PATCH',
+      url: '/me/preferences',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { following: ['bets', 'survivor'] },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().preferences.following).toEqual(['bets', 'survivor']);
+
+    const fetched = await app.fastify.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(fetched.statusCode).toBe(200);
+    expect(fetched.json().preferences.following).toEqual(['bets', 'survivor']);
+  });
+
+  it('rejects a following option outside fantasy, bets, survivor', async () => {
+    app = await buildTestApp({}, { 'user-1': { preferences: {} } });
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const patched = await app.fastify.inject({
+      method: 'PATCH',
+      url: '/me/preferences',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { following: ['prediction_markets'] },
+    });
+    expect(patched.statusCode).toBe(400);
   });
 });
 

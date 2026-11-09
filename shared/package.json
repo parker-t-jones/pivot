@@ -34,6 +34,12 @@
       "types": "./dist/types/picks.d.ts",
       "default": "./dist/types/picks.js"
     },
+    "./preferences": {
+      "react-native": "./src/types/preferences.ts",
+      "browser": "./src/types/preferences.ts",
+      "types": "./dist/types/preferences.d.ts",
+      "default": "./dist/types/preferences.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

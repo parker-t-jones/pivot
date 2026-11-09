@@ -56,6 +56,7 @@ const freeUser: DispatchUser = {
     watchOpponent: false,
     watchedLeagueIds: [],
     alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
+    following: [],
   },
   // No token by default — most of these tests predate push and shouldn't inadvertently exercise it.
   // The "push" describe block below builds its own user fixture with a token set.

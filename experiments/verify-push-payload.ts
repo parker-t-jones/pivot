@@ -122,6 +122,7 @@ async function main(): Promise<void> {
       watchOpponent: false,
       watchedLeagueIds: [],
       alertTiming: { defaultDelaySeconds: 0, serviceDelaySeconds: {} },
+      following: [],
     },
     expoPushToken: 'ExponentPushToken[verify]',
   };
@@ -188,8 +189,10 @@ async function main(): Promise<void> {
   // and routes on — a payload that passes the guard but has a null deep link still cannot switch.
   const payload = call.data as CheckedPayload;
   const problems: string[] = [];
-  if (payload.action.deep_link_url === null) problems.push('action.deep_link_url is null (tap cannot route)');
-  if (payload.game_summary.possession_team === null) problems.push('game_summary.possession_team is null');
+  if (payload.action.deep_link_url === null)
+    problems.push('action.deep_link_url is null (tap cannot route)');
+  if (payload.game_summary.possession_team === null)
+    problems.push('game_summary.possession_team is null');
   if (payload.flagged_players.length === 0) problems.push('flagged_players is empty');
   if (payload.game_summary.home_team_primary_color === '') problems.push('team colors missing');
 

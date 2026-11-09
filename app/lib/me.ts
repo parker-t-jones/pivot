@@ -1,4 +1,5 @@
 import type { UserService } from '@pivot/shared/broadcast';
+import type { FollowingOption } from '@pivot/shared/preferences';
 import type { AlertTiming } from './alertTiming';
 import { apiClient } from './apiClient';
 import { noteMeFeatures } from './featureGate';
@@ -21,6 +22,8 @@ export interface Preferences {
   watchedLeagueIds: string[];
   /** Settings → Alert timing. Absent on an older server. */
   alertTiming?: AlertTiming;
+  /** Onboarding "What are you following?" (#31). Orders add-paths/filter pills; never gates. */
+  following: FollowingOption[];
 }
 
 /** `PATCH /me/preferences` `alertTiming`. A service set to `null` goes back to Same as default. */
@@ -64,6 +67,7 @@ export async function patchPreferences(patch: {
   watchOpponent?: boolean;
   watchedLeagueIds?: string[];
   alertTiming?: AlertTimingPatch;
+  following?: FollowingOption[];
 }): Promise<MeResponse> {
   const me = await apiClient.patch<MeResponse>('/me/preferences', patch);
   noteMe(me);
