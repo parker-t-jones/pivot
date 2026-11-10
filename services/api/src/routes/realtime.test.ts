@@ -61,7 +61,12 @@ async function buildTestApp(routeOptions: RealtimeRoutesOptions = {}): Promise<T
   if (address === null || typeof address === 'string') {
     throw new Error('Expected a bound TCP address.');
   }
-  return { fastify, url: `ws://127.0.0.1:${address.port}/v1/realtime`, gameStateStore, realtimeBus };
+  return {
+    fastify,
+    url: `ws://127.0.0.1:${address.port}/v1/realtime`,
+    gameStateStore,
+    realtimeBus,
+  };
 }
 
 function onceMessage(socket: WebSocket): Promise<Record<string, unknown>> {
@@ -189,7 +194,7 @@ describe('GET /v1/realtime', () => {
     await onceClose(socket);
   });
 
-  it('relays a realtime:user:{id} fan-out publish only to that user\'s connection', async () => {
+  it("relays a realtime:user:{id} fan-out publish only to that user's connection", async () => {
     const tokenA = await signToken({ sub: 'user-a', email: 'a@b.com' });
     const tokenB = await signToken({ sub: 'user-b', email: 'b@b.com' });
     const socketA = new WebSocket(`${app.url}?token=${tokenA}`);
@@ -309,7 +314,9 @@ describe('GET /v1/realtime', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(await app.gameStateStore.isDeviceActive('user-device', deviceId)).toBe(true);
     expect(await app.gameStateStore.isUserActive('user-device')).toBe(true);
-    expect(await app.gameStateStore.isDeviceActive('user-device', LEGACY_IOS_DEVICE_ID)).toBe(false);
+    expect(await app.gameStateStore.isDeviceActive('user-device', LEGACY_IOS_DEVICE_ID)).toBe(
+      false,
+    );
 
     second.close();
     await onceClose(second);

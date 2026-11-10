@@ -18,14 +18,18 @@ export class MemoryPresenceRedis implements PresenceRedis {
   zrangeByScore(key: string, min: number, max: number): Promise<string[]> {
     this.commands.push(`zrange ${key}`);
     this.dropIfExpired(key);
-    const members = (this.sets.get(key) ?? []).filter((entry) => entry.score >= min && entry.score <= max);
+    const members = (this.sets.get(key) ?? []).filter(
+      (entry) => entry.score >= min && entry.score <= max,
+    );
     return Promise.resolve(members.map((entry) => entry.member));
   }
 
   zremRangeByScore(key: string, min: number, max: number): Promise<void> {
     this.commands.push(`zremrangebyscore ${key}`);
     this.dropIfExpired(key);
-    const kept = (this.sets.get(key) ?? []).filter((entry) => entry.score < min || entry.score > max);
+    const kept = (this.sets.get(key) ?? []).filter(
+      (entry) => entry.score < min || entry.score > max,
+    );
     if (kept.length === 0) this.sets.delete(key);
     else this.sets.set(key, kept);
     return Promise.resolve();

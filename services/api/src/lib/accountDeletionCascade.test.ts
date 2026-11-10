@@ -152,7 +152,11 @@ describe.skipIf(!localReady)('account deletion cascades through every user-data 
     const client = createClient<Database>(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const existing = await client.from('users').select('id').eq('email', FIXTURE_EMAIL).maybeSingle();
+    const existing = await client
+      .from('users')
+      .select('id')
+      .eq('email', FIXTURE_EMAIL)
+      .maybeSingle();
     if (existing.data) await client.auth.admin.deleteUser(existing.data.id);
   });
 

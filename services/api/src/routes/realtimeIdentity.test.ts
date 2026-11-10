@@ -31,8 +31,12 @@ describe('resolveRealtimeIdentity', () => {
   });
 
   it('rejects a non-UUID deviceId, including the reserved legacy id', () => {
-    expect(resolveRealtimeIdentity({ deviceId: 'legacy-ios', platform: 'ios' }).kind).toBe('reject');
-    expect(resolveRealtimeIdentity({ deviceId: 'not-a-uuid', platform: 'web' }).kind).toBe('reject');
+    expect(resolveRealtimeIdentity({ deviceId: 'legacy-ios', platform: 'ios' }).kind).toBe(
+      'reject',
+    );
+    expect(resolveRealtimeIdentity({ deviceId: 'not-a-uuid', platform: 'web' }).kind).toBe(
+      'reject',
+    );
     expect(resolveRealtimeIdentity({ deviceId: DEVICE }).kind).toBe('reject');
   });
 });

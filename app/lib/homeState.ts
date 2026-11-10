@@ -120,18 +120,11 @@ export function stakeTeamAbbreviations(playerTeamMap: PlayerTeamMap): Set<string
   return teams;
 }
 
-export function gameHasStake(
-  homeTeam: string,
-  awayTeam: string,
-  stakeTeams: Set<string>,
-): boolean {
+export function gameHasStake(homeTeam: string, awayTeam: string, stakeTeams: Set<string>): boolean {
   return stakeTeams.has(homeTeam) || stakeTeams.has(awayTeam);
 }
 
-export function filterLiveStakeGames(
-  liveGames: LiveGame[],
-  stakeTeams: Set<string>,
-): LiveGame[] {
+export function filterLiveStakeGames(liveGames: LiveGame[], stakeTeams: Set<string>): LiveGame[] {
   return liveGames.filter((g) => gameHasStake(g.home_team, g.away_team, stakeTeams));
 }
 
@@ -209,9 +202,7 @@ export function findNextStakeGames(
   return candidates
     .filter(({ kickoffMs }) => sameKickoffSlot(anchorMs, kickoffMs))
     .map(({ game }) => game)
-    .sort((a, b) =>
-      `${a.away_team}@${a.home_team}`.localeCompare(`${b.away_team}@${b.home_team}`),
-    );
+    .sort((a, b) => `${a.away_team}@${a.home_team}`.localeCompare(`${b.away_team}@${b.home_team}`));
 }
 
 /**
@@ -376,10 +367,7 @@ export function groupLineupByGame(
   const sorted = weekGames
     .filter((g) => gameHasStake(g.home_team, g.away_team, stakeTeams))
     .slice()
-    .sort(
-      (a, b) =>
-        new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime(),
-    );
+    .sort((a, b) => new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime());
 
   for (const game of sorted) {
     const homePlayers = playersByTeam.get(game.home_team) ?? [];
@@ -434,10 +422,7 @@ export function seasonIdleCopy(
     regularSeasonStart: null,
   },
 ): SeasonIdleCopy {
-  const leagueLine =
-    leagueCount === 1
-      ? '1 league connected'
-      : `${leagueCount} leagues connected`;
+  const leagueLine = leagueCount === 1 ? '1 league connected' : `${leagueCount} leagues connected`;
   const seasonLine = season.length > 0 ? `${season} season` : null;
 
   if (variant === 'off') {

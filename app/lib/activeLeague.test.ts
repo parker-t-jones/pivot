@@ -153,8 +153,8 @@ describe('nextWatchedLeagueIds', () => {
   });
 
   it('writes a single id when Pro has nothing watched yet', () => {
-    expect(
-      nextWatchedLeagueIds({ tier: 'pro', leagueId: 'manual', watchedLeagueIds: [] }),
-    ).toEqual(['manual']);
+    expect(nextWatchedLeagueIds({ tier: 'pro', leagueId: 'manual', watchedLeagueIds: [] })).toEqual(
+      ['manual'],
+    );
   });
 });

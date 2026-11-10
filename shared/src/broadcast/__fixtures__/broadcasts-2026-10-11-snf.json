@@ -11,9 +11,7 @@
     "broadcasts": [
       {
         "market": "national",
-        "names": [
-          "NBC"
-        ]
+        "names": ["NBC"]
       }
     ],
     "geoBroadcasts": [
@@ -64,9 +62,7 @@
     "broadcasts": [
       {
         "market": "national",
-        "names": [
-          "CBS"
-        ]
+        "names": ["CBS"]
       }
     ],
     "geoBroadcasts": [
@@ -96,9 +92,7 @@
     "broadcasts": [
       {
         "market": "national",
-        "names": [
-          "Fox"
-        ]
+        "names": ["Fox"]
       }
     ],
     "geoBroadcasts": [

@@ -2,14 +2,13 @@
 
 Read-only, no-op pass: no `PLAN.md` or `app/` edits happened alongside this file. This is the incoming design brief translated into this repo's actual stack, tokens, and shipped screens, plus two rendered mockups so the look can be judged before anything is built. Treat it the same way as `[AUDIT-UI-POLISH.md](AUDIT-UI-POLISH.md)` — an inventory/intent document that a future sprint can turn into real diffs against `[app/lib/theme.ts](app/lib/theme.ts)` and the screens under `app/app/(app)/`. If a later pass implements any of this, fold the relevant parts into `PLAN.md` Section 10 and delete this file rather than letting two UX specs drift.
 
-**Status update (Sept 18, 2026): Home State 1 shipped.** §3.1 (field gauge), §3.3 (possession glow), §6 (`HomeDashboard`), and the Home State 1 row of §7/§9 below described proposals; those are now implemented (`app/components/FieldGauge.tsx`, `NowActiveCard.tsx`, `AlsoFlaggedRow.tsx`, `HomeDashboard.tsx`) and folded into `PLAN.md` §10's State 1 description, which is the source of truth for that screen going forward — the sections below are left in place as a historical record of the proposal, marked shipped inline, rather than deleted, since they still explain *why* each choice was made. Settings (§2 switch tinting, §3.2 sync slider) and the layout/web/TV notes (§4) remain live, unshipped proposals.
+**Status update (Sept 18, 2026): Home State 1 shipped.** §3.1 (field gauge), §3.3 (possession glow), §6 (`HomeDashboard`), and the Home State 1 row of §7/§9 below described proposals; those are now implemented (`app/components/FieldGauge.tsx`, `NowActiveCard.tsx`, `AlsoFlaggedRow.tsx`, `HomeDashboard.tsx`) and folded into `PLAN.md` §10's State 1 description, which is the source of truth for that screen going forward — the sections below are left in place as a historical record of the proposal, marked shipped inline, rather than deleted, since they still explain _why_ each choice was made. Settings (§2 switch tinting, §3.2 sync slider) and the layout/web/TV notes (§4) remain live, unshipped proposals.
 
 **Status update (Sept 23, 2026): Home State 2 scoreboard parity shipped.** Until now, `HomeLiveIdleCard` (State 2) only inherited the field gauge stick from State 1 (per §3.1 below) — its matchup line was still plain `AWAY @ HOME` text with a small inline score. It now also renders each live row with the same `fieldAlignedMatchup` scoreboard (team-color-washed name+score chips split by a divider) as `NowActiveCard`'s hero card. Folded into `PLAN.md` §10's State 2 description, which is the source of truth for that screen going forward.
 
 ## 0. Stack correction
 
 The source brief was written against Tailwind CSS, `backdrop-filter`, `box-shadow`, and three CSS breakpoints. This is an Expo / React Native client with dark-only design tokens in `app/lib/theme.ts`, styled via `StyleSheet.create`, no CSS engine, and (`PLAN.md` §4) **no web or TV app in v1**. Every recipe below is restated in that vocabulary. Where the brief assumes a capability this repo doesn't have (blur, motion, a settings field, live yardage data), that's called out as a gap rather than quietly implemented as if it already existed.
-
 
 | Brief concept                               | This repo's equivalent                                                                                                                                                                      |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -21,13 +20,11 @@ The source brief was written against Tailwind CSS, `backdrop-filter`, `box-shado
 | `lg:` breakpoint / 3-column web             | Out of v1 per `PLAN.md` §4 ("Android, web, TV apps"). Documented as future-web notes only, §4 below                                                                                         |
 | TV / AirPlay billboard mode                 | Maps to `PLAN.md` §14's unbuilt Screen Mirroring reframe, not a v1 presentation flag. See §4                                                                                                |
 
-
 ## 1. Palette: what already matches, what's new
 
 The amber/dark palette in the brief is already this app's palette. `PLAN.md`'s Known Issues (the "competing accent colors" entry, resolved pre-Sprint-10) recorded `#FFB020` as the chosen accent because no NFL team owns it as a primary; that hue was later warmed to **`#F5A018`** (commit `2f78a67`), which is what `app/lib/theme.ts` pins today. This pass doesn't change that decision.
 
 **Already in** `app/lib/theme.ts`**, unchanged:**
-
 
 | Token                  | Value     |
 | ---------------------- | --------- |
@@ -36,24 +33,22 @@ The amber/dark palette in the brief is already this app's palette. `PLAN.md`'s K
 | `colors.onAccent`      | `#412402` |
 | `colors.textPrimary`   | `#FFFFFF` |
 
-
 **Proposed additions** (sketched in §5; not applied to `theme.ts` in this pass — `app/lib/theme.test.ts` pins the current hexes, so any of these would be a deliberate follow-up edit with test changes, not a silent swap):
 
-
-| New token                        | Value                      | Replaces / sits alongside                                                                  |
-| -------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------ |
-| `colors.canvas`                  | `#000000`                  | Optional harder-black screen background vs. today's `colors.background` (`#0B0B0F`)        |
-| `colors.surface` (revised)       | `#121417`                  | Today `#1A1A20`                                                                            |
-| `colors.surfaceRaised` (revised) | `#1A1C20`                  | Today `#22222A`                                                                            |
-| `colors.textSecondary` (revised) | `#94A3B8`                  | Today `#9A9AA3` — close enough that this is a nice-to-have, not a fix                      |
-| `colors.accentBorder`            | `rgba(245, 160, 24, 0.25)` | Shipped — glass-panel stroke                                                               |
-| `colors.accentGlow`              | `rgba(245, 160, 24, 0.15)` | Shipped — shadow color for the "active" glow in §2.3                                       |
+| New token                        | Value                      | Replaces / sits alongside                                                                     |
+| -------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------- |
+| `colors.canvas`                  | `#000000`                  | Optional harder-black screen background vs. today's `colors.background` (`#0B0B0F`)           |
+| `colors.surface` (revised)       | `#121417`                  | Today `#1A1A20`                                                                               |
+| `colors.surfaceRaised` (revised) | `#1A1C20`                  | Today `#22222A`                                                                               |
+| `colors.textSecondary` (revised) | `#94A3B8`                  | Today `#9A9AA3` — close enough that this is a nice-to-have, not a fix                         |
+| `colors.accentBorder`            | `rgba(245, 160, 24, 0.25)` | Shipped — glass-panel stroke                                                                  |
+| `colors.accentGlow`              | `rgba(245, 160, 24, 0.15)` | Shipped — shadow color for the "active" glow in §2.3                                          |
 | `colors.dangerMuted`             | `rgba(255, 90, 90, 0.14)`  | Already hand-rolled inline at `app/app/(app)/(tabs)/settings.tsx` — this just gives it a name |
-
 
 No new hue is introduced. `danger` (`#FF5A5A`) and `success` (`#3ECf8E`) are untouched.
 
 **Color rules (PIVOT-STAKES-PLAN.md §11.1, shipped with the amber ladder in U1):**
+
 - Amber never means warning or error. Danger stays `#FF5A5A`, and the field gauge's red zone stays red.
 - Flare (`#FFC94D`) and its glow appear only when something is live. Stillness means nothing is happening.
 - Team colors are the second accent. Use them only as stripes, bands or washes, never as text color on black.
@@ -143,7 +138,7 @@ No `lg:` breakpoint, no CSS grid — this is a paragraph, not a component.
 
 The paragraph above is the historical note. The web build now has a real desktop layout; see **Desktop layout** below. It does not change the phone.
 
-**TV / AirPlay billboard mode — not a v1 presentation flag.** `PLAN.md` §14 already scoped this territory as the "Screen Mirroring reframe": unbuilt, needs its own UX design, and premised on the *user* enabling Screen Mirroring from Control Center — an app cannot trigger a presentation mode on its own, and §14 is explicit that deep-linking into a streaming app ends any mirrored session, so "big-screen mode" and the shipping deep-link flow may be mutually exclusive rather than layered. This spec doesn't add a `isPresenting` flag or a scaled-up card variant; it points at §14 as the place that idea already lives.
+**TV / AirPlay billboard mode — not a v1 presentation flag.** `PLAN.md` §14 already scoped this territory as the "Screen Mirroring reframe": unbuilt, needs its own UX design, and premised on the _user_ enabling Screen Mirroring from Control Center — an app cannot trigger a presentation mode on its own, and §14 is explicit that deep-linking into a streaming app ends any mirrored session, so "big-screen mode" and the shipping deep-link flow may be mutually exclusive rather than layered. This spec doesn't add a `isPresenting` flag or a scaled-up card variant; it points at §14 as the place that idea already lives.
 
 ## 5. Sketch: `theme.ts` additions (documentation only — not applied)
 
@@ -205,17 +200,13 @@ flowchart TB
   Dash --> S5
 ```
 
-
-
 ## 7. Zone-by-zone mapping
-
 
 | Zone                                                            | Today                                                                                                                                                                 | Spec treatment                                                                                                                                                                             |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Onboarding streaming (`app/app/(app)/onboarding-streaming.tsx`) | Pill chips, `radii.pill`, accent fill when selected (`:104-116`)                                                                                                      | Larger block variant: unselected = `surface` fill + muted icon; selected = 2px `accentBorder` wrap + `textPrimary` icon. Same data (`STREAMING_SERVICES`), no new fields — still unshipped |
-| Home (`app/app/(app)/(tabs)/index.tsx`)                          | **Shipped** — `HomeDashboard` wrapper (§6), State 1's numbered field gauge (§3.1) and possession glow (§3.3), outlined reason chip, situation-card "Also flagged" row | See `PLAN.md` §10 for the current State 1 description — this row is historical                                                                                                             |
-| Settings (`app/app/(app)/(tabs)/settings.tsx`)                   | Grouped `SectionCard`s: Account, Notifications, Streaming, Leagues, Star players, About                                                                               | Groupings unchanged. Switches get `SWITCH_THUMB`/`SWITCH_TRACK` amber tinting (already partially wired per `settings.tsx`); no sync slider added — §3.2 explains why                       |
-
+| Home (`app/app/(app)/(tabs)/index.tsx`)                         | **Shipped** — `HomeDashboard` wrapper (§6), State 1's numbered field gauge (§3.1) and possession glow (§3.3), outlined reason chip, situation-card "Also flagged" row | See `PLAN.md` §10 for the current State 1 description — this row is historical                                                                                                             |
+| Settings (`app/app/(app)/(tabs)/settings.tsx`)                  | Grouped `SectionCard`s: Account, Notifications, Streaming, Leagues, Star players, About                                                                               | Groupings unchanged. Switches get `SWITCH_THUMB`/`SWITCH_TRACK` amber tinting (already partially wired per `settings.tsx`); no sync slider added — §3.2 explains why                       |
 
 ## 8. Explicitly not in this pass
 
@@ -251,11 +242,11 @@ No sync slider rendered, matching §3.2 — that control has no backing preferen
 
 Web only. The phone tokens in §1–§3 are the palette; this section does not add a color. Width is `useWindowDimensions`, and `Platform.OS !== 'web'` always takes the phone tree, including on an iPad.
 
-| Tier | Width | What you see |
-| --- | --- | --- |
-| Companion | under 900px | The phone column and the bottom tab bar, at the window's width. A window around 600px, snapped beside a broadcast, stays on this tier. |
-| Medium | 900–1279px | An icon-only left rail (Home, Watchlist, Settings). Home is two panes. |
-| Wide | 1280px and up | A labeled sidebar. The Pivot Pro card is pinned to the bottom of that sidebar. Home adds a right column of about 360px. |
+| Tier      | Width         | What you see                                                                                                                           |
+| --------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Companion | under 900px   | The phone column and the bottom tab bar, at the window's width. A window around 600px, snapped beside a broadcast, stays on this tier. |
+| Medium    | 900–1279px    | An icon-only left rail (Home, Watchlist, Settings). Home is two panes.                                                                 |
+| Wide      | 1280px and up | A labeled sidebar. The Pivot Pro card is pinned to the bottom of that sidebar. Home adds a right column of about 360px.                |
 
 The whole frame, nav included, is at most 1440px and centered. Board rows, table rows, and settings cards stop at that frame. They do not stretch to the edges of the monitor. The active destination uses `colors.accent`.
 

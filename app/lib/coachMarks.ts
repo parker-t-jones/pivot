@@ -1,8 +1,4 @@
-import {
-  hasSeenCoachMark,
-  withCoachMarkSeen,
-  type CoachMarkId,
-} from '@pivot/shared/preferences';
+import { hasSeenCoachMark, withCoachMarkSeen, type CoachMarkId } from '@pivot/shared/preferences';
 
 export { withCoachMarkSeen, type CoachMarkId };
 

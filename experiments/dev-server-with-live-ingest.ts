@@ -53,7 +53,12 @@ function parseArgs(): { espnIds: string[] } {
     );
     process.exit(1);
   }
-  return { espnIds: raw.split(',').map((s) => s.trim()).filter(Boolean) };
+  return {
+    espnIds: raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  };
 }
 
 async function main(): Promise<void> {
@@ -73,11 +78,11 @@ async function main(): Promise<void> {
   console.log(`[dev-server-with-live-ingest] API server listening on :${env.PORT}`);
 
   console.log(`[dev-server-with-live-ingest] starting live ingestion for: ${espnIds.join(', ')}`);
-  void Promise.all(
-    espnIds.map((id) => runOne(fastify.supabase, fastify.gameStateStore, id)),
-  ).then(() => {
-    console.log('[dev-server-with-live-ingest] all ingestion subscriptions ended');
-  });
+  void Promise.all(espnIds.map((id) => runOne(fastify.supabase, fastify.gameStateStore, id))).then(
+    () => {
+      console.log('[dev-server-with-live-ingest] all ingestion subscriptions ended');
+    },
+  );
 }
 
 main().catch((error) => {

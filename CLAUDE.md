@@ -10,18 +10,18 @@ Status: **live on the App Store** ("Pivot: Fantasy & Picks Live") and on the web
 
 ## Repo layout (pnpm workspace)
 
-| Path | Package | Role |
-|---|---|---|
-| `app/` | `@pivot/app` | Expo / React Native client (iOS + web via react-native-web). Routes in `app/app/` (expo-router), components in `app/components/`, logic in `app/lib/`. |
-| `services/api/` | `@pivot/api` | Fastify REST + WebSocket (`src/index.ts`), lineup worker (`src/worker.ts`), live runner (`src/runner.ts`, `src/runner/`). One Fly app, three process groups. |
-| `services/engine/` | `@pivot/engine` | Switching engine: flag computation, priority, resumption detection (`resumptionWatcher.ts`, `incrementalResumption.ts`). |
-| `services/dispatcher/` | `@pivot/dispatcher` | Deferred firing, rate limiting, delivery (Expo push, Web Push, realtime). |
-| `services/ingestion/` | `@pivot/ingestion` | ESPN unofficial site API consumer (`EspnPlaySource`, `espnPlayTypeMap.ts`). |
-| `shared/` | `@pivot/shared` | Shared types and pure logic (`broadcast/` destination resolver + watch links, `types/`). |
-| `supabase/` | — | Migrations, `config.toml` (local stack). |
-| `scripts/` | — | Seeds and one-offs. All go through `scripts/remoteSafety.ts`. |
-| `experiments/` | — | Harnesses and live-capture tools. Unproven ideas start here, not in `services/`. |
-| `docs/` | — | Design notes, runbooks, recon write-ups. |
+| Path                   | Package             | Role                                                                                                                                                         |
+| ---------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `app/`                 | `@pivot/app`        | Expo / React Native client (iOS + web via react-native-web). Routes in `app/app/` (expo-router), components in `app/components/`, logic in `app/lib/`.       |
+| `services/api/`        | `@pivot/api`        | Fastify REST + WebSocket (`src/index.ts`), lineup worker (`src/worker.ts`), live runner (`src/runner.ts`, `src/runner/`). One Fly app, three process groups. |
+| `services/engine/`     | `@pivot/engine`     | Switching engine: flag computation, priority, resumption detection (`resumptionWatcher.ts`, `incrementalResumption.ts`).                                     |
+| `services/dispatcher/` | `@pivot/dispatcher` | Deferred firing, rate limiting, delivery (Expo push, Web Push, realtime).                                                                                    |
+| `services/ingestion/`  | `@pivot/ingestion`  | ESPN unofficial site API consumer (`EspnPlaySource`, `espnPlayTypeMap.ts`).                                                                                  |
+| `shared/`              | `@pivot/shared`     | Shared types and pure logic (`broadcast/` destination resolver + watch links, `types/`).                                                                     |
+| `supabase/`            | —                   | Migrations, `config.toml` (local stack).                                                                                                                     |
+| `scripts/`             | —                   | Seeds and one-offs. All go through `scripts/remoteSafety.ts`.                                                                                                |
+| `experiments/`         | —                   | Harnesses and live-capture tools. Unproven ideas start here, not in `services/`.                                                                             |
+| `docs/`                | —                   | Design notes, runbooks, recon write-ups.                                                                                                                     |
 
 Infra: Fly.io app `pivot-sports-api` (processes `api`, `worker`, `runner`; region `iad`), self-hosted Redis as Fly app `pivot-sports-redis` (not Upstash, whatever older docs say), hosted Supabase project ref `taucqrptzfyzhfzpinzo`, Cloudflare Pages project `pivot` for the web app (builds from `origin/main`), EAS for iOS builds, RevenueCat for Pro.
 

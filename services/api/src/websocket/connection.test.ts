@@ -27,7 +27,9 @@ describe('RealtimeConnection', () => {
     const socket = fakeSocket();
     const connection = new RealtimeConnection(socket, 'user-1', 0);
     connection.send({ id: '1', type: 'pong', timestamp: 0, payload: {} });
-    expect(socket.sent).toEqual([JSON.stringify({ id: '1', type: 'pong', timestamp: 0, payload: {} })]);
+    expect(socket.sent).toEqual([
+      JSON.stringify({ id: '1', type: 'pong', timestamp: 0, payload: {} }),
+    ]);
   });
 
   it('starts with an empty subscribedGameIds set', () => {

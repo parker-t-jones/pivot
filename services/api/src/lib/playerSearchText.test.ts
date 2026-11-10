@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildPlayerSearchText,
-  playerSearchTextMatches,
-} from './playerSearchText.js';
+import { buildPlayerSearchText, playerSearchTextMatches } from './playerSearchText.js';
 
 function text(parts: {
   first_name: string;

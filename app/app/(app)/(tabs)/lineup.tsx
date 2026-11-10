@@ -298,7 +298,12 @@ export default function LineupScreen() {
       {screen}
       <PickEventFlash flash={pickFlash.flash} onDone={pickFlash.dismiss} />
       {shareContent ? (
-        <View collapsable={false} pointerEvents="none" ref={shareViewRef} style={styles.shareOffscreen}>
+        <View
+          collapsable={false}
+          pointerEvents="none"
+          ref={shareViewRef}
+          style={styles.shareOffscreen}
+        >
           <ShareableCard content={shareContent} />
         </View>
       ) : null}

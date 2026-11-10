@@ -1,4 +1,4 @@
-# Gates on every pull request and on main: tests (against a local Supabase), typecheck, lint.
+# Gates on every pull request and on main: tests (against a local Supabase), typecheck, lint, format.
 # Mirrors CLAUDE.md "Definition of done". Redis integration suites stay skipped (no Redis here),
 # and the PHI @ CHI replay needs a gitignored local recording, so the expected skip count is exactly 6.
 name: CI
@@ -62,6 +62,9 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
 
       - name: Test
         run: pnpm exec vitest run --reporter=default --reporter=json --outputFile=vitest-results.json

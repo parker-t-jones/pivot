@@ -28,7 +28,10 @@ export class SupabaseWebPushSubscriptionStore implements WebPushSubscriptionStor
   }
 
   async deleteEndpoint(endpoint: string): Promise<void> {
-    const { error } = await this.client.from('web_push_subscriptions').delete().eq('endpoint', endpoint);
+    const { error } = await this.client
+      .from('web_push_subscriptions')
+      .delete()
+      .eq('endpoint', endpoint);
     if (error) throw new Error(`web push subscription delete failed: ${error.message}`);
   }
 }

@@ -26,9 +26,13 @@ describe('presence members', () => {
     });
   });
 
-  it('lists live connections from that user\'s key only', async () => {
+  it("lists live connections from that user's key only", async () => {
     const redis = new MemoryPresenceRedis();
-    await writePresenceConnection(redis, { ...connection, userId: 'user-b', connectionId: 'other' }, 60_000);
+    await writePresenceConnection(
+      redis,
+      { ...connection, userId: 'user-b', connectionId: 'other' },
+      60_000,
+    );
     redis.commands.length = 0;
 
     expect(await listLivePresenceConnections(redis, 'user-a')).toEqual([]);

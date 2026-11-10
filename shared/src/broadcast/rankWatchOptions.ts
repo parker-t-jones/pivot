@@ -1,11 +1,6 @@
 import type { UserService, WatchOption } from './types.js';
 
-const IN_MARKET_MVPDS = new Set<UserService>([
-  'youtube_tv',
-  'hulu_live',
-  'fubo',
-  'directv',
-]);
+const IN_MARKET_MVPDS = new Set<UserService>(['youtube_tv', 'hulu_live', 'fubo', 'directv']);
 
 /**
  * Rank expanded watch options against the user's subscribed services (§1.6, §9.3).
@@ -50,10 +45,10 @@ export function rankWatchOptions(
   });
 
   if (ticketEligible) {
-    const preferred = ranked.find((o) => o.service === 'sunday_ticket' && userServices.has(o.service));
-    const local = ranked.find(
-      (o) => IN_MARKET_MVPDS.has(o.service) && userServices.has(o.service),
+    const preferred = ranked.find(
+      (o) => o.service === 'sunday_ticket' && userServices.has(o.service),
     );
+    const local = ranked.find((o) => IN_MARKET_MVPDS.has(o.service) && userServices.has(o.service));
     if (preferred && local && preferred !== local) {
       local.routeHint = 'in_market_local';
       const without = ranked.filter((o) => o !== preferred && o !== local);

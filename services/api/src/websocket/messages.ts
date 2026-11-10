@@ -60,7 +60,11 @@ export function parseClientMessage(raw: string): ClientIntent {
     case 'subscribe_game': {
       const payload = gamePayloadSchema.safeParse(envelope.data.payload);
       if (!payload.success) {
-        return { kind: 'error', code: 'invalid_payload', message: 'subscribe_game requires game_id.' };
+        return {
+          kind: 'error',
+          code: 'invalid_payload',
+          message: 'subscribe_game requires game_id.',
+        };
       }
       return { kind: 'subscribe_game', gameId: payload.data.game_id };
     }

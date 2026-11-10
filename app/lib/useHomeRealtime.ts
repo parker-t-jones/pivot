@@ -92,11 +92,7 @@ export function useHomeRealtime(options: UseHomeRealtimeOptions): void {
         },
         ...(platform === 'web'
           ? {
-              onInTabAlert: (alert: {
-                title: string;
-                body: string;
-                payload: FlagEventPayload;
-              }) => {
+              onInTabAlert: (alert: { title: string; body: string; payload: FlagEventPayload }) => {
                 offerInTabAlert(alert, globalThis.document?.visibilityState !== 'hidden');
               },
             }
@@ -123,7 +119,8 @@ export function useHomeRealtime(options: UseHomeRealtimeOptions): void {
         client.start();
         const onVisibility = () => syncVisibility();
         globalThis.document?.addEventListener('visibilitychange', onVisibility);
-        removeVisibility = () => globalThis.document?.removeEventListener('visibilitychange', onVisibility);
+        removeVisibility = () =>
+          globalThis.document?.removeEventListener('visibilitychange', onVisibility);
       } else {
         // Tear down only on true `background` (not `inactive` / Control Center).
         if (AppState.currentState === 'active') {

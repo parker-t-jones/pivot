@@ -82,7 +82,9 @@ export function mapRosterToLineupSlots(
   });
 
   const starterIds = new Set(
-    starterList.filter((playerId): playerId is string => typeof playerId === 'string' && playerId.length > 0),
+    starterList.filter(
+      (playerId): playerId is string => typeof playerId === 'string' && playerId.length > 0,
+    ),
   );
   const benchSlots: RosterMappingSlot[] = playerList
     .filter(

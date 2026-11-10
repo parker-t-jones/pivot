@@ -124,21 +124,24 @@ describe('decidePushDelivery', () => {
       hasToken: false,
       expected: 'no_token' as const,
     },
-  ])('one legacy iOS connection: $name', async ({ connected, primaryGameId, hasToken, expected }) => {
-    const store = new InMemoryGameStateStore();
-    if (connected) await store.markUserActive('u1', 60_000);
-    const deviceActive = await store.isDeviceActive('u1', LEGACY_IOS_DEVICE_ID);
-    expect(deviceActive).toBe(connected);
-    expect(await store.isUserActive('u1')).toBe(connected);
-    expect(
-      decidePushDelivery({
-        connected: deviceActive,
-        primaryGameId,
-        gameId: GAME,
-        hasToken,
-      }),
-    ).toBe(expected);
-  });
+  ])(
+    'one legacy iOS connection: $name',
+    async ({ connected, primaryGameId, hasToken, expected }) => {
+      const store = new InMemoryGameStateStore();
+      if (connected) await store.markUserActive('u1', 60_000);
+      const deviceActive = await store.isDeviceActive('u1', LEGACY_IOS_DEVICE_ID);
+      expect(deviceActive).toBe(connected);
+      expect(await store.isUserActive('u1')).toBe(connected);
+      expect(
+        decidePushDelivery({
+          connected: deviceActive,
+          primaryGameId,
+          gameId: GAME,
+          hasToken,
+        }),
+      ).toBe(expected);
+    },
+  );
 });
 
 describe('formatPushDecisionLog', () => {

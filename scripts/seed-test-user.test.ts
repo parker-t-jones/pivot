@@ -13,9 +13,21 @@ function player(id: string, position: Position) {
   return { id, first_name: 'First', last_name: `Last${id}`, position };
 }
 
-const qbSpec: RosterSpec = { positionInLineup: 'QB', slotType: 'starter', eligiblePositions: ['QB'] };
-const rb1Spec: RosterSpec = { positionInLineup: 'RB1', slotType: 'starter', eligiblePositions: ['RB'] };
-const rb2Spec: RosterSpec = { positionInLineup: 'RB2', slotType: 'starter', eligiblePositions: ['RB'] };
+const qbSpec: RosterSpec = {
+  positionInLineup: 'QB',
+  slotType: 'starter',
+  eligiblePositions: ['QB'],
+};
+const rb1Spec: RosterSpec = {
+  positionInLineup: 'RB1',
+  slotType: 'starter',
+  eligiblePositions: ['RB'],
+};
+const rb2Spec: RosterSpec = {
+  positionInLineup: 'RB2',
+  slotType: 'starter',
+  eligiblePositions: ['RB'],
+};
 const flexSpec: RosterSpec = {
   positionInLineup: 'FLEX',
   slotType: 'flex',

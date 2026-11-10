@@ -18,7 +18,11 @@ const gameWithoutLink: Game = { id: 'game-2' };
 
 /** Stands in for the native AirPlay boundary so `AirPlayPlaybackSource` is testable off-device, and
  *  counts picker presentations — the one side effect `createSession` has. */
-function fakeRoute({ available }: { available: boolean }): AirPlayRouteController & { presentCount: number } {
+function fakeRoute({
+  available,
+}: {
+  available: boolean;
+}): AirPlayRouteController & { presentCount: number } {
   return {
     presentCount: 0,
     isTargetAvailable: () => available,
@@ -85,7 +89,11 @@ describe('resolvePlaybackSource', () => {
     const deepLink = new DeepLinkPlaybackSource();
 
     // AirPlay/Chromecast are `canPlay: false` stubs; only DeepLink is eligible for a linked game.
-    const resolved = resolvePlaybackSource([airplay, chromecast, deepLink], gameWithLink, userContext);
+    const resolved = resolvePlaybackSource(
+      [airplay, chromecast, deepLink],
+      gameWithLink,
+      userContext,
+    );
 
     expect(resolved).toBe(deepLink);
   });

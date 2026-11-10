@@ -68,7 +68,7 @@ export function nextWatchedLeagueIds(input: {
 }
 
 export type WatchlistLeagueEvent =
-    | {
+  | {
       type: 'focus';
       leagues: readonly ActiveLeagueRef[];
       /** Null when the refetch failed and nothing was known yet. */

@@ -181,25 +181,31 @@ describe('lineup edits rebuild both caches before the caller returns', () => {
 
   it('PUT /leagues/:id/lineup (refreshLineupCache) writes the new player with no worker tick', async () => {
     slots.push({ player_id: TE, position: 'TE' });
-    await refreshLineupCache({ supabase: supabaseFor(slots), lineupCache: cache }, leagueRow(), WEEK, {
-      lineupSource: 'matchup',
-    });
+    await refreshLineupCache(
+      { supabase: supabaseFor(slots), lineupCache: cache },
+      leagueRow(),
+      WEEK,
+      {
+        lineupSource: 'matchup',
+      },
+    );
     await expectPlayer(TE);
   });
 
   it('Sleeper /sync writes the new player with no worker tick', async () => {
     getFantasyProvider.mockReturnValue({
       supportsSync: () => true,
-      fetchLineup: vi.fn().mockResolvedValue([
-        { externalPlayerId: 'sl-te', slotType: 'starter', positionInLineup: 'TE' },
-      ]),
+      fetchLineup: vi
+        .fn()
+        .mockResolvedValue([
+          { externalPlayerId: 'sl-te', slotType: 'starter', positionInLineup: 'TE' },
+        ]),
       fetchRosterPlayers: vi.fn(),
     });
-    await syncLeagueLineup(
-      { supabase: supabaseFor(slots), lineupCache: cache },
-      leagueRow(),
-      { week: WEEK, displayPhase: 'regular' },
-    );
+    await syncLeagueLineup({ supabase: supabaseFor(slots), lineupCache: cache }, leagueRow(), {
+      week: WEEK,
+      displayPhase: 'regular',
+    });
     await expectPlayer(TE);
   });
 

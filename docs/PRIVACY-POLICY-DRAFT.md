@@ -114,7 +114,7 @@ generic placeholder.]
   automatically") is backed by a specific file in `docs/PRIVACY-INVENTORY.md` — re-check that table
   before editing this draft, since a wording change here should track a real code change, not the
   other way around.
-- The bet-slip section describes issue #12's *design*, which is not yet merged. Don't let this
+- The bet-slip section describes issue #12's _design_, which is not yet merged. Don't let this
   section go live before the feature does, and re-verify the "we don't save it" claim against the
   actual implementation when it ships — that's a promise this document is making on the code's
   behalf.

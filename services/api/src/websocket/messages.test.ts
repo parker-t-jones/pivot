@@ -45,7 +45,12 @@ describe('parseClientMessage', () => {
   });
 
   it('rejects subscribe_game missing game_id', () => {
-    const raw = JSON.stringify({ id: '1', type: 'subscribe_game', timestamp: Date.now(), payload: {} });
+    const raw = JSON.stringify({
+      id: '1',
+      type: 'subscribe_game',
+      timestamp: Date.now(),
+      payload: {},
+    });
     expect(parseClientMessage(raw)).toEqual({
       kind: 'error',
       code: 'invalid_payload',

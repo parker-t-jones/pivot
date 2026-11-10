@@ -11,11 +11,7 @@ import { useLeaguesGate } from '../../contexts/LeaguesGateContext';
 import { useUpgradeSheet } from '../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../lib/apiClient';
 import { fetchLineup, putManualLineup } from '../../lib/leagues';
-import {
-  fetchMe,
-  FREE_MAX_MANUAL_LINEUP_SLOTS,
-  type MeResponse,
-} from '../../lib/me';
+import { fetchMe, FREE_MAX_MANUAL_LINEUP_SLOTS, type MeResponse } from '../../lib/me';
 import type { PlayerSearchResult } from '../../lib/players';
 import { promptUpgradeForCapError } from '../../lib/upgradePrompt';
 import { theme } from '../../lib/theme';
@@ -40,8 +36,7 @@ export default function EditManualLineupScreen() {
   const [me, setMe] = useState<MeResponse | null>(null);
 
   const league = leagues.find((row) => row.league_id === leagueId) ?? null;
-  const freeCap =
-    me && me.subscription_tier !== 'pro' ? FREE_MAX_MANUAL_LINEUP_SLOTS : undefined;
+  const freeCap = me && me.subscription_tier !== 'pro' ? FREE_MAX_MANUAL_LINEUP_SLOTS : undefined;
 
   const load = useCallback(async () => {
     if (!leagueId) {

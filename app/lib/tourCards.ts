@@ -22,8 +22,7 @@ export const TOUR_CARDS: readonly TourCard[] = [
     id: 'live',
     eyebrow: 'Card 2 of 4',
     title: "When it's live, Home lights up.",
-    body:
-      "When something's worth switching for, the top card goes LIVE and tells you exactly where to go.",
+    body: "When something's worth switching for, the top card goes LIVE and tells you exactly where to go.",
   },
   {
     id: 'alerts',

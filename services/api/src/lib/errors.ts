@@ -86,7 +86,9 @@ export function apiErrorHandler(
 
   if (statusCode >= 500) {
     request.log.error(error);
-    reply.status(500).send({ error: { code: 'internal_error', message: 'Internal server error.' } });
+    reply
+      .status(500)
+      .send({ error: { code: 'internal_error', message: 'Internal server error.' } });
     return;
   }
 

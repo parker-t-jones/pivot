@@ -17,9 +17,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "Prime Video"
-              ]
+              "names": ["Prime Video"]
             }
           ],
           "geoBroadcasts": [
@@ -48,9 +46,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "FOX"
-              ]
+              "names": ["FOX"]
             }
           ],
           "geoBroadcasts": [
@@ -79,9 +75,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "FOX"
-              ]
+              "names": ["FOX"]
             }
           ],
           "geoBroadcasts": [
@@ -110,9 +104,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "FOX"
-              ]
+              "names": ["FOX"]
             }
           ],
           "geoBroadcasts": [
@@ -141,9 +133,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "CBS"
-              ]
+              "names": ["CBS"]
             }
           ],
           "geoBroadcasts": [
@@ -172,9 +162,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "CBS"
-              ]
+              "names": ["CBS"]
             }
           ],
           "geoBroadcasts": [
@@ -203,9 +191,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "CBS"
-              ]
+              "names": ["CBS"]
             }
           ],
           "geoBroadcasts": [
@@ -234,9 +220,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "CBS"
-              ]
+              "names": ["CBS"]
             }
           ],
           "geoBroadcasts": [
@@ -265,9 +249,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "FOX"
-              ]
+              "names": ["FOX"]
             }
           ],
           "geoBroadcasts": [
@@ -296,9 +278,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "CBS"
-              ]
+              "names": ["CBS"]
             }
           ],
           "geoBroadcasts": [
@@ -327,9 +307,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "FOX"
-              ]
+              "names": ["FOX"]
             }
           ],
           "geoBroadcasts": [
@@ -358,9 +336,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "FOX"
-              ]
+              "names": ["FOX"]
             }
           ],
           "geoBroadcasts": [
@@ -389,9 +365,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "CBS"
-              ]
+              "names": ["CBS"]
             }
           ],
           "geoBroadcasts": [
@@ -420,9 +394,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "CBS"
-              ]
+              "names": ["CBS"]
             }
           ],
           "geoBroadcasts": [
@@ -451,9 +423,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "NBC"
-              ]
+              "names": ["NBC"]
             }
           ],
           "geoBroadcasts": [
@@ -482,10 +452,7 @@
           "broadcasts": [
             {
               "market": "national",
-              "names": [
-                "ESPN",
-                "ABC"
-              ]
+              "names": ["ESPN", "ABC"]
             }
           ],
           "geoBroadcasts": [

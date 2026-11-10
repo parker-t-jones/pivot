@@ -82,9 +82,7 @@ export interface PresenceRedis {
 
 const LIVE_MAX = Number.POSITIVE_INFINITY;
 
-function visibilityOf(
-  raw: string | undefined,
-): PresenceVisibility {
+function visibilityOf(raw: string | undefined): PresenceVisibility {
   return raw === 'hidden' ? 'hidden' : 'visible';
 }
 
@@ -128,7 +126,9 @@ export async function removePresenceConnection(
   await redis.zremRangeByScore(connectionsKey, 0, now - 1);
   if (expiredIds.length > 0) await redis.hdel(visibilityKey, expiredIds);
   const live = await redis.zrangeByScore(connectionsKey, now, LIVE_MAX);
-  const mine = live.filter((member) => decodeConnectionMember(member)?.connectionId === connectionId);
+  const mine = live.filter(
+    (member) => decodeConnectionMember(member)?.connectionId === connectionId,
+  );
   if (mine.length > 0) await redis.zrem(connectionsKey, mine);
   await redis.hdel(visibilityKey, [connectionId]);
   const remaining = await redis.zrangeByScore(connectionsKey, now, LIVE_MAX);

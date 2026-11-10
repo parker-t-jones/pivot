@@ -12,30 +12,30 @@ Date: 2026-09-24.
 
 **Repo + local env: no hosted DB wired. Fly hostname check: incomplete pending auth.**
 
-| Check | Finding |
-|---|---|
-| CI | No `.github/` workflows. Nothing automates `pnpm seed:broadcasts`. |
-| Deploy config in repo | No `fly.toml`, no Dockerfile, no linked remote (`supabase/.temp/project-ref` absent). |
-| `B3-HANDOFF.md` (Aug 21 2026) | Explicit: "There is no deployed backend. At all." Supabase is local-only; `seed:broadcasts` is listed as a step still needed *if* a hosted project is created. |
-| Seed script | Reads `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` from `services/api/.env`. That file currently points at `127.0.0.1` (local Kong). |
-| App client env | `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_API_BASE_URL` also `127.0.0.1`. |
-| Migrations | Create `game_broadcasts` and expand the service CHECK; none INSERT rows. |
-| One-off | `scripts/tmp-seed-broadcasts-chunked.ts` is a local-only workaround for a URI-too-long DELETE against the *dev* Kong stack — same env, same fixture rows. |
+| Check                         | Finding                                                                                                                                                        |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CI                            | No `.github/` workflows. Nothing automates `pnpm seed:broadcasts`.                                                                                             |
+| Deploy config in repo         | No `fly.toml`, no Dockerfile, no linked remote (`supabase/.temp/project-ref` absent).                                                                          |
+| `B3-HANDOFF.md` (Aug 21 2026) | Explicit: "There is no deployed backend. At all." Supabase is local-only; `seed:broadcasts` is listed as a step still needed _if_ a hosted project is created. |
+| Seed script                   | Reads `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` from `services/api/.env`. That file currently points at `127.0.0.1` (local Kong).                           |
+| App client env                | `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_API_BASE_URL` also `127.0.0.1`.                                                                                      |
+| Migrations                    | Create `game_broadcasts` and expand the service CHECK; none INSERT rows.                                                                                       |
+| One-off                       | `scripts/tmp-seed-broadcasts-chunked.ts` is a local-only workaround for a URI-too-long DELETE against the _dev_ Kong stack — same env, same fixture rows.      |
 
 ### Fly.io verification (2026-09-24 follow-up)
 
-The earlier "no production Supabase" claim rested on missing *repo* deploy config.
+The earlier "no production Supabase" claim rested on missing _repo_ deploy config.
 That is necessary but not sufficient — the API might live on Fly with secrets only
 in the Fly dashboard.
 
-| Check | Finding |
-|---|---|
-| DNS | `pivot-api.fly.dev` resolves (Fly Anycast). |
-| HTTP | Every probed path (`/`, `/health`, `/state/nfl`, `/games`) returns Fly edge `404 NOT_FOUND` (`server: Fly/...`). Looks like an empty/stopped app shell, not a live Fastify process. |
-| `fly secrets list -a pivot-api` | **Not run.** `flyctl` was not installed; after install, `fly auth whoami` fails (`no access token`). Browser dashboard requires sign-in. No `FLY_API_TOKEN` in the environment. |
+| Check                                 | Finding                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DNS                                   | `pivot-api.fly.dev` resolves (Fly Anycast).                                                                                                                                                                                                                                                                                                                                  |
+| HTTP                                  | Every probed path (`/`, `/health`, `/state/nfl`, `/games`) returns Fly edge `404 NOT_FOUND` (`server: Fly/...`). Looks like an empty/stopped app shell, not a live Fastify process.                                                                                                                                                                                          |
+| `fly secrets list -a pivot-api`       | **Not run.** `flyctl` was not installed; after install, `fly auth whoami` fails (`no access token`). Browser dashboard requires sign-in. No `FLY_API_TOKEN` in the environment.                                                                                                                                                                                              |
 | Conclusion until secrets are readable | Cannot confirm or deny a hosted `SUPABASE_URL` / `DATABASE_URL` on Fly. **Do not treat "no production Supabase" as closed.** Run locally: `fly auth login && fly secrets list -a pivot-api` and look for those keys. If set, open that Supabase project → Table Editor → `game_broadcasts` and check for the seed pattern (one OTA + `sunday_ticket` + `nfl_plus` per game). |
 
-What *is* closed: the **simulator board** and local `services/api/.env` are on seeded local rows (TNF → CBS while ESPN says Prime Video). That does not answer whether a separate hosted DB exists.
+What _is_ closed: the **simulator board** and local `services/api/.env` are on seeded local rows (TNF → CBS while ESPN says Prime Video). That does not answer whether a separate hosted DB exists.
 
 ### Can production rows be told apart from seeded rows?
 
@@ -57,7 +57,7 @@ airings (Prime Video on TNF, ESPN+ABC on MNF) never appear in that rotation.
 
 **No.**
 
-- `services/ingestion` polls ESPN scoreboard/summary for *plays* only.
+- `services/ingestion` polls ESPN scoreboard/summary for _plays_ only.
   `espnScoreboardEventSchema` (`espnTypes.ts`) does not include
   `competitions[].broadcasts` or `geoBroadcasts`.
 - Grep of `services/` for inserts into `game_broadcasts` finds only the seed
@@ -75,7 +75,7 @@ game_broadcasts rows
 ```
 
 Same table for dispatcher enrichment (`recommended_source` / deep link). If the
-rows are seed fixtures, routing ranks and deep-links the *fixture* services —
+rows are seed fixtures, routing ranks and deep-links the _fixture_ services —
 not ESPN's actual airing network. Example from local Week 3: TNF ATL@GB is
 seeded as `cbs` (+ carriers); ESPN says **Prime Video**.
 
@@ -90,12 +90,12 @@ Saved at:
 
 Request: `GET https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=3`
 
-| Window | Game | `broadcasts` | `geoBroadcasts` (type / market / media) |
-|---|---|---|---|
-| TNF | ATL @ GB | names: `["Prime Video"]`, market: `national` | Streaming / National / Prime Video |
-| Sunday early | LAC @ BUF | names: `["FOX"]`, market: `national` | TV / National / FOX |
-| SNF | LAR @ DEN | names: `["NBC"]`, market: `national` | TV / National / NBC |
-| MNF | PHI @ CHI | names: `["ESPN","ABC"]`, market: `national` | TV / National / ESPN **and** TV / National / ABC (simulcast) |
+| Window       | Game      | `broadcasts`                                 | `geoBroadcasts` (type / market / media)                      |
+| ------------ | --------- | -------------------------------------------- | ------------------------------------------------------------ |
+| TNF          | ATL @ GB  | names: `["Prime Video"]`, market: `national` | Streaming / National / Prime Video                           |
+| Sunday early | LAC @ BUF | names: `["FOX"]`, market: `national`         | TV / National / FOX                                          |
+| SNF          | LAR @ DEN | names: `["NBC"]`, market: `national`         | TV / National / NBC                                          |
+| MNF          | PHI @ CHI | names: `["ESPN","ABC"]`, market: `national`  | TV / National / ESPN **and** TV / National / ABC (simulcast) |
 
 Notes from the same payload: most Sunday 1pm/4pm games are listed as a single
 national OTA name (FOX or CBS). Local-market-only entries did not appear on
@@ -104,6 +104,7 @@ this national scoreboard response for Week 3.
 ---
 
 ## 4. What would have to change for ESPN / ABC+ESPN simulcasts
+
 (list only — no implementation)
 
 For a real airing-network key on MNF (and ABC/ESPN simulcasts):

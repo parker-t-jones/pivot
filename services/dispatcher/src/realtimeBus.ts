@@ -82,7 +82,10 @@ export class InMemoryRealtimeBus implements RealtimeBus, RealtimeSubscriber {
     };
   }
 
-  async psubscribe(pattern: string, handler: RealtimeMessageHandler): Promise<RealtimeSubscription> {
+  async psubscribe(
+    pattern: string,
+    handler: RealtimeMessageHandler,
+  ): Promise<RealtimeSubscription> {
     const handlers = this.patternHandlers.get(pattern) ?? new Set();
     handlers.add(handler);
     this.patternHandlers.set(pattern, handlers);

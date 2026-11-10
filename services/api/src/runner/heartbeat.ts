@@ -24,11 +24,7 @@ export async function publishRunnerHeartbeat(
   input: { isLeader: boolean; inProgressFollows: number; now: Date },
 ): Promise<void> {
   if (!input.isLeader || input.inProgressFollows < 1) return;
-  await redis.setEx(
-    RUNNER_HEARTBEAT_KEY,
-    input.now.toISOString(),
-    RUNNER_HEARTBEAT_TTL_SECONDS,
-  );
+  await redis.setEx(RUNNER_HEARTBEAT_KEY, input.now.toISOString(), RUNNER_HEARTBEAT_TTL_SECONDS);
 }
 
 /** True when the stored ISO timestamp is present and not older than {@link RUNNER_HEARTBEAT_MAX_AGE_MS}. */

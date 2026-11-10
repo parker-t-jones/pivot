@@ -120,7 +120,10 @@ export class InMemoryGameStateStore implements GameStateStore {
   }
 
   hasPresenceKey(userId: string): boolean {
-    return this.presence.hasKey(presenceKey(userId)) || this.presence.hasKey(presenceVisibilityKey(userId));
+    return (
+      this.presence.hasKey(presenceKey(userId)) ||
+      this.presence.hasKey(presenceVisibilityKey(userId))
+    );
   }
 
   presenceMembers(userId: string): string[] {

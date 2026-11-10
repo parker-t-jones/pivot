@@ -221,7 +221,9 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
         <View
           accessibilityRole="menu"
-          style={desktop ? [styles.dropdown, { top: anchor.top, right: anchor.right }] : styles.sheet}
+          style={
+            desktop ? [styles.dropdown, { top: anchor.top, right: anchor.right }] : styles.sheet
+          }
           testID={desktop ? 'active-lineup-dropdown' : 'active-lineup-sheet'}
         >
           <Text style={styles.sheetTitle}>{isPro ? 'Watch leagues' : 'Active lineup'}</Text>
@@ -239,11 +241,7 @@ export function ActiveLineupPicker({ leagues, me, onMeUpdated }: ActiveLineupPic
                 disabled={saving}
                 key={league.league_id}
                 onPress={() => toggle(league.league_id)}
-                style={[
-                  styles.row,
-                  selected && styles.rowSelected,
-                  saving && styles.rowDisabled,
-                ]}
+                style={[styles.row, selected && styles.rowSelected, saving && styles.rowDisabled]}
                 testID="active-lineup-option"
               >
                 <Text style={styles.rowLabel}>{league.name}</Text>
