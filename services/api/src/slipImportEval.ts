@@ -10,17 +10,9 @@
  * accuracy per field. Only the reader is measured; matching to this week's players and games
  * is covered by unit tests.
  */
-import { readFile, readdir } from 'node:fs/promises';
-import { extname, join } from 'node:path';
-import { AnthropicSlipReader, sniffImageType } from './lib/slipImport/reader.js';
-import {
-  emptyTally,
-  formatTally,
-  scoreSlip,
-  type ExpectedSlip,
-} from './lib/slipImport/evalScore.js';
-
-const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+import { AnthropicSlipReader } from './lib/slipImport/reader.js';
+import { emptyTally, formatTally, scoreSlip } from './lib/slipImport/evalScore.js';
+import { loadEvalImages } from './lib/slipImport/evalImages.js';
 
 async function main(): Promise<void> {
   const key = process.env['ANTHROPIC_API_KEY'];
@@ -28,26 +20,15 @@ async function main(): Promise<void> {
   const dir = process.argv[2] ?? '../../experiments/slip-eval';
   const reader = new AnthropicSlipReader(key);
   const tally = emptyTally();
-  const names = (await readdir(dir)).filter((name) =>
-    IMAGE_EXTENSIONS.has(extname(name).toLowerCase()),
-  );
-  if (names.length === 0) {
+  const { cases, skipped } = await loadEvalImages(dir);
+  for (const name of skipped) console.log(`${name}: not an image the reader takes, skipped`);
+  if (cases.length === 0) {
     console.log(`No screenshots in ${dir}. See experiments/slip-eval/README.md.`);
     return;
   }
-  for (const name of names.sort()) {
-    const base = name.slice(0, -extname(name).length);
-    const bytes = await readFile(join(dir, name));
-    const mediaType = sniffImageType(bytes);
-    if (mediaType === null) {
-      console.log(`${name}: not an image the reader takes, skipped`);
-      continue;
-    }
-    const expected = JSON.parse(
-      await readFile(join(dir, `${base}.expected.json`), 'utf8'),
-    ) as ExpectedSlip;
+  for (const { name, image, expected } of cases) {
     try {
-      const read = await reader.read({ mediaType, data: bytes.toString('base64') });
+      const read = await reader.read(image);
       scoreSlip(tally, read, expected);
       console.log(`${name}: ${read.legs.length}/${expected.legs.length} legs read`);
     } catch (error) {

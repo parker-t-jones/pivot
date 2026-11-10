@@ -45,4 +45,31 @@ describe('slip eval scoring', () => {
     expect(tally.legCountCorrect).toBe(0);
     expect(tally.fields.market).toEqual({ correct: 1, total: 2 });
   });
+
+  it('defaults the expected is_bet_slip to true when the fixture omits it', () => {
+    const tally = emptyTally();
+    scoreSlip(
+      tally,
+      { is_bet_slip: true, bet_count: 1, legs: [got()] },
+      { bet_count: 1, legs: [want] },
+    );
+    expect(tally.isBetSlipCorrect).toBe(1);
+  });
+
+  it('scores a non-slip image correctly flagged, and wrongly flagged', () => {
+    const tally = emptyTally();
+    scoreSlip(
+      tally,
+      { is_bet_slip: false, bet_count: 0, legs: [] },
+      { bet_count: 0, legs: [], is_bet_slip: false },
+    );
+    scoreSlip(
+      tally,
+      { is_bet_slip: true, bet_count: 0, legs: [] },
+      { bet_count: 0, legs: [], is_bet_slip: false },
+    );
+    expect(tally.isBetSlipCorrect).toBe(1);
+    expect(tally.slips).toBe(2);
+    expect(formatTally(tally)).toContain('is_bet_slip right: 1/2 (50.0%)');
+  });
 });
