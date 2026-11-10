@@ -17,12 +17,3 @@ declare module 'expo-sharing' {
     options?: { dialogTitle?: string; mimeType?: string; UTI?: string },
   ): Promise<void>;
 }
-
-declare module 'react-native-view-shot' {
-  export interface CaptureOptions {
-    format?: 'png' | 'jpg' | 'webm' | 'raw';
-    quality?: number;
-    result?: 'tmpfile' | 'base64' | 'data-uri' | 'zip-base64';
-  }
-  export function captureRef(view: unknown, options?: CaptureOptions): Promise<string>;
-}
