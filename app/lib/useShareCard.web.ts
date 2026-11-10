@@ -13,7 +13,7 @@ export interface ShareCardResult {
 export interface UseShareCard {
   sharing: boolean;
   share: (
-    viewRef: RefObject<View>,
+    viewRef: RefObject<View | null>,
     content: ShareContent,
     dialogTitle: string,
   ) => Promise<ShareCardResult>;
@@ -108,7 +108,7 @@ export function useShareCard(): UseShareCard {
     // Native captures `viewRef`; the web fallback draws `content` onto a canvas instead, so this
     // parameter is unused here but kept so both platform files export the same hook shape.
     async (
-      _viewRef: RefObject<View>,
+      _viewRef: RefObject<View | null>,
       content: ShareContent,
       dialogTitle: string,
     ): Promise<ShareCardResult> => {

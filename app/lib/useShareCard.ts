@@ -15,7 +15,7 @@ export interface UseShareCard {
    * sheet / web fallback. `content` names the file; `dialogTitle` is the only text the OS share
    * sheet itself shows. */
   share: (
-    viewRef: RefObject<View>,
+    viewRef: RefObject<View | null>,
     content: ShareContent,
     dialogTitle: string,
   ) => Promise<ShareCardResult>;
@@ -33,7 +33,7 @@ export function useShareCard(): UseShareCard {
     // `content` only matters for the web fallback's canvas draw (`useShareCard.web.ts`); native
     // captures the live `viewRef` instead, so this signature keeps the two call sites identical.
     async (
-      viewRef: RefObject<View>,
+      viewRef: RefObject<View | null>,
       _content: ShareContent,
       dialogTitle: string,
     ): Promise<ShareCardResult> => {
