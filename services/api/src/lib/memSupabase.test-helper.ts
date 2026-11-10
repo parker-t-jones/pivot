@@ -121,7 +121,7 @@ class MemQuery implements PromiseLike<Result> {
   }
 
   /** Only the `'is'` operator is needed so far (e.g. `.not('result', 'is', null)`). */
-  not(column: string, operator: 'is', value: null): this {
+  not(column: string, _operator: 'is', value: null): this {
     this.filters.push((row) => (row[column] ?? null) !== value);
     return this;
   }
