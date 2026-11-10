@@ -151,8 +151,8 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(@types/react@19.2.17)(react@19.2.3))
       react-native-view-shot:
-        specifier: ^4.0.3
-        version: 4.0.3(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+        specifier: ^5.1.1
+        version: 5.1.1(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
       react-native-web:
         specifier: ^0.21.2
         version: 0.21.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -3844,11 +3844,12 @@ packages:
     peerDependencies:
       react-native: '*'
 
-  react-native-view-shot@4.0.3:
-    resolution: {integrity: sha512-USNjYmED7C0me02c1DxKA0074Hw+y/nxo+xJKlffMvfUWWzL5ELh/TJA/pTnVqFurIrzthZDPtDM7aBFJuhrHQ==}
+  react-native-view-shot@5.1.1:
+    resolution: {integrity: sha512-jOTLQrMGNBgv/nRA81VR2x2AdiCGoCjc63c9a5P4A0gStCbh9oDeJ6W+GtRxxQmxXXf6LDSrvG+mmWYulIrOkg==}
+    engines: {node: '>=20.19.4', npm: '>=10'}
     peerDependencies:
-      react: '*'
-      react-native: '*'
+      react: '>=18.0.0'
+      react-native: '>=0.76.0'
 
   react-native-web@0.21.4:
     resolution: {integrity: sha512-77B6KlalB4osNIck91TNFixPkYPsTbuNEvw8P7IV+4v4/5wZSBRKZnw0Zhx6YjuauDTz71gc8IW+fVhcBMjr5A==}
@@ -6243,7 +6244,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -8627,7 +8630,7 @@ snapshots:
       react-native: 0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(@types/react@19.2.17)(react@19.2.3)
       whatwg-url-without-unicode: 8.0.0-3
 
-  react-native-view-shot@4.0.3(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3):
+  react-native-view-shot@5.1.1(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.0(@babel/core@7.29.0))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3):
     dependencies:
       html2canvas: 1.4.1
       react: 19.2.3
