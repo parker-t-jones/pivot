@@ -22,8 +22,10 @@ import {
   type SlipTeam,
 } from '../lib/slipImport/mapSlip.js';
 import {
-  SLIP_IMPORT_KEY_TTL_SEC,
-  slipImportKey,
+  SLIP_IMPORT_FREE_KEY_TTL_SEC,
+  SLIP_IMPORT_PRO_KEY_TTL_SEC,
+  slipImportFreeKey,
+  slipImportProKey,
   type UsageCounter,
 } from '../lib/slipImport/quota.js';
 import { SlipReadError, sniffImageType, type SlipReader } from '../lib/slipImport/reader.js';
@@ -54,13 +56,12 @@ function unreadable(): ApiError {
 }
 
 function limitError(limit: number, isPro: boolean): ApiError {
-  const used = `You’ve used today’s ${limit} screenshot imports.`;
   return new ApiError(
     429,
     'slip_import_limit',
     isPro
-      ? `${used} You can still add picks yourself, and imports reset tomorrow.`
-      : `${used} You can still add picks yourself, imports reset tomorrow, and Pro includes more.`,
+      ? `You’ve used today’s ${limit} screenshot imports. You can still add picks yourself, and imports reset tomorrow.`
+      : `You’ve used this week’s ${limit} screenshot imports. You can still add picks yourself, imports reset next week, and Pro includes more.`,
     { limit },
   );
 }
@@ -127,8 +128,10 @@ const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (
       if (userError) throw userError;
       const isPro = userRow.subscription_tier === 'pro';
       const limit = isPro ? opts.limits.pro : opts.limits.free;
-      const key = slipImportKey(user.id, now());
-      const used = await opts.counter.increment(key, SLIP_IMPORT_KEY_TTL_SEC);
+      const nfl = await getCurrentNflState(fastify);
+      const key = isPro ? slipImportProKey(user.id, now()) : slipImportFreeKey(user.id, nfl);
+      const ttl = isPro ? SLIP_IMPORT_PRO_KEY_TTL_SEC : SLIP_IMPORT_FREE_KEY_TTL_SEC;
+      const used = await opts.counter.increment(key, ttl);
       if (used > limit) {
         await opts.counter.decrement(key);
         throw limitError(limit, isPro);
@@ -172,7 +175,6 @@ const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (
         );
       }
 
-      const nfl = await getCurrentNflState(fastify);
       const season = Number(nfl.season);
       const { data: gameData, error: gamesError } = await fastify.supabase
         .from('games')
