@@ -1,7 +1,11 @@
 import type { Redis } from 'ioredis';
 import { describe, expect, it } from 'vitest';
-import { GAME_STATE_KEY_TTL_SECONDS, serializeGameState } from '@pivot/dispatcher';
-import type { GameState } from '@pivot/shared';
+import {
+  GAME_STATE_KEY_TTL_SECONDS,
+  serializeFlagState,
+  serializeGameState,
+} from '@pivot/dispatcher';
+import type { FlagState, GameState } from '@pivot/shared';
 import { createTcpRedis, tcpGameState } from './tcpRedis.js';
 
 const STATE: GameState = {
@@ -102,5 +106,58 @@ describe('createTcpRedis address family', () => {
   it('leaves local Docker URLs on the default lookup', () => {
     expect(familyFor('redis://localhost:6379')).not.toBe(6);
     expect(familyFor('redis://127.0.0.1:6379')).not.toBe(6);
+  });
+});
+
+const FLAG: FlagState = {
+  gameId: 'g1',
+  flagged: true,
+  priorityScore: 4,
+  reasons: [{ type: 'offense_active', triggeringPlayerIds: ['p1'] }],
+  computedAt: 1_700_000_000_000,
+};
+
+describe('tcpGameState user_flag_state', () => {
+  it('sets the hash and refreshes its TTL in one MULTI on every write', async () => {
+    const { redis, transactions } = fakeRedis();
+    const store = tcpGameState(redis);
+
+    await store.setUserFlagState('u1', 'g1', FLAG);
+    await store.setUserFlagState('u1', 'g1', { ...FLAG, priorityScore: 8 });
+
+    const key = 'user_flag_state:u1:g1';
+    expect(transactions).toEqual([
+      [
+        ['hset', key, serializeFlagState(FLAG)],
+        ['expire', key, GAME_STATE_KEY_TTL_SECONDS],
+        ['exec'],
+      ],
+      [
+        ['hset', key, serializeFlagState({ ...FLAG, priorityScore: 8 })],
+        ['expire', key, GAME_STATE_KEY_TTL_SECONDS],
+        ['exec'],
+      ],
+    ]);
+  });
+
+  it('keeps the flag-state TTL at 6 hours, longer than any game', () => {
+    expect(GAME_STATE_KEY_TTL_SECONDS).toBe(6 * 60 * 60);
+  });
+
+  it('reads the stored hash back before it expires', async () => {
+    const stored = serializeFlagState(FLAG);
+    const { redis } = fakeRedis();
+    (redis as unknown as { hgetall: (key: string) => Promise<Record<string, string>> }).hgetall =
+      async (key) => (key === 'user_flag_state:u1:g1' ? stored : {});
+
+    expect(await tcpGameState(redis).getUserFlagState('u1', 'g1')).toEqual(FLAG);
+    expect(await tcpGameState(redis).getUserFlagState('u1', 'other')).toBeNull();
+  });
+
+  it('rejects when a command inside the MULTI fails', async () => {
+    const { redis } = fakeRedis([[new Error('READONLY'), null]]);
+    await expect(tcpGameState(redis).setUserFlagState('u1', 'g1', FLAG)).rejects.toThrow(
+      'READONLY',
+    );
   });
 });

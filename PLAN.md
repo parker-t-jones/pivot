@@ -619,9 +619,11 @@ user_flagged_games:{user_id}      sorted set → { game_id : priority_score }
 user_flag_state:{user_id}:{game_id} hash → { flagged, priority_score, reasons_json, computed_at }
                                   Change log for diffing; NOT authoritative state.
                                   /flags/current and cold-start MUST recompute fresh, not read this.
+                                  Expires 6h (GAME_STATE_KEY_TTL_SECONDS) after the last write.
 
 user_lineup_cache:{user_id}:{week} hash → { team_id : [position_categories] }
                                   e.g., { "IND": ["offense"], "BAL": ["offense", "defense"] }
+                                  Expires 14d (LINEUP_CACHE_KEY_TTL_SECONDS) after the last rebuild.
 
 users_with_stake:{team_id}        set → user_ids with any player on this team
 
