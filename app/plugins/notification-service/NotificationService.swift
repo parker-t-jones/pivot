@@ -140,3 +140,6 @@ private struct Badge {
     )
   }
 }
+
+// Deliberate break for the issue #58 failure-path proof. Not for merge.
+let deliberateBreak: Int = "not an int"
