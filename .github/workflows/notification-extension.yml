@@ -1,0 +1,148 @@
+# Proves the push-notification extension (issue #49 / #55) still builds on macOS.
+# The extension is Swift plus an Expo config plugin that edits the generated Xcode project, and
+# nothing in ci.yml compiles either. macOS minutes are expensive, so this runs only for pull
+# requests that touch the plugin, the Expo config, or this file, and on manual dispatch.
+# It builds only the NotificationService target; it does not build the full app.
+name: Notification extension (macOS)
+
+on:
+  pull_request:
+    paths:
+      - 'app/plugins/**'
+      - 'app/app.json'
+      - 'app/package.json'
+      - '.github/workflows/notification-extension.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: notification-extension-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # packageManager in package.json is pnpm@9.15.0. Node 22 matches ci.yml.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the iOS project (expo prebuild)
+        working-directory: app
+        run: npx expo prebuild --platform ios --no-install --clean
+
+      - name: Assert the extension files were generated
+        run: |
+          test -f app/ios/NotificationService/NotificationService.swift
+          test -f app/ios/NotificationService/Info.plist
+          ls -l app/ios/NotificationService
+
+      - name: Typecheck the Swift source against the iOS SDK
+        run: >
+          xcrun --sdk iphoneos swiftc -typecheck -target arm64-apple-ios15.1
+          app/plugins/notification-service/NotificationService.swift
+
+      - name: Print the generated project file
+        run: |
+          ls -d app/ios/*.xcodeproj
+          cat app/ios/*.xcodeproj/project.pbxproj
+
+      # Written against the real generated project.pbxproj (printed above). The project has no
+      # PBXTargetDependency for the extension, yet Xcode still builds and embeds it, so this
+      # asserts the embed (a Copy Files phase to PlugIns holding the .appex, listed in the app
+      # target's buildPhases) rather than an explicit target dependency.
+      - name: Assert the app target embeds the extension
+        run: |
+          set -euo pipefail
+          projects=(app/ios/*.xcodeproj)
+          if [ "${#projects[@]}" -ne 1 ]; then
+            echo "Expected exactly one .xcodeproj, found ${#projects[@]}" >&2
+            exit 1
+          fi
+          PBXPROJ="${projects[0]}/project.pbxproj" node - <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync(process.env.PBXPROJ, 'utf8');
+          const fail = (msg) => {
+            console.error(`FAIL: ${msg}`);
+            process.exit(1);
+          };
+          const section = (name) => {
+            const m = text.match(
+              new RegExp(`/\\* Begin ${name} section \\*/([\\s\\S]*?)/\\* End ${name} section \\*/`),
+            );
+            return m ? m[1] : '';
+          };
+          const entries = (body) =>
+            [...body.matchAll(/\n\t\t([0-9A-F]{24}) \/\* (.+?) \*\/ = \{\n([\s\S]*?)\n\t\t\};/g)].map(
+              (m) => ({
+                id: m[1],
+                // Comments can quote the name (`/* "NotificationService" */`), so prefer `name = `.
+                name: (m[3].match(/\n\t\t\tname = "?([^";]+)"?;/) || [])[1] || m[2].replace(/"/g, ''),
+                body: m[3],
+              }),
+            );
+
+          const targets = entries(section('PBXNativeTarget'));
+          const ext = targets.find((t) => t.name === 'NotificationService');
+          if (!ext) fail('no PBXNativeTarget named NotificationService');
+          if (!/productType = "com\.apple\.product-type\.app-extension"/.test(ext.body)) {
+            fail('NotificationService is not an app-extension target');
+          }
+          const apps = targets.filter((t) =>
+            /productType = "com\.apple\.product-type\.application"/.test(t.body),
+          );
+          if (apps.length !== 1) fail(`expected exactly one application target, found ${apps.length}`);
+          const app = apps[0];
+
+          const embeds = entries(section('PBXCopyFilesBuildPhase')).filter(
+            (p) =>
+              /dstSubfolderSpec = 13;/.test(p.body) &&
+              /NotificationService\.appex/.test(p.body),
+          );
+          if (embeds.length === 0) {
+            fail('no Copy Files phase with dstSubfolderSpec = 13 (PlugIns) containing NotificationService.appex');
+          }
+          const linked = embeds.filter((p) => app.body.includes(p.id));
+          if (linked.length === 0) {
+            fail(`application target ${app.name} does not list the embed phase in buildPhases`);
+          }
+          console.log(
+            `OK: app target "${app.name}" runs Copy Files phase ${linked[0].id} (PlugIns) that embeds NotificationService.appex`,
+          );
+          NODE
+
+      - name: Build the NotificationService target
+        run: >
+          xcodebuild -project app/ios/*.xcodeproj -target NotificationService
+          -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
+
+      - name: Check the extension bundle id and deployment target
+        run: |
+          set -euo pipefail
+          app_id=$(node -p "require('./app/app.json').expo.ios.bundleIdentifier")
+          settings=$(xcodebuild -project app/ios/*.xcodeproj -target NotificationService \
+            -sdk iphonesimulator -configuration Debug -showBuildSettings)
+          bundle_id=$(echo "$settings" | sed -n 's/^ *PRODUCT_BUNDLE_IDENTIFIER = //p' | head -1)
+          deployment=$(echo "$settings" | sed -n 's/^ *IPHONEOS_DEPLOYMENT_TARGET = //p' | head -1)
+          echo "App bundle id:                 $app_id"
+          echo "PRODUCT_BUNDLE_IDENTIFIER:     $bundle_id"
+          echo "IPHONEOS_DEPLOYMENT_TARGET:    $deployment"
+          if [ "$bundle_id" != "${app_id}.NotificationService" ]; then
+            echo "FAIL: expected bundle id ${app_id}.NotificationService" >&2
+            exit 1
+          fi
