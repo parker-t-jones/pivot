@@ -21,6 +21,7 @@
     "plugins": [
       "expo-router",
       "expo-notifications",
+      "./plugins/notification-service/withNotificationService",
       "expo-font",
       [
         "expo-local-authentication",

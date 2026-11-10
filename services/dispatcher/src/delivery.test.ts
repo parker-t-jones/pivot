@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { FlagEvent, FlagState } from '@pivot/shared';
+import { buildPushTeamBadge, type FlagEvent, type FlagState } from '@pivot/shared';
 import { InMemoryBroadcastCatalog } from './broadcastLag.js';
 import {
   InMemoryFlagEventPersistence,
@@ -731,6 +731,43 @@ describe('deliverFlagEvent', () => {
       expect(pushNotifier.calls[0]?.token).toBe(TOKEN);
     });
 
+    it('passes the possessing team badge to the push, leaving copy and data as they were', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const gameStateStore = new InMemoryGameStateStore();
+      await setPossessingHomeGameState(gameStateStore);
+      const bus = new InMemoryRealtimeBus();
+      const deps = buildDeps({
+        pushNotifier,
+        gameStateStore,
+        gameCatalog: gameCatalogWithNames(),
+        realtimeBus: bus,
+      });
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+
+      const call = pushNotifier.calls[0];
+      expect(call?.badge).toEqual(buildPushTeamBadge('IND'));
+      expect(call?.badge?.initials).toBe('IND');
+      const envelope = bus.published[0]?.message as FlagEventEnvelope;
+      expect(call?.data).toEqual(envelope.payload);
+      expect(call?.data).not.toHaveProperty('pivot_badge');
+    });
+
+    it('sends the push with no badge when nobody has the ball', async () => {
+      const pushNotifier = new CapturingPushNotifier();
+      const gameStateStore = new InMemoryGameStateStore();
+      await setPossessingHomeGameState(gameStateStore);
+      const state = await gameStateStore.getGameState('g1');
+      if (!state) throw new Error('missing game state');
+      await gameStateStore.setGameState('g1', { ...state, possessionTeamId: null });
+      const deps = buildDeps({ pushNotifier, gameStateStore, gameCatalog: gameCatalogWithNames() });
+
+      await deliverFlagEvent(deps, makeEvent(), pushUser);
+
+      expect(pushNotifier.calls).toHaveLength(1);
+      expect(pushNotifier.calls[0]?.badge).toBeNull();
+    });
+
     it.each(['flag_removed', 'priority_increased', 'priority_decreased'] as const)(
       'persists and publishes %s with no push and no rate-limit hit',
       async (type) => {
@@ -953,6 +990,8 @@ describe('deliverFlagEvent', () => {
       await retryPendingPushes(deps, deliveredAt + PUSH_RETRY_BACKOFF_MS);
 
       expect(pushNotifier.calls).toHaveLength(2);
+      expect(pushNotifier.calls[0]?.badge).toEqual(buildPushTeamBadge('IND'));
+      expect(pushNotifier.calls[1]?.badge).toEqual(pushNotifier.calls[0]?.badge);
       expect(delivered).toBe(1);
       expect(persistence.records).toHaveLength(1);
       expect(persistence.pushOutcome(rowId ?? '')?.status).toBe('sent');

@@ -1,4 +1,5 @@
 import type { ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
+import { buildPushTeamBadge } from '@pivot/shared';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CapturingPushNotifier,
@@ -190,5 +191,51 @@ describe('createPushNotifier (PUSH_DRIVER factory)', () => {
     const notifier = createPushNotifier({ pushDriver: 'expo' });
     expect(notifier).toBeInstanceOf(ExpoPushNotifier);
     expect(notifier.id).toBe('expo');
+  });
+});
+
+describe('ExpoPushNotifier team badge', () => {
+  const BADGE = buildPushTeamBadge('KC');
+  if (!BADGE) throw new Error('no badge for KC');
+
+  async function sendOne(payload: PushPayload): Promise<ExpoPushMessage> {
+    const { client, sentChunks } = makeFakeExpo((chunk) =>
+      chunk.map(() => ({ status: 'ok', id: 't' })),
+    );
+    await new ExpoPushNotifier(client).sendPush(payload);
+    const message = sentChunks[0]?.[0];
+    if (!message) throw new Error('nothing was sent');
+    return message;
+  }
+
+  it('sets mutableContent and adds the badge under data.pivot_badge when a team is known', async () => {
+    const message = await sendOne(makePayload({ badge: BADGE }));
+    expect(message.mutableContent).toBe(true);
+    expect(message.data).toEqual({ eventId: 'evt-1', pivot_badge: BADGE });
+    expect(message.title).toBe('Jonathan Taylor active');
+    expect(message.body).toBe('Colts have the ball — Q2, 7:14. Tap to watch.');
+  });
+
+  it.each([undefined, null])("sends today's plain message when badge is %s", async (badge) => {
+    const message = await sendOne(makePayload({ badge }));
+    expect(message).toEqual({
+      to: VALID_TOKEN,
+      title: 'Jonathan Taylor active',
+      body: 'Colts have the ball — Q2, 7:14. Tap to watch.',
+      data: { eventId: 'evt-1' },
+    });
+    expect('mutableContent' in message).toBe(false);
+  });
+
+  it('degrades to a plain message when data cannot carry the badge', async () => {
+    const message = await sendOne(makePayload({ badge: BADGE, data: ['not', 'an', 'object'] }));
+    expect(message.data).toEqual(['not', 'an', 'object']);
+    expect('mutableContent' in message).toBe(false);
+  });
+
+  it('does not mutate the caller data object', async () => {
+    const data = { eventId: 'evt-1' };
+    await sendOne(makePayload({ badge: BADGE, data }));
+    expect(data).toEqual({ eventId: 'evt-1' });
   });
 });

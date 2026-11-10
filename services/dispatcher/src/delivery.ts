@@ -1,5 +1,6 @@
 import { defaultClock, type Clock } from '@pivot/engine';
 import {
+  buildPushTeamBadge,
   onNetworkLabel,
   onNetworkName,
   resolvePossessionAbbreviation,
@@ -470,6 +471,7 @@ export async function deliverFlagEvent(
         title: pushCopy.title,
         body: pushCopy.body,
         data: envelope.payload,
+        badge: buildPushTeamBadge(possessionTeam),
       };
       const result = await deps.pushNotifier.sendPush(payload);
 

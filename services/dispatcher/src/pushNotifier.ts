@@ -1,4 +1,5 @@
 import { Expo, type ExpoPushMessage, type ExpoPushTicket } from 'expo-server-sdk';
+import { PUSH_TEAM_BADGE_KEY, withPushTeamBadge, type PushTeamBadge } from '@pivot/shared';
 
 /**
  * Sprint 6 Phase 1 — the swap-ready `PushNotifier` boundary (PLAN.md Section 2's principle, applied
@@ -22,6 +23,13 @@ export interface PushPayload {
   title: string;
   body: string;
   data: unknown;
+  /**
+   * Team badge for iOS rich notifications (iOS Expo push only; Web Push does not read it). When
+   * present the message is sent with `mutableContent` and the badge rides in `data`, so a build with
+   * the Notification Service Extension draws it. Builds without the extension, and a missing badge,
+   * get today's plain notification.
+   */
+  badge?: PushTeamBadge | null | undefined;
 }
 
 export interface PushResult {
@@ -72,6 +80,24 @@ export class CapturingPushNotifier implements PushNotifier {
  *  inject a fake without constructing a real `Expo` instance (mirrors `RedisGameStateProvider`
  *  taking an already-constructed `Redis` client rather than building one internally). */
 export type ExpoClient = Pick<Expo, 'chunkPushNotifications' | 'sendPushNotificationsAsync'>;
+
+/**
+ * Maps a `PushPayload` to the Expo message. With a badge the message gains `mutableContent: true`
+ * and `data.pivot_badge`. If the badge cannot be attached (`data` is not a plain object), the
+ * message is sent exactly as before, without `mutableContent`.
+ */
+export function buildExpoMessage(payload: PushPayload): ExpoPushMessage {
+  const base: ExpoPushMessage = {
+    to: payload.token,
+    title: payload.title,
+    body: payload.body,
+    ...(payload.data !== undefined ? { data: payload.data as Record<string, unknown> } : {}),
+  };
+  if (!payload.badge) return base;
+  const data = withPushTeamBadge(payload.data, payload.badge) as Record<string, unknown>;
+  if (data[PUSH_TEAM_BADGE_KEY] !== payload.badge) return base;
+  return { ...base, data, mutableContent: true };
+}
 
 interface PendingSend {
   payload: PushPayload;
@@ -132,12 +158,7 @@ export class ExpoPushNotifier implements PushNotifier {
     this.pending = [];
     if (batch.length === 0) return;
 
-    const messages: ExpoPushMessage[] = batch.map(({ payload }) => ({
-      to: payload.token,
-      title: payload.title,
-      body: payload.body,
-      ...(payload.data !== undefined ? { data: payload.data as Record<string, unknown> } : {}),
-    }));
+    const messages: ExpoPushMessage[] = batch.map(({ payload }) => buildExpoMessage(payload));
 
     const chunks = this.expo.chunkPushNotifications(messages);
     let cursor = 0;

@@ -7,6 +7,7 @@ import type {
   PushOutcome,
   PushRetryPayload,
 } from '@pivot/dispatcher';
+import { parsePushTeamBadge } from '@pivot/shared';
 import type { Database, Json } from '../lib/database.types.js';
 
 const UNIQUE_VIOLATION = '23505';
@@ -98,5 +99,6 @@ function parsePushPayload(value: Json | null): PushRetryPayload | null {
   if (typeof token !== 'string' || typeof title !== 'string' || typeof body !== 'string')
     return null;
   if (!Object.prototype.hasOwnProperty.call(value, 'data')) return null;
-  return { token, title, body, data: value['data'] ?? null };
+  const badge = parsePushTeamBadge(value['badge']);
+  return { token, title, body, data: value['data'] ?? null, ...(badge ? { badge } : {}) };
 }
