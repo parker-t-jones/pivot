@@ -28,8 +28,6 @@ pnpm seed:players     # required after first start or a DB reset
 pnpm seed:schedule
 ```
 
-
-
 ## 3. API server
 
 ```bash
@@ -46,21 +44,18 @@ addresses — worth noting for step 4).
 nothing until Metro restarts with `--clear`.
 
 1. **Try Wi-Fi first**, same network as the Mac:
-  ```bash
-   ipconfig getifaddr en0        # e.g. 192.168.12.24
-  ```
-   Set in `app/.env`:
-2. **If the phone can't load anything over Wi-Fi** (e.g. "fetch failed" on sign-in, or Safari
-  can't load `http://<en0-ip>:3000/` from the phone at all) — this usually means router/AP
-   **client isolation** (happened on the "Dukeblue" network Sept 13), not a code bug. Switch to
-   USB:
-   Set **both** URLs in `app/.env` to that address instead:
-3. **Restart Metro with** `--clear` **after any** `.env` **change** (not optional — a running Metro
-  keeps serving the old inlined values):
-4. Sign in on the phone. If it still won't connect, kill Metro (`Ctrl-C`, or `lsof -ti :8081 |
+
+```bash
+ ipconfig getifaddr en0        # e.g. 192.168.12.24
+```
+
+Set in `app/.env`: 2. **If the phone can't load anything over Wi-Fi** (e.g. "fetch failed" on sign-in, or Safari
+can't load `http://<en0-ip>:3000/` from the phone at all) — this usually means router/AP
+**client isolation** (happened on the "Dukeblue" network Sept 13), not a code bug. Switch to
+USB:
+Set **both** URLs in `app/.env` to that address instead: 3. **Restart Metro with** `--clear` **after any** `.env` **change** (not optional — a running Metro
+keeps serving the old inlined values): 4. Sign in on the phone. If it still won't connect, kill Metro (`Ctrl-C`, or `lsof -ti :8081 |
   xargs kill -9`) and re-run step 3 — don't just retry the app.
-
-
 
 ## 5. Capture the push token (once per install)
 
@@ -68,14 +63,14 @@ The harness needs a real Expo push token to actually deliver pushes to your phon
 just logging them.
 
 1. With the app signed in, check the Metro log for:
-  ```
-   [push] registering token via POST /me/push-token
-  ```
+
+```
+ [push] registering token via POST /me/push-token
+```
+
 2. Grab the token (from that log line, or `select expo_push_token from users where id = '<your
-  user id>';`against local Postgres) and save it — this file lives in`/tmp`, so it does
+user id>';`against local Postgres) and save it — this file lives in`/tmp`, so it does
    **not** survive a reboot and should be re-created if missing or after a fresh install:
-
-
 
 ## 6. Ground-truth capture tools
 
@@ -88,8 +83,6 @@ npx tsx experiments/mark-visible.ts       # Enter (optionally with a note first)
 npx tsx experiments/reference-clock.ts    # live millisecond clock — keep in the screen
                                            # recording frame if you're also recording
 ```
-
-
 
 ## 7. Find today's ESPN game ids
 
@@ -113,8 +106,6 @@ cd /Users/parkerjones/Developer/projects/pivot && \
 
 ---
 
-
-
 ## Mid-test gotcha: rebuild before restarting, if you touched engine/dispatcher/ingestion code
 
 **Silent failure risk.** `@pivot/engine`, `@pivot/dispatcher`, and `@pivot/ingestion` each
@@ -132,12 +123,9 @@ doesn't pick up your fix, which reads exactly like the bug is still there.
 
 ## Quick troubleshooting
 
-
 | Symptom                                                          | Likely cause                                                                                             |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Phone shows "fetch failed" / stuck on sign-in                    | `.env` still points at the wrong IP, or Metro wasn't restarted after editing it. Redo step 4.            |
 | Harness sends 0 pushes despite `PIVOT_EXPO_PUSH_TOKEN` being set | Token is stale (reinstall since capture) — redo step 5.                                                  |
 | A fix you just made doesn't seem to take effect                  | Forgot to rebuild the changed `services/*` package — see the gotcha above.                               |
 | Harness dies from a stray `Ctrl-C` in the wrong terminal         | Just restart step 8 with the same `--watch` list; the JSONL logs from before the kill are still on disk. |
-
-

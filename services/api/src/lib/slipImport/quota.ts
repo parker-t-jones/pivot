@@ -82,6 +82,9 @@ export function slipImportProKey(userId: string, now: Date): string {
  * happened in, which can differ from the week a slip's legs end up matching after parsing (e.g.
  * near a week boundary). That's expected: the limit is on read attempts, not on the picks' week.
  */
-export function slipImportFreeKey(userId: string, nflState: Pick<NflState, 'season' | 'week'>): string {
+export function slipImportFreeKey(
+  userId: string,
+  nflState: Pick<NflState, 'season' | 'week'>,
+): string {
   return `slip_import:${userId}:${nflState.season}:${nflState.week}`;
 }

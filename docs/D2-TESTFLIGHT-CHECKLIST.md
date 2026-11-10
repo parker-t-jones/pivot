@@ -19,41 +19,53 @@ Values in `<ANGLE_BRACKETS>` come from a dashboard or password manager. Never co
 ## A. Hosted Supabase
 
 ### A1. Project
+
 If not already created: [supabase.com/dashboard](https://supabase.com/dashboard) → New project, region **East US (North Virginia)**. Save these in your password manager: the Project URL, `anon` key, `service_role` key, JWT secret (Settings → API → JWT Settings, legacy secret), and DB password.
 
 ### A2. Link
+
 ```bash
 pnpm exec supabase login
 pnpm exec supabase link --project-ref <REF>
 ```
+
 **Expect:** it asks for the DB password, then prints `Finished supabase link.`
 **Check:** `cat supabase/.temp/project-ref` → `<REF>`. `git diff --stat supabase/config.toml` → empty (`project_id` stays `FantasyFocusApp`).
 
 ### A3. Migrations
+
 ```bash
 pnpm exec supabase db push --linked --dry-run
 pnpm exec supabase db push --linked
 ```
+
 **Expect:** the dry run lists the migrations not yet applied (all 14 on a fresh project, `20260510120000_users_user_app_presence.sql` … `20260928021000_drop_game_broadcasts.sql`). The real push asks `[Y/n]`, then prints `Finished supabase db push.`
 **Check:** `pnpm exec supabase migration list --linked` → Local and Remote columns match for all 14 rows.
 
 ### A4. Teams (32 rows from `supabase/seed.sql`)
+
 `db push` does not run the seed. `seed.sql` is a plain `INSERT` of the 32 NFL teams, so run it **once**:
+
 ```bash
 pnpm exec supabase db query --linked "select count(*) from teams"
 # only if that printed 0:
 pnpm exec supabase db query --linked -f supabase/seed.sql
 pnpm exec supabase db query --linked "select count(*) from teams"
 ```
+
 **Expect:** `count` = `32` after the insert. A second run of the file fails on the unique constraint; that's fine, the rows are already there.
 
 ### A5. Players and schedule
+
 Create `.env.production` in the repo root containing `SUPABASE_URL=https://<REF>.supabase.co` and `SUPABASE_SERVICE_ROLE_KEY=<service_role>`. `git status` must not list it.
+
 ```bash
 pnpm seed:players -- --env-file .env.production --allow-remote
 pnpm seed:schedule -- --env-file .env.production --allow-remote
 ```
+
 **Expect:**
+
 - `seed:players` prints `Fetching teams from https://<REF>.supabase.co...`, then `Upserting N players (… individual, 32 defenses) …`, then `Done.`
 - `seed:schedule` prints `Upserting 321 games from …/data/nfl-schedule-2026.json (49 pre, 272 regular)...`, then `Done. Upserted 321 games.`
 - If you omit `--allow-remote`, the script refuses to run. That's the guard working.
@@ -61,6 +73,7 @@ pnpm seed:schedule -- --env-file .env.production --allow-remote
 **Never** run `pnpm seed:broadcasts` against hosted (it refuses anyway). `game_airings` is written by the runner's airings cycle (§D2).
 
 ### A6. Auth settings
+
 Dashboard → Authentication → Providers: **Email on**. Sign In / Up: **Confirm email off**. The app signs in with email and password only.
 
 ---
@@ -70,12 +83,14 @@ Dashboard → Authentication → Providers: **Email on**. Sign In / Up: **Confir
 `fly.redis.toml` runs `redis:7-alpine` on one `shared-cpu-1x` 256 MB machine in `iad`, with `requirepass`, `maxmemory 128mb` and `noeviction`. It has no `[http_service]` or `[[services]]`, so there's no public IP; it's reachable only at `pivot-sports-redis.internal:6379` from apps in the same Fly org. It restarts on crash (`[[restart]] policy = "always"`). Nothing auto-stops it, because Fly only auto-stops machines behind a service.
 
 **No persistence** (no volume, `--save ""`, `--appendonly no`). Any restart or redeploy of this app comes back **empty**. That drops:
+
 - the leader lock;
 - `game_state` and the seen-play sets;
 - the lineup cache and stake sets;
 - `flag_event_queue` (queued pushes).
 
 The app recovers without intervention:
+
 - The runner's renew fails, it stands by, re-acquires the lock within about 5 s, and rebuilds the stake cache on becoming leader.
 - Discovery re-seeds `game_state` from the scoreboard.
 - Each live game re-seeds its seen set from the current ESPN summary, so plays during the gap are skipped, not replayed.
@@ -86,6 +101,7 @@ Pushes that were queued at the moment of the restart are lost. So is per-user fl
 Redeploying `pivot-sports-api` does **not** touch Redis. **Never restart or redeploy `pivot-sports-redis` on Thu/Sun/Mon.**
 
 ### B1. Create the app and its password
+
 ```bash
 fly apps list                                   # note the org pivot-sports-api is in
 fly apps create pivot-sports-redis --org <that org>
@@ -93,24 +109,29 @@ openssl rand -hex 32                            # save the output in your passwo
 fly secrets set REDIS_PASSWORD='<that value>' -a pivot-sports-redis
 fly secrets list -a pivot-sports-redis
 ```
+
 **Expect:** `New app created: pivot-sports-redis`. The secrets list shows only `REDIS_PASSWORD`.
 
 Fly never shows the value again, and you need it for `REDIS_URL` in §C. Use hex (not base64) so the password needs no escaping inside the URL. **The org must match `pivot-sports-api`**; `.internal` names only resolve inside one org.
 
 ### B2. Deploy
+
 ```bash
 fly deploy -c fly.redis.toml --ha=false
 fly machines list -a pivot-sports-redis
 fly ips list -a pivot-sports-redis
 fly logs -a pivot-sports-redis --no-tail | grep -i 'ready to accept'
 ```
+
 **Expect:**
+
 - The deploy pulls `redis:7-alpine` and finishes without a "Visit your newly deployed app" line (there's no public service).
 - `fly machines list` shows **exactly one** machine in `iad`, state `started`. `--ha=false` matters: two machines would be two separate, empty Redis servers behind one `.internal` name.
 - `fly ips list` shows **nothing** (header only). If any address is listed, release it: `fly ips release <address> -a pivot-sports-redis`, then list again.
 - The logs show `Ready to accept connections tcp`.
 
 ### B3. Values for §C
+
 - `REDIS_URL` = `redis://default:<REDIS_PASSWORD>@pivot-sports-redis.internal:6379?family=6`
 - `PRODUCTION_REDIS_HOST` = `pivot-sports-redis.internal`
 
@@ -133,9 +154,11 @@ fly secrets set -a pivot-sports-api --stage \
   PUSH_DRIVER='expo' \
   REVENUECAT_WEBHOOK_SECRET='<openssl rand -hex 32 output>'
 ```
+
 Optional ninth: `EXPO_ACCESS_TOKEN='<token>'`, only if "Enhanced push security" is on for the project at expo.dev. Without it, `expo` push still works.
 
 **Do not set:**
+
 - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `UPSTASH_REDIS_TCP_URL` (Upstash-only fallbacks; unused);
 - `NODE_ENV` (`fly.toml` sets `production`), `PORT`, `GIT_SHA` (a build arg);
 - `SUPABASE_ANON_KEY`, `SEED_*`.
@@ -150,23 +173,29 @@ Don't `fly secrets import` a `.env` file.
 ## D. Deploy and smoke check (Wednesday only)
 
 ### D1. Deploy and scale
+
 ```bash
 git status --short          # expect: empty
 fly deploy -a pivot-sports-api --build-arg GIT_SHA=$(git rev-parse --short HEAD)
 fly scale count api=1 worker=1 runner=1 -a pivot-sports-api --yes
 fly status -a pivot-sports-api
 ```
+
 **Expect:**
+
 - The deploy ends with `Visit your newly deployed app at https://pivot-sports-api.fly.dev/`.
 - `fly status` lists exactly one machine each for `api`, `worker` and `runner`, all `started`, and the api check `passing`. The api may stop when idle (`min_machines_running = 0`); the next request or WebSocket starts it again.
 
 ### D2. Smoke checks
+
 ```bash
 curl -s https://pivot-sports-api.fly.dev/health
 fly ssh console -a pivot-sports-api -C "node --input-type=module -e 'const {createTcpRedis}=await import(\"/app/dist/runner/tcpRedis.js\");const r=createTcpRedis(process.env.REDIS_URL,\"smoke\");console.log(await r.ping());await r.quit()'"
 fly logs -a pivot-sports-api --no-tail | grep -E '\[runner\]|\[lineup-sync-worker\]|refusing|redis:'
 ```
+
 **Expect:**
+
 - `/health` → `{"ok":true,"version":"<short sha>"}`, with the same SHA as `git rev-parse --short HEAD`.
 - The `ssh` PING prints `PONG`. It uses the app's own `createTcpRedis` and the machine's `REDIS_URL`, so this proves the `.internal` name, IPv6 and the password together.
   - `getaddrinfo ENOTFOUND` means a wrong host name or a different org.
@@ -188,6 +217,7 @@ If `airings` logged `airings failed: …` instead, the rest of the runner is fin
 ## E. EAS production environment
 
 Run in `app/`. Use plaintext visibility: `EXPO_PUBLIC_*` values are inlined into the JS bundle, so they're public by design.
+
 ```bash
 cd app
 eas env:create --environment production --name EXPO_PUBLIC_SUPABASE_URL --value 'https://<REF>.supabase.co' --visibility plaintext --non-interactive
@@ -197,6 +227,7 @@ eas env:create --environment production --name EXPO_PUBLIC_API_BASE_URL --value 
 eas env:create --environment production --name EXPO_PUBLIC_REVENUECAT_API_KEY --value '<rc_ios_public_key>' --visibility plaintext --non-interactive
 eas env:list --environment production
 ```
+
 **Expect:** `eas env:list` shows the three (or four) names with your values. If a name already exists, add `--force`.
 
 The API base URL is the bare origin: `https`, no trailing slash, no `/v1`. The app builds `wss://pivot-sports-api.fly.dev/v1/realtime` from it. `app/.env` (the link-local IPs) is gitignored, so it's never uploaded to EAS.
@@ -206,27 +237,35 @@ The API base URL is the bare origin: `https`, no trailing slash, no `/v1`. The a
 ## F. Build and submit
 
 ### F1. Credentials check
+
 ```bash
 cd app
 eas credentials -p ios
 ```
+
 **Expect:** bundle `com.fantasyfocus.app` and push key `82JW379P4C`. If there's no distribution certificate or provisioning profile yet, `eas build` creates them in F2 (answer **Yes** to the prompts).
 
 ### F2. Build
+
 ```bash
 eas build -p ios --profile production
 ```
+
 **Expect:**
+
 - Early output reads `Environment variables loaded from the "production" environment on EAS: EXPO_PUBLIC_API_BASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, EXPO_PUBLIC_SUPABASE_URL…`. If that line is missing or lists no variables, stop: the build would point at nothing.
 - A buildNumber increment message (remote version source, `autoIncrement`).
 - It ends with `Build finished` and an `.ipa` link, after about 15–25 minutes.
 - Version is `1.0.0` (committed). The build number is managed by EAS; `eas build:version:get -p ios` shows it.
 
 ### F3. Submit
+
 ```bash
 eas submit -p ios --profile production --latest
 ```
+
 **Expect:**
+
 - It asks for your Apple ID, then for the App Store Connect app. If none exists for `com.fantasyfocus.app`, it offers to create one. App names are unique across the App Store, so if "Pivot" is taken, pick a variant; the name under the icon is unaffected.
 - It ends with `Submitted your app to Apple App Store Connect!`.
 - Apple emails "has completed processing" in 5–30 minutes. There's no export-compliance prompt (`ITSAppUsesNonExemptEncryption` is `false`).
@@ -236,9 +275,11 @@ eas submit -p ios --profile production --latest
 ## G. TestFlight
 
 ### G1. Today: internal group
+
 App Store Connect → the app → TestFlight → Internal Testing → **+** → group "Internal", then add yourself and any App Store Connect users. Enable build `1.0.0 (<n>)`. There is no review.
 
 **On your phone** (TestFlight app, **Wi-Fi off**):
+
 1. Sign up with a new email → you reach onboarding.
 2. Connect a Sleeper team → Home loads today's schedule.
 3. Allow notifications → Supabase Table Editor → `users` → your row has `expo_push_token` set.
@@ -253,6 +294,7 @@ App Store Connect → the app → TestFlight → Internal Testing → **+** → 
 A build that fails step 1 or 2 is almost always a missing EAS value (§E), and fixing it only needs a new build (§F2). A build is not a backend deploy.
 
 ### G2. Thursday: external group and Beta App Review
+
 Backend is frozen; everything here is App Store Connect.
 
 1. **Check the icon first.** `app/app.json` has no `icon`, and there's no 1024×1024 marketing icon (B3 handoff blocker #3). Open the build in App Store Connect. If it shows a missing-icon issue, Beta App Review will reject it. Adding an icon means a design asset, `"icon"` in `app.json`, and a new build (§F2–F3), all before submitting for review.
@@ -277,28 +319,30 @@ This is for sizing only; self-hosted Redis has no per-command billing.
 
 **Runner, idle (no live games), per day:**
 
-| Source | Rate | Commands/day |
-| --- | --- | --- |
-| Dispatcher loop: lock `GET` + `ZRANGEBYSCORE flag_event_queue` before every 500 ms tick | ~4/s | ~345,600 |
-| Lock heartbeat: renew `EVAL` every 5 s | 0.2/s | 17,280 |
-| Discovery: lock `GET` every 30 s | | 2,880 |
-| Airings cycle: lock `GET` + NFL-state `GET` (writes go to Postgres) | every 15 min Thu–Mon, daily otherwise | < 200 |
-| **Runner idle total** | | **~366K** |
+| Source                                                                                  | Rate                                  | Commands/day |
+| --------------------------------------------------------------------------------------- | ------------------------------------- | ------------ |
+| Dispatcher loop: lock `GET` + `ZRANGEBYSCORE flag_event_queue` before every 500 ms tick | ~4/s                                  | ~345,600     |
+| Lock heartbeat: renew `EVAL` every 5 s                                                  | 0.2/s                                 | 17,280       |
+| Discovery: lock `GET` every 30 s                                                        |                                       | 2,880        |
+| Airings cycle: lock `GET` + NFL-state `GET` (writes go to Postgres)                     | every 15 min Thu–Mon, daily otherwise | < 200        |
+| **Runner idle total**                                                                   |                                       | **~366K**    |
 
 **Other processes:**
+
 - **Worker, in season:** every 5 min, one NFL-state `GET`, plus per user a lineup `GET` and `SET` and ~12 stake `SADD`s. With 10 users that's ~150 commands per tick, ~44K/day.
 - **API:** 2 `PSUBSCRIBE`s at boot; the idle-socket sweep is in memory. Weekday traffic is under 5K/day.
 
 **Sunday, 14 games (~45 game-hours), 10 users.** Add to the idle baseline:
 
-| Source | Commands/day |
-| --- | --- |
-| New plays (~2,800 across the slate). Each play costs ~15–25 commands: seen-set `SISMEMBER` + `SADD`, `game_state` `HGETALL` + `MULTI`/`HSET`/`EXPIRE`/`EXEC`, stake `SMEMBERS` ×2, per stake user lineup `GET` + flag `HGETALL`/`HSET` + `ZADD`, publish `HGETALL` + `PUBLISH` | ~40–70K |
-| Discovery with live games (`game_state` `HGETALL` per live game per 30 s, stake check) | ~7K |
-| Dispatcher deliveries (per due event: flag `HGETALL`, rate-limit `ZCOUNT` / `ZADD` + `EXPIRE`, `ZREM`) | ~3K |
-| API: `ZADD active_users` on each 25 s pong (10 users × ~10 h) + REST reads | ~20K |
+| Source                                                                                                                                                                                                                                                                         | Commands/day |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| New plays (~2,800 across the slate). Each play costs ~15–25 commands: seen-set `SISMEMBER` + `SADD`, `game_state` `HGETALL` + `MULTI`/`HSET`/`EXPIRE`/`EXEC`, stake `SMEMBERS` ×2, per stake user lineup `GET` + flag `HGETALL`/`HSET` + `ZADD`, publish `HGETALL` + `PUBLISH` | ~40–70K      |
+| Discovery with live games (`game_state` `HGETALL` per live game per 30 s, stake check)                                                                                                                                                                                         | ~7K          |
+| Dispatcher deliveries (per due event: flag `HGETALL`, rate-limit `ZCOUNT` / `ZADD` + `EXPIRE`, `ZREM`)                                                                                                                                                                         | ~3K          |
+| API: `ZADD active_users` on each 25 s pong (10 users × ~10 h) + REST reads                                                                                                                                                                                                     | ~20K         |
 
 **Daily totals:**
+
 - **Idle weekday:** ~0.41M/day.
 - **Sunday:** ~0.49–0.51M/day.
 - **Month (in season):** ~12.5–13.5M.
@@ -306,6 +350,7 @@ This is for sizing only; self-hosted Redis has no per-command billing.
 The peak is under 100 commands/s, which is trivial for one `shared-cpu-1x` Redis.
 
 **Memory:** `maxmemory 128mb` with `noeviction`, so when full, writes fail rather than dropping keys. Three key families have no TTL and grow all season:
+
 - `espn_seen_plays:*`,
 - `user_flag_state:*`,
 - `user_lineup_cache:*`.

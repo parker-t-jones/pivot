@@ -23,7 +23,9 @@ const localReady = Boolean(supabaseUrl && isLoopback(supabaseUrl));
 
 /** Local `supabase start` database. Postgres owns the migrations, so a table it creates uses its default privileges. */
 function localDbUrl(): string {
-  return process.env['SUPABASE_DB_URL'] ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
+  return (
+    process.env['SUPABASE_DB_URL'] ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+  );
 }
 
 function psql(sql: string): string {

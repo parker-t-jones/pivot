@@ -551,8 +551,8 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
         void: totals.voided,
         decided: totals.decided,
         hit_rate: totals.hitRate,
-        best: totals.bestPickId ? summaryById.get(totals.bestPickId) ?? null : null,
-        worst: totals.worstPickId ? summaryById.get(totals.worstPickId) ?? null : null,
+        best: totals.bestPickId ? (summaryById.get(totals.bestPickId) ?? null) : null,
+        worst: totals.worstPickId ? (summaryById.get(totals.worstPickId) ?? null) : null,
       },
       season_recap: {
         won: seasonTotals.won,

@@ -116,7 +116,9 @@ export async function setStarPlayer(
   });
 }
 
-export async function syncLeague(leagueId: string): Promise<{ league_id: string; week: number; slot_count: number }> {
+export async function syncLeague(
+  leagueId: string,
+): Promise<{ league_id: string; week: number; slot_count: number }> {
   return await apiClient.post(`/leagues/${leagueId}/sync`);
 }
 
@@ -147,7 +149,10 @@ export async function connectSleeperLeague(
   });
 }
 
-export async function connectManualLeague(name: string, seasonYear: number): Promise<LeagueSummary> {
+export async function connectManualLeague(
+  name: string,
+  seasonYear: number,
+): Promise<LeagueSummary> {
   return await apiClient.post('/leagues/manual', { name, season_year: seasonYear });
 }
 

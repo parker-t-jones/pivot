@@ -54,7 +54,9 @@ export function parseScoreboardSource(rest: readonly string[]): ScoreboardSource
   if (live && file !== undefined) {
     throw new Error('seed:broadcasts: --live and a scoreboard path are mutually exclusive.');
   }
-  return live ? { kind: 'live' } : { kind: 'file', path: path.resolve(file ?? DEFAULT_SCOREBOARD_PATH) };
+  return live
+    ? { kind: 'live' }
+    : { kind: 'file', path: path.resolve(file ?? DEFAULT_SCOREBOARD_PATH) };
 }
 
 /** §1.2: a saved payload is a fixture; `--live` is a real scoreboard read. */
@@ -82,7 +84,10 @@ function supabaseGameAiringsStore(supabase: SupabaseClient): GameAiringsStore {
         .in('sportradar_id', [...externalIds]);
       if (error) throw error;
       return new Map(
-        (data ?? []).map((game: { id: string; sportradar_id: string }) => [game.sportradar_id, game.id]),
+        (data ?? []).map((game: { id: string; sportradar_id: string }) => [
+          game.sportradar_id,
+          game.id,
+        ]),
       );
     },
     async upsert(rows) {
@@ -100,7 +105,10 @@ function supabaseGameAiringsStore(supabase: SupabaseClient): GameAiringsStore {
       return (data ?? []) as StoredAiringKey[];
     },
     async deleteByIds(ids) {
-      const { error } = await supabase.from('game_airings').delete().in('id', [...ids]);
+      const { error } = await supabase
+        .from('game_airings')
+        .delete()
+        .in('id', [...ids]);
       if (error) throw error;
     },
   };
@@ -110,11 +118,15 @@ export async function seedBroadcasts(source: ScoreboardSource): Promise<void> {
   const supabaseUrl = process.env['SUPABASE_URL'];
   const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY. Set them in services/api/.env.');
+    throw new Error(
+      'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY. Set them in services/api/.env.',
+    );
   }
 
   console.log(
-    source.kind === 'live' ? 'Fetching the current ESPN scoreboard...' : `Reading scoreboard from ${source.path}...`,
+    source.kind === 'live'
+      ? 'Fetching the current ESPN scoreboard...'
+      : `Reading scoreboard from ${source.path}...`,
   );
   const result = await ingestAirings({
     scoreboard: source.kind === 'live' ? espnClient : fileScoreboard(source.path),
@@ -132,7 +144,9 @@ export async function seedBroadcasts(source: ScoreboardSource): Promise<void> {
   console.log(
     `game_airings: upserted ${result.rows}, deleted ${result.deleted} stale across ${result.games} games.`,
   );
-  console.log(`Done. ${result.unmapped} unmapped, ${result.unmatchedEventIds.length} unmatched events.`);
+  console.log(
+    `Done. ${result.unmapped} unmapped, ${result.unmatchedEventIds.length} unmatched events.`,
+  );
 }
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);

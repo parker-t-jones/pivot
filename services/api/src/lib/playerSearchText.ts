@@ -14,8 +14,7 @@ export function buildPlayerSearchText(parts: {
   abbreviation: string;
 }): string {
   const nameParts = [parts.first_name, parts.last_name];
-  const teamParts =
-    parts.position === 'DEF' ? [parts.city, parts.name, parts.abbreviation] : [];
+  const teamParts = parts.position === 'DEF' ? [parts.city, parts.name, parts.abbreviation] : [];
   return [...nameParts, ...teamParts]
     .map((p) => p.trim())
     .filter((p) => p.length > 0)
@@ -40,6 +39,9 @@ export function playerSearchTextMatches(searchText: string, query: string): bool
     .filter((t) => t.length > 0);
   if (tokens.length === 0) return false;
 
-  const words = searchText.toLowerCase().split(/\s+/).filter((w) => w.length > 0);
+  const words = searchText
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
   return tokens.every((token) => words.some((word) => word.startsWith(token)));
 }

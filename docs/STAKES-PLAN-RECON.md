@@ -10,37 +10,28 @@ Working-tree caveat: `PLAN.md`, `UI-SPEC.md`, `app/app/(app)/(tabs)/index.tsx`, 
 
 ---
 
-
-
 ## 1. Path & name mismatches
-
-
 
 ### 1.1 The accent hex the whole token plan is built on does not exist in the repo
 
 This is the single most consequential mismatch, so it leads.
 
-
-| Plan says                                                             | Repo actually has                           |
-| --------------------------------------------------------------------- | ------------------------------------------- |
+| Plan says                                     | Repo actually has     |
+| --------------------------------------------- | --------------------- | ------------------------------------------- |
 | `PIVOT-STAKES-PLAN.md:366` — ``colors.accent` | `#FFB020` (existing)` | `app/lib/theme.ts:14` — `accent: '#F5A018'` |
 
-
 `#FFB020` appears nowhere in `app/`. The pinning test asserts the real value at `app/lib/theme.test.ts:13` (`expect(theme.colors.accent).toBe('#F5A018')`). The derived tokens follow the same wrong base:
-
 
 | Token               | Plan value (line)                | Repo's actual base                                      |
 | ------------------- | -------------------------------- | ------------------------------------------------------- |
 | `colors.ember`      | `rgba(255,176,32,0.05)` (`:364`) | accent is `245,160,24`, cf. `app/lib/theme.ts:17,24,26` |
 | `effects.flareGlow` | shadow `#FFC94D` (`:368`)        | `panelGlow` uses `#F5A018`, `app/lib/theme.ts:56`       |
 
-
-`UI-SPEC.md:34` is the origin of the error — under a heading that reads "**Already in** `app/lib/theme.ts`**, unchanged:**" (`UI-SPEC.md:29`), it lists `colors.accent` as `#FFB020`. The spec's *proposed* rows carry the same wrong base: `accentBorder` as `rgba(255, 176, 32, 0.25)` and `accentGlow` as `rgba(255, 176, 32, 0.15)` (`UI-SPEC.md:49-50`), where the values that actually shipped are `rgba(245, 160, 24, …)` (`app/lib/theme.ts:24,26`). So the implementation correctly derived both from the real accent and the spec was never corrected. The stakes plan inherited the stale hex from the spec. See §3.1 for the conflict framing.
+`UI-SPEC.md:34` is the origin of the error — under a heading that reads "**Already in** `app/lib/theme.ts`**, unchanged:**" (`UI-SPEC.md:29`), it lists `colors.accent` as `#FFB020`. The spec's _proposed_ rows carry the same wrong base: `accentBorder` as `rgba(255, 176, 32, 0.25)` and `accentGlow` as `rgba(255, 176, 32, 0.15)` (`UI-SPEC.md:49-50`), where the values that actually shipped are `rgba(245, 160, 24, …)` (`app/lib/theme.ts:24,26`). So the implementation correctly derived both from the real accent and the spec was never corrected. The stakes plan inherited the stale hex from the spec. See §3.1 for the conflict framing.
 
 ### 1.2 Components the plan names that do not exist
 
 All four are genuinely new (expected for U1–U3), but note the directory convention is confirmed correct — `app/components/` is flat and already holds 24 components.
-
 
 | Plan reference                                  | Status         |
 | ----------------------------------------------- | -------------- |
@@ -49,32 +40,25 @@ All four are genuinely new (expected for U1–U3), but note the directory conven
 | `app/components/BoardRow.tsx` (`:389`)          | Does not exist |
 | `app/components/FeaturedStakeCard.tsx` (`:394`) | Does not exist |
 
-
-
-
 ### 1.3 The paywall component is never named in the plan
 
 §10.4 (`:328`) says "Keep the existing floating Pro card treatment" and §11.2 (`:387`) says "The existing paywall should be refactored onto it". Neither names the file. It is `app/components/UpgradeSheet.tsx` (declared at `:55`, `export function UpgradeSheet()`), mounted once in `app/app/(app)/_layout.tsx` and opened via `useUpgradeSheet().openUpgrade()` (`app/contexts/UpgradeSheetContext.tsx:27`).
 
 ### 1.4 Screen paths in `UI-SPEC.md` are stale (the stakes plan defers to them)
 
-
 | `UI-SPEC.md` says                                     | Actual path                         |
 | ----------------------------------------------------- | ----------------------------------- |
 | `app/app/(app)/index.tsx` (`:172`, `:198`)            | `app/app/(app)/(tabs)/index.tsx`    |
 | `app/app/(app)/settings.tsx` (`:111`, `:200`, `:227`) | `app/app/(app)/(tabs)/settings.tsx` |
 
-
 `PLAN.md:1546-1548` has the correct `(tabs)/` paths. The `.cursorrules` file-layout note (`app/screens/`) is also stale: `app/screens/` does not exist; `app/playback/` does.
 
 ### 1.5 Test commands in the plan are silent no-ops
-
 
 | Plan says                                                                             | Reality                                                                                                                                                    |
 | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PIVOT-STAKES-PLAN.md:449` — "run `pnpm --filter app test`"                           | `app/package.json` has no `test` script (scripts are `start`, `ios`, `typecheck`). Verified: `pnpm --filter app test` exits `0` having run **zero tests**. |
 | `PIVOT-STAKES-PLAN.md:225` — "run `pnpm -r test` and save the output as the baseline" | No workspace package defines `test`. Verified: `pnpm -r test` prints `Scope: 6 of 7 workspace projects` and exits `0`, running zero tests.                 |
-
 
 The only command that runs the suite is `pnpm test` at the repo root (`package.json:14`, `"test": "vitest run"`), driven by the single root `vitest.config.ts`. Both plan commands **pass vacuously**, which is worse than failing — a U1 verification that "ran the tests" would be green while testing nothing.
 
@@ -88,18 +72,13 @@ The plan references `plays-<date>.jsonl` at `:226`, `:456` and `:493`. No file m
 
 ### 1.8 Database objects
 
-
 | Plan reference                  | Status                                                                                                                                                                                                                                |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `stakes` table (`:187`)         | No migration. `supabase/migrations/` holds 10 files, none mentioning `stakes`.                                                                                                                                                        |
 | `stake_trigger_log` (`:189`)    | No migration.                                                                                                                                                                                                                         |
 | `users.pro_expires_at` (`:319`) | Column does not exist. `users` is defined at `supabase/migrations/20260510120000_users_user_app_presence.sql:26`, which has `subscription_tier` but no expiry column. Not in `services/api/src/lib/database.types.ts:400-418` either. |
 
-
-
-
 ### 1.9 Endpoints and error contracts
-
 
 | Plan reference                                                   | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -107,17 +86,12 @@ The plan references `plays-<date>.jsonl` at `:226`, `:456` and `:493`. No file m
 | HTTP `402` with `{code: 'STAKE_CAP', limit: 3}` (`:311`, `:348`) | `402` is used nowhere in the codebase. Every existing free-tier cap returns **403** with a snake_case code: `league_limit_free` (`services/api/src/routes/leagues.ts:43`), `manual_lineup_limit_free` (`leagues.ts:399`), `watched_league_limit_free` (`services/api/src/routes/me.ts:187`). The client's cap handler hard-codes exactly two of those codes (`app/lib/upgradePrompt.ts:12`) and ignores status entirely. `ApiError` does support a `details` payload (`services/api/src/lib/errors.ts:10`), so `{limit: 3}` is expressible. |
 | `POST /billing/revenuecat` sets `pro_expires_at` (`:321`)        | Route exists (`services/api/src/routes/billing.ts:65`) but only writes `subscription_tier` (`billing.ts:93-96`).                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
-
-
-
 ### 1.10 Preference keys
-
 
 | Plan reference                                  | Status                                                                                                                                                   |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `preferences.following: string[]` (`:472`)      | Not in the schema. `shared/src/types/preferences.ts:9-21` defines exactly four keys: `notificationMode`, `quietHours`, `autoSwitch`, `watchedLeagueIds`. |
 | `preferences.seenCoachMarks: string[]` (`:500`) | Same — absent.                                                                                                                                           |
-
 
 Both are `z.object(...)` fields parsed through `parsePreferences` (`preferences.ts:26-28`), and zod strips unknown keys by default, so writing `following` without a schema change would **silently discard it** on the next read. Adding either key needs three coordinated edits: `shared/src/types/preferences.ts`, the client mirror `app/lib/me.ts:11-17`, and the PATCH body allow-list `services/api/src/routes/me.ts:85-97`.
 
@@ -130,11 +104,7 @@ Both are `z.object(...)` fields parsed through `parsePreferences` (`preferences.
 
 ---
 
-
-
 ## 2. Assumption checks
-
-
 
 ### (a) Where the Pro paywall lives, and whether a `Slip` refactor is visually safe — **CONFIRMED, with one caveat**
 
@@ -173,9 +143,9 @@ Caveat on verification: there is no test covering this component (§1.6), so "no
 - **Effects** (`:104-111`): `panelBorderWidth 1` and `panelGlow` via `toEqual` — `shadowColor #F5A018`, offset `{0,0}`, opacity `0.15`, radius `20`, elevation `8`.
 - Spacing, radii, opacity, and the full type scale (`:21-98`), several via exact `toEqual`.
 
-**Additivity verdict:** adding `ember`, `brass`, `flare`, `well`, `wellBorder`, `rowDivider` to `colors` and `flareGlow` to `effects` touches no pinned key. Every color assertion is a per-key `toBe`, never a whole-object `toEqual`, so new sibling keys cannot break them. The two `toEqual` assertions are on `theme.effects.panelGlow` (`:105`) and individual `type.`* entries (`:65-91`) — neither is the object §11.1 extends. **§11.1 is purely additive as a structural matter.**
+**Additivity verdict:** adding `ember`, `brass`, `flare`, `well`, `wellBorder`, `rowDivider` to `colors` and `flareGlow` to `effects` touches no pinned key. Every color assertion is a per-key `toBe`, never a whole-object `toEqual`, so new sibling keys cannot break them. The two `toEqual` assertions are on `theme.effects.panelGlow` (`:105`) and individual `type.`\* entries (`:65-91`) — neither is the object §11.1 extends. **§11.1 is purely additive as a structural matter.**
 
-The problem is the *values*, not the shape: §11.1 presents `#FFB020` as the existing accent (`:366`). If that row is implemented literally, `theme.test.ts:13` fails and the U1 diff is no longer additive — it becomes a palette change across every accent surface in the app. See §3.1.
+The problem is the _values_, not the shape: §11.1 presents `#FFB020` as the existing accent (`:366`). If that row is implemented literally, `theme.test.ts:13` fails and the U1 diff is no longer additive — it becomes a palette change across every accent surface in the app. See §3.1.
 
 ### (c) Does `GET /games?week=` return the full weekly slate? — **CONFIRMED yes, with two conditions**
 
@@ -195,25 +165,21 @@ There is no user, league, roster, or stake filter anywhere in the handler. It re
 Two conditions worth knowing before U2:
 
 1. **Empty during the offseason.** `games.ts:69-71` short-circuits to `{ week, games: [] }` when the derived `display_phase` is `'off'`. Harmless for Home (which never reaches the live machine in that phase, `app/lib/homeState.ts:82-85`) but it means the board cannot be exercised off-season without mocking.
-2. **Network labels are derivable but not direct.** §11.3 (`:391`) wants "the network (mono, small, muted)" per row. `ScheduleGame` carries `broadcasts: GameBroadcast[]` (`app/lib/schedule.ts:19`), where `service` is the streaming-service enum (`fox`, `cbs`, `nbc`, `abc`, `espn_plus`, `sunday_ticket`, … — `services/api/src/routes/me.ts:12-27`). Rendering "CBS" means picking a broadcast and mapping the enum to a display label. `rankBroadcasts` already orders them by user eligibility (`games.ts:30-41`), which is a *subscription* ordering, not a "which network is this game on" answer. This is a small new display helper, not a data gap — but it is not free.
-
-
+2. **Network labels are derivable but not direct.** §11.3 (`:391`) wants "the network (mono, small, muted)" per row. `ScheduleGame` carries `broadcasts: GameBroadcast[]` (`app/lib/schedule.ts:19`), where `service` is the streaming-service enum (`fox`, `cbs`, `nbc`, `abc`, `espn_plus`, `sunday_ticket`, … — `services/api/src/routes/me.ts:12-27`). Rendering "CBS" means picking a broadcast and mapping the enum to a display label. `rankBroadcasts` already orders them by user eligibility (`games.ts:30-41`), which is a _subscription_ ordering, not a "which network is this game on" answer. This is a small new display helper, not a data gap — but it is not free.
 
 ### (d) How `resolveHomeBranch` maps to States 1–4/4a/5 — **CONFIRMED complete coverage, naming diverges**
 
 `resolveHomeBranch` (`app/lib/homeState.ts:69-98`) returns exactly six shapes, typed at `homeState.ts:23-29`:
 
-
-| Returned branch                           | Plan's name        | Covered by §11.3 table?                      |
-| ----------------------------------------- | ------------------ | -------------------------------------------- |
-| `{branch: 'no_leagues'}`                  | State 5            | Yes — `:424` "State 4a, State 5 | Unchanged" |
-| `{branch: 'season_idle', variant: 'off'}` | State 4a (`'off'`) | Yes, same row                                |
-| `{branch: 'season_idle', variant: 'pre'}` | State 4a (`'pre'`) | Yes, same row                                |
-| `{branch: 'state1'}`                      | State 1            | Yes — `:421`                                 |
-| `{branch: 'state2'}`                      | State 2            | Yes — `:422`                                 |
-| `{branch: 'state3'}`                      | State 3            | Yes — `:423`                                 |
-| `{branch: 'state4'}`                      | State 4            | Yes — `:423`, merged with State 3            |
-
+| Returned branch                           | Plan's name        | Covered by §11.3 table?           |
+| ----------------------------------------- | ------------------ | --------------------------------- | ---------- |
+| `{branch: 'no_leagues'}`                  | State 5            | Yes — `:424` "State 4a, State 5   | Unchanged" |
+| `{branch: 'season_idle', variant: 'off'}` | State 4a (`'off'`) | Yes, same row                     |
+| `{branch: 'season_idle', variant: 'pre'}` | State 4a (`'pre'`) | Yes, same row                     |
+| `{branch: 'state1'}`                      | State 1            | Yes — `:421`                      |
+| `{branch: 'state2'}`                      | State 2            | Yes — `:422`                      |
+| `{branch: 'state3'}`                      | State 3            | Yes — `:423`                      |
+| `{branch: 'state4'}`                      | State 4            | Yes — `:423`, merged with State 3 |
 
 **The §11.3 mode table covers every branch the function returns.** No branch is orphaned. Three notes:
 
@@ -221,14 +187,11 @@ Two conditions worth knowing before U2:
 2. The `state3` vs `state4` split is **not** day-of-week. It's `isPregameWindow` (`homeState.ts:94`, defined at `:100-104`): same local calendar day, or within 12 hours (`PREGAME_WINDOW_MS`, `homeState.ts:13`). Merging them into one presentation row (`:423`) is therefore consistent with "no day-of-week screen swapping" (`:287`) — but it also means the merged row inherits a real behavioral difference: `state3` renders `lineupGroups` (all stake games this week, `index.tsx:444`) while `state4` renders `upcomingGames` (`index.tsx:451`), which is filtered to kickoffs still in the future (`homeState.ts:313-326`). Collapsing the presentation does not collapse those two inputs; U2 must pick one.
 3. `'off'` and `'pre'` are deliberately distinct branches with a "do not merge" docstring (`homeState.ts:56`, `:83`) and an explicit regression test (`app/lib/homeState.test.ts:59-68`). "Unchanged" at `:424` is the right call and should be held to.
 
-
-
 ### (e) Every `users.subscription_tier` read site — **CONFIRMED, 11 production read sites**
 
 The plan at `:318-322` says to replace the bare read with a derived check while keeping `subscription_tier` as a cached value "so existing reads don't break." Here is the full inventory that claim has to hold for.
 
 **Server, tier-gating reads (5):**
-
 
 | Site                                              | What it gates                                        |
 | ------------------------------------------------- | ---------------------------------------------------- |
@@ -238,20 +201,16 @@ The plan at `:318-322` says to replace the bare read with a derived check while 
 | `services/api/src/routes/me.ts:156,182`           | `PATCH /me/preferences` watched-league cap           |
 | `services/api/src/lib/watched-leagues.ts:115,129` | Watched-league resolution for the engine             |
 
-
 **Server, pass-through reads (3):**
 
-
-| Site                                          | Use                                          |
-| --------------------------------------------- | -------------------------------------------- |
-| `services/api/src/routes/me.ts:127,73`        | `GET /me` response body                      |
-| `services/api/src/routes/me.ts:204`           | `PATCH /me/preferences` response body        |
-| `services/api/src/routes/flags.ts:122,128`    | Coerced to `'pro' | 'free'` for flag context |
-| `services/api/src/lib/lineup-sync.ts:270,286` | Sync context                                 |
-
+| Site                                          | Use                                   |
+| --------------------------------------------- | ------------------------------------- | ------------------------ |
+| `services/api/src/routes/me.ts:127,73`        | `GET /me` response body               |
+| `services/api/src/routes/me.ts:204`           | `PATCH /me/preferences` response body |
+| `services/api/src/routes/flags.ts:122,128`    | Coerced to `'pro'                     | 'free'` for flag context |
+| `services/api/src/lib/lineup-sync.ts:270,286` | Sync context                          |
 
 **Client reads (4):**
-
 
 | Site                                            | Use                                            |
 | ----------------------------------------------- | ---------------------------------------------- |
@@ -261,10 +220,9 @@ The plan at `:318-322` says to replace the bare read with a derived check while 
 | `app/app/(app)/edit-manual-lineup.tsx:44`       | Manual-lineup free cap                         |
 | `app/app/(app)/(tabs)/settings.tsx:161,220,225` | Plan label + Upgrade CTA                       |
 
-
 **Single write site:** `services/api/src/routes/billing.ts:93-96`.
 
-**Assessment of the plan's approach.** Keeping `subscription_tier` as a derived cache does keep all 15 sites compiling, but it introduces a correctness hazard the plan does not address: a season pass expires by *time*, with no inbound event at the moment of expiry. If the webhook is the only writer (`billing.ts:93`), a lapsed season-pass user keeps `subscription_tier = 'pro'` until something else recomputes it. The plan's own §10.3 wording — "A user is Pro when there's an active RevenueCat `pro` entitlement **or** `pro_expires_at > now()`" (`:320`) — is a read-time predicate, which is correct, but "keep `subscription_tier` as a cached value" (`:322`) is a write-time denormalization, and nothing in the plan says who recomputes it on the expiry boundary. This needs a decision before M1: either a scheduled recompute, or make the five gating reads call a shared `isPro(userRow)` helper and let the cached column be display-only.
+**Assessment of the plan's approach.** Keeping `subscription_tier` as a derived cache does keep all 15 sites compiling, but it introduces a correctness hazard the plan does not address: a season pass expires by _time_, with no inbound event at the moment of expiry. If the webhook is the only writer (`billing.ts:93`), a lapsed season-pass user keeps `subscription_tier = 'pro'` until something else recomputes it. The plan's own §10.3 wording — "A user is Pro when there's an active RevenueCat `pro` entitlement **or** `pro_expires_at > now()`" (`:320`) — is a read-time predicate, which is correct, but "keep `subscription_tier` as a cached value" (`:322`) is a write-time denormalization, and nothing in the plan says who recomputes it on the expiry boundary. This needs a decision before M1: either a scheduled recompute, or make the five gating reads call a shared `isPro(userRow)` helper and let the cached column be display-only.
 
 ### (f) Is RevenueCat configured for a non-renewing product alongside `pivot_pro_monthly`? — **CANNOT BE DETERMINED from the repo; code is partially ready**
 
@@ -276,8 +234,6 @@ What the code does say:
 - **Webhook already accepts the event type.** `services/api/src/routes/billing.ts:13` includes `'NON_RENEWING_PURCHASE'` in `GRANT_TYPES`, so a season-pass purchase would already flip `subscription_tier` to `'pro'` (`billing.ts:43-48`, `:93-96`). That is a genuine head start.
 - **But revocation is event-only.** `REVOKE_TYPES` is `{'EXPIRATION', 'REFUND'}` (`billing.ts:19`). With no `pro_expires_at` column and no scheduled job, expiry depends entirely on RevenueCat emitting `EXPIRATION` for a non-renewing product — which in turn depends on a duration being configured on that product in the dashboard. Unverifiable here; flag it as a sandbox test item for M1 §10.5.1.
 - **Entitlement id is shared.** `PRO_ENTITLEMENT_ID = 'pro'` on both sides (`app/lib/purchases.ts:9`, `billing.ts:6`), so a season pass mapped to the same `pro` entitlement needs no new identifier.
-
-
 
 ### (g) The four §0 guardrail-1 production pipeline fixes — **NOT MERGED (1 of 4 partially, in** `experiments/` **only)**
 
@@ -328,7 +284,7 @@ The key is user-only, both in the interface and in both implementations:
 
 The Redis key is `user_notifications:{user_id}` (`rateLimiter.ts:23`), the call site passes only `event.userId` (`rateLimiter.ts:71`), and `InMemoryRateLimitStore` maps by user id alone (`rateLimiter.ts:84-99`). The window is 3-per-60s globally per user (`rateLimiter.ts:4-5`), matching `PLAN.md:222`.
 
-This matters more than it looks for the stakes model. §3 at `:150` asserts "The rate limiter already keys by `(userId, gameId)`. Triggers from multiple stakes in the same game collapse into one notification." **That is false today**, and the collapse behavior it describes is a consequence the plan is relying on, not merely a detail. Adding `gameId` to the key would also *loosen* the global cap (3 per game rather than 3 overall), which is a product decision, not a refactor.
+This matters more than it looks for the stakes model. §3 at `:150` asserts "The rate limiter already keys by `(userId, gameId)`. Triggers from multiple stakes in the same game collapse into one notification." **That is false today**, and the collapse behavior it describes is a consequence the plan is relying on, not merely a detail. Adding `gameId` to the key would also _loosen_ the global cap (3 per game rather than 3 overall), which is a product decision, not a refactor.
 
 **4. Ceiling-on-silence timer — NOT MERGED.**
 
@@ -338,17 +294,13 @@ This matters more than it looks for the stakes model. §3 at `:150` asserts "The
 
 ---
 
-
-
 ## 3. Conflicts
-
-
 
 ### 3.1 The accent hex — plan and `UI-SPEC.md` vs. `theme.ts`
 
 > `PIVOT-STAKES-PLAN.md:366`: "| `colors.accent` | `#FFB020` (existing) | Actionable or today: CTAs, stake markers, game-day kickoff times, selected segment |"
 
-> `UI-SPEC.md:34`: "| `colors.accent`        | `#FFB020` |" — under the heading "**Already in** `app/lib/theme.ts`**, unchanged:**" (`UI-SPEC.md:29`)
+> `UI-SPEC.md:34`: "| `colors.accent` | `#FFB020` |" — under the heading "**Already in** `app/lib/theme.ts`**, unchanged:**" (`UI-SPEC.md:29`)
 
 versus
 
@@ -356,7 +308,7 @@ versus
     accent: '#F5A018',
 ```
 
-Both documents are wrong about a value they claim to be quoting. This is not cosmetic: §11.1 opens with "Additive only. Don't change existing hexes" (`:360`), yet its own table would change one. And `ember` (`:364`) and `flareGlow` (`:368`) are specified as tints of `#FFB020`, so implementing them literally seeds a *second* amber hue into a palette whose whole premise (`UI-SPEC.md:27`) is a single accent. Parker needs to decide whether the ladder is rebuilt around `#F5A018` or whether U1 is deliberately a palette migration — the plan currently reads as neither.
+Both documents are wrong about a value they claim to be quoting. This is not cosmetic: §11.1 opens with "Additive only. Don't change existing hexes" (`:360`), yet its own table would change one. And `ember` (`:364`) and `flareGlow` (`:368`) are specified as tints of `#FFB020`, so implementing them literally seeds a _second_ amber hue into a palette whose whole premise (`UI-SPEC.md:27`) is a single accent. Parker needs to decide whether the ladder is rebuilt around `#F5A018` or whether U1 is deliberately a palette migration — the plan currently reads as neither.
 
 ### 3.2 `#FFC94D` "flare" vs. the resolved "competing accent colors" decision
 
@@ -372,7 +324,7 @@ Introducing a second amber for live states reopens, at least partially, an issue
 
 versus `services/dispatcher/src/scheduleFlagEvent.ts:37-39`, which computes `scheduledFireAt` as `clock() + lagSec * 1000` from a per-platform constant, and `PLAN.md:1121`: "What's missing is using a resumption watcher's detected trigger time as that queue's `scheduledFireAt`, in place of the fixed padding."
 
-The fixed-delay path is the *only* path that exists. §0 guardrail 1 does gate on this being fixed, so the plan is internally consistent — but §3's rule is written in the present tense as though the watcher were already the timing source, and a reader could easily build against that assumption.
+The fixed-delay path is the _only_ path that exists. §0 guardrail 1 does gate on this being fixed, so the plan is internally consistent — but §3's rule is written in the present tense as though the watcher were already the timing source, and a reader could easily build against that assumption.
 
 ### 3.4 "The rate limiter already keys by `(userId, gameId)`"
 
@@ -396,11 +348,9 @@ The link is already Settings-only: rendered at `app/app/(app)/(tabs)/settings.ts
 
 > `PIVOT-STAKES-PLAN.md:423`: "`FeaturedStakeCard` for the highest-`gameScore` upcoming game"
 
-`gameScore` is defined in §4 (`:159-161`) as a sum over stake weights times *active trigger leverage*. Pre-game, by definition, there are no active triggers, so the formula evaluates to zero for every game. And the stakes model it depends on is Phase 1, which U2 explicitly does not depend on (`:524`). Meanwhile the shipped `priorityScore` (`services/engine/src/computeFlagState.ts`, surfaced as `priority_score` in `services/api/src/routes/flags.ts`) is also a live-state score — it requires possession, so it is equally unavailable pre-game. **U2 needs a pre-game ranking rule that the plan does not specify.** Starter count per game (available today via `countStakePlayersInGame`, `app/lib/homeState.ts:228`) is the obvious candidate, but that is an invention, not a spec.
+`gameScore` is defined in §4 (`:159-161`) as a sum over stake weights times _active trigger leverage_. Pre-game, by definition, there are no active triggers, so the formula evaluates to zero for every game. And the stakes model it depends on is Phase 1, which U2 explicitly does not depend on (`:524`). Meanwhile the shipped `priorityScore` (`services/engine/src/computeFlagState.ts`, surfaced as `priority_score` in `services/api/src/routes/flags.ts`) is also a live-state score — it requires possession, so it is equally unavailable pre-game. **U2 needs a pre-game ranking rule that the plan does not specify.** Starter count per game (available today via `countStakePlayersInGame`, `app/lib/homeState.ts:228`) is the obvious candidate, but that is an invention, not a spec.
 
 ---
-
-
 
 ## 4. Phase U1 readiness — file-by-file change list
 
@@ -414,18 +364,14 @@ Resolve the `#FFB020` vs. `#F5A018` conflict (§3.1). Until Parker rules, the `e
 
 - Add to `colors` (after `accentGlow`, `:26`): `ember`, `brass` `#A07C38`, `flare` `#FFC94D`, `well` `#070709`, `wellBorder` `#1E1E25`, `rowDivider` `#16161B`.
 - Add to `effects` (after `panelGlow`, `:61`): `flareGlow` — `shadowColor` (pending 4.0), `shadowOffset {0,0}`, `shadowOpacity 0.25`, `shadowRadius 24`, plus an `elevation` value. **Note:** §11.1 (`:368`) omits `elevation`; `panelGlow` has `elevation: 8` (`theme.ts:60`) as the Android fallback. Pick a value or document the omission — the object is `as const` and consumed by spread, so an asymmetric shape is a typing inconsistency, not just a style one.
-- `ember` is dual-valued in the plan (`:364`): `rgba(255,176,32,0.05)` *or* `#1A150C` solid. One token cannot be both. Needs either two keys (`ember` / `emberSolid`) or a decision.
+- `ember` is dual-valued in the plan (`:364`): `rgba(255,176,32,0.05)` _or_ `#1A150C` solid. One token cannot be both. Needs either two keys (`ember` / `emberSolid`) or a decision.
 - Touch no existing key.
-
-
 
 ### 4.2 `app/lib/theme.test.ts` — additive test edits
 
 - Add one new `it` block (matching the existing convention at `:100`, `'adds the UI-SPEC.md §2 border/glow tokens'`) asserting each new color via `toBe` and `flareGlow` via `toEqual`.
 - **Change nothing in the five existing blocks.** If any existing assertion needs editing, U1 has stopped being additive — treat that as a stop-and-ask signal.
 - Verify with `pnpm test` (root), **not** `pnpm --filter app test` (§1.5).
-
-
 
 ### 4.3 `app/components/Slip.tsx` — new file
 
@@ -434,8 +380,6 @@ Resolve the `#FFB020` vs. `#F5A018` conflict (§3.1). Until Parker rules, the `e
 - The perforated divider (`:386`: dashed hairline + two half-circle notches in the `background` color) is **not built anywhere today** and is not exercised by the paywall. Building it in U1 means shipping untested, unused code; deferring it to U7/U5 (its actual consumers per `:387`) is the safer read of "no visual change."
 - The plan's "plus a drop shadow" (`:386`) must default off — see §2(a).
 
-
-
 ### 4.4 `app/components/UpgradeSheet.tsx` — refactor
 
 - Replace the `Pressable style={styles.card}` at `:165` with `<Slip>`, preserving the tap-blocking `onPress={() => {}}`.
@@ -443,15 +387,11 @@ Resolve the `#FFB020` vs. `#F5A018` conflict (§3.1). Until Parker rules, the `e
 - Leave `cardWrap` (`:252`), `dim` (`:263`), and all content styles untouched.
 - Do **not** touch the copy in this phase. §10.4's new headline and Season Pass block (`:330-341`) are M1 (`:526`), not U1.
 
-
-
 ### 4.5 Tests that need updating
 
 - `app/lib/theme.test.ts` — the only file. One added block.
 - **No component test exists or can exist** for the `Slip` refactor without new dependencies (§1.6). `vitest.config.ts:17` would need `.tsx` in `include`, `environment` would need jsdom or similar, and `@testing-library/react-native` would need adding — all out of U1 scope and all forbidden as unrequested additions under `.cursorrules`. Regression coverage for U1's second half is §11.5 step 2's manual screenshot diff, full stop.
 - No API, engine, dispatcher, or shared test is touched by U1.
-
-
 
 ### 4.6 Verification sequence
 
@@ -463,11 +403,7 @@ Resolve the `#FFB020` vs. `#F5A018` conflict (§3.1). Until Parker rules, the `e
 
 ---
 
-
-
 ## 5. Open risks
-
-
 
 ### 5.1 U1 — the token ladder is specified against a palette the app doesn't have
 
@@ -527,8 +463,6 @@ U4 depends on "production pipeline fixes merged" (`:525`). Per §2(g), **none of
 
 ---
 
-
-
 ## Appendix — verification commands used
 
 ```
@@ -537,4 +471,3 @@ pnpm --filter app test                        # exit 0, zero tests run
 pnpm -r test                                  # "Scope: 6 of 7 workspace projects", zero tests run
 git log --oneline -25                         # HEAD = f1e0963, branch main
 ```
-

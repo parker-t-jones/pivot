@@ -1,4 +1,11 @@
-import { Pressable, StyleSheet, Text, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
 
 import { TEXT_BUTTON_HIT_SLOP } from '../lib/controlRecipes';
 import { theme } from '../lib/theme';

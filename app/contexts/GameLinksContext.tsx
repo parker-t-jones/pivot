@@ -88,10 +88,7 @@ function LiveGameLinksProvider({ children }: PropsWithChildren) {
   return <GameLinksContext.Provider value={value}>{children}</GameLinksContext.Provider>;
 }
 
-function FixtureGameLinks({
-  children,
-  links,
-}: PropsWithChildren<{ links: readonly GameLink[] }>) {
+function FixtureGameLinks({ children, links }: PropsWithChildren<{ links: readonly GameLink[] }>) {
   const byId = useMemo(() => new Map(links.map((link) => [link.game_id, link])), [links]);
   const value = useMemo<GameLinksContextValue>(
     () => ({

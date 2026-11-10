@@ -110,7 +110,12 @@ function resolveVisibleAt(row: LogRow, runReferenceMs: number): number | null {
   if (!match) return null;
 
   const base = new Date(runReferenceMs);
-  base.setHours(Number(match[1]), Number(match[2]), Number(match[3]), Number((match[4] ?? '0').padEnd(3, '0')));
+  base.setHours(
+    Number(match[1]),
+    Number(match[2]),
+    Number(match[3]),
+    Number((match[4] ?? '0').padEnd(3, '0')),
+  );
   return base.getTime();
 }
 
@@ -192,7 +197,10 @@ function main(): void {
   const opened = events.filter((e) => e.kind === 'resumption_window_opened');
   console.log(`\n--- resumption detection ---`);
   console.log(`  windows opened: ${opened.length}   resolved: ${resolved.length}`);
-  for (const [key, n] of counts(resolved, (e) => `${str(e, 'outcome')} via ${str(e, 'resolvedBy')}`)) {
+  for (const [key, n] of counts(
+    resolved,
+    (e) => `${str(e, 'outcome')} via ${str(e, 'resolvedBy')}`,
+  )) {
     console.log(`    ${n.toString().padStart(4)}  ${key}`);
   }
   console.log(`  revealing play that opened the window:`);
@@ -204,10 +212,12 @@ function main(): void {
   }
   describe(
     'pause length (REAL_ACTION elapsedMs)',
-    resolved.filter((e) => str(e, 'outcome') === 'REAL_ACTION').flatMap((e) => {
-      const v = num(e, 'elapsedMs');
-      return v === null ? [] : [v];
-    }),
+    resolved
+      .filter((e) => str(e, 'outcome') === 'REAL_ACTION')
+      .flatMap((e) => {
+        const v = num(e, 'elapsedMs');
+        return v === null ? [] : [v];
+      }),
   );
   const ceilingByTimer = resolved.filter((e) => str(e, 'resolvedBy') === 'wall_clock_timer').length;
   console.log(
@@ -308,8 +318,12 @@ function main(): void {
 
   const visiblePath = flag('visible');
   if (!visiblePath) {
-    console.log(`\n--- WORKSHEET: ${candidates.length} possession-change notification(s) to locate ---`);
-    console.log(`  Scrub the recording to each play, read the reference clock, and write a JSONL file:`);
+    console.log(
+      `\n--- WORKSHEET: ${candidates.length} possession-change notification(s) to locate ---`,
+    );
+    console.log(
+      `  Scrub the recording to each play, read the reference clock, and write a JSONL file:`,
+    );
     console.log(`    { "playId": "<triggerPlayId>", "visibleAt": "HH:MM:SS.mmm" }`);
     console.log(`  Then: npx tsx experiments/analyze-live-run.ts --visible <that file>\n`);
     for (const c of candidates) {

@@ -81,7 +81,10 @@ class WatchFake {
   }
 }
 
-function directory(setAtMs: number, status = 'in_progress'): { directory: SupabaseUserDirectory; fake: WatchFake } {
+function directory(
+  setAtMs: number,
+  status = 'in_progress',
+): { directory: SupabaseUserDirectory; fake: WatchFake } {
   const fake = new WatchFake(new Date(setAtMs).toISOString(), status);
   return {
     fake,

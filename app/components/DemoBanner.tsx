@@ -11,12 +11,7 @@ export function DemoBanner({ onExit }: { onExit: () => void }) {
   return (
     <View style={styles.banner}>
       <Text style={styles.label}>DEMO — not a real game</Text>
-      <TextButton
-        label="Exit"
-        labelStyle={styles.exitLabel}
-        onPress={onExit}
-        size="smallStrong"
-      />
+      <TextButton label="Exit" labelStyle={styles.exitLabel} onPress={onExit} size="smallStrong" />
     </View>
   );
 }

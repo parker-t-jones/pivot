@@ -3,7 +3,9 @@ import { readOrCreateDeviceId, type DeviceIdStorage } from './deviceIdStorage';
 
 const FIXED = '11111111-1111-4111-8111-111111111111';
 
-function memoryStorage(seed: Record<string, string> = {}): DeviceIdStorage & { values: Record<string, string> } {
+function memoryStorage(
+  seed: Record<string, string> = {},
+): DeviceIdStorage & { values: Record<string, string> } {
   const values = { ...seed };
   return {
     values,

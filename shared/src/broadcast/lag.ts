@@ -29,5 +29,7 @@ export const DEFAULT_LAG_SECONDS = 60;
 
 export function lagSecondsFor(service: string | null): number {
   if (service === null) return DEFAULT_LAG_SECONDS;
-  return (USER_SERVICE_LAG_SECONDS as Partial<Record<string, number>>)[service] ?? DEFAULT_LAG_SECONDS;
+  return (
+    (USER_SERVICE_LAG_SECONDS as Partial<Record<string, number>>)[service] ?? DEFAULT_LAG_SECONDS
+  );
 }

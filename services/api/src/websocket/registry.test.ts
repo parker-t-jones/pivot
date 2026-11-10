@@ -65,6 +65,11 @@ describe('ConnectionRegistry', () => {
     const b = new RealtimeConnection(fakeSocket(), 'user-2', 0);
     registry.add(a);
     registry.add(b);
-    expect(registry.all().map((c) => c.id).sort()).toEqual([a.id, b.id].sort());
+    expect(
+      registry
+        .all()
+        .map((c) => c.id)
+        .sort(),
+    ).toEqual([a.id, b.id].sort());
   });
 });

@@ -64,13 +64,7 @@ export default function OnboardingTourScreen() {
           </>
         )}
 
-        <TextButton
-          label="Skip"
-          onPress={finish}
-          size="small"
-          style={styles.skip}
-          tone="muted"
-        />
+        <TextButton label="Skip" onPress={finish} size="small" style={styles.skip} tone="muted" />
       </Slip>
     </View>
   );
@@ -104,10 +98,7 @@ function CardIllustration({ cardId }: { cardId: string }) {
     case 'alerts':
       return (
         <View style={styles.illustration}>
-          <ListRow
-            subtitle="Switch before the drive starts"
-            title="Your QB just took the field"
-          />
+          <ListRow subtitle="Switch before the drive starts" title="Your QB just took the field" />
         </View>
       );
     case 'watchlist':

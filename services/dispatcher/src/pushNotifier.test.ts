@@ -93,7 +93,11 @@ describe('ExpoPushNotifier', () => {
 
   it('surfaces a ticket-level error as a failed PushResult', async () => {
     const { client } = makeFakeExpo(() => [
-      { status: 'error', message: 'DeviceNotRegistered', details: { error: 'DeviceNotRegistered' } },
+      {
+        status: 'error',
+        message: 'DeviceNotRegistered',
+        details: { error: 'DeviceNotRegistered' },
+      },
     ]);
     const notifier = new ExpoPushNotifier(client);
 

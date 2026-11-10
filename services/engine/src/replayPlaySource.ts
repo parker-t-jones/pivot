@@ -170,7 +170,9 @@ export class ReplayPlaySource implements PlaySource {
   private async loadPlays(): Promise<PlayEvent[]> {
     const parser = createReadStream(this.options.filePath)
       .pipe(createGunzip())
-      .pipe(parse({ columns: true, skipEmptyLines: true, relaxQuotes: true, relaxColumnCount: true }));
+      .pipe(
+        parse({ columns: true, skipEmptyLines: true, relaxQuotes: true, relaxColumnCount: true }),
+      );
 
     const rows: NflverseRow[] = [];
     for await (const record of parser as AsyncIterable<NflverseRow>) {

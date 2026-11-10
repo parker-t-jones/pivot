@@ -185,7 +185,10 @@ describe('seasonIdleCopy — off vs pre distinct (schedule openers)', () => {
   });
 
   it('off and pre headings/bodies differ', () => {
-    const openers = { preseasonStart: '2026-08-06' as string | null, regularSeasonStart: '2026-09-09' as string | null };
+    const openers = {
+      preseasonStart: '2026-08-06' as string | null,
+      regularSeasonStart: '2026-09-09' as string | null,
+    };
     const off = seasonIdleCopy('off', '2026', 1, openers);
     const pre = seasonIdleCopy('pre', '2026', 1, openers);
     expect(off.heading).not.toBe(pre.heading);
@@ -271,12 +274,7 @@ describe('findNextStakeGames / formatPlayersActiveInGame', () => {
   const kickoff1pm = '2026-09-14T17:00:00.000Z';
   const kickoff4pm = '2026-09-14T20:00:00.000Z';
 
-  function scheduleGame(
-    gameId: string,
-    away: string,
-    home: string,
-    start: string,
-  ): ScheduleGame {
+  function scheduleGame(gameId: string, away: string, home: string, start: string): ScheduleGame {
     return {
       game_id: gameId,
       status: 'scheduled',
@@ -327,10 +325,7 @@ describe('findNextStakeGames / formatPlayersActiveInGame', () => {
     const stake = new Set(['BUF', 'MIA', 'KC']);
     const now = new Date('2026-09-14T12:00:00.000Z');
 
-    expect(findNextStakeGames(games, stake, now).map((g) => g.game_id)).toEqual([
-      'g-buf',
-      'g-mia',
-    ]);
+    expect(findNextStakeGames(games, stake, now).map((g) => g.game_id)).toEqual(['g-buf', 'g-mia']);
   });
 
   it('includes 1pm-window games even when scheduled_start differs by a few minutes', () => {
@@ -344,10 +339,7 @@ describe('findNextStakeGames / formatPlayersActiveInGame', () => {
     const stake = new Set(['BUF', 'PHI', 'DEN']);
     const now = new Date('2026-09-14T12:00:00.000Z');
 
-    expect(findNextStakeGames(games, stake, now).map((g) => g.game_id)).toEqual([
-      'g-buf',
-      'g-phi',
-    ]);
+    expect(findNextStakeGames(games, stake, now).map((g) => g.game_id)).toEqual(['g-buf', 'g-phi']);
   });
 
   it('includes in_progress games in the upcoming window (status can flip before live Redis)', () => {
@@ -362,10 +354,7 @@ describe('findNextStakeGames / formatPlayersActiveInGame', () => {
     const stake = new Set(['BUF', 'PHI']);
     const now = new Date('2026-09-19T23:30:00.000Z');
 
-    expect(findNextStakeGames(games, stake, now).map((g) => g.game_id)).toEqual([
-      'g-buf',
-      'g-phi',
-    ]);
+    expect(findNextStakeGames(games, stake, now).map((g) => g.game_id)).toEqual(['g-buf', 'g-phi']);
   });
 
   it('upcomingStakeGameGroups lists every remaining non-final stake game chronologically', () => {
@@ -393,9 +382,11 @@ describe('findNextStakeGames / formatPlayersActiveInGame', () => {
     ];
     const stake = new Set(['BUF', 'PHI', 'DEN', 'MIA']);
     const now = new Date('2026-09-20T12:00:00.000Z');
-    expect(
-      upcomingStakeGameGroups(games, lineups, stake, now).map((g) => g.game.game_id),
-    ).toEqual(['g-buf', 'g-phi', 'g-late']);
+    expect(upcomingStakeGameGroups(games, lineups, stake, now).map((g) => g.game.game_id)).toEqual([
+      'g-buf',
+      'g-phi',
+      'g-late',
+    ]);
   });
 
   it('upcomingStakeGameGroups excludes games whose kickoff has already passed', () => {
@@ -455,9 +446,9 @@ describe('findNextStakeGames / formatPlayersActiveInGame', () => {
   });
 
   it('formats Active Players copy', () => {
-    expect(
-      formatPlayersActiveInGame([{ first_name: 'Josh', last_name: 'Allen' }]),
-    ).toBe('Active Players: Josh Allen');
+    expect(formatPlayersActiveInGame([{ first_name: 'Josh', last_name: 'Allen' }])).toBe(
+      'Active Players: Josh Allen',
+    );
     expect(
       formatPlayersActiveInGame([
         { first_name: 'Josh', last_name: 'Allen' },

@@ -39,14 +39,21 @@ function parseArgs(): { espnIds: string[] } {
     console.error('Usage: npx tsx experiments/live-ingest-service.ts --espn-id 401872931[,...]');
     process.exit(1);
   }
-  return { espnIds: raw.split(',').map((s) => s.trim()).filter(Boolean) };
+  return {
+    espnIds: raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  };
 }
 
 async function main(): Promise<void> {
   const { espnIds } = parseArgs();
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (expected in services/api/.env)');
+    console.error(
+      'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (expected in services/api/.env)',
+    );
     process.exit(1);
   }
   if (CACHE_DRIVER !== 'redis') {

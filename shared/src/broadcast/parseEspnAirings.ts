@@ -1,10 +1,5 @@
 import { mapMediaName } from './mapMediaName.js';
-import type {
-  AiringMarket,
-  EspnBroadcastEvent,
-  ParsedAiring,
-  UnmappedMediaLog,
-} from './types.js';
+import type { AiringMarket, EspnBroadcastEvent, ParsedAiring, UnmappedMediaLog } from './types.js';
 
 function normalizeMarket(raw: string | undefined): AiringMarket {
   if (raw === undefined) return 'unknown';
@@ -19,10 +14,7 @@ function normalizeMarket(raw: string | undefined): AiringMarket {
  * Prefers geoBroadcasts; falls back to broadcasts[].names[].
  * Never parses the singular `broadcast` string (collapses simulcasts).
  */
-export function parseEspnAirings(
-  event: EspnBroadcastEvent,
-  log: UnmappedMediaLog,
-): ParsedAiring[] {
+export function parseEspnAirings(event: EspnBroadcastEvent, log: UnmappedMediaLog): ParsedAiring[] {
   const competition = event.competitions?.[0];
   if (!competition) return [];
 

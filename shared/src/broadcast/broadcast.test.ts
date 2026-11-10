@@ -114,17 +114,14 @@ describe('parseEspnAirings', () => {
       const airings = parseEspnAirings(event, () => {
         throw new Error(`unexpected unmapped on ${short}`);
       });
-      expect(
-        airings.map((a) => a.network).sort(),
-        short,
-      ).toEqual([...(expected ?? [])].sort());
+      expect(airings.map((a) => a.network).sort(), short).toEqual([...(expected ?? [])].sort());
     }
   });
 
   it('maps TNF to amazon_prime and MNF to espn+abc', () => {
-    expect(parseEspnAirings(eventByShort('ATL @ GB'), () => undefined).map((a) => a.network)).toEqual([
-      'amazon_prime',
-    ]);
+    expect(
+      parseEspnAirings(eventByShort('ATL @ GB'), () => undefined).map((a) => a.network),
+    ).toEqual(['amazon_prime']);
     expect(
       parseEspnAirings(eventByShort('PHI @ CHI'), () => undefined)
         .map((a) => a.network)
@@ -219,9 +216,9 @@ describe('networkLabelFromAirings', () => {
 
   it('ignores an unknown key', () => {
     expect(networkLabelFromAirings([{ network: 'some_new_service' }])).toBeNull();
-    expect(
-      networkLabelFromAirings([{ network: 'some_new_service' }, { network: 'nbc' }]),
-    ).toBe('NBC');
+    expect(networkLabelFromAirings([{ network: 'some_new_service' }, { network: 'nbc' }])).toBe(
+      'NBC',
+    );
   });
 });
 
@@ -286,11 +283,7 @@ describe('expandWatchOptions + rankWatchOptions', () => {
 
   it('ranks Ticket before YTTV on a regional FOX game and tags the local route', () => {
     const options = expandWatchOptions([foxAiring], sundayEarly, true);
-    const ranked = rankWatchOptions(
-      options,
-      new Set(['sunday_ticket', 'youtube_tv']),
-      true,
-    );
+    const ranked = rankWatchOptions(options, new Set(['sunday_ticket', 'youtube_tv']), true);
     expect(ranked[0]?.service).toBe('sunday_ticket');
     expect(ranked[0]?.preferred).toBe(true);
     expect(ranked[1]?.service).toBe('youtube_tv');
@@ -300,10 +293,7 @@ describe('expandWatchOptions + rankWatchOptions', () => {
 
   it('uses lag on a non-regional slate with no route hint', () => {
     // Constructed pair — Ticket does not expand onto SNF NBC; ranking rule still applies.
-    const pair = [
-      option('sunday_ticket', 'fox', 75),
-      option('youtube_tv', 'fox', 45),
-    ];
+    const pair = [option('sunday_ticket', 'fox', 75), option('youtube_tv', 'fox', 45)];
     const ranked = rankWatchOptions(pair, new Set(['sunday_ticket', 'youtube_tv']), false);
     expect(ranked.map((o) => o.service)).toEqual(['youtube_tv', 'sunday_ticket']);
     expect(ranked[0]?.preferred).toBe(true);
@@ -489,15 +479,21 @@ function watchLink(
 }
 
 describe('2026-10-11 scoreboard carriage', () => {
-  it('maps tonight\'s Fox shortName to fox', () => {
-    expect(parseEspnAirings(tonightEvent(tonight.fox), () => undefined).map((a) => a.network)).toEqual([
-      'fox',
-    ]);
+  it("maps tonight's Fox shortName to fox", () => {
+    expect(
+      parseEspnAirings(tonightEvent(tonight.fox), () => undefined).map((a) => a.network),
+    ).toEqual(['fox']);
   });
 
-  it('gives a Peacock-only user the Peacock link on tonight\'s NBC SNF', () => {
-    const options = watchOptionsForGame(tonight.snf.id, tonightWeek(tonight.snf), new Set(['peacock']));
-    expect(options.map((o) => [o.service, o.network, o.preferred])).toEqual([['peacock', 'nbc', true]]);
+  it("gives a Peacock-only user the Peacock link on tonight's NBC SNF", () => {
+    const options = watchOptionsForGame(
+      tonight.snf.id,
+      tonightWeek(tonight.snf),
+      new Set(['peacock']),
+    );
+    expect(options.map((o) => [o.service, o.network, o.preferred])).toEqual([
+      ['peacock', 'nbc', true],
+    ]);
     expect(watchLink('peacock', 'nbc', 'Ravens', 'Falcons', tonight.snf.date)).toBe(
       'https://www.peacocktv.com/watch/sports',
     );
@@ -518,14 +514,26 @@ describe('2026-10-11 scoreboard carriage', () => {
   });
 
   it('leaves a YouTube TV user on YouTube TV for NBC and CBS', () => {
-    const snf = watchOptionsForGame(tonight.snf.id, tonightWeek(tonight.snf), new Set(['youtube_tv']));
-    expect(snf.map((o) => [o.service, o.network, o.preferred])).toEqual([['youtube_tv', 'nbc', true]]);
+    const snf = watchOptionsForGame(
+      tonight.snf.id,
+      tonightWeek(tonight.snf),
+      new Set(['youtube_tv']),
+    );
+    expect(snf.map((o) => [o.service, o.network, o.preferred])).toEqual([
+      ['youtube_tv', 'nbc', true],
+    ]);
     expect(watchLink('youtube_tv', 'nbc', 'Ravens', 'Falcons', tonight.snf.date)).toBe(
       'https://tv.youtube.com/search/Ravens%20vs%20Falcons%20today',
     );
 
-    const cbs = watchOptionsForGame(tonight.cbs.id, tonightWeek(tonight.cbs), new Set(['youtube_tv']));
-    expect(cbs.map((o) => [o.service, o.network, o.preferred])).toEqual([['youtube_tv', 'cbs', true]]);
+    const cbs = watchOptionsForGame(
+      tonight.cbs.id,
+      tonightWeek(tonight.cbs),
+      new Set(['youtube_tv']),
+    );
+    expect(cbs.map((o) => [o.service, o.network, o.preferred])).toEqual([
+      ['youtube_tv', 'cbs', true],
+    ]);
     expect(watchLink('youtube_tv', 'cbs', 'Texans', 'Titans', tonight.cbs.date)).toBe(
       'https://tv.youtube.com/search/Texans%20vs%20Titans%20today',
     );

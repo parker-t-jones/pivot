@@ -206,7 +206,9 @@ describe('InMemoryGameStateStore', () => {
     );
 
     const pruneCommands = store.takePresenceCommands();
-    const prunedAt = pruneCommands.findIndex((command) => command === 'zremrangebyscore presence:u1');
+    const prunedAt = pruneCommands.findIndex(
+      (command) => command === 'zremrangebyscore presence:u1',
+    );
     const deletedAt = pruneCommands.findIndex((command) => command === 'hdel presence-vis:u1');
     const writtenAt = pruneCommands.findIndex((command) => command.startsWith('zadd presence:u1'));
     expect(prunedAt).toBeGreaterThanOrEqual(0);
@@ -228,7 +230,7 @@ describe('InMemoryGameStateStore', () => {
     expect(await store.isUserActive(userId)).toBe(false);
   });
 
-  it('reads only that user\'s presence key', async () => {
+  it("reads only that user's presence key", async () => {
     const store = new InMemoryGameStateStore();
     await store.markConnectionActive(
       {
@@ -243,11 +245,15 @@ describe('InMemoryGameStateStore', () => {
     store.takePresenceCommands();
 
     expect(await store.isUserActive('user-a')).toBe(false);
-    expect(await store.isDeviceActive('user-a', '11111111-1111-4111-8111-111111111111')).toBe(false);
+    expect(await store.isDeviceActive('user-a', '11111111-1111-4111-8111-111111111111')).toBe(
+      false,
+    );
     const commands = store.takePresenceCommands();
     expect(commands.length).toBeGreaterThan(0);
     expect(commands.every((command) => command.includes('presence:user-a'))).toBe(true);
-    expect(commands.some((command) => command.includes('user-b') || command.includes('active_users'))).toBe(false);
+    expect(
+      commands.some((command) => command.includes('user-b') || command.includes('active_users')),
+    ).toBe(false);
   });
 
   it('keeps one member and one visibility field when a connection flips to hidden', async () => {

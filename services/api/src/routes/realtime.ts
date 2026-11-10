@@ -117,11 +117,19 @@ const realtimeRoutes: FastifyPluginAsync<RealtimeRoutesOptions> = async (fastify
       const tracked: TrackedPresence =
         identity.kind === 'legacy'
           ? { kind: 'legacy' }
-          : { kind: 'device', deviceId: identity.deviceId, platform: identity.platform, visibility: 'visible' };
+          : {
+              kind: 'device',
+              deviceId: identity.deviceId,
+              platform: identity.platform,
+              visibility: 'visible',
+            };
 
       let disposed = false;
       let presenceChain = Promise.resolve();
-      const enqueuePresence = (kind: 'refresh' | 'remove', operation: () => Promise<void>): void => {
+      const enqueuePresence = (
+        kind: 'refresh' | 'remove',
+        operation: () => Promise<void>,
+      ): void => {
         presenceChain = presenceChain
           .then(async () => {
             if (kind === 'refresh' && disposed) return;

@@ -45,10 +45,10 @@ describe('applyLeaguesRefresh — count and list never diverge', () => {
 
   it('never allows an optimistic count without a matching list entry', () => {
     // Documented invariant: there is no API that sets count without replacing the list.
-    const next = applyLeaguesRefresh(
-      { leagues: [], leagueCount: 0, leaguesRevision: 0 },
-      [league('a'), league('b')],
-    );
+    const next = applyLeaguesRefresh({ leagues: [], leagueCount: 0, leaguesRevision: 0 }, [
+      league('a'),
+      league('b'),
+    ]);
     expect(next.leagueCount).toBe(2);
     expect(next.leagues.map((l) => l.league_id)).toEqual(['a', 'b']);
   });
@@ -60,10 +60,9 @@ describe('Home / gate reactions to leagues changes', () => {
   });
 
   it('connect from State 5: revision bump with count≥1 → Home can leave State 5; gate renders', () => {
-    const afterConnect = applyLeaguesRefresh(
-      { leagues: [], leagueCount: 0, leaguesRevision: 0 },
-      [league('a')],
-    );
+    const afterConnect = applyLeaguesRefresh({ leagues: [], leagueCount: 0, leaguesRevision: 0 }, [
+      league('a'),
+    ]);
     expect(afterConnect.leagueCount).toBeGreaterThan(0);
     // Gate on Home with leagues — no redirect to connect
     expect(

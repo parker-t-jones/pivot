@@ -103,11 +103,10 @@ describe('runWorkerCycle', () => {
 
     expect(result.ran).toBe(true);
     expect(result.nextState).toEqual({ lastDailySyncAt: NOON });
-    expect(syncLeagueLineup).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      { week: 0, displayPhase: 'off' },
-    );
+    expect(syncLeagueLineup).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+      week: 0,
+      displayPhase: 'off',
+    });
   });
 
   it('skips an off-season tick within 24h of the last daily sync', async () => {

@@ -152,7 +152,9 @@ export async function seedTestUser(): Promise<void> {
   const supabaseUrl = process.env['SUPABASE_URL'];
   const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY. Set them in services/api/.env.');
+    throw new Error(
+      'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY. Set them in services/api/.env.',
+    );
   }
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 

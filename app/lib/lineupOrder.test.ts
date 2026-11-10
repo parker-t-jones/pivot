@@ -111,7 +111,12 @@ describe('orderLineupSlots', () => {
       row('BN', 'bn-2', 'bench'),
       row('BN', 'bn-1', 'bench'),
     ];
-    expect(ids(orderLineupSlots([...slots].reverse()))).toEqual(['player-a', 'player-b', 'bn-1', 'bn-2']);
+    expect(ids(orderLineupSlots([...slots].reverse()))).toEqual([
+      'player-a',
+      'player-b',
+      'bn-1',
+      'bn-2',
+    ]);
   });
 });
 

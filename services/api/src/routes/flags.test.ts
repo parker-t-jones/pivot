@@ -334,9 +334,7 @@ async function buildTestApp(
     nflStateSource: unreachableNflStateSource,
     gameStateStore,
     realtimeSubscriber: new InMemoryRealtimeBus(),
-    ...(options?.readRunnerHeartbeat
-      ? { readRunnerHeartbeat: options.readRunnerHeartbeat }
-      : {}),
+    ...(options?.readRunnerHeartbeat ? { readRunnerHeartbeat: options.readRunnerHeartbeat } : {}),
   });
   await fastify.register(flagsRoutes);
 
@@ -409,8 +407,20 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });
@@ -431,8 +441,20 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });
@@ -454,8 +476,20 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });
@@ -478,8 +512,20 @@ describe('GET /flags/current', () => {
       {
         games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
         teams: [
-          { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-          { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+          {
+            id: 'team-kc',
+            abbreviation: 'KC',
+            name: 'Chiefs',
+            primary_color: '#E31837',
+            secondary_color: '#FFB81C',
+          },
+          {
+            id: 'team-lv',
+            abbreviation: 'LV',
+            name: 'Raiders',
+            primary_color: '#000000',
+            secondary_color: '#A5ACAF',
+          },
         ],
         user: { subscription_tier: 'free', preferences: {} },
       },
@@ -505,8 +551,20 @@ describe('GET /flags/current', () => {
       {
         games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
         teams: [
-          { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-          { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+          {
+            id: 'team-kc',
+            abbreviation: 'KC',
+            name: 'Chiefs',
+            primary_color: '#E31837',
+            secondary_color: '#FFB81C',
+          },
+          {
+            id: 'team-lv',
+            abbreviation: 'LV',
+            name: 'Raiders',
+            primary_color: '#000000',
+            secondary_color: '#A5ACAF',
+          },
         ],
         user: { subscription_tier: 'free', preferences: {} },
       },
@@ -530,8 +588,20 @@ describe('GET /flags/current', () => {
       {
         games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
         teams: [
-          { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-          { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+          {
+            id: 'team-kc',
+            abbreviation: 'KC',
+            name: 'Chiefs',
+            primary_color: '#E31837',
+            secondary_color: '#FFB81C',
+          },
+          {
+            id: 'team-lv',
+            abbreviation: 'LV',
+            name: 'Raiders',
+            primary_color: '#000000',
+            secondary_color: '#A5ACAF',
+          },
         ],
         user: { subscription_tier: 'free', preferences: {} },
       },
@@ -554,13 +624,23 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
-      players: [
-        { id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' },
-      ],
+      players: [{ id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' }],
     });
     await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
     await app.gameStateStore.setGameState('game-1', makeGameState());
@@ -613,8 +693,20 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
       players: [], // no matching row for player-1
@@ -656,8 +748,20 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: { autoSwitch: true } },
     });
@@ -682,10 +786,34 @@ describe('GET /flags/current', () => {
         { id: 'game-a', home_team_id: 'team-a', away_team_id: 'team-a-opp' },
       ],
       teams: [
-        { id: 'team-a', abbreviation: 'AAA', name: 'Team A', primary_color: '#111111', secondary_color: '#222222' },
-        { id: 'team-a-opp', abbreviation: 'AOP', name: 'Team A Opponents', primary_color: '#333333', secondary_color: '#444444' },
-        { id: 'team-b', abbreviation: 'BBB', name: 'Team B', primary_color: '#555555', secondary_color: '#666666' },
-        { id: 'team-b-opp', abbreviation: 'BOP', name: 'Team B Opponents', primary_color: '#777777', secondary_color: '#888888' },
+        {
+          id: 'team-a',
+          abbreviation: 'AAA',
+          name: 'Team A',
+          primary_color: '#111111',
+          secondary_color: '#222222',
+        },
+        {
+          id: 'team-a-opp',
+          abbreviation: 'AOP',
+          name: 'Team A Opponents',
+          primary_color: '#333333',
+          secondary_color: '#444444',
+        },
+        {
+          id: 'team-b',
+          abbreviation: 'BBB',
+          name: 'Team B',
+          primary_color: '#555555',
+          secondary_color: '#666666',
+        },
+        {
+          id: 'team-b-opp',
+          abbreviation: 'BOP',
+          name: 'Team B Opponents',
+          primary_color: '#777777',
+          secondary_color: '#888888',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
     });
@@ -1115,13 +1243,23 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
-      players: [
-        { id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' },
-      ],
+      players: [{ id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' }],
     });
     await setLineup(app, 'user-1', [['team-kc', ['offense']]]);
     await app.gameStateStore.setGameState('game-1', makeGameState());
@@ -1190,10 +1328,34 @@ describe('GET /flags/current', () => {
         { id: 'game-bet', home_team_id: 'team-chi', away_team_id: 'team-phi' },
       ],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
-        { id: 'team-chi', abbreviation: 'CHI', name: 'Bears', primary_color: '#0B162A', secondary_color: '#C83803' },
-        { id: 'team-phi', abbreviation: 'PHI', name: 'Eagles', primary_color: '#004C54', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
+        {
+          id: 'team-chi',
+          abbreviation: 'CHI',
+          name: 'Bears',
+          primary_color: '#0B162A',
+          secondary_color: '#C83803',
+        },
+        {
+          id: 'team-phi',
+          abbreviation: 'PHI',
+          name: 'Eagles',
+          primary_color: '#004C54',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
       players: [{ id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' }],
@@ -1229,8 +1391,20 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
       players: [{ id: 'player-1', first_name: 'Jonathan', last_name: 'Taylor', position: 'RB' }],
@@ -1264,7 +1438,10 @@ describe('GET /flags/current', () => {
       {
         stake_id: 'stake-bet',
         label: formatStakeLabel(
-          { condition: { type: 'TOTAL_OVER', line: 30.5 }, subject: { type: 'GAME', teamId: null } },
+          {
+            condition: { type: 'TOTAL_OVER', line: 30.5 },
+            subject: { type: 'GAME', teamId: null },
+          },
           [],
         ),
       },
@@ -1275,8 +1452,20 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
       stakes: [manualTotal('stake-bet', 'game-1', 30.5)],
@@ -1302,8 +1491,20 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       user: { subscription_tier: 'free', preferences: {} },
       stakes: [manualTotal('stake-bet', 'game-1', 30.5)],
@@ -1346,8 +1547,20 @@ describe('GET /flags/current', () => {
     app = await buildTestApp({
       games: [{ id: 'game-1', home_team_id: 'team-kc', away_team_id: 'team-lv' }],
       teams: [
-        { id: 'team-kc', abbreviation: 'KC', name: 'Chiefs', primary_color: '#E31837', secondary_color: '#FFB81C' },
-        { id: 'team-lv', abbreviation: 'LV', name: 'Raiders', primary_color: '#000000', secondary_color: '#A5ACAF' },
+        {
+          id: 'team-kc',
+          abbreviation: 'KC',
+          name: 'Chiefs',
+          primary_color: '#E31837',
+          secondary_color: '#FFB81C',
+        },
+        {
+          id: 'team-lv',
+          abbreviation: 'LV',
+          name: 'Raiders',
+          primary_color: '#000000',
+          secondary_color: '#A5ACAF',
+        },
       ],
       leagues: [{ id: 'league-1', season_year: 2026 }],
       stakes: [
@@ -1355,7 +1568,13 @@ describe('GET /flags/current', () => {
         manualTotal('stake-bet', 'game-1', 30.5),
       ],
       players: [
-        { id: 'wr-1', first_name: 'Stefon', last_name: 'Diggs', position: 'WR', team_id: 'team-kc' },
+        {
+          id: 'wr-1',
+          first_name: 'Stefon',
+          last_name: 'Diggs',
+          position: 'WR',
+          team_id: 'team-kc',
+        },
       ],
       user: { subscription_tier: 'free', preferences: { watchOpponent: true } },
     });
@@ -1417,7 +1636,7 @@ describe('POST /flags/:event_id/action', () => {
     await app.fastify.close();
   });
 
-  it('records the action on the caller\'s own flag_events row', async () => {
+  it("records the action on the caller's own flag_events row", async () => {
     app = await buildTestApp({
       games: [],
       teams: [],
@@ -1498,7 +1717,7 @@ describe('POST /flags/:event_id/action', () => {
     expect(response.json().error.code).toBe('flag_event_not_found');
   });
 
-  it('returns 404 (not another user\'s data) when the event belongs to someone else', async () => {
+  it("returns 404 (not another user's data) when the event belongs to someone else", async () => {
     app = await buildTestApp({
       games: [],
       teams: [],

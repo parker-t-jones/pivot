@@ -72,11 +72,7 @@ describe('RecapCard', () => {
 
   it('omits the best/worst rows when there is none to show', async () => {
     await act(async () => {
-      root.render(
-        <RecapCard
-          model={{ ...POPULATED_MODEL, bestLabel: null, worstLabel: null }}
-        />,
-      );
+      root.render(<RecapCard model={{ ...POPULATED_MODEL, bestLabel: null, worstLabel: null }} />);
     });
     expect(container.querySelector('[data-testid="recap-best"]')).toBeNull();
     expect(container.querySelector('[data-testid="recap-worst"]')).toBeNull();

@@ -53,9 +53,7 @@ describe('home bets', () => {
     };
     expect(readBetGameIds(response)).toEqual([]);
     expect(betChipLabel(flag.bets?.map((bet) => bet.label) ?? [])).toBeNull();
-    expect(rankHomeFlags(response.flags, [], new Map([[flag.game_id, flag.game]]))).toEqual([
-      flag,
-    ]);
+    expect(rankHomeFlags(response.flags, [], new Map([[flag.game_id, flag.game]]))).toEqual([flag]);
   });
 
   it('labels the first bet and counts the rest', () => {

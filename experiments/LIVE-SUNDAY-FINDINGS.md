@@ -1,6 +1,6 @@
 # Live Sunday test — findings log (1pm ET slate, Sept 13, 2026)
 
-Running notes captured *during* today's live multi-game test (`experiments/live-sunday-harness.ts`,
+Running notes captured _during_ today's live multi-game test (`experiments/live-sunday-harness.ts`,
 Bills @ Texans + Bears @ Panthers). Observations flagged by Parker mid-game, root-caused against the
 actual code and the run's `experiments/logs/*.jsonl`, and where practical fixed live (real code
 changes to `services/engine`, not just harness patches) without stopping the test. Line/file refs are
@@ -13,24 +13,24 @@ and a human's live account of what actually appeared on the broadcast. Both shar
 (same machine, `Date.now()`/local wall clock, no drift correction needed) so they can be lined up
 directly. Findings below cite both.
 
-| | Live harness (system side) | Mark-visible marks (human ground truth) |
-|---|---|---|
-| **Readable file** | [`experiments/logs/live-harness-run-1pm-2026-09-13.log`](./logs/live-harness-run-1pm-2026-09-13.log) | [`experiments/logs/mark-visible-1pm-2026-09-13.log`](./logs/mark-visible-1pm-2026-09-13.log) |
-| **Raw/machine file** | `experiments/logs/plays-2026-09-13T18-56-05-002Z.jsonl` + `events-2026-09-13T18-56-05-002Z.jsonl` (this run's final restart) | `experiments/logs/markers-2026-09-13T18-02-22-807Z.jsonl` |
-| **Produced by** | `experiments/live-sunday-harness.ts` stdout — every normalized ESPN play, every `watchForResumption` decision, every dispatched push | `experiments/mark-visible.ts` — Parker hitting Enter (optionally with a note) the instant a play became visible on the CBS/FOX broadcast |
-| **Format** | Plain text, one line per play/event, local ET wall-clock timestamps (`[HH:MM:SS.mmm]`) | Readable file: same `[HH:MM:SS.mmm] #N note` shape, generated from the raw JSONL (`{wall, index, note}`, epoch ms) |
-| **Volume** | ~600 play/event lines across both games, full slate through both `end_game`s | 30 marks |
-| **Answers** | *What did the pipeline do, and exactly when* (resumption outcome, hold time, push sent/dropped) | *What did the human actually see, and exactly when* — plus live running commentary on whether each push made sense |
-| **Status** | Final — harness exited clean (`exit_code 0`) after both games went final, ~4:36pm ET | Live snapshot as of ~4:55pm ET; `mark-visible.ts` (terminal 34, pid 10312) is still running, so the raw JSONL may gain more marks if Parker watches/marks later games — re-render the readable copy from it if so |
+|                      | Live harness (system side)                                                                                                           | Mark-visible marks (human ground truth)                                                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Readable file**    | [`experiments/logs/live-harness-run-1pm-2026-09-13.log`](./logs/live-harness-run-1pm-2026-09-13.log)                                 | [`experiments/logs/mark-visible-1pm-2026-09-13.log`](./logs/mark-visible-1pm-2026-09-13.log)                                                                                                                      |
+| **Raw/machine file** | `experiments/logs/plays-2026-09-13T18-56-05-002Z.jsonl` + `events-2026-09-13T18-56-05-002Z.jsonl` (this run's final restart)         | `experiments/logs/markers-2026-09-13T18-02-22-807Z.jsonl`                                                                                                                                                         |
+| **Produced by**      | `experiments/live-sunday-harness.ts` stdout — every normalized ESPN play, every `watchForResumption` decision, every dispatched push | `experiments/mark-visible.ts` — Parker hitting Enter (optionally with a note) the instant a play became visible on the CBS/FOX broadcast                                                                          |
+| **Format**           | Plain text, one line per play/event, local ET wall-clock timestamps (`[HH:MM:SS.mmm]`)                                               | Readable file: same `[HH:MM:SS.mmm] #N note` shape, generated from the raw JSONL (`{wall, index, note}`, epoch ms)                                                                                                |
+| **Volume**           | ~600 play/event lines across both games, full slate through both `end_game`s                                                         | 30 marks                                                                                                                                                                                                          |
+| **Answers**          | _What did the pipeline do, and exactly when_ (resumption outcome, hold time, push sent/dropped)                                      | _What did the human actually see, and exactly when_ — plus live running commentary on whether each push made sense                                                                                                |
+| **Status**           | Final — harness exited clean (`exit_code 0`) after both games went final, ~4:36pm ET                                                 | Live snapshot as of ~4:55pm ET; `mark-visible.ts` (terminal 34, pid 10312) is still running, so the raw JSONL may gain more marks if Parker watches/marks later games — re-render the readable copy from it if so |
 
 ## Status summary
 
-| # | Finding | Status |
-|---|---|---|
-| 1 | Mid-drive timeouts flap the flag off/on with no possession change | **FIXED** (~2:43pm ET) |
-| 1a | Same symptom, second cause: `no_play` (pre-snap penalty) also flapped the flag | **FIXED** (~2:56pm ET) |
-| 1b | `flag_removed` push copy names the wrong team on a real possession change | **Open, root-caused, NOT a side effect of 1/1a** — confirmed reproducible, see below |
-| 2 | Kickoffs resolve the resumption window before the `flag_added` event they're meant to gate exists | **FIXED** (~5:20pm ET, post-slate follow-up — harness-only, `experiments/resumptionGate.ts`) |
+| #   | Finding                                                                                           | Status                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1   | Mid-drive timeouts flap the flag off/on with no possession change                                 | **FIXED** (~2:43pm ET)                                                                       |
+| 1a  | Same symptom, second cause: `no_play` (pre-snap penalty) also flapped the flag                    | **FIXED** (~2:56pm ET)                                                                       |
+| 1b  | `flag_removed` push copy names the wrong team on a real possession change                         | **Open, root-caused, NOT a side effect of 1/1a** — confirmed reproducible, see below         |
+| 2   | Kickoffs resolve the resumption window before the `flag_added` event they're meant to gate exists | **FIXED** (~5:20pm ET, post-slate follow-up — harness-only, `experiments/resumptionGate.ts`) |
 
 ---
 
@@ -52,7 +52,7 @@ confirmed against the Bears/Panthers play log too.
 
 Matching `events.jsonl` entries around the timeout (wall-clock `1789323244056`):
 
-- `flag_added` "Texans have the ball — Q2, 3:33" fired *before* the timeout.
+- `flag_added` "Texans have the ball — Q2, 3:33" fired _before_ the timeout.
 - `flag_removed` "Possession has changed." fired **at the same timestamp as the timeout play**,
   even though Houston had the ball on the very next snap.
 - `flag_added` "Texans have the ball — Q2, 3:05" fired again on that next snap — same team,
@@ -72,7 +72,7 @@ Matching `events.jsonl` entries around the timeout (wall-clock `1789323244056`):
 - `services/engine/src/computeFlagState.ts`'s offense rule requires
   `state.unitOnField === 'offense'` to set `flagged`. A timeout momentarily zeroes `unitOnField`,
   so `flagged` drops to `false` for that one play, then flips back to `true` on the team's next
-  offensive snap — producing a spurious `flag_removed` → `flag_added` pair around *every* mid-drive
+  offensive snap — producing a spurious `flag_removed` → `flag_added` pair around _every_ mid-drive
   timeout, independent of whether possession actually changed.
 - This is a real gap in `computeFlagState`/`applyPlayToState`, not a harness artifact — the harness
   just made it visible by delivering real pushes instead of only logging.
@@ -85,6 +85,7 @@ Matching `events.jsonl` entries around the timeout (wall-clock `1789323244056`):
 `end_game`) deliberately still reset to `null`/`'none'` — those are real intermissions.
 
 Verified two ways before restarting the live run:
+
 - `services/engine/src/applyPlayToState.test.ts` — added 6 new cases (carries forward through
   `timeout` and `end_period`; does NOT carry forward through `end_half` / `end_game`; no-op with no
   `previous`; a genuine possession change still updates normally). Full suite:
@@ -103,7 +104,7 @@ same restart artifact as every other restart today.
 **STATUS: FIXED live (Sept 13, 2026, ~2:56pm ET).**
 
 Reported again live for the Bears game ("CHI bouncing between active/not-active despite remaining on
-offense"), *after* the Finding 1 fix above was already deployed — so a different root cause. Traced
+offense"), _after_ the Finding 1 fix above was already deployed — so a different root cause. Traced
 to the actual play sequence in this
 run's `plays-*.jsonl` (game `401872660`): `kickoff(HOU) → run(HOU) → run(HOU) → no_play(HOU)`. Houston
 held the ball through all four plays (`no_play` = a pre-snap penalty, ESPN `type.id` `'8'`,
@@ -111,13 +112,13 @@ held the ball through all four plays (`no_play` = a pre-snap penalty, ESPN `type
 
 Cause: `unitOnFieldFor` maps `'no_play'` to `'none'` unconditionally, with no exception for
 "possession didn't actually change" the way the timeout case does — because `no_play`'s
-`possessionTeamId` is *not* generally null (unlike a timeout), the original Finding 1 fix's
+`possessionTeamId` is _not_ generally null (unlike a timeout), the original Finding 1 fix's
 `possessionTeamId === null` guard never engaged for this case.
 
 **Fix applied**, same file: extracted the carry-forward condition into
 `continuesPreviousPossession(play, previous)`, which now also carries possession-derived fields
 forward for a `no_play` whose `possessionTeamId` matches `previous`'s — same drive continuing. A
-`no_play` naming a *different* team than `previous` (the genuinely ambiguous "penalty on the very
+`no_play` naming a _different_ team than `previous` (the genuinely ambiguous "penalty on the very
 first play of a new, not-yet-established drive" case `espnPlayTypeMap.ts`'s comment describes) still
 falls through to the original `'none'` behavior, unchanged.
 
@@ -160,14 +161,14 @@ guaranteed structural miss.
   still HOU, `unitOnField` is `'special_teams'`.
 - `computeFlagState` correctly sees `unitOnField !== 'offense'` and flips `flagged: false` →
   `flag_removed` fires — that part is right.
-- But `resolveNotificationTeamNames` reads that *same, still-HOU* `GameState` to answer "who has it
+- But `resolveNotificationTeamNames` reads that _same, still-HOU_ `GameState` to answer "who has it
   now," and since `possessionTeamId` is non-null (still HOU) it happily returns "Texans." The actual
-  new possessor (Buffalo) doesn't exist in `GameState` yet — it only appears once the *next* play (the
+  new possessor (Buffalo) doesn't exist in `GameState` yet — it only appears once the _next_ play (the
   return team's first offensive snap) is processed. Because `flag_removed` is an un-gated
   `fire_immediately` event (Finding 2's `ResumptionGatedDispatcher` doesn't hold `flag_removed`),
   delivery happens near-instantly after the punt play, essentially guaranteeing it beats the next play.
 - The ~1-in-3 hit rate (not every punt) fits this being a genuine **race**: whether the wrong name
-  shows up depends on whether the *next* play (the return team's first snap) has already been
+  shows up depends on whether the _next_ play (the return team's first snap) has already been
   ingested and applied to `GameState` before `deliverFlagEvent` happens to read it — a function of
   ESPN poll timing relative to delivery latency, not something the punt play itself determines. It's
   independent of the Finding 1/1a flapping bugs either way (this run's fix for those was already
@@ -177,7 +178,7 @@ guaranteed structural miss.
 (`old_state.possession_team` is unconditionally `null` rather than best-effort, per the "Sprint 9
 Phase 1 gate review" comment at the `old_state:` line) — i.e. this exact "state as of when vs. state
 as of delivery" tradeoff has already been litigated once for a sibling field, so the right fix
-(likely: resolve the *new* possessor from `event.newState`/the triggering play rather than re-reading
+(likely: resolve the _new_ possessor from `event.newState`/the triggering play rather than re-reading
 current `GameState`, or explicitly special-case punts) deserves the same deliberate treatment rather
 than a quick patch while unattended. Flagging for a real fix pass, not patching now.
 
@@ -192,20 +193,20 @@ up with when the notification actually fires.
 **Two separate, both-intentional classifications collide here:**
 
 1. `services/engine/src/resumptionWatcher.ts`'s `classifyPlayType()` has no explicit case for
-   `'kickoff'`, so it falls through to the `REAL_ACTION` default — a kickoff *is* already treated as
+   `'kickoff'`, so it falls through to the `REAL_ACTION` default — a kickoff _is_ already treated as
    valid real action for timing purposes, by design ("unrecognized play type fails toward firing").
 2. `services/engine/src/applyPlayToState.ts`'s `unitOnFieldFor()` puts `'kickoff'` in
    `SPECIAL_TEAMS_PLAY_TYPES`, deliberately **not** `OFFENSE_PLAY_TYPES` — also by design (see the
    comment there re: kicker-flag double-counting, Section 4 "special handling for kickers" being
    out of scope for v1). So a kickoff itself never sets `unitOnField: 'offense'`, and therefore
-   `computeFlagState` never emits a `flag_added` on the kickoff play — only on the *following*
+   `computeFlagState` never emits a `flag_added` on the kickoff play — only on the _following_
    offensive snap.
 
 **The mismatch:** `experiments/resumptionGate.ts`'s `ResumptionGatedDispatcher` opens a resumption
 window on the possession-revealing play and closes it as soon as that play classifies as
-`REAL_ACTION`. Since a kickoff already reveals the new possession *and* already classifies as
+`REAL_ACTION`. Since a kickoff already reveals the new possession _and_ already classifies as
 `REAL_ACTION`, the window opens and resolves in the same step — on the kickoff. `beginPlay()` then
-clears `resolutionThisPlay` before the *next* play (the actual offensive snap that produces the real
+clears `resolutionThisPlay` before the _next_ play (the actual offensive snap that produces the real
 `flag_added`) is processed. By the time that `flag_added` event reaches `dispatch()`, there is no
 open window and no stored resolution, so it goes out via the plain `fire_immediately` path with
 `resolution: null` — bypassing the resumption-gating logic entirely for every kickoff-started drive.
@@ -214,13 +215,13 @@ Confirmed in `events.jsonl`: gated entries consistently show `"resumptionOutcome
 
 This matches (and explains) `resumptionGate.ts`'s own header comment, which already predicted
 `holdMs ≈ 0 for every event` because "the play that reveals a new possession is always itself
-REAL_ACTION" — that prediction is correct for the *resumption-timing* question, but it means the
-window closes one play too early relative to the *flag_added* event a kickoff-started drive actually
+`REAL_ACTION`" — that prediction is correct for the _resumption-timing_ question, but it means the
+window closes one play too early relative to the _flag_added_ event a kickoff-started drive actually
 needs gated.
 
 **Possible direction (not evaluated in depth):** either (a) have the incremental tracker keep the
 window open through a `kickoff` specifically until the next non-special-teams play arrives, or
-(b) have `dispatch()` fall back to the *last* resolution for the game rather than only the one from
+(b) have `dispatch()` fall back to the _last_ resolution for the game rather than only the one from
 the current play, so a flag_added one play behind the resolving play still inherits it.
 
 **STATUS: FIXED post-slate (Sept 13, 2026, ~5:20pm ET).** Went with direction (b), scoped tightly:
@@ -236,12 +237,13 @@ second, real resolution can't be shadowed by a stale first one.
 This is a **harness-only fix** — `resumptionGate.ts` isn't shipped `services/*` code, it's this test's
 own simulation of what resumption-gating dispatch would look like if wired into production (per the
 verification at the top of this test, `resumptionWatcher.ts` isn't wired into the live firing path
-yet). So this fix only affects the accuracy of *today's test data going forward*, not any running
+yet). So this fix only affects the accuracy of _today's test data going forward_, not any running
 production behavior.
 
 Verified with two standalone simulation scripts reproducing the exact harness call order
 (`beginPlay` → `tracker.observe` → `onPlayEvent`/`dispatch`, per `live-sunday-harness.ts`'s
 `makeHandler`):
+
 1. Kickoff resolves `REAL_ACTION` with no dispatch that play → next play's `flag_added` now correctly
    shows `resolution.outcome: 'REAL_ACTION'` instead of `null` → a third, later event correctly shows
    `null` again (no over-carry).
@@ -277,7 +279,7 @@ Before starting any further live testing, went back through every open item abov
 
 Root cause is confirmed (see Finding 1b above), but the fix isn't a small patch: the only reliable way
 to name the correct new possessor after a punt/kickoff is to know which team possessed the ball
-*before* the triggering play, and `FlagState` (PLAN.md Section 8, described in `delivery.ts`'s own
+_before_ the triggering play, and `FlagState` (PLAN.md Section 8, described in `delivery.ts`'s own
 comments as a "frozen" shape) carries no team identity at all — only player ids. `delivery.ts` already
 has a deliberate, reviewed ruling on the identical tradeoff for a sibling field
 (`old_state.possession_team` is unconditionally `null`, not best-effort, per the "Sprint 9 Phase 1 gate
