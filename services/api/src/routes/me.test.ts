@@ -102,7 +102,11 @@ class FakeSupabase {
           eq: (_col: string, userId: string) => ({
             single: async () => {
               const existing = this.users.get(userId);
-              if (!existing) return { data: null, error: { message: 'not found' } };
+              // Mirrors PostgREST's actual "0 rows" shape (Issue #46) — a plain `{ message }`
+              // here would hide the bug this fixture is meant to exercise.
+              if (!existing) {
+                return { data: null, error: { code: 'PGRST116', message: 'no rows found' } };
+              }
               return { data: existing, error: null };
             },
             maybeSingle: async () => {
@@ -116,7 +120,13 @@ class FakeSupabase {
           eq: (_col: string, userId: string) => ({
             select: (_cols: string) => ({
               single: async () => {
-                const existing = this.users.get(userId) ?? { expo_push_token: null };
+                const existing = this.users.get(userId);
+                // An UPDATE whose WHERE matches no row (account deleted mid-session, Issue #46)
+                // affects 0 rows, so the trailing `.select().single()` sees PostgREST's "0 rows"
+                // shape too — not an upsert.
+                if (!existing) {
+                  return { data: null, error: { code: 'PGRST116', message: 'no rows found' } };
+                }
                 const merged: UserRow = { ...existing, ...payload };
                 this.users.set(userId, merged);
                 return { data: merged, error: null };
@@ -264,7 +274,7 @@ describe('POST /me/push-token', () => {
   });
 
   it('registers a valid ExponentPushToken and echoes it back', async () => {
-    app = await buildTestApp();
+    app = await buildTestApp({}, { 'user-1': {} });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
     const response = await app.fastify.inject({
@@ -281,7 +291,7 @@ describe('POST /me/push-token', () => {
   });
 
   it('stores a deviceId beside the token and treats an omitted one as legacy', async () => {
-    app = await buildTestApp();
+    app = await buildTestApp({}, { 'user-1': {} });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
     const deviceId = '11111111-1111-4111-8111-111111111111';
 
@@ -305,7 +315,7 @@ describe('POST /me/push-token', () => {
   });
 
   it('also accepts the legacy ExpoPushToken[...] format', async () => {
-    app = await buildTestApp();
+    app = await buildTestApp({}, { 'user-1': {} });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
     const response = await app.fastify.inject({
@@ -407,6 +417,26 @@ describe('POST /me/push-token', () => {
     });
     expect(response.statusCode).toBe(401);
   });
+
+  it('Issue #46: returns 401 account_not_found, not a 500, when the JWT outlives the account', async () => {
+    app = await buildTestApp();
+    const token = await signToken({ sub: 'ghost-user', email: 'ghost@example.com' });
+
+    const response = await app.fastify.inject({
+      method: 'POST',
+      url: '/me/push-token',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { token: VALID_TOKEN, platform: 'ios' },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: {
+        code: 'account_not_found',
+        message: "Your account isn't available anymore. Please sign in again.",
+      },
+    });
+  });
 });
 
 describe('DELETE /me/push-token', () => {
@@ -432,7 +462,7 @@ describe('DELETE /me/push-token', () => {
   });
 
   it('is a no-op (still 200, still null) when the user has no token set', async () => {
-    app = await buildTestApp();
+    app = await buildTestApp({}, { 'user-1': {} });
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
     const response = await app.fastify.inject({
@@ -498,6 +528,27 @@ describe('GET /me', () => {
     app = await buildTestApp();
     const response = await app.fastify.inject({ method: 'GET', url: '/me' });
     expect(response.statusCode).toBe(401);
+  });
+
+  it('Issue #46: returns 401 account_not_found, not a 500, when the JWT outlives the account', async () => {
+    app = await buildTestApp();
+    // No seed/userRows entry for this id — the JWT is valid but `public.users` has no matching
+    // row, exactly like a deleted account whose already-issued access token hasn't expired yet.
+    const token = await signToken({ sub: 'ghost-user', email: 'ghost@example.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: {
+        code: 'account_not_found',
+        message: "Your account isn't available anymore. Please sign in again.",
+      },
+    });
   });
 });
 

@@ -1,5 +1,6 @@
 import { parsePreferences, FREE_MAX_WATCHED_LEAGUES, type Preferences } from '@pivot/shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { throwAsAccountNotFoundIfMissingRow } from './errors.js';
 
 /**
  * Resolves which league IDs the user is watching, applying free-tier clamp and
@@ -36,7 +37,7 @@ export async function updateWatchedLeagueIds(
     .select('preferences')
     .eq('id', userId)
     .single();
-  if (error) throw error;
+  if (error) throwAsAccountNotFoundIfMissingRow(error);
 
   const current = parsePreferences(row.preferences);
   const merged = parsePreferences({
@@ -78,7 +79,7 @@ export async function onLeagueConnected(
     .select('preferences')
     .eq('id', userId)
     .single();
-  if (userError) throw userError;
+  if (userError) throwAsAccountNotFoundIfMissingRow(userError);
 
   const prefs = parsePreferences(userRow.preferences);
   let watched = prefs.watchedLeagueIds.filter((id) => ownedIds.includes(id));
@@ -116,7 +117,7 @@ export async function onLeagueDisconnected(
     .select('preferences, subscription_tier')
     .eq('id', userId)
     .single();
-  if (userError) throw userError;
+  if (userError) throwAsAccountNotFoundIfMissingRow(userError);
 
   const prefs = parsePreferences(userRow.preferences);
   let watched = prefs.watchedLeagueIds.filter(
