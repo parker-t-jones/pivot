@@ -22,6 +22,9 @@ export type ExpectedLeg = Pick<SlipLeg, ScoredField>;
 export interface ExpectedSlip {
   bet_count: number;
   legs: ExpectedLeg[];
+  /** Defaults to true: most eval images are real slips. Set false for a non-slip or unreadable
+   *  image used to check that the reader doesn't invent legs for it. */
+  is_bet_slip?: boolean;
 }
 
 export interface FieldTally {
@@ -33,6 +36,7 @@ export interface EvalTally {
   slips: number;
   legCountCorrect: number;
   betCountCorrect: number;
+  isBetSlipCorrect: number;
   fields: Record<ScoredField, FieldTally>;
 }
 
@@ -40,7 +44,7 @@ export function emptyTally(): EvalTally {
   const fields = Object.fromEntries(
     SCORED_FIELDS.map((field) => [field, { correct: 0, total: 0 }]),
   ) as Record<ScoredField, FieldTally>;
-  return { slips: 0, legCountCorrect: 0, betCountCorrect: 0, fields };
+  return { slips: 0, legCountCorrect: 0, betCountCorrect: 0, isBetSlipCorrect: 0, fields };
 }
 
 /** Case, punctuation, and spacing don't count against a name: "A.J. Brown" equals "AJ Brown". */
@@ -68,6 +72,7 @@ export function scoreSlip(tally: EvalTally, got: SlipRead, want: ExpectedSlip): 
   tally.slips += 1;
   if (got.legs.length === want.legs.length) tally.legCountCorrect += 1;
   if (got.bet_count === want.bet_count) tally.betCountCorrect += 1;
+  if (got.is_bet_slip === (want.is_bet_slip ?? true)) tally.isBetSlipCorrect += 1;
   want.legs.forEach((expected, index) => {
     for (const field of SCORED_FIELDS) {
       const entry = tally.fields[field];
@@ -83,6 +88,7 @@ export function formatTally(tally: EvalTally): string {
     `slips: ${tally.slips}`,
     `leg count right: ${tally.legCountCorrect}/${tally.slips} (${pct(tally.legCountCorrect, tally.slips)})`,
     `bet count right: ${tally.betCountCorrect}/${tally.slips} (${pct(tally.betCountCorrect, tally.slips)})`,
+    `is_bet_slip right: ${tally.isBetSlipCorrect}/${tally.slips} (${pct(tally.isBetSlipCorrect, tally.slips)})`,
     ...SCORED_FIELDS.map((field) => {
       const { correct, total } = tally.fields[field];
       return `${field.padEnd(10)} ${correct}/${total} (${pct(correct, total)})`;
