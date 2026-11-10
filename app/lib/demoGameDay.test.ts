@@ -9,7 +9,10 @@ import {
   DEMO_PRE_GAME_MS,
   DEMO_TOTAL_MS,
   demoPhaseAtElapsed,
+  demoPossessionLine,
   demoSnapshotAtElapsed,
+  demoTickerLine,
+  type DemoLiveGame,
 } from './demoGameDay';
 import {
   EMPTY_PICK_HIT_TRACKER,
@@ -116,5 +119,78 @@ describe('demo pick timeline', () => {
 
   it('keeps the same array between ticks that change nothing', () => {
     expect(demoSnapshotAtElapsed(DEMO_HIT_AT_MS)).toBe(demoSnapshotAtElapsed(DEMO_HIT_AT_MS + 500));
+  });
+});
+
+describe('demo live game situation', () => {
+  function liveAt(elapsed: number): DemoLiveGame {
+    const live = demoSnapshotAtElapsed(elapsed).live;
+    if (!live) throw new Error(`no live game at ${elapsed}ms`);
+    return live;
+  }
+
+  const liveElapsed = (): number[] => {
+    const out: number[] = [];
+    for (let elapsed = DEMO_PRE_GAME_MS; elapsed < DEMO_TOTAL_MS; elapsed += 500) {
+      out.push(elapsed);
+    }
+    return out;
+  };
+
+  it('has no live game before kickoff and one for the whole live phase', () => {
+    expect(demoSnapshotAtElapsed(0).live).toBeNull();
+    expect(demoSnapshotAtElapsed(DEMO_PRE_GAME_MS - 1).live).toBeNull();
+    for (const elapsed of liveElapsed()) {
+      expect(demoSnapshotAtElapsed(elapsed).live).not.toBeNull();
+    }
+  });
+
+  it('only ever puts a fictional team on the ball, and the field position names one', () => {
+    const abbrs = [DEMO_HOME_TEAM.abbr, DEMO_AWAY_TEAM.abbr] as string[];
+    for (const elapsed of liveElapsed()) {
+      const live = liveAt(elapsed);
+      expect(abbrs).toContain(live.possession_team);
+      expect(live.down).toBeGreaterThanOrEqual(1);
+      expect(live.down).toBeLessThanOrEqual(4);
+      expect(live.distance).toBeGreaterThan(0);
+      expect(live.yards_to_endzone).toBeGreaterThan(0);
+      expect(live.yards_to_endzone).toBeLessThan(100);
+      const line = demoPossessionLine(live);
+      expect(line.startsWith(`${live.possession_team} ball · `)).toBe(true);
+      expect(abbrs).toContain(line.split(' · ')[2]?.split(' ')[0]);
+    }
+  });
+
+  it('advances the clock and never lowers a score', () => {
+    let previous = liveAt(DEMO_PRE_GAME_MS);
+    for (const elapsed of liveElapsed()) {
+      const live = liveAt(elapsed);
+      expect(live.time_remaining_sec).toBeLessThanOrEqual(previous.time_remaining_sec);
+      expect(live.score.home).toBeGreaterThanOrEqual(previous.score.home);
+      expect(live.score.away).toBeGreaterThanOrEqual(previous.score.away);
+      previous = live;
+    }
+    expect(liveAt(DEMO_HIT_AT_MS).time_remaining_sec).toBeLessThan(
+      liveAt(DEMO_PRE_GAME_MS).time_remaining_sec,
+    );
+    expect(liveAt(DEMO_HIT_AT_MS).score.home).toBeGreaterThan(liveAt(DEMO_PRE_GAME_MS).score.home);
+  });
+
+  it('formats the ticker and possession line the way the Home live cards do', () => {
+    expect(demoTickerLine(liveAt(DEMO_PRE_GAME_MS))).toBe('LIVE · Q3 · 7:40');
+    expect(demoTickerLine(liveAt(DEMO_HIT_AT_MS))).toBe('LIVE · Q3 · 4:12');
+    expect(demoPossessionLine(liveAt(DEMO_PRE_GAME_MS))).toBe('CMT ball · 1st & 10 · CMT 25');
+    expect(demoPossessionLine(liveAt(DEMO_PRE_GAME_MS + 10_000))).toBe(
+      'CMT ball · 2nd & 7 · HBR 34',
+    );
+    expect(demoPossessionLine(liveAt(DEMO_HIT_AT_MS))).toBe('HBR ball · 1st & 10 · HBR 25');
+  });
+
+  it('never names a real team or player in the live row copy', () => {
+    const copy = liveElapsed()
+      .map((elapsed) => `${demoTickerLine(liveAt(elapsed))} ${demoPossessionLine(liveAt(elapsed))}`)
+      .join(' ');
+    expect(copy).not.toMatch(/\b(SEA|DAL)\b/);
+    expect(copy).not.toMatch(/metcalf/i);
   });
 });

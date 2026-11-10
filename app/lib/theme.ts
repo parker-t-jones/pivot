@@ -122,6 +122,15 @@ export const theme = {
       fontVariant: ['tabular-nums'] as const,
       fontFamily: 'JetBrainsMono_500Medium',
     },
+    /** Big mono tabular countdown (demo game day kickoff timer). */
+    countdown: {
+      size: 72,
+      weight: '700' as const,
+      lineHeight: 80,
+      letterSpacing: -1,
+      fontVariant: ['tabular-nums'] as const,
+      fontFamily: 'JetBrainsMono_700Bold',
+    },
     /** Score digits — Plus Jakarta Sans + tabular-nums (same family as team names). */
     score: {
       size: 22,

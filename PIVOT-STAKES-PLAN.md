@@ -634,8 +634,15 @@ Changes to the existing 6 screens are marked **new** or **changed**.
     **never written** to `stakes` or `lineup_slots` — there is no write path in this screen at all.
   - **Pick-hit moment (issue #44):** the LIVE pane renders the real `PickCard`, and 20s in the
     demo player prop goes LIVE → HIT. That runs through the Watchlist's own `usePickHitFlash` +
-    `PickEventFlash` (edge-glow pulse + lower-third), not a demo-only animation. The countdown
-    stays demo-only.
+    `PickEventFlash` (edge-glow pulse + lower-third), not a demo-only animation.
+  - **Mockup wiring (issue #66):** pre-game is `DemoCountdownCard` (eyebrow "DEMO · KICKOFF IN", a
+    mono `m:ss` countdown, "Pivot is watching for your picks", both badges). Live is `DemoLiveRow`:
+    a pulsing LIVE dot (static under Reduce Motion), the `LIVE · Q3 · 4:12` ticker, both score
+    lines, a possession line with the pylon marker (`CMT ball · 2nd & 7 · HBR 34`), then the pick
+    cards inside the row. The row takes `flareGlow` once a pick has hit, like the card does
+    (issue #65). It is built from theme tokens and shared primitives rather than `NowActiveCard` /
+    `LiveStakeGameCard`, which need server wire types and a watch button. The snapshots carry
+    possession, down and distance for the possession line.
   - The fixture's teams are fictional ("Comets" / "Harbor"); the notification copy names no team
     at all and leads with "Demo alert", so it can't be mistaken for a real one.
 - **Coach marks:**

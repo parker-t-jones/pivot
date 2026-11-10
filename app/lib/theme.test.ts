@@ -92,6 +92,12 @@ describe('theme', () => {
     });
   });
 
+  it('has a big mono tabular countdown for the demo kickoff timer', () => {
+    expect(theme.type.countdown.size).toBe(72);
+    expect(theme.type.countdown.fontFamily).toBe('JetBrainsMono_700Bold');
+    expect(theme.type.countdown.fontVariant).toEqual(['tabular-nums']);
+  });
+
   it('pairs Plus Jakarta Sans headers/scores with JetBrains Mono metrics (type trial)', () => {
     expect(theme.type.title.fontFamily).toBe('PlusJakartaSans_700Bold');
     expect(theme.type.heading.fontFamily).toBe('PlusJakartaSans_600SemiBold');
