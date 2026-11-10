@@ -89,7 +89,12 @@ jobs:
           };
           const entries = (body) =>
             [...body.matchAll(/\n\t\t([0-9A-F]{24}) \/\* (.+?) \*\/ = \{\n([\s\S]*?)\n\t\t\};/g)].map(
-              (m) => ({ id: m[1], name: m[2], body: m[3] }),
+              (m) => ({
+                id: m[1],
+                // Comments can quote the name (`/* "NotificationService" */`), so prefer `name = `.
+                name: (m[3].match(/\n\t\t\tname = "?([^";]+)"?;/) || [])[1] || m[2].replace(/"/g, ''),
+                body: m[3],
+              }),
             );
 
           const targets = entries(section('PBXNativeTarget'));
