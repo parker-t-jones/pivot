@@ -2,7 +2,7 @@ import UIKit
 import UserNotifications
 
 /// Notification Service Extension: draws Pivot's team badge (team color plus initials, the same look
-/// as the app's `TeamBadge`) and attaches it to the notification. No logos, no network, no bundled
+/// as the app's `TeamBadge`) and attaches it to the notification. No team marks, no network, no bundled
 /// color table: the server resolves fill, border and ink and sends them under `data.pivot_badge`
 /// (see `shared/src/push/teamBadge.ts`).
 ///
