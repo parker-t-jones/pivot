@@ -138,4 +138,26 @@ describe('WeekCard', () => {
     expect(host.textContent).toContain('YOUR WEEK 9 CARD');
     expect(host.textContent).not.toMatch(/GAMES?\b/);
   });
+
+  it('hides Share when no onShare is passed, and fires it on tap when it is', () => {
+    render();
+    expect(buttons(host).some((node) => node.textContent === 'Share')).toBe(false);
+    const onShare = vi.fn();
+    act(() => {
+      root.render(
+        createElement(WeekCard, {
+          model: weekCardModel(base),
+          onAddStake: vi.fn(),
+          onOpponentToggle: () => undefined,
+          onShare,
+        }),
+      );
+    });
+    const share = buttons(host).find((node) => node.textContent === 'Share');
+    expect(share).toBeDefined();
+    act(() => {
+      share?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onShare).toHaveBeenCalledTimes(1);
+  });
 });

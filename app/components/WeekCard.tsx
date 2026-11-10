@@ -13,6 +13,8 @@ interface WeekCardProps {
   onAddStake: () => void;
   onOpponentToggle?: () => void;
   editsLocked?: boolean;
+  /** Share a branded image of this card (issue #48). Omit to hide the action. */
+  onShare?: () => void;
 }
 
 /**
@@ -24,6 +26,7 @@ export function WeekCard({
   onAddStake,
   onOpponentToggle,
   editsLocked = false,
+  onShare,
 }: WeekCardProps) {
   const { openUpgrade } = useUpgradeSheet();
   return (
@@ -36,15 +39,27 @@ export function WeekCard({
         >
           {model.eyebrow}
         </Text>
-        {model.gameCountLabel ? (
-          <Text
-            maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-            numberOfLines={1}
-            style={styles.gameCount}
-          >
-            {model.gameCountLabel}
-          </Text>
-        ) : null}
+        <View style={styles.headRight}>
+          {model.gameCountLabel ? (
+            <Text
+              maxFontSizeMultiplier={theme.fontScaleCaps.dense}
+              numberOfLines={1}
+              style={styles.gameCount}
+            >
+              {model.gameCountLabel}
+            </Text>
+          ) : null}
+          {onShare ? (
+            <TextButton
+              accessibilityLabel="Share your week card"
+              hitArea="padding"
+              label="Share"
+              onPress={onShare}
+              size="smallStrong"
+              tone="muted"
+            />
+          ) : null}
+        </View>
       </View>
       <View style={styles.grid}>
         <Cell cell={model.fantasy} />
@@ -151,6 +166,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
+  },
+  headRight: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.md,
   },
   note: {
     color: theme.colors.textSecondary,
