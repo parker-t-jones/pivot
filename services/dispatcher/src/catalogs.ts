@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { FlagReason, Preferences } from '@pivot/shared';
+import type { FlagReason, Preferences, PushTeamBadge } from '@pivot/shared';
 
 /**
  * Structural interfaces the dispatcher needs from the `users`/`viewing_sessions`/`games`/`teams`/
@@ -161,6 +161,8 @@ export interface PushRetryPayload {
   title: string;
   body: string;
   data: unknown;
+  /** Same optional team badge as `PushPayload`, so a retry sends the same rich notification. */
+  badge?: PushTeamBadge | null | undefined;
 }
 
 export interface PendingPushRetry {

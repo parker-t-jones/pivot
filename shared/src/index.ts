@@ -9,3 +9,4 @@ export * from './lineupOrder.js';
 export * from './observability/errorReporter.js';
 export * from './observability/sentryErrorReporter.js';
 export * from './broadcast/index.js';
+export * from './push/teamBadge.js';
