@@ -1,7 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { PickCard } from './PickCard';
-import { fonts } from '../lib/fonts';
 import type { PickCardModel } from '../lib/pickCard';
 import { theme } from '../lib/theme';
 
@@ -60,7 +59,7 @@ const styles = StyleSheet.create({
   },
   screenTitle: {
     color: theme.colors.textPrimary,
-    fontFamily: fonts.sansBold,
+    fontFamily: theme.type.title.fontFamily,
     fontSize: theme.type.heading.size,
     fontWeight: '400',
   },

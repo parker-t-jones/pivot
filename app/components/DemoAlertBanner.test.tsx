@@ -57,7 +57,7 @@ describe('DemoAlertBanner', () => {
       root.render(<DemoAlertBanner alert={ACTIVE} alertKey={1} onDismiss={onDismiss} />);
     });
     expect(container.textContent).not.toMatch(/switch|watch/i);
-    const dismiss = Array.from(container.querySelectorAll('div')).find(
+    const dismiss = Array.from(container.querySelectorAll('[role="button"]')).find(
       (el) => el.textContent === 'Dismiss',
     );
     expect(dismiss).toBeDefined();

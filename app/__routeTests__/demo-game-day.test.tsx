@@ -280,7 +280,7 @@ describe('DemoGameDayScreen: three alerts, in-app path (web, foreground, no OS d
     await mount();
     await advance(DEMO_ACTIVE_AT_MS);
     expect(byId('demo-alert-active')).not.toBeNull();
-    const dismiss = Array.from(container.querySelectorAll('div')).find(
+    const dismiss = Array.from(container.querySelectorAll('[role="button"]')).find(
       (el) => el.textContent === 'Dismiss',
     );
     await act(async () => {
