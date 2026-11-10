@@ -6,14 +6,20 @@
  * separate, bundled fixture with fictional teams, driven by a plain elapsed-time state machine —
  * no server calls, no `stakes`/`lineup_slots` writes.
  *
- * The live phase renders the Watchlist's own `PickCard`s, and the pick-hit moment runs through the
- * same `usePickHitFlash` + `PickEventFlash` the Watchlist uses (issue #44), fed by these snapshots.
+ * The live phase renders Home's live day (issue #71): the real `LiveStakeGameCard` fed by a
+ * `LiveGame` and a `LiveStakeCardModel` built here from fictional ids, with the shared `PickCard`s
+ * under it. The pick-hit moment runs through the same `usePickHitFlash` + `PickEventFlash` the
+ * Watchlist uses (issue #44), fed by these snapshots.
  *
  * Issue #69: a short demo (about 30s) that tells Pivot's story, three alerts about one pick, evenly
  * spaced, ending on the hit. Every moment is a constant below; the screen only reads the clock.
  */
 
 import type { PickProgress } from '@pivot/shared/picks';
+
+import { buildLiveStakeCards, type LiveStakeCardModel } from './liveStakeCards';
+import type { LiveGame } from './schedule';
+import { theme } from './theme';
 
 /** The countdown shows 10 down to 1, then the game goes live. */
 export const DEMO_COUNTDOWN_START = 10;
@@ -80,21 +86,19 @@ export interface DemoPick {
   };
 }
 
-export interface DemoLiveGame {
-  game_id: string;
-  score: { home: number; away: number };
-  quarter: number;
-  time_remaining_sec: number;
-}
+/** The real client `LiveGame` (`GET /games/live`), so Home's own components take it unchanged. */
+export type DemoLiveGame = LiveGame;
 
 export interface DemoSnapshot {
   picks: readonly DemoPick[];
   live: DemoLiveGame | null;
 }
 
+const DEMO_KICKOFF_ISO = '2026-11-15T18:00:00.000Z';
+
 function demoGame(status: string): DemoPick['game'] {
   return {
-    scheduled_start: '2026-11-15T18:00:00.000Z',
+    scheduled_start: DEMO_KICKOFF_ISO,
     status,
     home_team_id: DEMO_HOME_TEAM.abbr,
     away_team_id: DEMO_AWAY_TEAM.abbr,
@@ -136,7 +140,7 @@ function snapshot(
       {
         id: 'demo-prop',
         game_id: DEMO_GAME_ID,
-        subject: { type: 'PLAYER', playerId: 'demo-player', teamId: DEMO_HOME_TEAM.abbr },
+        subject: { type: 'PLAYER', playerId: DEMO_PLAYER_ID, teamId: DEMO_HOME_TEAM.abbr },
         condition: { type: 'STAT_OVER', stat: 'REC_YDS', line: PROP_LINE },
         label: `${DEMO_PLAYER_NAME} over ${PROP_LINE} rec yds`,
         progress: propProgress,
@@ -155,25 +159,74 @@ function snapshot(
   };
 }
 
-function liveAt(home: number, away: number, clockSec: number): DemoLiveGame {
+/** Where the ball is at one beat. `yardsToEndzone` counts from the team with the ball. */
+interface DemoSituation {
+  yardsToEndzone: number;
+  down: number | null;
+  distance: number | null;
+}
+
+/**
+ * One beat of the one fictional game. CMT has the ball at all three beats (a drive that ends in the
+ * touchdown catch, the extra point still to come), so the hero stays NOW ACTIVE with the player on
+ * the field. The neutral team colors are the same ones the app shows for a team it has no colors
+ * for; no real team mark is drawn.
+ */
+function liveAt(
+  home: number,
+  away: number,
+  clockSec: number,
+  situation: DemoSituation,
+): DemoLiveGame {
   return {
     game_id: DEMO_GAME_ID,
+    status: 'in_progress',
+    scheduled_start: DEMO_KICKOFF_ISO,
+    home_team: DEMO_HOME_TEAM.abbr,
+    away_team: DEMO_AWAY_TEAM.abbr,
+    home_team_name: DEMO_HOME_TEAM.name,
+    away_team_name: DEMO_AWAY_TEAM.name,
+    home_team_primary_color: theme.colors.surface,
+    home_team_secondary_color: theme.colors.border,
+    away_team_primary_color: theme.colors.surface,
+    away_team_secondary_color: theme.colors.border,
     score: { home, away },
     quarter: 3,
     time_remaining_sec: clockSec,
+    possession_team: DEMO_HOME_TEAM.abbr,
+    yards_to_endzone: situation.yardsToEndzone,
+    down: situation.down,
+    distance: situation.distance,
+    in_red_zone: situation.yardsToEndzone <= 20,
   };
 }
 
 /** The demo player's receiving yards at each beat. The alert copy below reads these same numbers. */
 export const DEMO_REC_YDS = { active: 47, closing: 62, hit: 70 } as const;
 export const DEMO_PLAYER_NAME = 'R. Vance';
+export const DEMO_PLAYER_ID = 'demo-player';
 
 /** Constant snapshots, so a tick that changes nothing keeps the same array for the hit diff. */
 const DEMO_SNAPSHOTS = {
   pre: snapshot('scheduled', null, null),
-  active: snapshot('in_progress', liveAt(10, 7, 460), DEMO_REC_YDS.active),
-  closing: snapshot('in_progress', liveAt(10, 7, 355), DEMO_REC_YDS.closing),
-  hit: snapshot('in_progress', liveAt(17, 7, 252), DEMO_REC_YDS.hit),
+  // CMT at its own 25, 1st and 10: the drive starts.
+  active: snapshot(
+    'in_progress',
+    liveAt(10, 7, 460, { yardsToEndzone: 75, down: 1, distance: 10 }),
+    DEMO_REC_YDS.active,
+  ),
+  // 2nd and 7 at the HBR 34: the gauge marker has moved up the field.
+  closing: snapshot(
+    'in_progress',
+    liveAt(10, 7, 355, { yardsToEndzone: 34, down: 2, distance: 7 }),
+    DEMO_REC_YDS.closing,
+  ),
+  // The touchdown catch: 17-7, the extra point at the HBR 2 (no down), so RED ZONE shows.
+  hit: snapshot(
+    'in_progress',
+    liveAt(17, 7, 252, { yardsToEndzone: 2, down: null, distance: null }),
+    DEMO_REC_YDS.hit,
+  ),
 } as const;
 
 /**
@@ -249,4 +302,47 @@ export function demoAlertsToPresent(input: {
     (alert) => !input.osSpans.some((span) => alert.atMs >= span.fromMs && alert.atMs <= span.toMs),
   );
   return { due, show };
+}
+
+/** The hero's button. The real label names the person's own streaming service; the demo has none. */
+export const DEMO_WATCH_LABEL = 'Watch on your service';
+/** What a tap on that button says instead of opening anything. */
+export const DEMO_WATCH_HINT = 'Demo only: in the real app this opens your streaming service.';
+
+/**
+ * Home's live game card model for the demo, built by the real `buildLiveStakeCards` from the
+ * fictional game, so the rank, the NOW ACTIVE label, the on-field chip and the field gauge inputs
+ * follow the same rules as Home. The player is flagged while CMT has the ball (every beat). Nothing
+ * is looked up: no broadcasts, so the label is the demo's own and nothing here can open a link.
+ */
+export function demoLiveStakeCards(live: DemoLiveGame | null): LiveStakeCardModel[] {
+  if (!live) return [];
+  const cards = buildLiveStakeCards({
+    liveGames: [live],
+    stakeGameIds: new Set([DEMO_GAME_ID]),
+    activeFlags: [
+      {
+        game_id: DEMO_GAME_ID,
+        priority_score: 1,
+        flagged_players: [{ player_id: DEMO_PLAYER_ID }],
+      },
+    ],
+    playersByGameId: new Map([
+      [
+        DEMO_GAME_ID,
+        [
+          {
+            playerId: DEMO_PLAYER_ID,
+            firstName: 'R.',
+            lastName: 'Vance',
+            position: 'WR',
+            teamAbbreviation: DEMO_HOME_TEAM.abbr,
+          },
+        ],
+      ],
+    ]),
+    betsByGameId: new Map(),
+    watchByGameId: new Map(),
+  });
+  return cards.map((card) => ({ ...card, buttonLabel: DEMO_WATCH_LABEL, opensLink: true }));
 }

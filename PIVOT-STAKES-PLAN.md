@@ -626,17 +626,23 @@ Changes to the existing 6 screens are marked **new** or **changed**.
     ships a synthetic, fictional-team fixture instead of a compressed real drive. Swapping in a
     real captured drive later is future work.
   - A local-only sandbox: a plain elapsed-time state machine (`demoPhaseAtElapsed`) drives a
-    dedicated screen through a sped-up countdown → the Watchlist with the demo picks → "Demo
+    dedicated screen through a sped-up countdown → Home's live day with the demo picks → "Demo
     complete". No server calls anywhere in the screen.
   - A persistent `DEMO` banner, with an Exit button, stays on screen the whole time.
   - The demo uses fake picks (`demoSnapshotAtElapsed`, same shape as `GET /picks` rows) that are
     **never written** to `stakes` or `lineup_slots` — there is no write path in this screen at all.
   - **Short demo, three alerts (issue #69):** about 30s. The countdown (`DemoCountdownCard`, eyebrow
     "DEMO · KICKOFF IN", mono `m:ss`) starts at 10 and a displayed second is 600ms of real time
-    (`DEMO_COUNTDOWN_TICK_MS`), so it lasts about 6s. Then the Watchlist (`DemoWatchlist`): the
-    screen header, a "YOUR PICKS · n" section, and the shared `PickCard`s, so the live and hit
-    states are the ones the real Watchlist draws. #66's bespoke live row is gone: the real
-    Watchlist has no live-game row, and the demo should not show more than the app does. Three
+    (`DEMO_COUNTDOWN_TICK_MS`), so it lasts about 6s. Then Home's live day (`DemoHomeLive`, issue #71):
+    a "● LIVE · 1 GAME" eyebrow and the Home title, the real `YourLiveGames` / `LiveStakeGameCard`
+    (the NOW ACTIVE hero: field-aligned teams, split score, numbered `FieldGauge`, the on-field
+    chip, the Watch button) fed a fixture `LiveGame` and a `LiveStakeCardModel` built by
+    `demoLiveStakeCards` through the real `buildLiveStakeCards`, then "YOUR PICKS · n" with the
+    shared `PickCard`s, so the hit state is the one the real Watchlist draws. The Watch button is
+    the demo's own ("Watch on your service"): a tap shows a short demo-only hint and opens
+    nothing. The ball, yard line, clock and score advance with the three beats. Home's own picks
+    list (`MyCardList`) needs the week board and the lineup route, so the demo keeps `PickCard`s
+    there. #66's bespoke live row and #70's Watchlist view are gone. Three
     alerts about the one pick fire 8s apart (`DEMO_ALERTS`; never under 6s or over 12s, pinned in
     `demoGameDay.test.ts`): "your pick is live" (a routing nudge, no number) as the demo goes live,
     "your pick is closing in" (the card steps from 47 to 62 of 68.5 rec yds at the same instant),
@@ -674,9 +680,11 @@ Changes to the existing 6 screens are marked **new** or **changed**.
 2. **Notification denial:** tap Don't Allow at the iOS prompt. Expect the recovery screen, not a second prompt. Then check that iOS Settings → Pivot → Notifications is reachable from the link.
 3. **Demo game day:**
    1. Start the demo from Settings → Help.
-   2. Expect a 10-to-1 countdown that lasts about 6s, then the Watchlist with two pick cards and a
-      "Demo alert: your pick is live" banner. About 8s later, "your pick is closing in" with the
-      card at 62 of 68.5. About 8s after that, "pick hit" together with the green edge glow, a
+   2. Expect a 10-to-1 countdown that lasts about 6s, then Home's live day: a NOW ACTIVE card for
+      Comets vs. Harbor with the field gauge at the CMT 25, and two pick cards under it, with a
+      "Demo alert: your pick is live" banner. Tap "Watch on your service": only a short demo hint
+      appears and nothing opens. About 8s later, "your pick is closing in" with the
+      card at 62 of 68.5 and the gauge marker at the HBR 34. About 8s after that, "pick hit" together with the green edge glow, a
       "PICK HIT · 70 REC YDS" lower-third (once) and the green bar and amber glow on the card.
       "Demo complete" follows at about 30s. In the foreground each alert shows once, as an in-app
       banner.
