@@ -8,7 +8,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "forceConsistentCasingInFileNames": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {
+      "react-native-view-shot": ["./types/react-native-view-shot.d.ts"]
+    }
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }
