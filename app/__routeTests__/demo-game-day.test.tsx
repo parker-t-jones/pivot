@@ -5,9 +5,46 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DemoGameDayScreen from '../app/(app)/demo-game-day';
 import { PICK_FLASH_MS } from '../components/PickEventFlash';
-import { DEMO_HIT_AT_MS, DEMO_PRE_GAME_MS, DEMO_TOTAL_MS } from '../lib/demoGameDay';
+import {
+  DEMO_ACTIVE_AT_MS,
+  DEMO_ALERT_VISIBLE_MS,
+  DEMO_ALERTS,
+  DEMO_CLOSING_AT_MS,
+  DEMO_COUNTDOWN_TICK_MS,
+  DEMO_HIT_AT_MS,
+  DEMO_PRE_GAME_MS,
+  DEMO_TOTAL_MS,
+} from '../lib/demoGameDay';
+import { NotificationsDisabledError } from '../lib/devNotifications';
 
-vi.mock('react-native', () => import('react-native-web'));
+const appState = vi.hoisted(() => {
+  const listeners = new Set<(state: string) => void>();
+  return {
+    listeners,
+    emit: (state: string) => {
+      for (const listener of listeners) listener(state);
+    },
+  };
+});
+
+vi.mock('react-native', async () => {
+  const rn = await import('react-native-web');
+  return {
+    ...rn,
+    AppState: {
+      currentState: 'active',
+      addEventListener: (_type: string, listener: (state: string) => void) => {
+        appState.listeners.add(listener);
+        return { remove: () => appState.listeners.delete(listener) };
+      },
+    },
+  };
+});
+
+vi.mock('expo-haptics', () => ({
+  impactAsync: vi.fn(async () => undefined),
+  ImpactFeedbackStyle: { Medium: 'medium' },
+}));
 
 const router = vi.hoisted(() => ({
   dismissTo: vi.fn(),
@@ -22,9 +59,13 @@ vi.mock('../lib/useReducedMotion', () => ({
   useReducedMotion: () => reduceMotion.value,
 }));
 
-const scheduleDemoNotification = vi.hoisted(() => vi.fn(async () => undefined));
+const notifications = vi.hoisted(() => ({
+  schedule: vi.fn(async (_startedAt: number): Promise<string[]> => []),
+  cancel: vi.fn(async (_ids: readonly string[]): Promise<void> => undefined),
+}));
 vi.mock('../lib/demoGameDayNotification', () => ({
-  scheduleDemoGameDayNotificationAsync: scheduleDemoNotification,
+  scheduleDemoGameDayNotificationsAsync: notifications.schedule,
+  cancelDemoGameDayNotificationsAsync: notifications.cancel,
 }));
 
 let container: HTMLDivElement;
@@ -33,12 +74,16 @@ let root: Root;
 beforeEach(() => {
   vi.useFakeTimers();
   reduceMotion.value = false;
+  appState.listeners.clear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   router.dismissTo.mockClear();
   router.replace.mockClear();
-  scheduleDemoNotification.mockClear();
+  notifications.schedule.mockReset();
+  notifications.schedule.mockResolvedValue([]);
+  notifications.cancel.mockReset();
+  notifications.cancel.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -47,197 +92,354 @@ afterEach(() => {
   });
   container.remove();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
-const byId = (container: HTMLElement, id: string) =>
-  container.querySelector(`[data-testid="${id}"]`);
+const STEP_MS = 200;
+const byId = (id: string) => container.querySelector(`[data-testid="${id}"]`);
+const bannerTitle = () => byId('demo-alert-title')?.textContent ?? null;
 
-describe('DemoGameDayScreen', () => {
-  it('pre-game: the countdown card counts down with the one-line promise and both team badges', async () => {
+async function mount() {
+  await act(async () => {
+    root.render(<DemoGameDayScreen />);
+  });
+}
+
+/** Advances in screen-sized steps so each tick's effects flush, as they do on a device. */
+async function advance(ms: number, onStep?: (elapsedSinceCall: number) => void) {
+  for (let spent = 0; spent < ms; spent += STEP_MS) {
     await act(async () => {
-      root.render(<DemoGameDayScreen />);
+      vi.advanceTimersByTime(Math.min(STEP_MS, ms - spent));
     });
-    expect(byId(container, 'demo-countdown-card')).not.toBeNull();
-    expect(byId(container, 'demo-countdown')?.textContent).toBe('0:15');
+    onStep?.(spent + STEP_MS);
+  }
+}
+
+/** Plays the whole demo from the start; returns each banner title with the demo time it appeared. */
+async function playAndRecordBanners(): Promise<{ title: string; at: number }[]> {
+  const seen: { title: string; at: number }[] = [];
+  let last: string | null = null;
+  let at = 0;
+  const record = () => {
+    const title = bannerTitle();
+    if (title !== null && title !== last) seen.push({ title, at });
+    last = title;
+  };
+  record();
+  await advance(DEMO_TOTAL_MS + STEP_MS, (spent) => {
+    at = spent;
+    record();
+  });
+  return seen;
+}
+
+describe('DemoGameDayScreen: countdown', () => {
+  it('starts at 10 and steps down a number every 600ms, about 6s in all', async () => {
+    await mount();
+    expect(byId('demo-countdown-card')).not.toBeNull();
+    expect(byId('demo-countdown')?.textContent).toBe('0:10');
     expect(container.textContent).toContain('Pivot is watching for your picks');
     expect(container.textContent).toContain('CMT');
     expect(container.textContent).toContain('HBR');
-    expect(byId(container, 'demo-live-row')).toBeNull();
+    expect(byId('demo-watchlist')).toBeNull();
 
-    await act(async () => {
-      vi.advanceTimersByTime(5_000);
-    });
-    expect(byId(container, 'demo-countdown')?.textContent).toBe('0:10');
+    await advance(DEMO_COUNTDOWN_TICK_MS);
+    expect(byId('demo-countdown')?.textContent).toBe('0:09');
+    await advance(DEMO_COUNTDOWN_TICK_MS * 4);
+    expect(byId('demo-countdown')?.textContent).toBe('0:05');
+    await advance(DEMO_COUNTDOWN_TICK_MS * 4);
+    expect(byId('demo-countdown')?.textContent).toBe('0:01');
+    expect(byId('demo-countdown-card')).not.toBeNull();
 
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_PRE_GAME_MS - 5_000 - 500);
-    });
-    expect(byId(container, 'demo-countdown')?.textContent).toBe('0:01');
+    await advance(DEMO_COUNTDOWN_TICK_MS);
+    expect(byId('demo-countdown-card')).toBeNull();
+    expect(DEMO_PRE_GAME_MS).toBe(6_000);
   });
 
-  it('live: the row shows the dot, ticker, both score lines, the possession line and the pick cards', async () => {
-    await act(async () => {
-      root.render(<DemoGameDayScreen />);
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_PRE_GAME_MS + 500);
-    });
-    expect(byId(container, 'demo-countdown-card')).toBeNull();
-    const row = byId(container, 'demo-live-row');
-    expect(row).not.toBeNull();
-    expect(byId(container, 'demo-live-row-glowing')).toBeNull();
-    expect(byId(container, 'demo-live-dot')).not.toBeNull();
-    expect(byId(container, 'demo-live-ticker')?.textContent).toBe('LIVE · Q3 · 7:40');
-    expect(byId(container, 'demo-score-HBR')?.textContent).toContain('7');
-    expect(byId(container, 'demo-score-CMT')?.textContent).toContain('10');
-    expect(byId(container, 'demo-pylon-marker')).not.toBeNull();
-    expect(byId(container, 'demo-possession-line')?.textContent).toBe(
-      'CMT ball · 1st & 10 · CMT 25',
-    );
-    // The pick cards render inside the row, not beside it.
-    expect(row?.querySelectorAll('[data-testid="pick-card-live"]')).toHaveLength(2);
+  it('shows no alert during the countdown', async () => {
+    await mount();
+    await advance(DEMO_PRE_GAME_MS - STEP_MS);
+    expect(bannerTitle()).toBeNull();
+  });
+});
 
-    await act(async () => {
-      vi.advanceTimersByTime(10_000);
-    });
-    expect(byId(container, 'demo-live-ticker')?.textContent).toBe('LIVE · Q3 · 5:55');
-    expect(byId(container, 'demo-possession-line')?.textContent).toBe(
-      'CMT ball · 2nd & 7 · HBR 34',
-    );
+describe('DemoGameDayScreen: Watchlist view', () => {
+  it('goes live as the Watchlist: header, YOUR PICKS section, both pick cards, no bespoke live row', async () => {
+    await mount();
+    await advance(DEMO_PRE_GAME_MS);
+    expect(byId('demo-countdown-card')).toBeNull();
+    expect(byId('demo-live-row')).toBeNull();
+    const watchlist = byId('demo-watchlist');
+    expect(watchlist).not.toBeNull();
+    expect(watchlist?.textContent).toContain('Watchlist');
+    expect(watchlist?.textContent).toContain('YOUR PICKS · 2');
+    const section = byId('demo-watchlist-picks');
+    expect(section?.querySelectorAll('[data-testid="pick-card-live"]')).toHaveLength(2);
+    expect(container.textContent).toContain('R. Vance over 68.5 rec yds');
+    expect(container.textContent).toContain('47 rec yds · 21.5 to go');
+    expect(byId('pick-card-bar-fill-hit')).toBeNull();
+    expect(container.textContent).not.toMatch(/watch on/i);
   });
 
-  it('hit: the live row takes the glow with the card hit state, and keeps it after the flash fades', async () => {
-    await act(async () => {
-      root.render(<DemoGameDayScreen />);
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_HIT_AT_MS + 500);
-    });
-    expect(byId(container, 'demo-live-row')).toBeNull();
-    expect(byId(container, 'demo-live-row-glowing')).not.toBeNull();
-    expect(byId(container, 'pick-card-bar-fill-hit')).not.toBeNull();
-    expect(byId(container, 'demo-score-CMT')?.textContent).toContain('17');
-    expect(byId(container, 'demo-live-ticker')?.textContent).toBe('LIVE · Q3 · 4:12');
-    expect(byId(container, 'pick-event-flash')).not.toBeNull();
+  it('steps the card up with each alert: 47, then 62, then the hit with the green bar and glow', async () => {
+    await mount();
+    await advance(DEMO_ACTIVE_AT_MS);
+    expect(container.textContent).toContain('47 rec yds');
 
-    await act(async () => {
-      vi.advanceTimersByTime(PICK_FLASH_MS);
-    });
-    expect(byId(container, 'pick-event-flash')).toBeNull();
-    expect(byId(container, 'demo-live-row-glowing')).not.toBeNull();
-    expect(byId(container, 'pick-card-bar-fill-hit')).not.toBeNull();
+    await advance(DEMO_CLOSING_AT_MS - DEMO_ACTIVE_AT_MS);
+    expect(container.textContent).toContain('62 rec yds · 6.5 to go');
+    expect(container.textContent).not.toContain('47 rec yds');
+    expect(byId('pick-card-bar-fill-hit')).toBeNull();
+
+    await advance(DEMO_HIT_AT_MS - DEMO_CLOSING_AT_MS);
+    expect(container.textContent).toContain('Hit · 70 rec yds');
+    expect(byId('pick-card-bar-fill-hit')).not.toBeNull();
   });
 
-  it('keeps the whole demo free of real teams, players, watch buttons and the old copy', async () => {
-    await act(async () => {
-      root.render(<DemoGameDayScreen />);
-    });
-    const seen = [container.textContent ?? ''];
-    for (const step of [DEMO_PRE_GAME_MS + 500, DEMO_HIT_AT_MS - DEMO_PRE_GAME_MS]) {
-      await act(async () => {
-        vi.advanceTimersByTime(step);
-      });
-      seen.push(container.textContent ?? '');
+  it('keeps the persistent DEMO banner and Exit for the whole demo', async () => {
+    await mount();
+    for (const step of [DEMO_PRE_GAME_MS, DEMO_HIT_AT_MS - DEMO_PRE_GAME_MS, DEMO_TOTAL_MS]) {
+      expect(container.textContent).toContain('DEMO — not a real game');
+      expect(container.textContent).toContain('Exit');
+      await advance(step);
     }
+    expect(container.textContent).toContain('Demo complete');
+    expect(container.textContent).toContain('DEMO — not a real game');
+  });
+});
+
+describe('DemoGameDayScreen: three alerts, in-app path (web, foreground, no OS delivery)', () => {
+  it('shows each of the three alerts exactly once, in order, with the demo copy', async () => {
+    await mount();
+    const seen = await playAndRecordBanners();
+    expect(seen.map((entry) => entry.title)).toEqual(DEMO_ALERTS.map((alert) => alert.title));
+  });
+
+  it('shows each alert at its own time, 8s apart', async () => {
+    await mount();
+    const seen = await playAndRecordBanners();
+    expect(seen).toHaveLength(3);
+    seen.forEach((entry, i) => {
+      const alert = DEMO_ALERTS[i];
+      expect(entry.at).toBeGreaterThanOrEqual(alert?.atMs ?? Infinity);
+      expect(entry.at - (alert?.atMs ?? 0)).toBeLessThanOrEqual(STEP_MS);
+    });
+    const gaps = seen.slice(1).map((entry, i) => entry.at - (seen[i]?.at ?? 0));
+    for (const gap of gaps) {
+      expect(gap).toBeGreaterThanOrEqual(6_000);
+      expect(gap).toBeLessThanOrEqual(12_000);
+    }
+  });
+
+  it('active: a nudge that reveals nothing, while the card is live at 47', async () => {
+    await mount();
+    await advance(DEMO_ACTIVE_AT_MS - STEP_MS);
+    expect(bannerTitle()).toBeNull();
+    await advance(STEP_MS);
+    expect(byId('demo-alert-active')).not.toBeNull();
+    expect(byId('demo-alert-body')?.textContent).toBe('R. Vance is on the field for your pick.');
+    expect(container.textContent).toContain('47 rec yds');
+    expect(byId('pick-event-flash')).toBeNull();
+  });
+
+  it('closing in: the message numbers match the card at the same moment', async () => {
+    await mount();
+    await advance(DEMO_CLOSING_AT_MS - STEP_MS);
+    expect(byId('demo-alert-closing')).toBeNull();
+    expect(container.textContent).toContain('47 rec yds');
+    await advance(STEP_MS);
+    expect(byId('demo-alert-closing')).not.toBeNull();
+    expect(byId('demo-alert-body')?.textContent).toBe('R. Vance is at 62 of 68.5 receiving yards.');
+    expect(container.textContent).toContain('62 rec yds · 6.5 to go');
+  });
+
+  it('hit: the alert, the edge pulse and lower-third, and the green bar land together', async () => {
+    await mount();
+    await advance(DEMO_HIT_AT_MS - STEP_MS);
+    expect(byId('demo-alert-hit')).toBeNull();
+    expect(byId('pick-event-flash')).toBeNull();
+    expect(byId('pick-card-bar-fill-hit')).toBeNull();
+    await advance(STEP_MS);
+    expect(byId('demo-alert-hit')).not.toBeNull();
+    expect(byId('demo-alert-body')?.textContent).toBe('R. Vance cleared 68.5 with 70 yards.');
+    expect(byId('pick-event-flash')).not.toBeNull();
+    expect(container.textContent).toContain('PICK HIT · 70 REC YDS');
+    expect(byId('pick-card-bar-fill-hit')).not.toBeNull();
+  });
+
+  it('hides each banner before the next one arrives, so two never stack', async () => {
+    await mount();
+    await advance(DEMO_ACTIVE_AT_MS + DEMO_ALERT_VISIBLE_MS + STEP_MS);
+    expect(bannerTitle()).toBeNull();
+    await advance(DEMO_CLOSING_AT_MS - DEMO_ACTIVE_AT_MS - DEMO_ALERT_VISIBLE_MS);
+    expect(byId('demo-alert-closing')).not.toBeNull();
+    expect(container.querySelectorAll('[data-testid="demo-alert-title"]')).toHaveLength(1);
+  });
+
+  it('lets the person dismiss one early, and it does not come back', async () => {
+    await mount();
+    await advance(DEMO_ACTIVE_AT_MS);
+    expect(byId('demo-alert-active')).not.toBeNull();
+    const dismiss = Array.from(container.querySelectorAll('div')).find(
+      (el) => el.textContent === 'Dismiss',
+    );
+    await act(async () => {
+      dismiss?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(bannerTitle()).toBeNull();
+    await advance(STEP_MS * 5);
+    expect(bannerTitle()).toBeNull();
+  });
+
+  it('plays the hit flash once, keeps the glow after it, then completes', async () => {
+    await mount();
+    await advance(DEMO_HIT_AT_MS);
+    expect(byId('pick-event-flash')).not.toBeNull();
+    await advance(PICK_FLASH_MS);
+    expect(byId('pick-event-flash')).toBeNull();
+    expect(byId('pick-card-bar-fill-hit')).not.toBeNull();
+    await advance(DEMO_TOTAL_MS);
+    expect(byId('pick-event-flash')).toBeNull();
+    expect(container.textContent).toContain('Demo complete');
+    expect(bannerTitle()).toBeNull();
+  });
+});
+
+describe('DemoGameDayScreen: iOS foreground (OS notifications scheduled, app active)', () => {
+  it('still shows the three in-app banners once each; the OS banner is suppressed in the foreground', async () => {
+    notifications.schedule.mockResolvedValue(['a', 'b', 'c']);
+    await mount();
+    expect(notifications.schedule).toHaveBeenCalledTimes(1);
+    const seen = await playAndRecordBanners();
+    expect(seen.map((entry) => entry.title)).toEqual(DEMO_ALERTS.map((alert) => alert.title));
+  });
+
+  it('schedules the OS notifications once, up front, from the demo start', async () => {
+    await mount();
+    expect(notifications.schedule).toHaveBeenCalledTimes(1);
+    expect(typeof notifications.schedule.mock.calls[0]?.[0]).toBe('number');
+    await advance(DEMO_TOTAL_MS + STEP_MS);
+    expect(notifications.schedule).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the pending OS notifications when the person exits mid-demo', async () => {
+    notifications.schedule.mockResolvedValue(['a', 'b', 'c']);
+    await mount();
+    await advance(DEMO_ACTIVE_AT_MS + STEP_MS);
+    act(() => {
+      root.unmount();
+    });
+    expect(notifications.cancel).toHaveBeenCalledWith(['a', 'b', 'c']);
+    root = createRoot(container);
+  });
+});
+
+describe('DemoGameDayScreen: iOS backgrounded (OS delivers while timers are suspended)', () => {
+  it('does not show a banner again for an alert the OS delivered while backgrounded', async () => {
+    notifications.schedule.mockResolvedValue(['a', 'b', 'c']);
+    await mount();
+    let last: string | null = null;
+    const seen: string[] = [];
+    const record = () => {
+      const title = bannerTitle();
+      if (title !== null && title !== last) seen.push(title);
+      last = title;
+    };
+    await advance(DEMO_ACTIVE_AT_MS + 2_000, record);
+    expect(seen).toEqual([DEMO_ALERTS[0]?.title]);
+
+    // Backgrounded through the closing-in and hit alerts, back after the hit.
+    act(() => appState.emit('background'));
+    await advance(DEMO_HIT_AT_MS + 2_000 - (DEMO_ACTIVE_AT_MS + 2_000), record);
+    act(() => appState.emit('active'));
+    await advance(DEMO_TOTAL_MS, record);
+
+    expect(seen).toEqual([DEMO_ALERTS[0]?.title]);
+    expect(bannerTitle()).toBeNull();
+  });
+
+  it('shows the card in its current state on return, not stale', async () => {
+    notifications.schedule.mockResolvedValue(['a', 'b', 'c']);
+    await mount();
+    await advance(DEMO_ACTIVE_AT_MS + 2_000);
+    act(() => appState.emit('background'));
+    await advance(DEMO_HIT_AT_MS - DEMO_ACTIVE_AT_MS);
+    act(() => appState.emit('active'));
+    await advance(STEP_MS);
+    expect(container.textContent).toContain('Hit · 70 rec yds');
+  });
+
+  it('still shows an alert that was due after the person came back', async () => {
+    notifications.schedule.mockResolvedValue(['a', 'b', 'c']);
+    await mount();
+    await advance(DEMO_ACTIVE_AT_MS + 1_000);
+    act(() => appState.emit('background'));
+    await advance(2_000);
+    act(() => appState.emit('active'));
+    await advance(DEMO_CLOSING_AT_MS - (DEMO_ACTIVE_AT_MS + 3_000));
+    expect(byId('demo-alert-closing')).not.toBeNull();
+  });
+});
+
+describe('DemoGameDayScreen: no OS delivery (permission off, or web)', () => {
+  it('plays fully on in-app banners when notification permission is off, with no error', async () => {
+    notifications.schedule.mockRejectedValue(new NotificationsDisabledError());
+    await mount();
+    const seen = await playAndRecordBanners();
+    expect(seen.map((entry) => entry.title)).toEqual(DEMO_ALERTS.map((alert) => alert.title));
+    expect(container.textContent).toContain('Demo complete');
+    expect(container.textContent).not.toMatch(/error|couldn.?t|failed/i);
+  });
+
+  it('plays fully when scheduling throws something unexpected', async () => {
+    notifications.schedule.mockRejectedValue(new Error('native module missing'));
+    await mount();
+    const seen = await playAndRecordBanners();
+    expect(seen).toHaveLength(3);
+    expect(container.textContent).toContain('Demo complete');
+  });
+
+  it('pauses the demo while the app is hidden, so no alert is missed on return', async () => {
+    await mount();
+    await advance(DEMO_ACTIVE_AT_MS - 1_000);
+    act(() => appState.emit('background'));
+    await advance(DEMO_TOTAL_MS);
+    expect(bannerTitle()).toBeNull();
+    expect(byId('demo-countdown-card')).not.toBeNull();
+    act(() => appState.emit('active'));
+    await advance(1_000 + STEP_MS);
+    expect(byId('demo-alert-active')).not.toBeNull();
+  });
+});
+
+describe('DemoGameDayScreen: local-only', () => {
+  it('makes no network calls', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    await mount();
+    await advance(DEMO_TOTAL_MS + STEP_MS);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps the whole demo free of real teams, players, watch buttons and betting talk', async () => {
+    await mount();
+    const seen: string[] = [container.textContent ?? ''];
+    await advance(DEMO_TOTAL_MS + STEP_MS, () => {
+      seen.push(container.textContent ?? '');
+    });
     const text = seen.join(' ');
     expect(text).not.toMatch(/\b(SEA|DAL)\b/);
     expect(text).not.toMatch(/metcalf/i);
     expect(text).not.toMatch(/watch on/i);
     expect(text).not.toMatch(/stake/i);
+    expect(text).not.toMatch(/\b(odds|bet|bets|wager|edge)\b/i);
     expect(text).toContain('DEMO');
-  });
-
-  it('Reduce Motion: no pulsing ring on the LIVE dot, and the hit moment still plays', async () => {
-    await act(async () => {
-      root.render(<DemoGameDayScreen />);
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_PRE_GAME_MS + 500);
-    });
-    expect(byId(container, 'demo-live-dot-ring')).not.toBeNull();
-    act(() => {
-      root.unmount();
-    });
-    reduceMotion.value = true;
-    root = createRoot(container);
-    await act(async () => {
-      root.render(<DemoGameDayScreen />);
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_PRE_GAME_MS + 500);
-    });
-    expect(byId(container, 'demo-live-dot')).not.toBeNull();
-    expect(byId(container, 'demo-live-dot-ring')).toBeNull();
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_HIT_AT_MS - DEMO_PRE_GAME_MS);
-    });
-    expect(byId(container, 'pick-event-flash')).not.toBeNull();
-    expect(byId(container, 'demo-live-row-glowing')).not.toBeNull();
-  });
-
-  it('starts pre-game, flips to live with one scheduled notification, then completes', async () => {
-    await act(async () => {
-      root.render(<DemoGameDayScreen />);
-    });
-    expect(container.textContent).toContain('DEMO · KICKOFF IN');
-    expect(scheduleDemoNotification).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_PRE_GAME_MS + 500);
-    });
-    expect(container.textContent).toContain('LIVE');
-    expect(scheduleDemoNotification).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(500);
-    });
-    expect(scheduleDemoNotification).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_TOTAL_MS);
-    });
-    expect(container.textContent).toContain('Demo complete');
-    expect(scheduleDemoNotification).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders the real pick cards and plays the Watchlist pick-hit flash once when the prop hits', async () => {
-    await act(async () => {
-      root.render(<DemoGameDayScreen />);
-    });
-    const flash = () => container.querySelector('[data-testid="pick-event-flash"]');
-
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_PRE_GAME_MS + 500);
-    });
-    expect(container.querySelectorAll('[data-testid="pick-card-live"]')).toHaveLength(2);
-    expect(container.textContent).toContain('R. Vance over 68.5 rec yds');
-    expect(container.textContent).toContain('47 rec yds · 21.5 to go');
-    expect(flash()).toBeNull();
-
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_HIT_AT_MS - DEMO_PRE_GAME_MS);
-    });
-    expect(flash()).not.toBeNull();
-    expect(container.textContent).toContain('PICK HIT · 70 REC YDS');
-    expect(container.textContent).toContain('Hit · 70 rec yds');
-
-    await act(async () => {
-      vi.advanceTimersByTime(PICK_FLASH_MS);
-    });
-    expect(flash()).toBeNull();
-
-    await act(async () => {
-      vi.advanceTimersByTime(DEMO_TOTAL_MS);
-    });
-    expect(flash()).toBeNull();
+    expect(text).toContain('pick');
   });
 
   it('shows the persistent DEMO banner, and Exit returns to real Home', async () => {
-    await act(async () => {
-      root.render(<DemoGameDayScreen />);
-    });
+    await mount();
     expect(container.textContent).toContain('DEMO');
-
     const exitButton = Array.from(container.querySelectorAll('div')).find(
       (el) => el.textContent === 'Exit',
     );
@@ -246,5 +448,23 @@ describe('DemoGameDayScreen', () => {
       exitButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(router.dismissTo).toHaveBeenCalledWith('/(app)');
+  });
+});
+
+describe('DemoGameDayScreen: Reduce Motion', () => {
+  it('still plays all three alerts and the hit moment', async () => {
+    reduceMotion.value = true;
+    await mount();
+    const seen = await playAndRecordBanners();
+    expect(seen.map((entry) => entry.title)).toEqual(DEMO_ALERTS.map((alert) => alert.title));
+  });
+
+  it('keeps the hit flash and the resting hit state', async () => {
+    reduceMotion.value = true;
+    await mount();
+    await advance(DEMO_HIT_AT_MS);
+    expect(byId('pick-event-flash')).not.toBeNull();
+    await advance(PICK_FLASH_MS);
+    expect(byId('pick-card-bar-fill-hit')).not.toBeNull();
   });
 });
