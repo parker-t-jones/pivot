@@ -790,6 +790,12 @@ function HelpSection({
         size="small"
         style={styles.aboutLink}
       />
+      <TextButton
+        label="This week's recap"
+        onPress={() => router.push('/(app)/recap')}
+        size="small"
+        style={styles.aboutLink}
+      />
       {Platform.OS === 'web' ? null : (
         <TextButton
           disabled={isSendingTest}

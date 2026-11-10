@@ -1,6 +1,7 @@
 // Test-only in-memory Supabase for the picks tests. Supports the query shapes the picks code
 // uses: select (columns ignored), insert (one row or many), upsert, update, delete, eq, in, is,
-// single, maybeSingle, ilike (`%` wildcards), limit. Deleting a `pick_slips` row cascades to its `stakes` legs, as the FK does.
+// not (`'is'` only), lte, single, maybeSingle, ilike (`%` wildcards), limit. Deleting a
+// `pick_slips` row cascades to its `stakes` legs, as the FK does.
 
 export type Row = Record<string, unknown>;
 
@@ -116,6 +117,20 @@ class MemQuery implements PromiseLike<Result> {
 
   is(column: string, value: null): this {
     this.filters.push((row) => (row[column] ?? null) === value);
+    return this;
+  }
+
+  /** Only the `'is'` operator is needed so far (e.g. `.not('result', 'is', null)`). */
+  not(column: string, _operator: 'is', value: null): this {
+    this.filters.push((row) => (row[column] ?? null) !== value);
+    return this;
+  }
+
+  lte(column: string, value: number): this {
+    this.filters.push((row) => {
+      const current = row[column];
+      return typeof current === 'number' && current <= value;
+    });
     return this;
   }
 
