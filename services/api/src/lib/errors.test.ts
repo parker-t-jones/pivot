@@ -1,6 +1,27 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ApiError, apiErrorHandler } from './errors.js';
+import { ApiError, apiErrorHandler, throwAsAccountNotFoundIfMissingRow } from './errors.js';
+
+describe('throwAsAccountNotFoundIfMissingRow', () => {
+  it('translates PGRST116 into a 401 account_not_found ApiError', () => {
+    expect(() =>
+      throwAsAccountNotFoundIfMissingRow({ code: 'PGRST116', message: 'no rows found' }),
+    ).toThrowError(
+      expect.objectContaining({
+        statusCode: 401,
+        code: 'account_not_found',
+        message: "Your account isn't available anymore. Please sign in again.",
+      }),
+    );
+  });
+
+  it('rethrows any other error unchanged — a different 0-row/error shape is not an account issue', () => {
+    const other = { code: 'PGRST301', message: 'JWT expired' };
+    expect(() => throwAsAccountNotFoundIfMissingRow(other)).toThrowError(
+      expect.objectContaining(other),
+    );
+  });
+});
 
 describe('apiErrorHandler', () => {
   const apps: ReturnType<typeof Fastify>[] = [];

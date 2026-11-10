@@ -1,7 +1,7 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { demoAccountFixed, userIsDemo } from '../lib/demoAccount.js';
-import { ApiError } from '../lib/errors.js';
+import { ApiError, throwAsAccountNotFoundIfMissingRow } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import {
   MAX_SLIP_LEGS,
@@ -124,7 +124,7 @@ const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (
         .select('subscription_tier')
         .eq('id', user.id)
         .single();
-      if (userError) throw userError;
+      if (userError) throwAsAccountNotFoundIfMissingRow(userError);
       const isPro = userRow.subscription_tier === 'pro';
       const limit = isPro ? opts.limits.pro : opts.limits.free;
       const key = slipImportKey(user.id, now());

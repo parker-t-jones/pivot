@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const signOutMock = vi.fn(async () => ({ error: null }));
+
 vi.mock('./supabase', () => ({
   supabase: {
     auth: {
@@ -7,8 +9,15 @@ vi.mock('./supabase', () => ({
         data: { session: { access_token: 'test-token' } },
         error: null,
       })),
+      signOut: signOutMock,
     },
   },
+}));
+
+const alertAsyncMock = vi.fn(async () => undefined);
+
+vi.mock('./confirm', () => ({
+  alertAsync: alertAsyncMock,
 }));
 
 describe('apiClient', () => {
@@ -24,6 +33,8 @@ describe('apiClient', () => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
     vi.resetModules();
+    signOutMock.mockClear();
+    alertAsyncMock.mockClear();
   });
 
   it('treats a 204 with no body as success without calling JSON.parse', async () => {
@@ -110,5 +121,47 @@ describe('apiClient', () => {
 
     const { apiClient } = await import('./apiClient');
     await expect(apiClient.get('/empty')).resolves.toBeNull();
+  });
+
+  it('Issue #46: signs out and alerts, rather than retrying, on account_not_found', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () =>
+        JSON.stringify({
+          error: {
+            code: 'account_not_found',
+            message: "Your account isn't available anymore. Please sign in again.",
+          },
+        }),
+    });
+
+    const { apiClient, ApiRequestError } = await import('./apiClient');
+    const call = apiClient.get('/me');
+
+    await expect(call).rejects.toMatchObject({
+      status: 401,
+      code: 'account_not_found',
+    });
+    await expect(call).rejects.toBeInstanceOf(ApiRequestError);
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(alertAsyncMock).toHaveBeenCalledWith(
+      "You're signed out",
+      "Your account isn't available anymore. Please sign in again.",
+    );
+  });
+
+  it('does not sign out for an unrelated error code', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () =>
+        JSON.stringify({ error: { code: 'league_limit_free', message: 'Upgrade to Pro.' } }),
+    });
+
+    const { apiClient } = await import('./apiClient');
+    await expect(apiClient.get('/leagues')).rejects.toMatchObject({ code: 'league_limit_free' });
+    expect(signOutMock).not.toHaveBeenCalled();
+    expect(alertAsyncMock).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { isBetCondition } from '../lib/betIndex.js';
 import { demoAccountFixed, userIsDemo } from '../lib/demoAccount.js';
 import { demoStakesResponse } from '../lib/demoFixture.js';
-import { ApiError } from '../lib/errors.js';
+import { ApiError, throwAsAccountNotFoundIfMissingRow } from '../lib/errors.js';
 import {
   FREE_BET_LIMIT,
   countFreeSlots,
@@ -217,7 +217,7 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
       .select('subscription_tier')
       .eq('id', user.id)
       .single();
-    if (userError) throw userError;
+    if (userError) throwAsAccountNotFoundIfMissingRow(userError);
     const { used: counted } = countFreeSlots(
       weekRows,
       await spentSlotIds(fastify.supabase, user.id, row.season_year, row.week),

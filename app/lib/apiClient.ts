@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { alertAsync } from './confirm';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
@@ -22,17 +23,28 @@ interface RequestOptions {
   body?: unknown;
 }
 
-function throwIfErrorResponse(status: number, parsedBody: unknown): void {
+/**
+ * Issue #46: the server's `account_not_found` means the signed-in Supabase session outlived the
+ * account it belongs to (the account was deleted, but the already-issued access token stays valid
+ * until it naturally expires). There's nothing to retry — clear the session here, in the one place
+ * every authenticated request goes through, so the root layout's existing session-based redirect
+ * (`resolveRootAuthRedirect`) takes the user to sign-in on its own, and tell them why instead of
+ * surfacing a generic error screen.
+ */
+async function throwIfErrorResponse(status: number, parsedBody: unknown): Promise<never> {
   const errorBody =
     parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody
       ? (parsedBody as { error: { code?: string; message?: string; details?: unknown } }).error
       : null;
-  throw new ApiRequestError(
-    status,
-    errorBody?.code ?? 'unknown_error',
-    errorBody?.message ?? `Request failed with status ${status}.`,
-    errorBody?.details,
-  );
+  const code = errorBody?.code ?? 'unknown_error';
+  const message = errorBody?.message ?? `Request failed with status ${status}.`;
+
+  if (code === 'account_not_found') {
+    await supabase.auth.signOut();
+    void alertAsync("You're signed out", message);
+  }
+
+  throw new ApiRequestError(status, code, message, errorBody?.details);
 }
 
 /**
@@ -75,7 +87,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   // surfaced disconnect/delete as false failures even when the server succeeded.
   if (response.status === 204 || response.status === 205) {
     if (!response.ok) {
-      throwIfErrorResponse(response.status, null);
+      await throwIfErrorResponse(response.status, null);
     }
     return undefined as T;
   }
@@ -88,7 +100,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       parsedBody = JSON.parse(trimmed) as unknown;
     } catch {
       if (!response.ok) {
-        throwIfErrorResponse(response.status, null);
+        await throwIfErrorResponse(response.status, null);
       }
       throw new ApiRequestError(
         response.status,
@@ -99,7 +111,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
-    throwIfErrorResponse(response.status, parsedBody);
+    await throwIfErrorResponse(response.status, parsedBody);
   }
 
   return parsedBody as T;

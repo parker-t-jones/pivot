@@ -15,6 +15,35 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Call this in place of `throw error` wherever the Supabase error being thrown comes from a
+ * `.single()`/`.maybeSingle()`-style lookup of the *signed-in caller's own* `public.users` row
+ * (keyed by `requireUser(request).id`). PostgREST's "0 rows" code (`PGRST116`) there always means
+ * the account was deleted after the JWT was issued — JWTs are stateless, so deletion revokes future
+ * refreshes but not an access token already handed to the client — so it becomes a clean 401
+ * `account_not_found` instead of a raw 500.
+ *
+ * This can't live in `apiErrorHandler` alone: a thrown `PostgrestError` carries only
+ * `code`/`message`/`details`/`hint`, not which table or row produced it, and PGRST116 on an
+ * unrelated lookup (a league, a stake) means something else entirely — translating every PGRST116
+ * globally would wrongly turn those into "sign in again" too. So the table/column context has to
+ * be supplied at the call site, which is why this is invoked there rather than centralized in the
+ * handler.
+ */
+export function throwAsAccountNotFoundIfMissingRow(error: {
+  code?: string | null;
+  message: string;
+}): never {
+  if (error.code === 'PGRST116') {
+    throw new ApiError(
+      401,
+      'account_not_found',
+      "Your account isn't available anymore. Please sign in again.",
+    );
+  }
+  throw error as Error;
+}
+
 export function toErrorBody(error: ApiError): {
   error: { code: string; message: string; details?: unknown };
 } {
