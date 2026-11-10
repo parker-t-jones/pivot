@@ -1,14 +1,13 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { DemoBanner } from '../../components/DemoBanner';
+import { DemoCountdownCard } from '../../components/DemoCountdownCard';
+import { DemoLiveRow } from '../../components/DemoLiveRow';
 import { PickCard } from '../../components/PickCard';
 import { PickEventFlash } from '../../components/PickEventFlash';
-import { TeamBadge } from '../../components/TeamBadge';
 import {
-  DEMO_AWAY_TEAM,
-  DEMO_HOME_TEAM,
   DEMO_PRE_GAME_MS,
   DEMO_TOTAL_MS,
   demoPhaseAtElapsed,
@@ -60,7 +59,9 @@ export default function DemoGameDayScreen() {
   return (
     <View style={styles.container}>
       <DemoBanner onExit={exit} />
-      <View style={styles.body}>{renderPhase(phase, elapsed, snapshot)}</View>
+      <ScrollView contentContainerStyle={styles.content} style={styles.scroll}>
+        {renderPhase(phase, elapsed, snapshot)}
+      </ScrollView>
       <PickEventFlash flash={pickFlash.flash} onDone={pickFlash.dismiss} />
     </View>
   );
@@ -68,43 +69,27 @@ export default function DemoGameDayScreen() {
 
 function renderPhase(phase: DemoPhase, elapsed: number, snapshot: DemoSnapshot) {
   if (phase === 'pre_game') {
-    const secondsLeft = Math.ceil((DEMO_PRE_GAME_MS - elapsed) / 1000);
-    return (
-      <View style={styles.card}>
-        <Text style={styles.eyebrow}>UP NEXT</Text>
-        <View style={styles.badgeRow}>
-          <TeamBadge abbr={DEMO_AWAY_TEAM.abbr} size="lg" />
-          <Text style={styles.vs}>at</Text>
-          <TeamBadge abbr={DEMO_HOME_TEAM.abbr} size="lg" />
-        </View>
-        <Text style={styles.title}>Kickoff in {Math.max(secondsLeft, 0)}s</Text>
-      </View>
-    );
+    return <DemoCountdownCard secondsLeft={Math.ceil((DEMO_PRE_GAME_MS - elapsed) / 1000)} />;
   }
 
-  if (phase === 'live') {
+  const live = snapshot.live;
+  if (phase === 'live' && live) {
+    const cards = snapshot.picks.map((pick) => ({
+      id: pick.id,
+      model: pickCardModel({
+        stake: pick,
+        teams: [],
+        weekGames: null,
+        liveGames: [live],
+        now: new Date(),
+      }),
+    }));
     return (
-      <View style={styles.card}>
-        <Text style={styles.liveEyebrow}>LIVE</Text>
-        <View style={styles.badgeRow}>
-          <TeamBadge abbr={DEMO_AWAY_TEAM.abbr} size="lg" />
-          <Text style={styles.vs}>vs</Text>
-          <TeamBadge abbr={DEMO_HOME_TEAM.abbr} size="lg" />
-        </View>
-        <Text style={styles.title}>Your demo picks are live</Text>
-        {snapshot.picks.map((pick) => (
-          <PickCard
-            key={pick.id}
-            model={pickCardModel({
-              stake: pick,
-              teams: [],
-              weekGames: null,
-              liveGames: snapshot.live ? [snapshot.live] : [],
-              now: new Date(),
-            })}
-          />
+      <DemoLiveRow game={live} glowing={cards.some((card) => card.model.hit)}>
+        {cards.map((card) => (
+          <PickCard key={card.id} model={card.model} />
         ))}
-      </View>
+      </DemoLiveRow>
     );
   }
 
@@ -117,11 +102,6 @@ function renderPhase(phase: DemoPhase, elapsed: number, snapshot: DemoSnapshot) 
 }
 
 const styles = StyleSheet.create({
-  badgeRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-  },
   body: {
     alignItems: 'center',
     flex: 1,
@@ -136,25 +116,20 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     flex: 1,
   },
-  eyebrow: {
-    color: theme.colors.textTertiary,
-    fontSize: theme.type.eyebrow.size,
-    fontWeight: theme.type.eyebrow.weight,
-    letterSpacing: theme.type.eyebrow.letterSpacing,
-    textTransform: 'uppercase',
+  // Centers the card, and scrolls when the live row is taller than a small phone.
+  content: {
+    alignItems: 'center',
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.lg,
   },
-  liveEyebrow: {
-    color: theme.colors.accent,
-    fontSize: theme.type.eyebrow.size,
-    fontWeight: theme.type.eyebrow.weight,
-    letterSpacing: theme.type.eyebrow.letterSpacing,
+  scroll: {
+    flex: 1,
   },
   title: {
     color: theme.colors.textPrimary,
     fontSize: theme.type.title.size,
     fontWeight: theme.type.title.weight,
-  },
-  vs: {
-    color: theme.colors.textTertiary,
   },
 });

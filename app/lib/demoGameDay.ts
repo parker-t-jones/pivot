@@ -12,6 +12,14 @@
 
 import type { PickProgress } from '@pivot/shared/picks';
 
+import {
+  downDistanceLabel,
+  fieldPositionLabel,
+  formatClock,
+  opponentAbbreviation,
+  quarterLabel,
+} from './gameDisplay';
+
 export const DEMO_PRE_GAME_MS = 15_000;
 export const DEMO_LIVE_MS = 75_000;
 export const DEMO_TOTAL_MS = DEMO_PRE_GAME_MS + DEMO_LIVE_MS;
@@ -58,6 +66,12 @@ export interface DemoLiveGame {
   score: { home: number; away: number };
   quarter: number;
   time_remaining_sec: number;
+  /** Possessing team abbreviation (always one of the two fictional teams). */
+  possession_team: string;
+  /** Yards from the possessing team to the opponent end zone. */
+  yards_to_endzone: number;
+  down: number;
+  distance: number;
 }
 
 export interface DemoSnapshot {
@@ -128,21 +142,58 @@ function snapshot(
   };
 }
 
-function liveAt(home: number, away: number, clockSec: number): DemoLiveGame {
+function liveAt(
+  home: number,
+  away: number,
+  clockSec: number,
+  situation: Pick<DemoLiveGame, 'possession_team' | 'yards_to_endzone' | 'down' | 'distance'>,
+): DemoLiveGame {
   return {
     game_id: DEMO_GAME_ID,
     score: { home, away },
     quarter: 3,
     time_remaining_sec: clockSec,
+    ...situation,
   };
 }
 
-/** Constant snapshots, so a tick that changes nothing keeps the same array for the hit diff. */
+/**
+ * Constant snapshots, so a tick that changes nothing keeps the same array for the hit diff. The
+ * drive reads as a story: the Comets start at their own 25, reach the Harbor 34 (2nd & 7), and the
+ * demo player's catch is the touchdown, so Harbor has the ball after it.
+ */
 const DEMO_SNAPSHOTS = {
   pre: snapshot('scheduled', null, null),
-  kickoff: snapshot('in_progress', liveAt(10, 7, 460), 47),
-  drive: snapshot('in_progress', liveAt(10, 7, 355), 58),
-  hit: snapshot('in_progress', liveAt(17, 7, 252), 70),
+  kickoff: snapshot(
+    'in_progress',
+    liveAt(10, 7, 460, {
+      possession_team: DEMO_HOME_TEAM.abbr,
+      yards_to_endzone: 75,
+      down: 1,
+      distance: 10,
+    }),
+    47,
+  ),
+  drive: snapshot(
+    'in_progress',
+    liveAt(10, 7, 355, {
+      possession_team: DEMO_HOME_TEAM.abbr,
+      yards_to_endzone: 34,
+      down: 2,
+      distance: 7,
+    }),
+    58,
+  ),
+  hit: snapshot(
+    'in_progress',
+    liveAt(17, 7, 252, {
+      possession_team: DEMO_AWAY_TEAM.abbr,
+      yards_to_endzone: 75,
+      down: 1,
+      distance: 10,
+    }),
+    70,
+  ),
 } as const;
 
 /** The demo picks and game at a point in the timeline. The prop goes LIVE → HIT at `DEMO_HIT_AT_MS`. */
@@ -151,6 +202,27 @@ export function demoSnapshotAtElapsed(elapsedMs: number): DemoSnapshot {
   if (elapsedMs < DEMO_SECOND_STEP_MS) return DEMO_SNAPSHOTS.kickoff;
   if (elapsedMs < DEMO_HIT_AT_MS) return DEMO_SNAPSHOTS.drive;
   return DEMO_SNAPSHOTS.hit;
+}
+
+/** The live row's header ticker, e.g. `LIVE · Q3 · 4:12`. */
+export function demoTickerLine(live: DemoLiveGame): string {
+  return `LIVE · ${quarterLabel(live.quarter)} · ${formatClock(live.time_remaining_sec)}`;
+}
+
+/** The live row's possession line, e.g. `CMT ball · 2nd & 7 · HBR 34`. */
+export function demoPossessionLine(live: DemoLiveGame): string {
+  const opponent = opponentAbbreviation(
+    live.possession_team,
+    DEMO_HOME_TEAM.abbr,
+    DEMO_AWAY_TEAM.abbr,
+  );
+  return [
+    `${live.possession_team} ball`,
+    downDistanceLabel(live.down, live.distance),
+    fieldPositionLabel(live.yards_to_endzone, live.possession_team, opponent),
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
 }
 
 /** Clearly labeled as a demo so it can never be mistaken for a real alert (§12.2). */
