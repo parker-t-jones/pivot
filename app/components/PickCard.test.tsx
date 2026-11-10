@@ -298,4 +298,69 @@ describe('PickCard', () => {
     expect(legs[1]).toContain('BUF @ KC');
     expect(host.textContent?.toLowerCase()).not.toContain('push');
   });
+
+  function bgOf(element: Element | null): string {
+    if (!(element instanceof HTMLElement)) throw new Error('missing element');
+    const match = /rgba?\((\d+), (\d+), (\d+)/.exec(getComputedStyle(element).backgroundColor);
+    return match ? `${match[1]}, ${match[2]}, ${match[3]}` : '';
+  }
+
+  describe('hit state', () => {
+    const hitProp: PickCardStake = {
+      ...prop,
+      progress: { status: 'hit', current: 70, line: 60.5, needed: 0 },
+    };
+
+    it('a live prop shows an accent bar and no hit styling', () => {
+      renderStake(prop, true);
+      expect(host.querySelector('[data-testid="pick-card-bar"]')).not.toBeNull();
+      const fill = host.querySelector('[data-testid="pick-card-bar-fill"]');
+      expect(bgOf(fill)).toBe(rgb(theme.colors.accent));
+      expect(host.querySelector('[data-testid="pick-card-bar-fill-hit"]')).toBeNull();
+      expect(colorOf(host.querySelector('[data-testid="pick-card-detail"]'))).toBe(
+        rgb(theme.colors.textSecondary),
+      );
+    });
+
+    it('a hit prop shows a success bar and a hit label that is not color-only', () => {
+      renderStake(hitProp, true);
+      const fill = host.querySelector('[data-testid="pick-card-bar-fill-hit"]');
+      expect(fill).not.toBeNull();
+      expect(bgOf(fill)).toBe(rgb(theme.colors.success));
+      const detail = host.querySelector('[data-testid="pick-card-detail"]');
+      expect(detail?.textContent).toBe('Hit · 70 rec yds');
+      expect(colorOf(detail)).toBe(rgb(theme.colors.success));
+      expect(host.querySelector('[data-testid="pick-card-bar"]')?.getAttribute('aria-label')).toBe(
+        '70 of 60.5',
+      );
+    });
+
+    it('an upcoming prop shows no bar', () => {
+      renderStake({ ...prop, progress: { status: 'pending' }, game }, false);
+      expect(host.querySelector('[data-testid="pick-card-bar"]')).toBeNull();
+    });
+
+    it('a final prop that won is dimmed with no bar and no success styling', () => {
+      act(() => {
+        root.render(
+          createElement(PickCard, {
+            model: pickCardModel({
+              stake: { ...prop, progress: { status: 'won', current: 70, line: 60.5, needed: 0 } },
+              teams,
+              weekGames: [
+                { game_id: 'g1', status: 'final', scheduled_start: game.scheduled_start },
+              ],
+              liveGames: [],
+              now: NOW,
+            }),
+          }),
+        );
+      });
+      expect(host.querySelector('[data-testid="pick-card-final"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="pick-card-bar"]')).toBeNull();
+      expect(colorOf(host.querySelector('[data-testid="pick-card-detail"]'))).toBe(
+        rgb(theme.colors.textTertiary),
+      );
+    });
+  });
 });

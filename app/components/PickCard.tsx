@@ -19,7 +19,7 @@ export function PickCard({ model }: PickCardProps) {
   const final = model.phase === 'final';
   const live = model.phase === 'live';
   return (
-    <View style={styles.card} testID={`pick-card-${model.phase}`}>
+    <View style={[styles.card, model.hit && styles.cardHit]} testID={`pick-card-${model.phase}`}>
       <View style={styles.top}>
         <View style={styles.pickCol}>
           <Text
@@ -60,7 +60,7 @@ export function PickCard({ model }: PickCardProps) {
       {model.detail ? (
         <Text
           maxFontSizeMultiplier={theme.fontScaleCaps.dense}
-          style={[styles.detail, final && styles.statusFinal]}
+          style={[styles.detail, final && styles.statusFinal, model.hit && styles.detailHit]}
           testID="pick-card-detail"
         >
           {model.detail}
@@ -98,6 +98,22 @@ export function PickCard({ model }: PickCardProps) {
           ))}
         </View>
       ) : null}
+      {live && model.bar ? (
+        <View
+          accessibilityLabel={`${model.bar.current} of ${model.bar.line}`}
+          style={styles.barTrack}
+          testID="pick-card-bar"
+        >
+          <View
+            style={[
+              styles.barFill,
+              model.hit && styles.barFillHit,
+              { width: `${Math.round(model.bar.fill * 100)}%` },
+            ]}
+            testID={model.hit ? 'pick-card-bar-fill-hit' : 'pick-card-bar-fill'}
+          />
+        </View>
+      ) : null}
       {live && model.progress ? (
         <View testID="pick-card-progress">
           <LineScale axisLabel={model.axisLabel} model={model.progress} />
@@ -106,6 +122,8 @@ export function PickCard({ model }: PickCardProps) {
     </View>
   );
 }
+
+const BAR_HEIGHT = 6;
 
 const styles = StyleSheet.create({
   at: {
@@ -119,6 +137,28 @@ const styles = StyleSheet.create({
     borderWidth: theme.effects.panelBorderWidth,
     gap: theme.spacing.md,
     padding: theme.spacing.lg,
+  },
+  // A hit pick keeps the amber flare glow and stroke after the PickEventFlash fades.
+  cardHit: {
+    ...theme.effects.flareGlow,
+    borderColor: theme.colors.accentBorder,
+  },
+  barFill: {
+    backgroundColor: theme.colors.accent,
+    borderRadius: BAR_HEIGHT / 2,
+    height: BAR_HEIGHT,
+  },
+  barFillHit: {
+    backgroundColor: theme.colors.success,
+  },
+  barTrack: {
+    backgroundColor: theme.colors.border,
+    borderRadius: BAR_HEIGHT / 2,
+    height: BAR_HEIGHT,
+    overflow: 'hidden',
+  },
+  detailHit: {
+    color: theme.colors.success,
   },
   eyebrow: {
     color: theme.colors.brass,

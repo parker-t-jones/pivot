@@ -110,6 +110,8 @@ Every trigger fires at most once per pick per game (`claimFirstFire`, unchanged)
 
 **Pick-hit flash (issue #44):** when a Watchlist refetch shows a single prop or team/game prop (not a parlay, a legacy full-game type, survivor, or fantasy) go from `pending`/`live` to `hit`/`won`, the Watchlist plays one in-app moment (`PickEventFlash`, an edge glow plus a lower-third naming the pick). It states only what the progress line already says in-app. It is not a push, and nothing ever frames it as ahead of the broadcast (§0.5 of the stakes plan). It fires on refetch (focus, pull, add-pick save), not over the socket.
 
+**Pick card hit state (issue #65):** while the game is live, a single prop or team/game prop whose progress is `hit` (or `won`, for a quarter or half line settled mid-game) keeps a resting hit state on its Watchlist card after the flash fades: a `success` progress bar, `flareGlow` with `accentBorder`, and the success-colored "Hit" progress line. The bar (current over line) is drawn for any live single prop with a number. Final, lost, tied, refunded, parlay and legacy full-game cards get none of this.
+
 **In-app:** `GET /picks` returns live progress from the Redis snapshot `game_player_stats:{gameId}`, which the runner writes on each summary poll. That is the same live, unheld path `GET /games/live` uses for the scores on Home. Anything in a push goes through the gate.
 
 ## 7. API

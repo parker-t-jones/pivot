@@ -77,7 +77,7 @@ export const theme = {
       shadowRadius: 20,
       elevation: 8,
     },
-    /** Live hero card only — same shape as panelGlow (PIVOT-STAKES-PLAN.md §11.1). */
+    /** Live hero card and a hit pick card (`PickCard`) — same shape as panelGlow (PIVOT-STAKES-PLAN.md §11.1). */
     flareGlow: {
       shadowColor: '#FFC94D',
       shadowOffset: { width: 0, height: 0 },
