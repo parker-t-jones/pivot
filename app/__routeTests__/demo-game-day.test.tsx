@@ -15,7 +15,6 @@ import {
   DEMO_PRE_GAME_MS,
   DEMO_TOTAL_MS,
 } from '../lib/demoGameDay';
-import { NotificationsDisabledError } from '../lib/devNotifications';
 
 const appState = vi.hoisted(() => {
   const listeners = new Set<(state: string) => void>();
@@ -383,7 +382,7 @@ describe('DemoGameDayScreen: iOS backgrounded (OS delivers while timers are susp
 
 describe('DemoGameDayScreen: no OS delivery (permission off, or web)', () => {
   it('plays fully on in-app banners when notification permission is off, with no error', async () => {
-    notifications.schedule.mockRejectedValue(new NotificationsDisabledError());
+    notifications.schedule.mockRejectedValue(new Error('Notifications are turned off.'));
     await mount();
     const seen = await playAndRecordBanners();
     expect(seen.map((entry) => entry.title)).toEqual(DEMO_ALERTS.map((alert) => alert.title));
