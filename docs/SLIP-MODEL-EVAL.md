@@ -32,11 +32,11 @@ that's a guess until it's measured against real slips.
 
 ## Models compared
 
-| Model | ID | Input $/M | Output $/M |
-|---|---|---|---|
-| Opus 5.5 | `claude-opus-5-5` | $4.00 | $20.00 |
-| Sonnet 5.5 | `claude-sonnet-5-5` | $2.00 | $10.00 |
-| Haiku 5.5 | `claude-haiku-5-5` | $0.10 | $0.50 |
+| Model      | ID                  | Input $/M | Output $/M |
+| ---------- | ------------------- | --------- | ---------- |
+| Opus 5.5   | `claude-opus-5-5`   | $4.00     | $20.00     |
+| Sonnet 5.5 | `claude-sonnet-5-5` | $2.00     | $10.00     |
+| Haiku 5.5  | `claude-haiku-5-5`  | $0.10     | $0.50      |
 
 Pricing from `services/api/src/lib/slipImport/modelCost.ts` — re-check against current Anthropic
 pricing before trusting an old run of this table; these rates can change.
@@ -50,11 +50,11 @@ each model alone costs and gets right, not what a fallback masks.
 
 _(not run — paste the harness's comparison table here)_
 
-| model | leg count | bet count | is_bet_slip | field accuracy (avg) | $/image |
-|---|---|---|---|---|---|
-| Opus 5.5 (`claude-opus-5-5`) | — | — | — | — | — |
-| Sonnet 5.5 (`claude-sonnet-5-5`) | — | — | — | — | — |
-| Haiku 5.5 (`claude-haiku-5-5`) | — | — | — | — | — |
+| model                            | leg count | bet count | is_bet_slip | field accuracy (avg) | $/image |
+| -------------------------------- | --------- | --------- | ----------- | -------------------- | ------- |
+| Opus 5.5 (`claude-opus-5-5`)     | —         | —         | —           | —                    | —       |
+| Sonnet 5.5 (`claude-sonnet-5-5`) | —         | —         | —           | —                    | —       |
+| Haiku 5.5 (`claude-haiku-5-5`)   | —         | —         | —           | —                    | —       |
 
 ### Opus 5.5
 

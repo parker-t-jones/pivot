@@ -120,7 +120,9 @@ describe('RedisGameStateProvider presence lookups', () => {
     const userId = 'user-a';
 
     expect(await provider.isUserActive(userId)).toBe(false);
-    expect(await provider.isDeviceActive(userId, '11111111-1111-4111-8111-111111111111')).toBe(false);
+    expect(await provider.isDeviceActive(userId, '11111111-1111-4111-8111-111111111111')).toBe(
+      false,
+    );
 
     expect(keys).toContain('zscore active_users');
     expect(keys.some((key) => key.includes('zrange active_users'))).toBe(false);
@@ -151,6 +153,8 @@ describe('RedisGameStateProvider presence lookups', () => {
     expect(keys).toContain('zadd presence:user-a');
     expect(keys).toContain('pexpire presence:user-a');
     expect(keys).toContain('pexpire presence-vis:user-a');
-    expect(keys.indexOf('hset presence-vis:user-a')).toBeLessThan(keys.indexOf('zadd presence:user-a'));
+    expect(keys.indexOf('hset presence-vis:user-a')).toBeLessThan(
+      keys.indexOf('zadd presence:user-a'),
+    );
   });
 });

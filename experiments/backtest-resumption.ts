@@ -254,15 +254,14 @@ function findPlayIndexByAnchor(plays: LoggedPlay[], anchorText: string): number 
     throw new Error(`Reference case anchor not found in log: "${anchorText}"`);
   }
   if (matches.length > 1) {
-    throw new Error(`Reference case anchor is not unique in log (${matches.length} matches): "${anchorText}"`);
+    throw new Error(
+      `Reference case anchor is not unique in log (${matches.length} matches): "${anchorText}"`,
+    );
   }
   return matches[0].index;
 }
 
-function runKnownCaseComparisons(
-  plays: LoggedPlay[],
-  events: PossessionChangeEvent[],
-): void {
+function runKnownCaseComparisons(plays: LoggedPlay[], events: PossessionChangeEvent[]): void {
   console.log('\n=== Comparison against hand-analyzed cases ===\n');
 
   for (const refCase of REFERENCE_CASES) {
@@ -270,7 +269,9 @@ function runKnownCaseComparisons(
     try {
       anchorIndex = findPlayIndexByAnchor(plays, refCase.anchorText);
     } catch (err) {
-      console.log(`[${refCase.label}] MISMATCH — ${String(err instanceof Error ? err.message : err)}`);
+      console.log(
+        `[${refCase.label}] MISMATCH — ${String(err instanceof Error ? err.message : err)}`,
+      );
       continue;
     }
 
@@ -284,7 +285,8 @@ function runKnownCaseComparisons(
     }
 
     const result = watchForResumption(event.precedingPlay, plays.slice(event.index));
-    const actualSeconds = result.outcome === 'NO_MORE_PLAYS' ? null : Math.round(result.elapsedMs / 1000);
+    const actualSeconds =
+      result.outcome === 'NO_MORE_PLAYS' ? null : Math.round(result.elapsedMs / 1000);
     const withinTolerance =
       actualSeconds != null &&
       Math.abs(actualSeconds - refCase.expectedElapsedSeconds) <= refCase.toleranceSeconds &&
@@ -310,7 +312,9 @@ function runKnownCaseComparisons(
   // Compare the three known raw timestamps directly here instead, since building the
   // "anchor on the play after a score, not just a possession change" logic into this
   // throwaway harness isn't worth it now that the real watcher already covers the case.
-  console.log('\n[TD -> timeout -> kickoff] Not auto-detected as an anchor by this harness (see comment above) —');
+  console.log(
+    '\n[TD -> timeout -> kickoff] Not auto-detected as an anchor by this harness (see comment above) —',
+  );
   console.log('  comparing the three raw log timestamps directly instead:');
   try {
     const tdIndex = findPlayIndexByAnchor(plays, 'Tr.Williams up the middle for 1 yard, TOUCHDOWN');
@@ -320,8 +324,15 @@ function runKnownCaseComparisons(
     const timeout = plays[timeoutIndex];
     const kickoff = plays[kickoffIndex];
 
-    if (!timeout || !kickoff || classifyPlayType(timeout.typeId) !== 'SKIP_AND_WAIT' || timeout.typeText.toLowerCase() !== 'official timeout') {
-      console.log('  MISMATCH — expected the two plays right after the TD to be [Official Timeout, Kickoff], found something else.');
+    if (
+      !timeout ||
+      !kickoff ||
+      classifyPlayType(timeout.typeId) !== 'SKIP_AND_WAIT' ||
+      timeout.typeText.toLowerCase() !== 'official timeout'
+    ) {
+      console.log(
+        '  MISMATCH — expected the two plays right after the TD to be [Official Timeout, Kickoff], found something else.',
+      );
     } else {
       const tdToTimeoutSec = Math.round((timeout.timestampMs - td.timestampMs) / 1000);
       const timeoutToKickoffSec = Math.round((kickoff.timestampMs - timeout.timestampMs) / 1000);
@@ -348,7 +359,9 @@ async function main(): Promise<void> {
   console.log(`Loaded ${plays.length} plays from ${LOG_PATH}`);
 
   const events = findPossessionChangeEvents(plays);
-  console.log(`Detected ${events.length} possession-change events (poss: differs from previous play)\n`);
+  console.log(
+    `Detected ${events.length} possession-change events (poss: differs from previous play)\n`,
+  );
 
   console.log('=== Possession-change events and resumption outcomes ===\n');
   for (const event of events) {

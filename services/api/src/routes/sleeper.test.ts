@@ -57,7 +57,10 @@ async function buildTestApp() {
     throw error;
   });
 
-  await fastify.register(authPlugin, { jwtSecret: JWT_SECRET, supabaseUrl: 'http://127.0.0.1:54321' });
+  await fastify.register(authPlugin, {
+    jwtSecret: JWT_SECRET,
+    supabaseUrl: 'http://127.0.0.1:54321',
+  });
   await fastify.register(sleeperRoutes);
   return fastify;
 }

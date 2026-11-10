@@ -102,11 +102,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       if (!response.ok) {
         await throwIfErrorResponse(response.status, null);
       }
-      throw new ApiRequestError(
-        response.status,
-        'invalid_json',
-        'Response was not valid JSON.',
-      );
+      throw new ApiRequestError(response.status, 'invalid_json', 'Response was not valid JSON.');
     }
   }
 

@@ -11,10 +11,5 @@ interface HomeOffDayCardProps {
  * PLAN.md Section 10 Home State 4 — in-season upcoming-games slate.
  */
 export function HomeOffDayCard({ upcomingGames, week }: HomeOffDayCardProps) {
-  return (
-    <UpcomingStakeGameList
-      games={upcomingGames}
-      heading={`WEEK ${week} — Upcoming games:`}
-    />
-  );
+  return <UpcomingStakeGameList games={upcomingGames} heading={`WEEK ${week} — Upcoming games:`} />;
 }

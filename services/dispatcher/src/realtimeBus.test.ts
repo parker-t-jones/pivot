@@ -12,7 +12,9 @@ describe('InMemoryRealtimeBus', () => {
   it('records every publish', async () => {
     const bus = new InMemoryRealtimeBus();
     await bus.publish('realtime:user:user-1', { hello: 'world' });
-    expect(bus.published).toEqual([{ channel: 'realtime:user:user-1', message: { hello: 'world' } }]);
+    expect(bus.published).toEqual([
+      { channel: 'realtime:user:user-1', message: { hello: 'world' } },
+    ]);
   });
 
   it('delivers to an exact-channel subscriber', async () => {

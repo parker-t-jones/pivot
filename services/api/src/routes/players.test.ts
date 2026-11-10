@@ -9,10 +9,7 @@ import { SignJWT } from 'jose';
 import { afterEach, describe, expect, it } from 'vitest';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import { apiErrorHandler } from '../lib/errors.js';
-import {
-  buildPlayerSearchText,
-  playerSearchTextMatches,
-} from '../lib/playerSearchText.js';
+import { buildPlayerSearchText, playerSearchTextMatches } from '../lib/playerSearchText.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
@@ -266,12 +263,9 @@ describe('GET /players/search', () => {
     app = await buildTestApp();
     const response = await search('DET');
     expect(response.statusCode).toBe(200);
-    const players = (
-      response.json() as { players: { position: string; last_name: string }[] }
-    ).players;
-    expect(players).toEqual([
-      expect.objectContaining({ position: 'DEF', last_name: 'Defense' }),
-    ]);
+    const players = (response.json() as { players: { position: string; last_name: string }[] })
+      .players;
+    expect(players).toEqual([expect.objectContaining({ position: 'DEF', last_name: 'Defense' })]);
   });
 
   it('finds Buccaneers defense by city Tampa without skill players', async () => {
@@ -305,12 +299,9 @@ describe('GET /players/search', () => {
     app = await buildTestApp();
     const response = await search('David', 'RB');
     expect(response.statusCode).toBe(200);
-    const players = (
-      response.json() as { players: { last_name: string; position: string }[] }
-    ).players;
-    expect(players).toEqual([
-      expect.objectContaining({ last_name: 'Montgomery', position: 'RB' }),
-    ]);
+    const players = (response.json() as { players: { last_name: string; position: string }[] })
+      .players;
+    expect(players).toEqual([expect.objectContaining({ last_name: 'Montgomery', position: 'RB' })]);
   });
 
   it('requires auth', async () => {

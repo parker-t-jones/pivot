@@ -598,10 +598,12 @@ describe('picks routes', () => {
 
     it('adds earlier weeks into the season-to-date hit rate but not into the week recap', async () => {
       h = await setup();
-      h.db.rows('stakes').push(
-        rawStake('p-this-week', { result: 'won', result_value: 140 }),
-        rawStake('p-earlier-week', { week: 4, result: 'lost', result_value: 60 }),
-      );
+      h.db
+        .rows('stakes')
+        .push(
+          rawStake('p-this-week', { result: 'won', result_value: 140 }),
+          rawStake('p-earlier-week', { week: 4, result: 'lost', result_value: 60 }),
+        );
       const res = (await get('/picks/recap')).json();
       expect(res.week_recap.picks_made).toBe(1);
       expect(res.season_recap).toEqual({ won: 1, decided: 2, hit_rate: 0.5 });

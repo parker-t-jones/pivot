@@ -18,9 +18,7 @@ describe('kickoffLabel', () => {
   it('counts down at exactly 24 hours and at 23h 59m', () => {
     const now = new Date('2026-10-18T13:30:00.000Z');
     expect(kickoffLabel(new Date(now.getTime() + 24 * HOUR_MS), now)).toBe('24h 0m');
-    expect(kickoffLabel(new Date(now.getTime() + 23 * HOUR_MS + 59 * 60_000), now)).toBe(
-      '23h 59m',
-    );
+    expect(kickoffLabel(new Date(now.getTime() + 23 * HOUR_MS + 59 * 60_000), now)).toBe('23h 59m');
   });
 
   it('switches from hours to minutes at one hour', () => {

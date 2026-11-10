@@ -43,7 +43,10 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
  * Base reasons that name who has the ball. The other `FlagReasonType` values — `red_zone`,
  * `close_game`, `star_player_active` — are bonuses and stay on the ±3 band.
  */
-const SIDE_OF_BALL_REASONS: ReadonlySet<FlagReasonType> = new Set(['offense_active', 'defense_active']);
+const SIDE_OF_BALL_REASONS: ReadonlySet<FlagReasonType> = new Set([
+  'offense_active',
+  'defense_active',
+]);
 
 /** Side of the ball, or the players named on it, is a different flag even at the same priority. */
 function sideOrPlayersChanged(oldState: FlagState, newState: FlagState): boolean {

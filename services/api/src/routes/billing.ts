@@ -26,10 +26,7 @@ const revenueCatEventSchema = z.object({
     /** SANDBOX and PRODUCTION share the same tier rules. */
     environment: z.string().optional(),
     entitlement_ids: z.array(z.string()).nullable().optional(),
-    entitlements: z
-      .record(z.string(), z.unknown())
-      .nullable()
-      .optional(),
+    entitlements: z.record(z.string(), z.unknown()).nullable().optional(),
   }),
 });
 
@@ -76,7 +73,11 @@ const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
     async (request) => {
       const expected = process.env['REVENUECAT_WEBHOOK_SECRET'];
       if (!expected) {
-        throw new ApiError(503, 'billing_unconfigured', 'RevenueCat webhook secret is not configured.');
+        throw new ApiError(
+          503,
+          'billing_unconfigured',
+          'RevenueCat webhook secret is not configured.',
+        );
       }
 
       const header = request.headers.authorization ?? '';

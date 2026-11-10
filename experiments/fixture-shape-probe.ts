@@ -14,9 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = path.resolve(__dirname, 'logs');
 
 function matches(name: string): boolean {
-  return (
-    (name.startsWith('events-') || name.startsWith('markers-')) && name.endsWith('.jsonl')
-  );
+  return (name.startsWith('events-') || name.startsWith('markers-')) && name.endsWith('.jsonl');
 }
 
 function summarize(filePath: string): void {

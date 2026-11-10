@@ -54,7 +54,9 @@ export class DeepLinkPlaybackSource implements PlaybackSource {
 
   async createSession(game: Game): Promise<VideoSession> {
     if (!game.deepLinkUrl) {
-      throw new Error(`DeepLinkPlaybackSource cannot play game "${game.id}": no deep link resolved.`);
+      throw new Error(
+        `DeepLinkPlaybackSource cannot play game "${game.id}": no deep link resolved.`,
+      );
     }
     return {
       source: this.id,
@@ -97,7 +99,9 @@ export class AirPlayPlaybackSource implements PlaybackSource {
 
   async createSession(game: Game): Promise<VideoSession> {
     if (!game.deepLinkUrl) {
-      throw new Error(`AirPlayPlaybackSource cannot play game "${game.id}": no deep link resolved.`);
+      throw new Error(
+        `AirPlayPlaybackSource cannot play game "${game.id}": no deep link resolved.`,
+      );
     }
     // Resolves once the user dismisses the picker, so the deep-link hand-off cannot race the sheet.
     await this.route.presentRoutePicker();

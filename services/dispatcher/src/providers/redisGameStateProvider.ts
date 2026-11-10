@@ -66,7 +66,9 @@ function upstashPresence(redis: Redis): PresenceRedis {
     async hgetAll(key) {
       const raw = await redis.hgetall<Record<string, unknown>>(key);
       if (!raw) return {};
-      return Object.fromEntries(Object.entries(raw).map(([field, value]) => [field, String(value)]));
+      return Object.fromEntries(
+        Object.entries(raw).map(([field, value]) => [field, String(value)]),
+      );
     },
     async hset(key, field, value) {
       await redis.hset(key, { [field]: value });
@@ -164,9 +166,14 @@ export class RedisGameStateProvider implements GameStateStore {
   }
 
   private async listLegacyMembers(): Promise<string[]> {
-    const members = await this.redis.zrange<(string | number)[]>(ACTIVE_USERS_KEY, Date.now(), '+inf', {
-      byScore: true,
-    });
+    const members = await this.redis.zrange<(string | number)[]>(
+      ACTIVE_USERS_KEY,
+      Date.now(),
+      '+inf',
+      {
+        byScore: true,
+      },
+    );
     return members.map((member) => String(member));
   }
 }

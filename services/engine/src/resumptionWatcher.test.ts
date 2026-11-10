@@ -131,7 +131,11 @@ describe('watchForResumption — reference cases from the recorded Colts @ Lions
     //
     // The turnover and the timeout landed in the same poll, so they share a timestamp — the anchor
     // choice is unobservable here, unlike the punt case above.
-    const fourthDown = observed('15:43:48', { playId: 'fourth-down', playType: 'pass', quarter: 4 });
+    const fourthDown = observed('15:43:48', {
+      playId: 'fourth-down',
+      playType: 'pass',
+      quarter: 4,
+    });
     const timeout = observed('15:43:48', {
       playId: 'timeout',
       playType: 'timeout',

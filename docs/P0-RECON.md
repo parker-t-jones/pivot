@@ -14,22 +14,22 @@ Line numbers are from the working tree on this date.
 
 `main` (`live-sunday-harness.ts:925-932`) parses argv and either prints the scoreboard (`runList`, `:559-568`) or calls `runHarness` (`:570`).
 
-| Step | Function | File | Kind |
-|---|---|---|---|
-| 1 | `parseArgs` | `experiments/live-sunday-harness.ts:210-238` | harness |
-| 2 | `fetchScoreboard` → `espnClient.getScoreboard` | harness `:417-430`; client `services/ingestion/src/espn/espnClient.ts:82-83` | harness calls production client |
-| 3 | `resolveContexts` → `espnClient.getSummary` + `resolveGameContext` | harness `:434-449`; `mapEspnPlay.ts:70-82` | harness calls production |
-| 4 | Seed in-memory catalogs, stakes, users, `FixedLineupCache` | harness `:603-675`, helpers `:464-548` | harness |
-| 5 | `startDispatcherLoop` → `runDispatcherTick` every 500ms | `services/dispatcher/src/dispatcher.ts:107-115`, interval `:11` | production, invoked only from the harness (and tests) |
-| 6 | One `EspnPlaySource` per game, `Promise.all` of `subscribe` | harness `:836-909`; class `services/ingestion/src/espn/espnPlaySource.ts:64` | production class, harness concurrency |
-| 7 | `getSummary` → `flattenPlays` → `mapEspnPlay` → `await handler` | `espnPlaySource.ts:84-134`; `mapEspnPlay.ts:94-121` | production |
-| 8 | Handler: log play, `gate.beginPlay`, `tracker.observe`, `onPlayEvent` | harness `:775-816` | harness order; `onPlayEvent` is production |
-| 9 | `IncrementalResumptionTracker.observe` → `watchForResumption` | `experiments/incrementalResumption.ts:111-167`; `services/engine/src/resumptionWatcher.ts:73` | harness tracker, production function |
-| 10 | `onPlayEvent`: `applyPlayToState`, `isInterestingStateChange`, `getActiveUsersWithStakeIn`, `computeFlagState`, `diffFlagStates`, `dispatcher.dispatch` | `services/engine/src/onPlayEvent.ts:59-87` | production |
-| 11 | `ResumptionGatedDispatcher.dispatch` enqueues with `scheduledFireAt = now` | `experiments/resumptionGate.ts:119-175` | harness. It does not call `QueueingEventDispatcher` |
-| 12 | `runDispatcherTick`: `queue.due`, `isStillRelevant`, `userDirectory.getUser`, `shouldRateLimit`, `deliverFlagEvent`, `queue.remove` | `dispatcher.ts:50-88` | production |
-| 13 | `deliverFlagEvent`: catalogs, `decideAction`, `persistFlagEvent`, `realtimeBus.publish`, `rateLimitStore.recordNotification`, `pushNotifier.sendPush` | `services/dispatcher/src/delivery.ts:189-315` | production |
-| 14 | `LoggingPushNotifier.sendPush` → `createPushNotifier` → `ExpoPushNotifier.sendPush` or `NoOpPushNotifier` | harness `:322-337`, `:631-634`; `services/dispatcher/src/pushNotifier.ts:98-118`, `:184-189` | wrapper is harness; notifier is production |
+| Step | Function                                                                                                                                                | File                                                                                          | Kind                                                  |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 1    | `parseArgs`                                                                                                                                             | `experiments/live-sunday-harness.ts:210-238`                                                  | harness                                               |
+| 2    | `fetchScoreboard` → `espnClient.getScoreboard`                                                                                                          | harness `:417-430`; client `services/ingestion/src/espn/espnClient.ts:82-83`                  | harness calls production client                       |
+| 3    | `resolveContexts` → `espnClient.getSummary` + `resolveGameContext`                                                                                      | harness `:434-449`; `mapEspnPlay.ts:70-82`                                                    | harness calls production                              |
+| 4    | Seed in-memory catalogs, stakes, users, `FixedLineupCache`                                                                                              | harness `:603-675`, helpers `:464-548`                                                        | harness                                               |
+| 5    | `startDispatcherLoop` → `runDispatcherTick` every 500ms                                                                                                 | `services/dispatcher/src/dispatcher.ts:107-115`, interval `:11`                               | production, invoked only from the harness (and tests) |
+| 6    | One `EspnPlaySource` per game, `Promise.all` of `subscribe`                                                                                             | harness `:836-909`; class `services/ingestion/src/espn/espnPlaySource.ts:64`                  | production class, harness concurrency                 |
+| 7    | `getSummary` → `flattenPlays` → `mapEspnPlay` → `await handler`                                                                                         | `espnPlaySource.ts:84-134`; `mapEspnPlay.ts:94-121`                                           | production                                            |
+| 8    | Handler: log play, `gate.beginPlay`, `tracker.observe`, `onPlayEvent`                                                                                   | harness `:775-816`                                                                            | harness order; `onPlayEvent` is production            |
+| 9    | `IncrementalResumptionTracker.observe` → `watchForResumption`                                                                                           | `experiments/incrementalResumption.ts:111-167`; `services/engine/src/resumptionWatcher.ts:73` | harness tracker, production function                  |
+| 10   | `onPlayEvent`: `applyPlayToState`, `isInterestingStateChange`, `getActiveUsersWithStakeIn`, `computeFlagState`, `diffFlagStates`, `dispatcher.dispatch` | `services/engine/src/onPlayEvent.ts:59-87`                                                    | production                                            |
+| 11   | `ResumptionGatedDispatcher.dispatch` enqueues with `scheduledFireAt = now`                                                                              | `experiments/resumptionGate.ts:119-175`                                                       | harness. It does not call `QueueingEventDispatcher`   |
+| 12   | `runDispatcherTick`: `queue.due`, `isStillRelevant`, `userDirectory.getUser`, `shouldRateLimit`, `deliverFlagEvent`, `queue.remove`                     | `dispatcher.ts:50-88`                                                                         | production                                            |
+| 13   | `deliverFlagEvent`: catalogs, `decideAction`, `persistFlagEvent`, `realtimeBus.publish`, `rateLimitStore.recordNotification`, `pushNotifier.sendPush`   | `services/dispatcher/src/delivery.ts:189-315`                                                 | production                                            |
+| 14   | `LoggingPushNotifier.sendPush` → `createPushNotifier` → `ExpoPushNotifier.sendPush` or `NoOpPushNotifier`                                               | harness `:322-337`, `:631-634`; `services/dispatcher/src/pushNotifier.ts:98-118`, `:184-189`  | wrapper is harness; notifier is production            |
 
 The handler runs resumption **before** `onPlayEvent` (`live-sunday-harness.ts:811-816`), so `dispatch` can see a resolution produced by the same play.
 
@@ -82,11 +82,11 @@ Each game has its own `seenPlayIds` set (`espnPlaySource.ts:80`) and its own `In
 
 **ESPN failure and retry.** `espnClient.fetchAndValidate` never throws for a rejected `fetch`, a non-2xx response, or a zod failure (`espnClient.ts:39-70`). It returns `{ ok: false, kind }`. `subscribe` then:
 
-| `kind` | What the source does |
-|---|---|
-| `network_error` | `console.error` and `sleep` the poll interval, then `continue` (`espnPlaySource.ts:98-102`) |
-| `http_error` | same branch (`:98-102`) |
-| `invalid_shape` | `reportShapeFailure` then `sleep` and `continue` (`:87-102`) |
+| `kind`                            | What the source does                                                                         |
+| --------------------------------- | -------------------------------------------------------------------------------------------- |
+| `network_error`                   | `console.error` and `sleep` the poll interval, then `continue` (`espnPlaySource.ts:98-102`)  |
+| `http_error`                      | same branch (`:98-102`)                                                                      |
+| `invalid_shape`                   | `reportShapeFailure` then `sleep` and `continue` (`:87-102`)                                 |
 | summary ok but both teams missing | `reportShapeFailure` (`signature: 'missing-team-context'`), `sleep`, `continue` (`:107-121`) |
 
 There is no backoff and no retry cap. The `while` runs until final or `disconnect`. Shape reports are throttled in memory for 5 minutes per signature (`errors.ts:38`, `:57-78`). Console logging of shape failures is not throttled (`errors.ts:47-48`).
@@ -167,12 +167,12 @@ There is no caller in `services/` (see §4). Tests call `watchForResumption` dir
 
 **Outputs.** `ResumptionResult` (`:48-52`):
 
-| `outcome` | When |
-|---|---|
-| `REAL_ACTION` | revealing play, or a later play, classifies as real action (`:85-86`, `:97-98`). `elapsedMs` is from `precedingPlay` if the revealing play is already real action (`:83-86`); from the revealing play if the loop continues (`:94`) |
-| `ABORTED` | revealing play or a later play is `end_half` or `end_game` (`:88-89`, `:100-101`) |
-| `CEILING_FALLBACK` | a later play is still `SKIP_AND_WAIT` and `observedAt - revealingPlay.observedAt >= RESUMPTION_CEILING_MS` (`:103-105`). Constant is `4 * 60 * 1000` (`:55`) |
-| `NO_MORE_PLAYS` | the array is empty (`:78-79`), or the array ends on unresolved `SKIP_AND_WAIT` plays that have not crossed the ceiling (`:108-112`) |
+| `outcome`          | When                                                                                                                                                                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REAL_ACTION`      | revealing play, or a later play, classifies as real action (`:85-86`, `:97-98`). `elapsedMs` is from `precedingPlay` if the revealing play is already real action (`:83-86`); from the revealing play if the loop continues (`:94`) |
+| `ABORTED`          | revealing play or a later play is `end_half` or `end_game` (`:88-89`, `:100-101`)                                                                                                                                                   |
+| `CEILING_FALLBACK` | a later play is still `SKIP_AND_WAIT` and `observedAt - revealingPlay.observedAt >= RESUMPTION_CEILING_MS` (`:103-105`). Constant is `4 * 60 * 1000` (`:55`)                                                                        |
+| `NO_MORE_PLAYS`    | the array is empty (`:78-79`), or the array ends on unresolved `SKIP_AND_WAIT` plays that have not crossed the ceiling (`:108-112`)                                                                                                 |
 
 **Ceiling.** The `>= RESUMPTION_CEILING_MS` check is inside the `for` over `subsequentPlays` (`:93-105`). It runs when a play object is already in the array. If the array ends before that, the function returns `NO_MORE_PLAYS` (`:108-112`). There is no `setTimeout` in this file. The unit test that expects `CEILING_FALLBACK` passes a synthetic play at `15:04:10` (`resumptionWatcher.test.ts:175-187`).
 
@@ -197,19 +197,19 @@ The harness tracker adds a separate timer. `armCeilingTimer` (`incrementalResump
 2. `pickBroadcastSource` keeps services the user subscribes to, sorts by `lagSecondsFor` ascending, then by service name (`broadcastLag.ts:43-56`).
 3. `lagSecondsFor` (`broadcastLag.ts:23-26`): `null` or a missing key returns `DEFAULT_LAG_SECONDS` (`60`, `:21`). Otherwise the table at `:3-18`:
 
-| service | seconds |
-|---|---|
-| `sunday_ticket` | 75 |
-| `espn_plus` | 60 |
-| `paramount_plus` | 50 |
-| `peacock` | 45 |
-| `amazon_prime` | 40 |
-| `hulu` | 45 |
-| `fubo` | 50 |
-| `directv` | 40 |
-| `nfl_plus` | 60 |
-| `nfl_network` | 20 |
-| `fox`, `cbs`, `nbc`, `abc` | 8 |
+| service                    | seconds |
+| -------------------------- | ------- |
+| `sunday_ticket`            | 75      |
+| `espn_plus`                | 60      |
+| `paramount_plus`           | 50      |
+| `peacock`                  | 45      |
+| `amazon_prime`             | 40      |
+| `hulu`                     | 45      |
+| `fubo`                     | 50      |
+| `directv`                  | 40      |
+| `nfl_plus`                 | 60      |
+| `nfl_network`              | 20      |
+| `fox`, `cbs`, `nbc`, `abc` | 8       |
 
 4. `scheduledFireAt = clock() + lagSec * 1000` (`scheduleFlagEvent.ts:39`). The engine placeholder is replaced.
 
@@ -217,11 +217,11 @@ The harness tracker adds a separate timer. `armCeilingTimer` (`incrementalResump
 
 **Who reads the values.**
 
-| Symbol | Readers |
-|---|---|
-| `scheduledFireAt` | `InMemoryFlagEventQueue.due` keeps events with `scheduledFireAt <= now` (`inMemoryQueue.ts:14-15`). `RedisFlagEventQueue.enqueue` uses it as the sorted-set score (`redisQueue.ts:11-15`); `due` ranges `0..now` (`:18-23`). `deliverFlagEvent` stores it as `firedAt` (`delivery.ts:272`). `GET` is not involved. `POST /flags/:event_id/action` does not read it. `toSyntheticFlagEvent` sets `0` because `decideAction` does not read it (`flags.ts:47-61`). The harness logs the field (`live-sunday-harness.ts:705`). |
-| `lagSecondsFor` | `scheduleFlagEvent.ts:37`. `pickBroadcastSource` (`broadcastLag.ts:53`). `rankBroadcasts` sets `typicalLagSeconds` (`broadcastResolver.ts:56`). |
-| `BROADCAST_LAG_SECONDS` | Read only inside `lagSecondsFor` (`broadcastLag.ts:25`). Tests assert the table (`broadcastLag.test.ts:11`). |
+| Symbol                  | Readers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scheduledFireAt`       | `InMemoryFlagEventQueue.due` keeps events with `scheduledFireAt <= now` (`inMemoryQueue.ts:14-15`). `RedisFlagEventQueue.enqueue` uses it as the sorted-set score (`redisQueue.ts:11-15`); `due` ranges `0..now` (`:18-23`). `deliverFlagEvent` stores it as `firedAt` (`delivery.ts:272`). `GET` is not involved. `POST /flags/:event_id/action` does not read it. `toSyntheticFlagEvent` sets `0` because `decideAction` does not read it (`flags.ts:47-61`). The harness logs the field (`live-sunday-harness.ts:705`). |
+| `lagSecondsFor`         | `scheduleFlagEvent.ts:37`. `pickBroadcastSource` (`broadcastLag.ts:53`). `rankBroadcasts` sets `typicalLagSeconds` (`broadcastResolver.ts:56`).                                                                                                                                                                                                                                                                                                                                                                            |
+| `BROADCAST_LAG_SECONDS` | Read only inside `lagSecondsFor` (`broadcastLag.ts:25`). Tests assert the table (`broadcastLag.test.ts:11`).                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 No production process constructs `QueueingEventDispatcher`. Call sites are `scheduleFlagEvent.test.ts` and `dispatcher.integration.test.ts:103`. The API `env.ts` schema has no `PUSH_DRIVER` and no dispatcher boot (`services/api/src/env.ts:6-19`). `docs/D1-DEPLOY-RUNBOOK.md:103-107` says the same.
 
@@ -319,31 +319,31 @@ Whether any hosted database currently has `status` other than `scheduled` is **U
 
 Along the harness path that actually sends push:
 
-| What | Where it lives |
-|---|---|
-| ESPN poll cursor (`seenPlayIds`, resolved `EspnGameContext`) | Memory inside one `EspnPlaySource` (`espnPlaySource.ts:80-81`) |
-| Resumption window, procedural buffer, ceiling `Timeout` | Memory inside one `IncrementalResumptionTracker` (`incrementalResumption.ts:91-95`, `:204`) |
-| Gate: open windows, parked events, carry-over resolution | Memory inside `ResumptionGatedDispatcher` (`resumptionGate.ts:56-77`) |
-| `GameState`, `FlagState`, stake sets, active users | `InMemoryGameStateStore` (`live-sunday-harness.ts:604`) |
-| Flag queue | `InMemoryFlagEventQueue` (`:605`, `inMemoryQueue.ts:6`) |
-| Rate-limit timestamps | `MeasuringRateLimitStore`'s `Map` (`live-sunday-harness.ts:284`) |
-| Users, players, games, broadcasts, viewing session | In-memory catalogs (`:606-609`) |
-| Delivered-flag log the harness writes | Append-only files `experiments/logs/events-*.jsonl` and `plays-*.jsonl` (`:598-601`). Not Supabase |
-| Realtime publish | `InMemoryRealtimeBus` (`:610`). Not Redis, not the API |
-| Push token | Process env `PIVOT_EXPO_PUSH_TOKEN` or the dry-run placeholder (`:236`, `:170`, `:666`) |
-| Supabase | Not used by `live-sunday-harness.ts` |
-| Redis | Not used by `live-sunday-harness.ts` |
+| What                                                         | Where it lives                                                                                     |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| ESPN poll cursor (`seenPlayIds`, resolved `EspnGameContext`) | Memory inside one `EspnPlaySource` (`espnPlaySource.ts:80-81`)                                     |
+| Resumption window, procedural buffer, ceiling `Timeout`      | Memory inside one `IncrementalResumptionTracker` (`incrementalResumption.ts:91-95`, `:204`)        |
+| Gate: open windows, parked events, carry-over resolution     | Memory inside `ResumptionGatedDispatcher` (`resumptionGate.ts:56-77`)                              |
+| `GameState`, `FlagState`, stake sets, active users           | `InMemoryGameStateStore` (`live-sunday-harness.ts:604`)                                            |
+| Flag queue                                                   | `InMemoryFlagEventQueue` (`:605`, `inMemoryQueue.ts:6`)                                            |
+| Rate-limit timestamps                                        | `MeasuringRateLimitStore`'s `Map` (`live-sunday-harness.ts:284`)                                   |
+| Users, players, games, broadcasts, viewing session           | In-memory catalogs (`:606-609`)                                                                    |
+| Delivered-flag log the harness writes                        | Append-only files `experiments/logs/events-*.jsonl` and `plays-*.jsonl` (`:598-601`). Not Supabase |
+| Realtime publish                                             | `InMemoryRealtimeBus` (`:610`). Not Redis, not the API                                             |
+| Push token                                                   | Process env `PIVOT_EXPO_PUSH_TOKEN` or the dry-run placeholder (`:236`, `:170`, `:666`)            |
+| Supabase                                                     | Not used by `live-sunday-harness.ts`                                                               |
+| Redis                                                        | Not used by `live-sunday-harness.ts`                                                               |
 
 Production types that exist and are **not** on the harness path:
 
-| Key / table | Writer in repo |
-|---|---|
-| `game_state:{gameId}`, `user_flag_state:{userId}:{gameId}`, `active_users` | `RedisGameStateProvider` (`redisGameStateProvider.ts:11-88`), selected when `CACHE_DRIVER=redis` (`providers/index.ts:19-30`) |
-| `user_lineup_cache:{userId}:{week}`, `users_with_stake:{teamId}`, `current_nfl_state` | `RedisLineupCache` (`services/api/src/cache/redis.ts:10-52`), filled by the lineup worker |
-| `flag_event_queue` | `RedisFlagEventQueue` (`redisQueue.ts:6-28`). No production caller enqueues |
-| `user_notifications:{userId}` | `RedisRateLimitStore` (`redisRateLimitStore.ts:4-25`). No production caller records |
-| `realtime:user:{id}` publish | `RedisRealtimeBus.publish` (`realtimeBus.ts:98-102`). API subscribes with a separate TCP client (`realtime.ts:46-56`) |
-| `public.games`, `public.lineup_slots`, `public.flag_events` | Supabase. Flag rows are not inserted by this pipeline (§6) |
+| Key / table                                                                           | Writer in repo                                                                                                                |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `game_state:{gameId}`, `user_flag_state:{userId}:{gameId}`, `active_users`            | `RedisGameStateProvider` (`redisGameStateProvider.ts:11-88`), selected when `CACHE_DRIVER=redis` (`providers/index.ts:19-30`) |
+| `user_lineup_cache:{userId}:{week}`, `users_with_stake:{teamId}`, `current_nfl_state` | `RedisLineupCache` (`services/api/src/cache/redis.ts:10-52`), filled by the lineup worker                                     |
+| `flag_event_queue`                                                                    | `RedisFlagEventQueue` (`redisQueue.ts:6-28`). No production caller enqueues                                                   |
+| `user_notifications:{userId}`                                                         | `RedisRateLimitStore` (`redisRateLimitStore.ts:4-25`). No production caller records                                           |
+| `realtime:user:{id}` publish                                                          | `RedisRealtimeBus.publish` (`realtimeBus.ts:98-102`). API subscribes with a separate TCP client (`realtime.ts:46-56`)         |
+| `public.games`, `public.lineup_slots`, `public.flag_events`                           | Supabase. Flag rows are not inserted by this pipeline (§6)                                                                    |
 
 `CACHE_DRIVER` defaults to `memory` (`env.ts:10`). Two API processes on `memory` do not share game state. `docs/D1-DEPLOY-RUNBOOK.md:29` says the same.
 
@@ -363,32 +363,48 @@ Production types that exist and are **not** on the harness path:
 
 These are harness decision logs (`kind` plus fields). They are not `PlayEvent`s and not ESPN summary documents.
 
-| File | Bytes | Lines | `gameId`s |
-|---|---:|---:|---|
-| `events-2026-09-13T16-47-50-738Z.jsonl` | 15827 | 141 | 401872658, 401872659, 401872660, 401872661, 401872922, 401872923, 401872924, 401872925, 401872926, 401872927, 401872928, 401872929, 401872930, 401872931 |
-| `events-2026-09-13T16-58-08-437Z.jsonl` | 122841 | 752 | same 14 ids |
-| `events-2026-09-13T17-35-51-343Z.jsonl` | 58249 | 225 | same 14 ids |
-| `events-2026-09-13T17-41-45-031Z.jsonl` | 11645 | 38 | 401872660, 401872661 |
-| `events-2026-09-13T17-43-44-427Z.jsonl` | 11419 | 36 | 401872660, 401872661 |
-| `events-2026-09-13T17-44-37-297Z.jsonl` | 29146 | 116 | 401872660, 401872661 |
-| `events-2026-09-13T17-59-02-157Z.jsonl` | 63806 | 269 | 401872660, 401872661 |
-| `events-2026-09-13T18-43-37-051Z.jsonl` | 44309 | 151 | 401872660, 401872661 |
-| `events-2026-09-13T18-56-05-002Z.jsonl` | 85246 | 356 | 401872660, 401872661 |
-| `events-2026-09-15T03-09-50-346Z.jsonl` | 26264 | 82 | 401872931 |
-| `events-2026-09-15T03-14-00-843Z.jsonl` | 26985 | 82 | 401872931 |
+| File                                    |  Bytes | Lines | `gameId`s                                                                                                                                                |
+| --------------------------------------- | -----: | ----: | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `events-2026-09-13T16-47-50-738Z.jsonl` |  15827 |   141 | 401872658, 401872659, 401872660, 401872661, 401872922, 401872923, 401872924, 401872925, 401872926, 401872927, 401872928, 401872929, 401872930, 401872931 |
+| `events-2026-09-13T16-58-08-437Z.jsonl` | 122841 |   752 | same 14 ids                                                                                                                                              |
+| `events-2026-09-13T17-35-51-343Z.jsonl` |  58249 |   225 | same 14 ids                                                                                                                                              |
+| `events-2026-09-13T17-41-45-031Z.jsonl` |  11645 |    38 | 401872660, 401872661                                                                                                                                     |
+| `events-2026-09-13T17-43-44-427Z.jsonl` |  11419 |    36 | 401872660, 401872661                                                                                                                                     |
+| `events-2026-09-13T17-44-37-297Z.jsonl` |  29146 |   116 | 401872660, 401872661                                                                                                                                     |
+| `events-2026-09-13T17-59-02-157Z.jsonl` |  63806 |   269 | 401872660, 401872661                                                                                                                                     |
+| `events-2026-09-13T18-43-37-051Z.jsonl` |  44309 |   151 | 401872660, 401872661                                                                                                                                     |
+| `events-2026-09-13T18-56-05-002Z.jsonl` |  85246 |   356 | 401872660, 401872661                                                                                                                                     |
+| `events-2026-09-15T03-09-50-346Z.jsonl` |  26264 |    82 | 401872931                                                                                                                                                |
+| `events-2026-09-15T03-14-00-843Z.jsonl` |  26985 |    82 | 401872931                                                                                                                                                |
 
 `kind` values seen across the series: `observed_week`, `espn_health`, `espn_poll_failure`, `resumption_window_opened`, `resumption_resolved`, `gated`, `tick`, `delivered`, `push`, `rate_limit_would_drop`, `shutdown`. The `16-47-50` file has only `espn_health` and `shutdown`.
 
 First line of `events-2026-09-13T16-47-50-738Z.jsonl`:
 
 ```json
-{"wall":1789318130743,"kind":"espn_health","gameId":"401872660","polls":12,"failures":0,"p50Ms":120,"maxMs":222}
+{
+  "wall": 1789318130743,
+  "kind": "espn_health",
+  "gameId": "401872660",
+  "polls": 12,
+  "failures": 0,
+  "p50Ms": 120,
+  "maxMs": 222
+}
 ```
 
 First line of `events-2026-09-13T16-58-08-437Z.jsonl`:
 
 ```json
-{"wall":1789318748448,"kind":"espn_health","gameId":"401872660","polls":12,"failures":0,"p50Ms":118,"maxMs":237}
+{
+  "wall": 1789318748448,
+  "kind": "espn_health",
+  "gameId": "401872660",
+  "polls": 12,
+  "failures": 0,
+  "p50Ms": 118,
+  "maxMs": 237
+}
 ```
 
 First line of each later `events-*.jsonl` through `events-2026-09-15T03-14-00-843Z.jsonl` is `{"wall":<ms>,"kind":"observed_week","week":1}` (walls `1789320951398`, `1789321305075`, `1789321424476`, `1789321477339`, `1789322342224`, `1789325017101`, `1789325765096`, `1789441790405`, `1789442040892`).
@@ -396,35 +412,45 @@ First line of each later `events-*.jsonl` through `events-2026-09-15T03-14-00-84
 A `push` line from `events-2026-09-13T18-56-05-002Z.jsonl` (same probe, not the first line):
 
 ```json
-{"wall":1789325765691,"kind":"push","eventId":"5fbbeb62c0af8a4e19c6ab85bbe60bb746bf0790","gameId":"401872660","title":"Texans RB1 no longer active","body":"Possession changed — Bills has the ball now.","deepLinkUrl":"https://tv.youtube.com/watch/skeSQ9ZXBXc","success":true,"error":null}
+{
+  "wall": 1789325765691,
+  "kind": "push",
+  "eventId": "5fbbeb62c0af8a4e19c6ab85bbe60bb746bf0790",
+  "gameId": "401872660",
+  "title": "Texans RB1 no longer active",
+  "body": "Possession changed — Bills has the ball now.",
+  "deepLinkUrl": "https://tv.youtube.com/watch/skeSQ9ZXBXc",
+  "success": true,
+  "error": null
+}
 ```
 
 ### `markers-*.jsonl` (3 files)
 
 Written by `experiments/mark-visible.ts:54` as `{ wall, index, note }`. No `gameId` field. Which ESPN game a marker belongs to is **UNKNOWN** from the file, except where a human note mentions a team.
 
-| File | Bytes | Lines | Structured game ids |
-|---|---:|---:|---|
-| `markers-2026-09-13T16-53-12-193Z.jsonl` | 10091 | 217 | none (`note` is null on the first line; the probe found no `gameId`) |
-| `markers-2026-09-13T17-18-34-187Z.jsonl` | 246 | 5 | none |
-| `markers-2026-09-13T18-02-22-807Z.jsonl` | 2381 | 30 | none |
+| File                                     | Bytes | Lines | Structured game ids                                                  |
+| ---------------------------------------- | ----: | ----: | -------------------------------------------------------------------- |
+| `markers-2026-09-13T16-53-12-193Z.jsonl` | 10091 |   217 | none (`note` is null on the first line; the probe found no `gameId`) |
+| `markers-2026-09-13T17-18-34-187Z.jsonl` |   246 |     5 | none                                                                 |
+| `markers-2026-09-13T18-02-22-807Z.jsonl` |  2381 |    30 | none                                                                 |
 
 First line of `markers-2026-09-13T16-53-12-193Z.jsonl`:
 
 ```json
-{"wall":1789319868768,"index":1,"note":null}
+{ "wall": 1789319868768, "index": 1, "note": null }
 ```
 
 First line of `markers-2026-09-13T17-18-34-187Z.jsonl`:
 
 ```json
-{"wall":1789321540413,"index":1,"note":"Starting at line 119"}
+{ "wall": 1789321540413, "index": 1, "note": "Starting at line 119" }
 ```
 
 First line of `markers-2026-09-13T18-02-22-807Z.jsonl`:
 
 ```json
-{"wall":1789322618750,"index":1,"note":null}
+{ "wall": 1789322618750, "index": 1, "note": null }
 ```
 
 Later notes in that third file are free text (`CAR poss`, `HOU poss kick return`, `Bills ball live`, and similar). They do not contain `401872…` ids.
@@ -443,71 +469,71 @@ Counts are vitest cases: each `it(...)` plus each row of `it.each`. `experiments
 
 **§2 `EspnPlaySource` and the client it retries on**
 
-| File | Cases |
-|---|---:|
-| `services/ingestion/src/espn/espnPlaySource.test.ts` | 7 |
-| `services/ingestion/src/espn/espnClient.test.ts` | 7 |
-| `services/ingestion/src/espn/errors.test.ts` | 10 |
+| File                                                 | Cases |
+| ---------------------------------------------------- | ----: |
+| `services/ingestion/src/espn/espnPlaySource.test.ts` |     7 |
+| `services/ingestion/src/espn/espnClient.test.ts`     |     7 |
+| `services/ingestion/src/espn/errors.test.ts`         |    10 |
 
 **§3 mapping and taxonomy**
 
-| File | Cases |
-|---|---:|
-| `services/ingestion/src/espn/mapEspnPlay.test.ts` | 30 (14 `it` + 16 `it.each` rows) |
+| File                                                  |                                       Cases |
+| ----------------------------------------------------- | ------------------------------------------: |
+| `services/ingestion/src/espn/mapEspnPlay.test.ts`     |            30 (14 `it` + 16 `it.each` rows) |
 | `services/ingestion/src/espn/espnPlayTypeMap.test.ts` | 41 (3 `it` + 26 + 5 + 4 + 3 `it.each` rows) |
 
 `classifyPlayType`'s cases are in the resumption file below.
 
 **§4 `watchForResumption`**
 
-| File | Cases |
-|---|---:|
+| File                                            |                                    Cases |
+| ----------------------------------------------- | ---------------------------------------: |
 | `services/engine/src/resumptionWatcher.test.ts` | 25 (11 `it` + 2 + 2 + 10 `it.each` rows) |
 
 Nine of the plain `it` calls are `watchForResumption` outcomes (`resumptionWatcher.test.ts:52-201`). The `it.each` block plus two `it` calls are `classifyPlayType` (`:205-241`).
 
 **§5 fire time**
 
-| File | Cases |
-|---|---:|
-| `services/dispatcher/src/scheduleFlagEvent.test.ts` | 3 |
-| `services/dispatcher/src/broadcastLag.test.ts` | 11 |
-| `services/engine/src/diffFlagStates.test.ts` | 11 |
-| `services/dispatcher/src/dispatcher.integration.test.ts` | 4 |
+| File                                                     | Cases |
+| -------------------------------------------------------- | ----: |
+| `services/dispatcher/src/scheduleFlagEvent.test.ts`      |     3 |
+| `services/dispatcher/src/broadcastLag.test.ts`           |    11 |
+| `services/engine/src/diffFlagStates.test.ts`             |    11 |
+| `services/dispatcher/src/dispatcher.integration.test.ts` |     4 |
 
 The integration file is the one that runs `QueueingEventDispatcher` through `runDispatcherTick` (`dispatcher.integration.test.ts:103`).
 
 **§6 flags, stakes, Home**
 
-| File | Cases |
-|---|---:|
-| `services/engine/src/onPlayEvent.test.ts` | 7 |
-| `services/engine/src/computeFlagState.test.ts` | 20 |
-| `services/engine/src/isInterestingStateChange.test.ts` | 10 |
-| `services/engine/src/applyPlayToState.test.ts` | 37 (23 `it` + 5 + 4 + 5 `it.each` rows) |
-| `services/api/src/lib/lineup-sync.test.ts` | 10 |
-| `services/api/src/lib/watched-leagues.test.ts` | 4 |
-| `services/api/src/routes/flags.test.ts` | 24 (20 `it` + 4 `it.each` rows) |
-| `services/dispatcher/src/providers/inMemoryGameStateStore.test.ts` | 5 |
-| `services/dispatcher/src/providers/redisGameStateProvider.integration.test.ts` | 4 |
-| `services/api/src/routes/realtime.test.ts` | 10 |
-| `app/lib/realtimeClient.test.ts` | 15 |
-| `app/lib/homeFlagUpdates.test.ts` | 18 |
+| File                                                                           |                                   Cases |
+| ------------------------------------------------------------------------------ | --------------------------------------: |
+| `services/engine/src/onPlayEvent.test.ts`                                      |                                       7 |
+| `services/engine/src/computeFlagState.test.ts`                                 |                                      20 |
+| `services/engine/src/isInterestingStateChange.test.ts`                         |                                      10 |
+| `services/engine/src/applyPlayToState.test.ts`                                 | 37 (23 `it` + 5 + 4 + 5 `it.each` rows) |
+| `services/api/src/lib/lineup-sync.test.ts`                                     |                                      10 |
+| `services/api/src/lib/watched-leagues.test.ts`                                 |                                       4 |
+| `services/api/src/routes/flags.test.ts`                                        |         24 (20 `it` + 4 `it.each` rows) |
+| `services/dispatcher/src/providers/inMemoryGameStateStore.test.ts`             |                                       5 |
+| `services/dispatcher/src/providers/redisGameStateProvider.integration.test.ts` |                                       4 |
+| `services/api/src/routes/realtime.test.ts`                                     |                                      10 |
+| `app/lib/realtimeClient.test.ts`                                               |                                      15 |
+| `app/lib/homeFlagUpdates.test.ts`                                              |                                      18 |
 
 No `*.test.ts` imports `app/app/(app)/(tabs)/index.tsx`. The screen's `useHomeRealtime` binding is untested. `reconcileHomeWithFlagsCurrent` is tested; the screen calls `loadHome` instead (§6).
 
 **§7 dispatcher, rate limit, push**
 
-| File | Cases |
-|---|---:|
-| `services/dispatcher/src/dispatcher.test.ts` | 8 |
-| `services/dispatcher/src/rateLimiter.test.ts` | 17 |
-| `services/dispatcher/src/isStillRelevant.test.ts` | 9 |
-| `services/dispatcher/src/delivery.test.ts` | 25 |
-| `services/dispatcher/src/pushNotifier.test.ts` | 13 |
-| `services/dispatcher/src/decideAction.test.ts` | 8 |
-| `services/dispatcher/src/notificationContent.test.ts` | 25 |
-| `services/dispatcher/src/broadcastResolver.test.ts` | 10 |
+| File                                                  | Cases |
+| ----------------------------------------------------- | ----: |
+| `services/dispatcher/src/dispatcher.test.ts`          |     8 |
+| `services/dispatcher/src/rateLimiter.test.ts`         |    17 |
+| `services/dispatcher/src/isStillRelevant.test.ts`     |     9 |
+| `services/dispatcher/src/delivery.test.ts`            |    25 |
+| `services/dispatcher/src/pushNotifier.test.ts`        |    13 |
+| `services/dispatcher/src/decideAction.test.ts`        |     8 |
+| `services/dispatcher/src/notificationContent.test.ts` |    25 |
+| `services/dispatcher/src/broadcastResolver.test.ts`   |    10 |
 
 `dispatcher.integration.test.ts` (4) is listed under §5 and also drives `deliverFlagEvent`.
 

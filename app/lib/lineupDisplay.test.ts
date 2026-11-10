@@ -3,10 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { LineupSlot } from './leagues';
 import { formatPositionInLineup, sortLineupSlots } from './lineupDisplay';
 
-function slot(
-  positionInLineup: string,
-  slotType: LineupSlot['slot_type'] = 'starter',
-): LineupSlot {
+function slot(positionInLineup: string, slotType: LineupSlot['slot_type'] = 'starter'): LineupSlot {
   return {
     slot_id: positionInLineup,
     slot_type: slotType,

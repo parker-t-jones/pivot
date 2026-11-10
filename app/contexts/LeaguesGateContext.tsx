@@ -79,8 +79,7 @@ export function LeaguesGateProvider({ children }: PropsWithChildren) {
       setStatus('ready');
       return next;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Could not load your leagues.';
+      const message = error instanceof Error ? error.message : 'Could not load your leagues.';
       if (leaguesStatusAfterRefreshError(statusAtStart, countAtStart) === 'error') {
         setErrorMessage(message);
         setStatus('error');

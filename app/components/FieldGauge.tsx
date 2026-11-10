@@ -98,10 +98,7 @@ export function FieldGauge({
           <View style={styles.captions}>
             {position ? (
               <Text
-                style={[
-                  styles.positionCaption,
-                  { left: `${clampedCaptionLeft(markerPercent)}%` },
-                ]}
+                style={[styles.positionCaption, { left: `${clampedCaptionLeft(markerPercent)}%` }]}
               >
                 {position}
               </Text>

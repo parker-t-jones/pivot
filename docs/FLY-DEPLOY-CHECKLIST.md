@@ -9,25 +9,22 @@
 7. Webhook secret: run openssl rand -hex 32 and save the output as your RevenueCat webhook secret.
 8. .env.production: create it at the path the runbook specifies and fill in the hosted values. It's gitignored; confirm with git status that it doesn't show up.
 
-
-
 ### Sunday, Sept 27 and Monday, Sept 28: game days. No Fly work.
 
 - Sunday before 1pm: plug in, run recorder.sh start, and go do homework. Run status whenever you like. It stops itself after the last game.
 - Monday before 8:15pm: same thing for Monday Night Football.
 
-
-
 ### Tuesday, Sept 29: database and deploy:
 
 1. supabase link --project-ref . It asks for the database password. Don't edit config.toml.
 2. supabase db push. Expect 10 migrations applied.
-3. Apply supabase/seed.sql: paste it into the Supabase SQL editor and run it. Then select count(*) from teams; should return 32.
+3. Apply supabase/seed.sql: paste it into the Supabase SQL editor and run it. Then select count(\*) from teams; should return 32.
 4. pnpm seed:players -- --env-file .env.production --allow-remote, then the same for seed:schedule. Never seed:broadcasts; the guard will refuse it anyway.
 5. In the Supabase dashboard, under Authentication: email sign-in on, email confirmation off.
 6. fly secrets set ... with the names from the runbook.
 7. fly deploy, then fly scale count worker=1 (and api=1).
 8. Smoke test:
+
 - curl [https://pivot-sports-api.fly.dev/health](https://pivot-sports-api.fly.dev/health) should return {"ok":true,...};
 - fly logs should show a [lineup-sync-worker] synced line within about 5 minutes.
 
@@ -38,6 +35,7 @@
 3. Test build: build a preview version, install it on your phone, switch to cellular (Wi-Fi off), sign in, and confirm Home loads.
 
 ### Later, not scheduled yet:
+
 - Upgrade Supabase to Pro before you invite outside TestFlight testers.
 - Add the PUSH_DRIVER secret when P0 lands.
 - No deploys on any Thursday, Sunday or Monday.

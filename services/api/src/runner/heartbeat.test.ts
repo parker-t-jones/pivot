@@ -10,7 +10,10 @@ import {
 
 const NOW = new Date('2026-10-11T17:00:00.000Z');
 
-function recordingRedis(): { redis: RunnerHeartbeatRedis; writes: { key: string; value: string; ttl: number }[] } {
+function recordingRedis(): {
+  redis: RunnerHeartbeatRedis;
+  writes: { key: string; value: string; ttl: number }[];
+} {
   const writes: { key: string; value: string; ttl: number }[] = [];
   return {
     writes,

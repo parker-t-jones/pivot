@@ -621,7 +621,7 @@ Changes to the existing 6 screens are marked **new** or **changed**.
   - Recon before building: `services/api/src/lib/demoFixture.ts` (the App Store reviewer demo)
     cannot be reused client-side — it's server-only code (`node:crypto`, `@pivot/dispatcher`'s
     Supabase-backed types, `SupabaseServiceClient`) and its slate uses real NFL teams, which this
-    demo must not. It also wasn't reused as a data *source*: this PR had no captured
+    demo must not. It also wasn't reused as a data _source_: this PR had no captured
     `experiments/logs/events-<ISO>.jsonl` available (gitignored, Parker's Mac only), so the demo
     ships a synthetic, fictional-team fixture instead of a compressed real drive. Swapping in a
     real captured drive later is future work.

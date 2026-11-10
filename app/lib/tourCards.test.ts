@@ -9,7 +9,7 @@ describe('TOUR_CARDS', () => {
       expect(card.title.toLowerCase()).not.toContain('stake');
       expect(card.body.toLowerCase()).not.toContain('stake');
       expect(card.body.toLowerCase()).not.toContain('never spoiled');
-      expect(card.body.toLowerCase()).not.toContain("never shows up in a notification");
+      expect(card.body.toLowerCase()).not.toContain('never shows up in a notification');
     }
   });
 

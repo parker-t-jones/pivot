@@ -2,11 +2,7 @@ import { usePathname, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {
-  DESKTOP_RAIL_WIDTH,
-  DESKTOP_SIDEBAR_WIDTH,
-  type DesktopTier,
-} from '../lib/desktopLayout';
+import { DESKTOP_RAIL_WIDTH, DESKTOP_SIDEBAR_WIDTH, type DesktopTier } from '../lib/desktopLayout';
 import { fonts } from '../lib/fonts';
 import { fetchMe } from '../lib/me';
 import { theme } from '../lib/theme';
