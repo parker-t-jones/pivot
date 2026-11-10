@@ -112,12 +112,13 @@ async function setup(
     options.reader === undefined
       ? new FakeReader({ is_bet_slip: true, bet_count: 1, legs: [RUSH_LEG] })
       : options.reader;
-  const counter = new InMemoryUsageCounter(() => NOW.getTime());
+  const clock = { now: NOW };
+  const counter = new InMemoryUsageCounter(() => clock.now.getTime());
   await app.register(pickImportRoutes, {
     reader,
     counter,
     limits: options.limits ?? { free: 5, pro: 30 },
-    now: () => NOW,
+    now: () => clock.now,
   });
   const token = await signToken(USER);
   const post = (payload: unknown, auth = true) =>
@@ -127,7 +128,17 @@ async function setup(
       headers: auth ? { authorization: `Bearer ${token}` } : {},
       payload: payload as Record<string, unknown>,
     });
-  return { app, db, reader, logs, post };
+  return {
+    app,
+    db,
+    reader,
+    logs,
+    post,
+    lineupCache,
+    setNow: (next: Date) => {
+      clock.now = next;
+    },
+  };
 }
 
 describe('POST /picks/import', () => {
@@ -234,7 +245,7 @@ describe('POST /picks/import', () => {
     expect(h.reader?.calls).toHaveLength(0);
   });
 
-  it('stops a free user after the daily limit with friendly copy', async () => {
+  it('stops a free user after the weekly limit with friendly copy', async () => {
     const h = await harness({ limits: { free: 2, pro: 30 } });
     expect((await h.post({ image: PNG })).json().imports_left).toBe(1);
     expect((await h.post({ image: PNG })).json().imports_left).toBe(0);
@@ -243,10 +254,28 @@ describe('POST /picks/import', () => {
     expect(blocked.json().error).toEqual({
       code: 'slip_import_limit',
       message:
-        'You’ve used today’s 2 screenshot imports. You can still add picks yourself, imports reset tomorrow, and Pro includes more.',
+        'You’ve used this week’s 2 screenshot imports. You can still add picks yourself, imports reset next week, and Pro includes more.',
       details: { limit: 2 },
     });
     expect(h.reader?.calls).toHaveLength(2);
+  });
+
+  it('keeps the free counter for the NFL week it started in, even across a UTC midnight', async () => {
+    const h = await harness({ limits: { free: 2, pro: 30 } });
+    // harness() already seeds the lineup cache with season 2026 / week 5.
+    expect((await h.post({ image: PNG })).json().imports_left).toBe(1);
+    // Later UTC clock, same NFL week: still charges the same counter.
+    h.setNow(new Date('2026-10-10T08:00:00.000Z'));
+    expect((await h.post({ image: PNG })).json().imports_left).toBe(0);
+    const blocked = await h.post({ image: PNG });
+    expect(blocked.statusCode).toBe(429);
+
+    // A new NFL week resets it.
+    await h.lineupCache.setNflState(
+      { season: '2026', week: 6, seasonType: 'regular', seasonStartDate: '2026-09-09' },
+      600,
+    );
+    expect((await h.post({ image: PNG })).statusCode).toBe(200);
   });
 
   it('gives Pro the higher limit', async () => {

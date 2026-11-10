@@ -168,7 +168,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
           ? new AnthropicSlipReader(env.ANTHROPIC_API_KEY)
           : null,
     counter: deps.slipImportCounter ?? slipImportCounter(env, commandRedis),
-    limits: { free: env.SLIP_IMPORT_DAILY_FREE, pro: env.SLIP_IMPORT_DAILY_PRO },
+    limits: { free: env.SLIP_IMPORT_WEEKLY_FREE, pro: env.SLIP_IMPORT_DAILY_PRO },
   });
   await fastify.register(gameLinksRoutes);
   await fastify.register(sessionRoutes);

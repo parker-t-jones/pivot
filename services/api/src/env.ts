@@ -44,8 +44,9 @@ const envSchema = z.object({
     (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
     z.string().min(1).optional(),
   ),
-  /** Screenshot imports per user per day (US Eastern), free and Pro. Bounds the model cost. */
-  SLIP_IMPORT_DAILY_FREE: z.coerce.number().int().min(0).default(5),
+  /** Screenshot imports per user per NFL week, free tier. Bounds the model cost. */
+  SLIP_IMPORT_WEEKLY_FREE: z.coerce.number().int().min(0).default(3),
+  /** Screenshot imports per user per day (US Eastern), Pro tier. Bounds the model cost. */
   SLIP_IMPORT_DAILY_PRO: z.coerce.number().int().min(0).default(30),
   PORT: z.coerce.number().int().positive().default(3000),
   /**
