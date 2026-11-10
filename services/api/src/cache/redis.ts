@@ -5,7 +5,7 @@ import {
   type SerializedUserLineupCache,
   type UserLineupCache,
 } from '@pivot/shared';
-import type { LineupCacheProvider, NflState } from './types.js';
+import { LINEUP_CACHE_KEY_TTL_SECONDS, type LineupCacheProvider, type NflState } from './types.js';
 
 const NFL_STATE_KEY = 'current_nfl_state';
 
@@ -30,7 +30,9 @@ export class RedisLineupCache implements LineupCacheProvider {
   constructor(private readonly redis: Redis) {}
 
   async setLineupCache(userId: string, week: number, cache: UserLineupCache): Promise<void> {
-    await this.redis.set(lineupCacheKey(userId, week), serializeUserLineupCache(cache));
+    await this.redis.set(lineupCacheKey(userId, week), serializeUserLineupCache(cache), {
+      ex: LINEUP_CACHE_KEY_TTL_SECONDS,
+    });
   }
 
   async getLineupCache(userId: string, week: number): Promise<UserLineupCache | null> {

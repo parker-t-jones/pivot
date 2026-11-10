@@ -224,7 +224,14 @@ export function tcpGameState(redis: Redis): GameStateStore {
       return deserializeFlagState(raw);
     },
     async setUserFlagState(userId: string, gameId: string, state: FlagState): Promise<void> {
-      await redis.hset(userFlagStateKey(userId, gameId), serializeFlagState(state));
+      const key = userFlagStateKey(userId, gameId);
+      const results = await redis
+        .multi()
+        .hset(key, serializeFlagState(state))
+        .expire(key, GAME_STATE_KEY_TTL_SECONDS)
+        .exec();
+      const failed = results?.find(([error]) => error !== null)?.[0];
+      if (failed) throw failed;
     },
     async getActiveUsers(): Promise<string[]> {
       const members = await redis.zrangebyscore(ACTIVE_USERS_KEY, Date.now(), '+inf');

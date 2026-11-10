@@ -114,7 +114,14 @@ export class RedisGameStateProvider implements GameStateStore {
   }
 
   async setUserFlagState(userId: string, gameId: string, state: FlagState): Promise<void> {
-    await this.redis.hset(userFlagStateKey(userId, gameId), serializeFlagState(state));
+    const key = userFlagStateKey(userId, gameId);
+    // Same TTL as game_state: writes only happen when a flag event fires, so the gap between
+    // writes is bounded by one game, which 6h comfortably covers. Every write refreshes it.
+    await this.redis
+      .multi()
+      .hset(key, serializeFlagState(state))
+      .expire(key, GAME_STATE_KEY_TTL_SECONDS)
+      .exec();
   }
 
   async getActiveUsers(): Promise<string[]> {

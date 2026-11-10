@@ -39,3 +39,11 @@ export interface LineupCacheProvider {
   getNflState(): Promise<NflState | null>;
   setNflState(state: NflState, ttlSec: number): Promise<void>;
 }
+
+/**
+ * TTL for `user_lineup_cache:{user_id}:{week}`, refreshed by every rebuild. A week's key is only
+ * read while that week is current (about 7 days), so 14 days always outlives its useful life while
+ * old weeks still disappear. Do not shorten below a week: a missing key means no routing for that
+ * user until the next rebuild.
+ */
+export const LINEUP_CACHE_KEY_TTL_SECONDS = 14 * 24 * 60 * 60;

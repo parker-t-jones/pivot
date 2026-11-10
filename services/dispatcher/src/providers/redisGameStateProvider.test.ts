@@ -1,8 +1,8 @@
 import type { Redis } from '@upstash/redis';
 import { describe, expect, it } from 'vitest';
-import type { GameState } from '@pivot/shared';
+import type { FlagState, GameState } from '@pivot/shared';
 import { GAME_STATE_KEY_TTL_SECONDS, RedisGameStateProvider } from './redisGameStateProvider.js';
-import { serializeGameState } from './redisSerde.js';
+import { serializeFlagState, serializeGameState } from './redisSerde.js';
 
 const STATE: GameState = {
   gameId: 'g1',
@@ -156,5 +156,69 @@ describe('RedisGameStateProvider presence lookups', () => {
     expect(keys.indexOf('hset presence-vis:user-a')).toBeLessThan(
       keys.indexOf('zadd presence:user-a'),
     );
+  });
+});
+
+describe('RedisGameStateProvider user_flag_state', () => {
+  const FLAG: FlagState = {
+    gameId: 'g1',
+    flagged: true,
+    priorityScore: 4,
+    reasons: [{ type: 'offense_active', triggeringPlayerIds: ['p1'] }],
+    computedAt: 1_700_000_000_000,
+  };
+
+  it('sets the hash and refreshes its TTL in one MULTI on every write', async () => {
+    const transactions: unknown[][][] = [];
+    const redis = {
+      multi: () => {
+        const queued: unknown[][] = [];
+        transactions.push(queued);
+        const chain = {
+          hset: (...args: unknown[]) => {
+            queued.push(['hset', ...args]);
+            return chain;
+          },
+          expire: (...args: unknown[]) => {
+            queued.push(['expire', ...args]);
+            return chain;
+          },
+          exec: () => {
+            queued.push(['exec']);
+            return Promise.resolve([1, 1]);
+          },
+        };
+        return chain;
+      },
+    } as unknown as Redis;
+    const provider = new RedisGameStateProvider(redis);
+
+    await provider.setUserFlagState('u1', 'g1', FLAG);
+    await provider.setUserFlagState('u1', 'g1', { ...FLAG, priorityScore: 8 });
+
+    const key = 'user_flag_state:u1:g1';
+    expect(transactions).toEqual([
+      [
+        ['hset', key, serializeFlagState(FLAG)],
+        ['expire', key, GAME_STATE_KEY_TTL_SECONDS],
+        ['exec'],
+      ],
+      [
+        ['hset', key, serializeFlagState({ ...FLAG, priorityScore: 8 })],
+        ['expire', key, GAME_STATE_KEY_TTL_SECONDS],
+        ['exec'],
+      ],
+    ]);
+  });
+
+  it('reads the stored hash back before it expires', async () => {
+    const redis = {
+      hgetall: async (key: string) =>
+        key === 'user_flag_state:u1:g1' ? serializeFlagState(FLAG) : null,
+    } as unknown as Redis;
+    const provider = new RedisGameStateProvider(redis);
+
+    expect(await provider.getUserFlagState('u1', 'g1')).toEqual(FLAG);
+    expect(await provider.getUserFlagState('u1', 'other')).toBeNull();
   });
 });
