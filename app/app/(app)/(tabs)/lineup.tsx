@@ -31,6 +31,7 @@ import { SecondaryButton } from '../../../components/SecondaryButton';
 import { PickCard } from '../../../components/PickCard';
 import { PickEventFlash } from '../../../components/PickEventFlash';
 import { RosterStripCard } from '../../../components/StakeCards';
+import { ShareableCard } from '../../../components/ShareableCard';
 import { SwipeToRemove } from '../../../components/SwipeToRemove';
 import { TextButton } from '../../../components/TextButton';
 import { WatchlistDesktop } from '../../../components/WatchlistDesktop';
@@ -68,6 +69,8 @@ import {
   type OpponentStarter,
 } from '../../../lib/leagues';
 import { leagueChipScrollOffset, leagueChipWidth } from '../../../lib/leagueChipScroll';
+import { weekCardShareContent, type ShareContent } from '../../../lib/shareCard';
+import { useShareCard } from '../../../lib/useShareCard';
 import {
   lineupLoadingMessage,
   readRememberedWatchlist,
@@ -269,10 +272,36 @@ export default function LineupScreen() {
   const watchlist = lineupScreenMode(betsOn) === 'watchlist';
   // Every refetch path lands in `bets`, so diffing here covers focus, pull, and add-pick saves.
   const pickFlash = usePickHitFlash(bets);
+  // Share (issue #48): render the branded `ShareableCard` offscreen, then capture it. `null`
+  // except for the brief window between a Share tap and the share sheet / web fallback closing.
+  const [shareContent, setShareContent] = useState<ShareContent | null>(null);
+  const shareViewRef = useRef<View>(null);
+  const { share: shareCard } = useShareCard();
+  useEffect(() => {
+    if (!shareContent) return;
+    let cancelled = false;
+    const dialogTitle = shareContent.kind === 'week' ? 'Share your week card' : 'Share your pick';
+    void (async () => {
+      const result = await shareCard(shareViewRef, shareContent, dialogTitle);
+      if (cancelled) return;
+      setShareContent(null);
+      if (!result.ok && result.reason !== 'unavailable') {
+        void alertAsync('Could not share', 'Try again in a moment.');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [shareCard, shareContent]);
   const withFlash = (screen: ReactNode) => (
     <View style={styles.flashHost}>
       {screen}
       <PickEventFlash flash={pickFlash.flash} onDone={pickFlash.dismiss} />
+      {shareContent ? (
+        <View collapsable={false} pointerEvents="none" ref={shareViewRef} style={styles.shareOffscreen}>
+          <ShareableCard content={shareContent} />
+        </View>
+      ) : null}
     </View>
   );
 
@@ -1045,6 +1074,7 @@ export default function LineupScreen() {
             onOpponentToggle={() => {
               void onWatchOpponent(opponentStatus !== 'on');
             }}
+            onShare={() => setShareContent(weekCardShareContent(weekCard))}
           />
           <WatchlistFilters onChange={selectFilter} value={filter} />
         </>
@@ -1774,6 +1804,13 @@ const styles = StyleSheet.create({
   },
   flashHost: {
     flex: 1,
+  },
+  // Rendered to capture, never seen: off the visible area but still laid out (not `display:
+  // none`), which `react-native-view-shot` needs to actually capture it.
+  shareOffscreen: {
+    left: -9999,
+    position: 'absolute',
+    top: -9999,
   },
   headerBlock: {
     gap: theme.spacing.xs,
