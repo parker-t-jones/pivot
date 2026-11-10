@@ -3,20 +3,24 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { DemoBanner } from '../../components/DemoBanner';
-import { ListRow } from '../../components/ListRow';
+import { PickCard } from '../../components/PickCard';
+import { PickEventFlash } from '../../components/PickEventFlash';
 import { TeamBadge } from '../../components/TeamBadge';
 import {
   DEMO_AWAY_TEAM,
   DEMO_HOME_TEAM,
   DEMO_PRE_GAME_MS,
-  DEMO_STAKES,
   DEMO_TOTAL_MS,
   demoPhaseAtElapsed,
+  demoSnapshotAtElapsed,
   type DemoPhase,
+  type DemoSnapshot,
 } from '../../lib/demoGameDay';
 import { scheduleDemoGameDayNotificationAsync } from '../../lib/demoGameDayNotification';
 import { resetToHomeRoot } from '../../lib/navigateAfterConnect';
+import { pickCardModel } from '../../lib/pickCard';
 import { theme } from '../../lib/theme';
+import { usePickHitFlash } from '../../lib/usePickHitFlash';
 
 const TICK_MS = 500;
 
@@ -24,6 +28,7 @@ const TICK_MS = 500;
  * "Try a demo game day" (issue #32 / PIVOT-STAKES-PLAN.md §12.2): a local-only sandbox that
  * replays a bundled fixture through PRE-GAME → LIVE with a flag → a local notification. No
  * server calls — nothing here reads or writes `stakes`, `lineup_slots`, or any API route.
+ * The pick-hit moment is the Watchlist's own `usePickHitFlash` + `PickEventFlash` (issue #44).
  */
 export default function DemoGameDayScreen() {
   const router = useRouter();
@@ -38,6 +43,8 @@ export default function DemoGameDayScreen() {
   }, []);
 
   const phase: DemoPhase = demoPhaseAtElapsed(elapsed);
+  const snapshot = demoSnapshotAtElapsed(elapsed);
+  const pickFlash = usePickHitFlash(snapshot.picks);
 
   useEffect(() => {
     if (phase !== 'live' || notifiedRef.current) return;
@@ -53,12 +60,13 @@ export default function DemoGameDayScreen() {
   return (
     <View style={styles.container}>
       <DemoBanner onExit={exit} />
-      <View style={styles.body}>{renderPhase(phase, elapsed)}</View>
+      <View style={styles.body}>{renderPhase(phase, elapsed, snapshot)}</View>
+      <PickEventFlash flash={pickFlash.flash} onDone={pickFlash.dismiss} />
     </View>
   );
 }
 
-function renderPhase(phase: DemoPhase, elapsed: number) {
+function renderPhase(phase: DemoPhase, elapsed: number, snapshot: DemoSnapshot) {
   if (phase === 'pre_game') {
     const secondsLeft = Math.ceil((DEMO_PRE_GAME_MS - elapsed) / 1000);
     return (
@@ -83,9 +91,18 @@ function renderPhase(phase: DemoPhase, elapsed: number) {
           <Text style={styles.vs}>vs</Text>
           <TeamBadge abbr={DEMO_HOME_TEAM.abbr} size="lg" />
         </View>
-        <Text style={styles.title}>Your demo pick is active</Text>
-        {DEMO_STAKES.map((stake) => (
-          <ListRow key={stake.id} subtitle={stake.subtitle} title={stake.title} />
+        <Text style={styles.title}>Your demo picks are live</Text>
+        {snapshot.picks.map((pick) => (
+          <PickCard
+            key={pick.id}
+            model={pickCardModel({
+              stake: pick,
+              teams: [],
+              weekGames: null,
+              liveGames: snapshot.live ? [snapshot.live] : [],
+              now: new Date(),
+            })}
+          />
         ))}
       </View>
     );

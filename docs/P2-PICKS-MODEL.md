@@ -108,6 +108,8 @@ Lines are multiples of 0.5. An integer line can land exactly, which is a tie.
 
 Every trigger fires at most once per pick per game (`claimFirstFire`, unchanged). A parlay's legs in the same game send at most one event per trigger code per play: the highest-leverage leg. Per-drive dedupe still needs a drive id on `GameState`.
 
+**Pick-hit flash (issue #44):** when a Watchlist refetch shows a single prop or team/game prop (not a parlay, a legacy full-game type, survivor, or fantasy) go from `pending`/`live` to `hit`/`won`, the Watchlist plays one in-app moment (`PickEventFlash`, an edge glow plus a lower-third naming the pick). It states only what the progress line already says in-app. It is not a push, and nothing ever frames it as ahead of the broadcast (§0.5 of the stakes plan). It fires on refetch (focus, pull, add-pick save), not over the socket.
+
 **In-app:** `GET /picks` returns live progress from the Redis snapshot `game_player_stats:{gameId}`, which the runner writes on each summary poll. That is the same live, unheld path `GET /games/live` uses for the scores on Home. Anything in a push goes through the gate.
 
 ## 7. API
