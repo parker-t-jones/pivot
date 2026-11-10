@@ -72,6 +72,8 @@ const pick: PickCardModel = {
   axisLabel: '',
   detail: null,
   legs: [],
+  hit: false,
+  bar: null,
 };
 
 describe('pickCardShareContent', () => {

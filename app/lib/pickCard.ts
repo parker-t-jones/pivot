@@ -76,6 +76,21 @@ export interface PickCardModel {
   detail: string | null;
   /** A parlay's legs, in kickoff order. Empty for a single pick. */
   legs: PickCardLeg[];
+  /**
+   * True for a live single pick whose progress is `hit` (cleared during play) or `won` (settled
+   * while the game is still live, e.g. a quarter line). Never on a final, upcoming, parlay,
+   * legacy full-game, or lost, tied, refunded card.
+   */
+  hit: boolean;
+  /** Current-vs-line bar for a live single prop or team prop that has a number. Else null. */
+  bar: PickCardBar | null;
+}
+
+export interface PickCardBar {
+  /** `current / line`, clamped to 0..1. */
+  fill: number;
+  current: number;
+  line: number;
 }
 
 export interface PickCardLeg {
@@ -186,6 +201,8 @@ export function pickCardModel(input: {
       progress: null,
       axisLabel,
       detail: parlaySummaryLine(stake.summary),
+      hit: false,
+      bar: null,
       legs: legs.map(({ leg, model }, index) => ({
         key: leg.id ?? `${leg.game_id}-${index}`,
         // Each leg carries the API's label; a leg has no type row of its own.
@@ -210,7 +227,35 @@ export function pickCardModel(input: {
     axisLabel,
     detail: isLegacyPick(stake) ? null : pickProgressLine(stake),
     legs: [],
+    hit: isLiveSingleWithProgress(stake, phase) && isHitStatus(stake.progress),
+    bar: pickBar(stake, phase),
   };
+}
+
+/** Singles with a progress line: props and team/game props. Not legacy types, slips or parlays. */
+function isLiveSingleWithProgress(
+  stake: PickCardStake,
+  phase: PickCardPhase,
+): stake is PickCardStake & { progress: PickProgress } {
+  return (
+    phase === 'live' &&
+    stake.progress != null &&
+    stake.subject.type !== 'SLIP' &&
+    !(stake.legs && stake.legs.length > 0) &&
+    !isLegacyPick(stake)
+  );
+}
+
+function isHitStatus(progress: PickProgress | undefined): boolean {
+  return progress?.status === 'hit' || progress?.status === 'won';
+}
+
+function pickBar(stake: PickCardStake, phase: PickCardPhase): PickCardBar | null {
+  if (!isLiveSingleWithProgress(stake, phase)) return null;
+  const { status, current, line } = stake.progress;
+  if (status !== 'live' && status !== 'hit' && status !== 'won') return null;
+  if (typeof current !== 'number' || typeof line !== 'number' || line <= 0) return null;
+  return { fill: Math.min(1, Math.max(0, current / line)), current, line };
 }
 
 function legTeams(leg: PickCardStake): StakeTeam[] {

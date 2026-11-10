@@ -75,6 +75,8 @@ describe('ShareableCard', () => {
       axisLabel: '',
       detail: null,
       legs: [],
+      hit: false,
+      bar: null,
     };
     act(() => {
       root.render(createElement(ShareableCard, { content: pickCardShareContent(pick, 9) }));

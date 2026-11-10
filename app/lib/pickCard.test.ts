@@ -168,3 +168,134 @@ describe('pickCardModel phases', () => {
     expect(card.status).toBe('Upcoming');
   });
 });
+
+describe('hit state and progress bar', () => {
+  const propStake = (
+    type: string,
+    subjectType: string,
+    progress: PickCardStake['progress'],
+    extra: Partial<PickCardStake> = {},
+  ): PickCardStake => ({
+    id: 'p1',
+    game_id: 'g1',
+    subject: { type: subjectType, teamId: 'det' },
+    condition: { type, line: 60.5, stat: 'REC_YDS' },
+    label: 'a pick',
+    progress,
+    game,
+    ...extra,
+  });
+  const hitProgress = { status: 'hit' as const, current: 70, line: 60.5, needed: 0 };
+  const liveOpts = { status: 'in_progress', live: live(7, 14) };
+
+  it('marks a live prop, team total, FG total and first-to-score pick that has hit', () => {
+    for (const [type, subject] of [
+      ['STAT_OVER', 'PLAYER'],
+      ['TEAM_TOTAL_OVER', 'TEAM'],
+      ['FG_OVER', 'GAME'],
+      ['FIRST_TO_SCORE', 'TEAM'],
+    ] as const) {
+      const card = model(propStake(type, subject, hitProgress), liveOpts);
+      expect(card.hit, type).toBe(true);
+    }
+  });
+
+  it('does not mark a live pick that is only on track', () => {
+    const card = model(
+      propStake('STAT_OVER', 'PLAYER', { status: 'live', current: 42, line: 60.5, needed: 19 }),
+      liveOpts,
+    );
+    expect(card.hit).toBe(false);
+  });
+
+  it('marks a pick settled as won while the game is still live (a quarter line)', () => {
+    const card = model(
+      propStake('STAT_OVER', 'PLAYER', { ...hitProgress, status: 'won' }),
+      liveOpts,
+    );
+    expect(card.hit).toBe(true);
+  });
+
+  it('never marks lost, missed, tie, void or unavailable', () => {
+    for (const status of ['lost', 'missed', 'tie', 'void', 'unavailable', 'pending'] as const) {
+      const card = model(propStake('STAT_OVER', 'PLAYER', { ...hitProgress, status }), liveOpts);
+      expect(card.hit, status).toBe(false);
+    }
+  });
+
+  it('never marks a final card, even when the pick won', () => {
+    const card = model(propStake('STAT_OVER', 'PLAYER', { ...hitProgress, status: 'won' }), {
+      status: 'final',
+    });
+    expect(card.phase).toBe('final');
+    expect(card.hit).toBe(false);
+    expect(card.bar).toBeNull();
+  });
+
+  it('never marks an upcoming card', () => {
+    const card = model(propStake('STAT_OVER', 'PLAYER', hitProgress));
+    expect(card.phase).toBe('upcoming');
+    expect(card.hit).toBe(false);
+  });
+
+  it('does not mark the legacy full-game types, which never state an outcome', () => {
+    for (const type of ['SPREAD', 'TOTAL_OVER', 'MONEYLINE', 'SURVIVOR']) {
+      const card = model(stake(type, { progress: hitProgress }), liveOpts);
+      expect(card.hit, type).toBe(false);
+      expect(card.bar, type).toBeNull();
+    }
+  });
+
+  it('a hit leg does not mark the whole parlay card, and the parlay has no bar', () => {
+    const card = model(
+      {
+        id: 'slip-1',
+        game_id: 'g1',
+        subject: { type: 'SLIP' },
+        condition: { type: 'PARLAY' },
+        label: '2-leg parlay',
+        game,
+        summary: { status: 'live', legs: 2, hit: 1, alive: 1, lost: 0, refunded: 0 },
+        legs: [
+          propStake('STAT_OVER', 'PLAYER', hitProgress, { id: 'a' }),
+          propStake(
+            'STAT_OVER',
+            'PLAYER',
+            { status: 'live', current: 10, line: 60.5 },
+            { id: 'b' },
+          ),
+        ],
+      },
+      liveOpts,
+    );
+    expect(card.hit).toBe(false);
+    expect(card.bar).toBeNull();
+    expect(card.legs[0]?.state).toBe('Hit');
+  });
+
+  it('draws a bar from current and line, clamped to 0..1', () => {
+    const on = model(
+      propStake('STAT_OVER', 'PLAYER', { status: 'live', current: 30.25, line: 60.5, needed: 31 }),
+      liveOpts,
+    );
+    expect(on.bar).toEqual({ fill: 0.5, current: 30.25, line: 60.5 });
+    expect(model(propStake('STAT_OVER', 'PLAYER', hitProgress), liveOpts).bar?.fill).toBe(1);
+    const none = model(
+      propStake('STAT_OVER', 'PLAYER', { status: 'live', current: 0, line: 60.5 }),
+      liveOpts,
+    );
+    expect(none.bar?.fill).toBe(0);
+  });
+
+  it('draws no bar without a number, with a non-positive line, or without progress', () => {
+    expect(model(propStake('FIRST_TO_SCORE', 'TEAM', { status: 'live' }), liveOpts).bar).toBeNull();
+    expect(
+      model(propStake('STAT_OVER', 'PLAYER', { status: 'live', current: 3, line: 0 }), liveOpts)
+        .bar,
+    ).toBeNull();
+    expect(model(propStake('STAT_OVER', 'PLAYER', undefined), liveOpts).bar).toBeNull();
+    expect(
+      model(propStake('STAT_OVER', 'PLAYER', { status: 'unavailable' }), liveOpts).bar,
+    ).toBeNull();
+  });
+});
