@@ -630,8 +630,12 @@ Changes to the existing 6 screens are marked **new** or **changed**.
     (`expo-notifications` `scheduleNotificationAsync`, same pattern as "Send test notification").
     No server calls anywhere in the screen.
   - A persistent `DEMO` banner, with an Exit button, stays on screen the whole time.
-  - The demo uses fake stakes (`DEMO_STAKES`) that are **never written** to `stakes` or
-    `lineup_slots` — there is no write path in this screen at all.
+  - The demo uses fake picks (`demoSnapshotAtElapsed`, same shape as `GET /picks` rows) that are
+    **never written** to `stakes` or `lineup_slots` — there is no write path in this screen at all.
+  - **Pick-hit moment (issue #44):** the LIVE pane renders the real `PickCard`, and 20s in the
+    demo player prop goes LIVE → HIT. That runs through the Watchlist's own `usePickHitFlash` +
+    `PickEventFlash` (edge-glow pulse + lower-third), not a demo-only animation. The countdown
+    stays demo-only.
   - The fixture's teams are fictional ("Comets" / "Harbor"); the notification copy names no team
     at all and leads with "Demo alert", so it can't be mistaken for a real one.
 - **Coach marks:**
@@ -654,7 +658,7 @@ Changes to the existing 6 screens are marked **new** or **changed**.
 2. **Notification denial:** tap Don't Allow at the iOS prompt. Expect the recovery screen, not a second prompt. Then check that iOS Settings → Pivot → Notifications is reachable from the link.
 3. **Demo game day:**
    1. Start the demo from Settings → Help.
-   2. Within ~90s, expect Home to show LIVE and a local notification to arrive (with the app backgrounded as well as foregrounded).
+   2. Within ~90s, expect Home to show LIVE and a local notification to arrive (with the app backgrounded as well as foregrounded). About 20s after LIVE, expect the green edge glow and a "PICK HIT · 70 REC YDS" lower-third, once.
    3. Exit the demo. Expect real Home to return unchanged.
    4. Query `select count(*) from stakes where user_id = '<you>'` before and after. The count should be unchanged.
 4. **Coach marks:** open Home twice. The coach mark should appear on the first visit only. After "Replay tour", it should not reappear. Replay covers the tour cards, not the coach marks.

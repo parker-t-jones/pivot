@@ -1,5 +1,13 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import {
   ActionSheetIOS,
   Alert,
@@ -21,6 +29,7 @@ import { ErrorState } from '../../../components/ErrorState';
 import { LoadingState } from '../../../components/LoadingState';
 import { SecondaryButton } from '../../../components/SecondaryButton';
 import { PickCard } from '../../../components/PickCard';
+import { PickEventFlash } from '../../../components/PickEventFlash';
 import { RosterStripCard } from '../../../components/StakeCards';
 import { SwipeToRemove } from '../../../components/SwipeToRemove';
 import { TextButton } from '../../../components/TextButton';
@@ -105,6 +114,7 @@ import { watchPickLabel } from '../../../lib/watchPicks';
 import { theme } from '../../../lib/theme';
 import { useOpenAddPick } from '../../../lib/useOpenAddPick';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
+import { usePickHitFlash } from '../../../lib/usePickHitFlash';
 import {
   browsedStarterCount,
   cardGameCount,
@@ -257,6 +267,14 @@ export default function LineupScreen() {
   }, []);
   const betsOn = useFeature('bets');
   const watchlist = lineupScreenMode(betsOn) === 'watchlist';
+  // Every refetch path lands in `bets`, so diffing here covers focus, pull, and add-pick saves.
+  const pickFlash = usePickHitFlash(bets);
+  const withFlash = (screen: ReactNode) => (
+    <View style={styles.flashHost}>
+      {screen}
+      <PickEventFlash flash={pickFlash.flash} onDone={pickFlash.dismiss} />
+    </View>
+  );
 
   const leaguesRef = useRef(leagues);
   leaguesRef.current = leagues;
@@ -867,7 +885,7 @@ export default function LineupScreen() {
   }
 
   if (watchlist && desktopTier !== 'companion') {
-    return (
+    const desktop = (
       <WatchlistDesktop
         benchSlots={showRoster ? benchSlots : []}
         bottomInset={insets.bottom + theme.spacing.huge}
@@ -974,6 +992,7 @@ export default function LineupScreen() {
         weekGames={weekGames}
       />
     );
+    return withFlash(desktop);
   }
 
   if (leagues.length === 0 && !watchlist) {
@@ -993,7 +1012,7 @@ export default function LineupScreen() {
     );
   }
 
-  return (
+  const phone = (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[
@@ -1339,6 +1358,7 @@ export default function LineupScreen() {
       </View>
     </ScrollView>
   );
+  return withFlash(phone);
 }
 
 function opponentStarterSlot(starter: OpponentStarter): LineupSlot {
@@ -1751,6 +1771,9 @@ const styles = StyleSheet.create({
     fontWeight: theme.type.eyebrow.weight,
     letterSpacing: theme.type.eyebrow.letterSpacing,
     textTransform: 'uppercase',
+  },
+  flashHost: {
+    flex: 1,
   },
   headerBlock: {
     gap: theme.spacing.xs,

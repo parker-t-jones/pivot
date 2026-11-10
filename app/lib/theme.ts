@@ -22,6 +22,8 @@ export const theme = {
     /** Danger at 14% opacity — red-zone gauge fill and Settings disconnect chip. */
     dangerMuted: 'rgba(255, 90, 90, 0.14)',
     success: '#3ECf8E',
+    /** Success at 45% opacity — the pick-hit lower-third stroke (`PickEventFlash`). */
+    successBorder: 'rgba(62, 207, 142, 0.45)',
     /** Accent at 25% opacity — "active" panel stroke (UI-SPEC.md §2.1). */
     accentBorder: 'rgba(245, 160, 24, 0.25)',
     /** Accent at 15% opacity — shadow color for panelGlow below (UI-SPEC.md §2.3). */

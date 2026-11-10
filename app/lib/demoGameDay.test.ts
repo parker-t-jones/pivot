@@ -2,13 +2,21 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEMO_AWAY_TEAM,
+  DEMO_HIT_AT_MS,
   DEMO_HOME_TEAM,
   DEMO_NOTIFICATION_BODY,
   DEMO_NOTIFICATION_TITLE,
   DEMO_PRE_GAME_MS,
   DEMO_TOTAL_MS,
   demoPhaseAtElapsed,
+  demoSnapshotAtElapsed,
 } from './demoGameDay';
+import {
+  EMPTY_PICK_HIT_TRACKER,
+  detectPickHits,
+  isFlashEligible,
+  pickHitCopy,
+} from './pickHitFlash';
 
 const REAL_NFL_TEAM_NAMES = [
   'chiefs',
@@ -46,6 +54,7 @@ describe('demo fixture copy', () => {
       DEMO_AWAY_TEAM.name,
       DEMO_NOTIFICATION_TITLE,
       DEMO_NOTIFICATION_BODY,
+      ...demoSnapshotAtElapsed(DEMO_HIT_AT_MS).picks.map((pick) => pick.label),
     ]
       .join(' ')
       .toLowerCase();
@@ -56,5 +65,56 @@ describe('demo fixture copy', () => {
 
   it('labels the notification clearly as a demo', () => {
     expect(DEMO_NOTIFICATION_TITLE.toLowerCase()).toContain('demo');
+  });
+});
+
+describe('demo pick timeline', () => {
+  /** Every tick of the demo, 500ms apart, as the screen feeds them to `usePickHitFlash`. */
+  function ticks(): ReturnType<typeof demoSnapshotAtElapsed>[] {
+    const out = [];
+    for (let elapsed = 0; elapsed <= DEMO_TOTAL_MS; elapsed += 500) {
+      out.push(demoSnapshotAtElapsed(elapsed));
+    }
+    return out;
+  }
+
+  it('runs the same LIVE → HIT diff the Watchlist runs, and it fires exactly once', () => {
+    let tracker = EMPTY_PICK_HIT_TRACKER;
+    const fired: string[] = [];
+    for (const snapshot of ticks()) {
+      const result = detectPickHits(tracker, snapshot.picks);
+      tracker = result.tracker;
+      fired.push(...result.hits.map((hit) => hit.id));
+    }
+    expect(fired).toEqual(['demo-prop']);
+  });
+
+  it('is pending before kickoff, live after, and hit from DEMO_HIT_AT_MS', () => {
+    const status = (elapsed: number) =>
+      demoSnapshotAtElapsed(elapsed).picks.find((pick) => pick.id === 'demo-prop')?.progress.status;
+    expect(status(0)).toBe('pending');
+    expect(status(DEMO_PRE_GAME_MS)).toBe('live');
+    expect(status(DEMO_HIT_AT_MS - 1)).toBe('live');
+    expect(status(DEMO_HIT_AT_MS)).toBe('hit');
+    expect(DEMO_HIT_AT_MS).toBeLessThan(DEMO_TOTAL_MS);
+  });
+
+  it('only uses pick types the real flash covers', () => {
+    for (const pick of demoSnapshotAtElapsed(DEMO_HIT_AT_MS).picks) {
+      expect(isFlashEligible(pick)).toBe(true);
+    }
+  });
+
+  it('produces the lower-third copy a real hit would', () => {
+    const before = detectPickHits(
+      EMPTY_PICK_HIT_TRACKER,
+      demoSnapshotAtElapsed(DEMO_PRE_GAME_MS).picks,
+    );
+    const after = detectPickHits(before.tracker, demoSnapshotAtElapsed(DEMO_HIT_AT_MS).picks);
+    expect(pickHitCopy(after.hits)?.headline).toBe('PICK HIT · 70 REC YDS');
+  });
+
+  it('keeps the same array between ticks that change nothing', () => {
+    expect(demoSnapshotAtElapsed(DEMO_HIT_AT_MS)).toBe(demoSnapshotAtElapsed(DEMO_HIT_AT_MS + 500));
   });
 });

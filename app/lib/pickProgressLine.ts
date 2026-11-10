@@ -56,10 +56,16 @@ function isUnder(type: string): boolean {
   return type.endsWith('_UNDER');
 }
 
-function withCurrent(word: string, pick: ProgressPick): string {
+/** "70 rec yds", or null when the pick has no number to state. */
+export function progressReadout(pick: ProgressPick): string | null {
   const current = pick.progress?.current;
   const unit = unitFor(pick.condition);
-  return typeof current === 'number' && unit ? `${word} · ${current} ${unit}` : word;
+  return typeof current === 'number' && unit ? `${current} ${unit}` : null;
+}
+
+function withCurrent(word: string, pick: ProgressPick): string {
+  const readout = progressReadout(pick);
+  return readout ? `${word} · ${readout}` : word;
 }
 
 /** One line under the pick, or null when there is nothing to say yet. */
