@@ -626,25 +626,34 @@ Changes to the existing 6 screens are marked **new** or **changed**.
     ships a synthetic, fictional-team fixture instead of a compressed real drive. Swapping in a
     real captured drive later is future work.
   - A local-only sandbox: a plain elapsed-time state machine (`demoPhaseAtElapsed`) drives a
-    dedicated screen through PRE-GAME → LIVE with a flag → a local notification
-    (`expo-notifications` `scheduleNotificationAsync`, same pattern as "Send test notification").
-    No server calls anywhere in the screen.
+    dedicated screen through a sped-up countdown → the Watchlist with the demo picks → "Demo
+    complete". No server calls anywhere in the screen.
   - A persistent `DEMO` banner, with an Exit button, stays on screen the whole time.
   - The demo uses fake picks (`demoSnapshotAtElapsed`, same shape as `GET /picks` rows) that are
     **never written** to `stakes` or `lineup_slots` — there is no write path in this screen at all.
-  - **Pick-hit moment (issue #44):** the LIVE pane renders the real `PickCard`, and 20s in the
-    demo player prop goes LIVE → HIT. That runs through the Watchlist's own `usePickHitFlash` +
-    `PickEventFlash` (edge-glow pulse + lower-third), not a demo-only animation.
-  - **Mockup wiring (issue #66):** pre-game is `DemoCountdownCard` (eyebrow "DEMO · KICKOFF IN", a
-    mono `m:ss` countdown, "Pivot is watching for your picks", both badges). Live is `DemoLiveRow`:
-    a pulsing LIVE dot (static under Reduce Motion), the `LIVE · Q3 · 4:12` ticker, both score
-    lines, a possession line with the pylon marker (`CMT ball · 2nd & 7 · HBR 34`), then the pick
-    cards inside the row. The row takes `flareGlow` once a pick has hit, like the card does
-    (issue #65). It is built from theme tokens and shared primitives rather than `NowActiveCard` /
-    `LiveStakeGameCard`, which need server wire types and a watch button. The snapshots carry
-    possession, down and distance for the possession line.
-  - The fixture's teams are fictional ("Comets" / "Harbor"); the notification copy names no team
-    at all and leads with "Demo alert", so it can't be mistaken for a real one.
+  - **Short demo, three alerts (issue #69):** about 30s. The countdown (`DemoCountdownCard`, eyebrow
+    "DEMO · KICKOFF IN", mono `m:ss`) starts at 10 and a displayed second is 600ms of real time
+    (`DEMO_COUNTDOWN_TICK_MS`), so it lasts about 6s. Then the Watchlist (`DemoWatchlist`): the
+    screen header, a "YOUR PICKS · n" section, and the shared `PickCard`s, so the live and hit
+    states are the ones the real Watchlist draws. #66's bespoke live row is gone: the real
+    Watchlist has no live-game row, and the demo should not show more than the app does. Three
+    alerts about the one pick fire 8s apart (`DEMO_ALERTS`; never under 6s or over 12s, pinned in
+    `demoGameDay.test.ts`): "your pick is live" (a routing nudge, no number) as the demo goes live,
+    "your pick is closing in" (the card steps from 47 to 62 of 68.5 rec yds at the same instant),
+    and "pick hit", which fires together with the pick-hit moment (issue #44: the Watchlist's own
+    `usePickHitFlash` + `PickEventFlash`, plus the card's green bar and amber glow from #65).
+    Titles lead with "Demo alert:".
+  - **Delivery, once per surface:** iOS foreground and web show `DemoAlertBanner`, an in-app banner
+    in the look of the real foreground banner but with only Dismiss (the real one's Switch
+    deep-links and records an action through the API). iOS suppresses its own banner in the
+    foreground, so nothing doubles. iOS backgrounded: three local notifications are scheduled when
+    the demo starts (`scheduleDemoGameDayNotificationsAsync`), because the app's timers are
+    suspended then; the screen skips any alert that fell inside a backgrounded stretch, and Exit
+    cancels the pending ones. Permission off, scheduling failing, or web: the in-app banners play
+    in full and the demo clock pauses while the app is hidden, so none is missed. The
+    notifications' data is `{ demo: true }`, which is not a flag event, so a tap never deep-links.
+  - The fixture's teams are fictional ("Comets" / "Harbor") and the player is fictional; the alert
+    copy leads with "Demo alert", so it can't be mistaken for a real one.
 - **Coach marks:**
   - One-time tooltips, tracked in `preferences.seenCoachMarks: string[]` via `pickCoachMarkToShow`
     / `withCoachMarkSeen` (`app/lib/coachMarks.ts`), capped at one per screen visit.
@@ -665,9 +674,16 @@ Changes to the existing 6 screens are marked **new** or **changed**.
 2. **Notification denial:** tap Don't Allow at the iOS prompt. Expect the recovery screen, not a second prompt. Then check that iOS Settings → Pivot → Notifications is reachable from the link.
 3. **Demo game day:**
    1. Start the demo from Settings → Help.
-   2. Within ~90s, expect Home to show LIVE and a local notification to arrive (with the app backgrounded as well as foregrounded). About 20s after LIVE, expect the green edge glow and a "PICK HIT · 70 REC YDS" lower-third, once.
-   3. Exit the demo. Expect real Home to return unchanged.
-   4. Query `select count(*) from stakes where user_id = '<you>'` before and after. The count should be unchanged.
+   2. Expect a 10-to-1 countdown that lasts about 6s, then the Watchlist with two pick cards and a
+      "Demo alert: your pick is live" banner. About 8s later, "your pick is closing in" with the
+      card at 62 of 68.5. About 8s after that, "pick hit" together with the green edge glow, a
+      "PICK HIT · 70 REC YDS" lower-third (once) and the green bar and amber glow on the card.
+      "Demo complete" follows at about 30s. In the foreground each alert shows once, as an in-app
+      banner.
+   3. Repeat with the app backgrounded right after the first alert. Expect the other two as OS
+      notifications, once each, and the card in its hit state when you come back.
+   4. Exit the demo. Expect real Home to return unchanged.
+   5. Query `select count(*) from stakes where user_id = '<you>'` before and after. The count should be unchanged.
 4. **Coach marks:** open Home twice. The coach mark should appear on the first visit only. After "Replay tour", it should not reappear. Replay covers the tour cards, not the coach marks.
 
 ---
