@@ -35,4 +35,12 @@ export {
 export { firstTouchdown, type FirstTd } from './progress/firstTd.js';
 export { matchPlayer, normalizeName, type PlayerMatch } from './progress/playerMatch.js';
 export { settledResult, slipSummary } from './progress/slipSummary.js';
+export {
+  pickMargin,
+  seasonHitRate,
+  weeklyRecap,
+  type RecapPickRow,
+  type SeasonHitRate,
+  type WeeklyRecapTotals,
+} from './progress/weeklyRecap.js';
 export { segmentComplete, segmentInPlay, segmentLate } from './progress/segment.js';

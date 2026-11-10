@@ -508,6 +508,114 @@ describe('picks routes', () => {
     });
   });
 
+  describe('GET /picks/recap', () => {
+    function rawStake(id: string, overrides: Row = {}): Row {
+      return {
+        id,
+        user_id: USER,
+        season: 2026,
+        week: 5,
+        game_id: GAME,
+        subject: { type: 'PLAYER', playerId: RB, teamId: AWAY },
+        condition: { type: 'STAT_OVER', stat: 'RUSH_YDS', line: 89.5 },
+        source: 'MANUAL',
+        weight: 1,
+        created_at: '2026-10-09T16:00:00.000Z',
+        slip_id: null,
+        result: null,
+        result_value: null,
+        settled_at: null,
+        ...overrides,
+      };
+    }
+
+    it('is empty for a new account with no graded picks', async () => {
+      h = await setup();
+      const res = (await get('/picks/recap')).json();
+      expect(res.week).toBe(5);
+      expect(res.week_recap).toEqual({
+        picks_made: 0,
+        won: 0,
+        lost: 0,
+        tie: 0,
+        void: 0,
+        decided: 0,
+        hit_rate: null,
+        best: null,
+        worst: null,
+      });
+      expect(res.season_recap).toEqual({ won: 0, decided: 0, hit_rate: null });
+    });
+
+    it('counts graded picks, computes hit rate, and names the best and worst graded pick', async () => {
+      h = await setup();
+      h.db.rows('stakes').push(
+        rawStake('p-won', { result: 'won', result_value: 140 }), // margin +50.5
+        rawStake('p-lost', {
+          subject: { type: 'TEAM', teamId: AWAY },
+          condition: { type: 'SPREAD', line: -3.5 },
+          result: 'lost',
+          result_value: -10, // margin -10, the worse of the two losses below
+        }),
+        rawStake('p-lost-2', {
+          subject: { type: 'TEAM', teamId: AWAY },
+          condition: { type: 'MONEYLINE', side: 'TEAM' },
+          result: 'lost',
+          result_value: -2,
+        }),
+        rawStake('p-tie', {
+          subject: { type: 'TEAM', teamId: AWAY },
+          condition: { type: 'SPREAD', line: 0 },
+          result: 'tie',
+          result_value: 0,
+        }),
+        rawStake('p-void', { result: 'void' }),
+        // Fantasy rows never settle in real use, but the route must not count one if it somehow did.
+        rawStake('p-fantasy', {
+          condition: { type: 'ROSTERED' },
+          result: 'won',
+          result_value: null,
+        }),
+      );
+      const res = (await get('/picks/recap')).json();
+      expect(res.week_recap).toMatchObject({
+        picks_made: 5,
+        won: 1,
+        lost: 2,
+        tie: 1,
+        void: 1,
+        decided: 3,
+        hit_rate: 1 / 3,
+      });
+      expect(res.week_recap.best).toMatchObject({
+        id: 'p-won',
+        label: 'S. Barkley over 89.5 rush yds',
+        result: 'won',
+      });
+      expect(res.week_recap.worst).toMatchObject({ id: 'p-lost', result: 'lost' });
+      expect(res.season_recap).toEqual({ won: 1, decided: 3, hit_rate: 1 / 3 });
+    });
+
+    it('adds earlier weeks into the season-to-date hit rate but not into the week recap', async () => {
+      h = await setup();
+      h.db.rows('stakes').push(
+        rawStake('p-this-week', { result: 'won', result_value: 140 }),
+        rawStake('p-earlier-week', { week: 4, result: 'lost', result_value: 60 }),
+      );
+      const res = (await get('/picks/recap')).json();
+      expect(res.week_recap.picks_made).toBe(1);
+      expect(res.season_recap).toEqual({ won: 1, decided: 2, hit_rate: 0.5 });
+    });
+
+    it('accepts a week query param, like GET /picks', async () => {
+      h = await setup();
+      h.db.rows('stakes').push(rawStake('p-week-4', { week: 4, result: 'won', result_value: 140 }));
+      const res = (await get('/picks/recap?week=4')).json();
+      expect(res.week).toBe(4);
+      expect(res.week_recap.picks_made).toBe(1);
+    });
+  });
+
   describe('demo account', () => {
     it('refuses writes and serves the fixture picks', async () => {
       h = await setup();

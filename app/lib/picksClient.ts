@@ -39,6 +39,42 @@ export async function fetchPicks(week: number): Promise<PicksPage> {
   return await apiClient.get<PicksPage>(`/picks?week=${week}`);
 }
 
+export interface RecapPickSummary {
+  id: string;
+  label: string;
+  result: 'won' | 'lost' | 'tie' | 'void';
+  result_value: number | null;
+  game_id: string;
+}
+
+/** `GET /picks/recap` (docs/P2-PICKS-MODEL.md §5, issue #47). */
+export interface RecapPage {
+  week: number;
+  season: number | null;
+  week_recap: {
+    picks_made: number;
+    won: number;
+    lost: number;
+    tie: number;
+    void: number;
+    decided: number;
+    hit_rate: number | null;
+    best: RecapPickSummary | null;
+    worst: RecapPickSummary | null;
+  };
+  season_recap: {
+    won: number;
+    decided: number;
+    hit_rate: number | null;
+  };
+}
+
+export async function fetchRecap(week?: number): Promise<RecapPage> {
+  return await apiClient.get<RecapPage>(
+    week === undefined ? '/picks/recap' : `/picks/recap?week=${week}`,
+  );
+}
+
 export async function createPick(pick: PickInput): Promise<unknown> {
   return await apiClient.post('/picks', { pick });
 }

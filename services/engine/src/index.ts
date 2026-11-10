@@ -3,18 +3,24 @@ export {
   evaluateOpponentRostered,
   evaluateStake,
   isDecided,
+  pickMargin,
   pickProgress,
+  seasonHitRate,
   settledResult,
   slipSummary,
+  weeklyRecap,
   TRIGGER_KIND,
 } from './stakes/index.js';
 export type {
   EvaluatorContext,
   ProgressContext,
   PropPlayer,
+  RecapPickRow,
+  SeasonHitRate,
   Stake,
   Trigger,
   TriggerCode,
+  WeeklyRecapTotals,
 } from './stakes/index.js';
 export { diffFlagStates } from './diffFlagStates.js';
 export { isInterestingStateChange } from './isInterestingStateChange.js';
