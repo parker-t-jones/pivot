@@ -1,16 +1,17 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { DemoAlertBanner } from '../../components/DemoAlertBanner';
 import { DemoBanner } from '../../components/DemoBanner';
 import { DemoCountdownCard } from '../../components/DemoCountdownCard';
-import { DemoWatchlist } from '../../components/DemoWatchlist';
+import { DemoHomeLive } from '../../components/DemoHomeLive';
 import { PickEventFlash } from '../../components/PickEventFlash';
 import {
   DEMO_TOTAL_MS,
   demoAlertsToPresent,
   demoCountdownAtElapsed,
+  demoLiveStakeCards,
   demoPhaseAtElapsed,
   demoSnapshotAtElapsed,
   type DemoAlert,
@@ -38,8 +39,9 @@ interface ShownAlert {
 
 /**
  * "Try a demo game day" (issue #32 / PIVOT-STAKES-PLAN.md §12.2, reshaped by issue #69): a
- * local-only sandbox that replays a bundled fixture. A sped-up 10-to-1 countdown, then the
- * Watchlist with the demo picks, and three alerts about one pick, 8s apart: live, closing in, hit.
+ * local-only sandbox that replays a bundled fixture. A sped-up 10-to-1 countdown, then Home's live
+ * day (issue #71: the real live game card with the field gauge, and the demo picks under it), and
+ * three alerts about one pick, 8s apart: live, closing in, hit.
  * The hit carries the Watchlist's own `usePickHitFlash` + `PickEventFlash` (issue #44). No server
  * calls: nothing here reads or writes `stakes`, `lineup_slots`, preferences, or any API route.
  *
@@ -151,6 +153,8 @@ export default function DemoGameDayScreen() {
   const phase: DemoPhase = demoPhaseAtElapsed(elapsed);
   const snapshot = demoSnapshotAtElapsed(elapsed);
   const pickFlash = usePickHitFlash(snapshot.picks);
+  // Snapshots are constants, so the card model is rebuilt only when a beat changes it.
+  const gameCards = useMemo(() => demoLiveStakeCards(snapshot.live), [snapshot]);
 
   const exit = () => resetToHomeRoot(router);
 
@@ -162,7 +166,7 @@ export default function DemoGameDayScreen() {
           contentContainerStyle={[styles.content, phase === 'live' ? null : styles.contentCentered]}
           style={styles.scroll}
         >
-          {renderPhase(phase, elapsed, snapshot)}
+          {renderPhase(phase, elapsed, snapshot, gameCards)}
         </ScrollView>
         {shown ? (
           <DemoAlertBanner
@@ -177,7 +181,12 @@ export default function DemoGameDayScreen() {
   );
 }
 
-function renderPhase(phase: DemoPhase, elapsed: number, snapshot: DemoSnapshot) {
+function renderPhase(
+  phase: DemoPhase,
+  elapsed: number,
+  snapshot: DemoSnapshot,
+  gameCards: ReturnType<typeof demoLiveStakeCards>,
+) {
   if (phase === 'pre_game') {
     return <DemoCountdownCard secondsLeft={demoCountdownAtElapsed(elapsed)} />;
   }
@@ -186,8 +195,9 @@ function renderPhase(phase: DemoPhase, elapsed: number, snapshot: DemoSnapshot) 
   if (phase === 'live' && live) {
     const now = new Date();
     return (
-      <DemoWatchlist
-        cards={snapshot.picks.map((pick) => ({
+      <DemoHomeLive
+        games={gameCards}
+        picks={snapshot.picks.map((pick) => ({
           id: pick.id,
           model: pickCardModel({
             stake: pick,
@@ -227,7 +237,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     flex: 1,
   },
-  // Scrolls when the Watchlist is taller than a small phone. Same gutters as the real Watchlist.
+  // Scrolls when the live view is taller than a small phone. Same gutters as the real Watchlist.
   content: {
     flexGrow: 1,
     paddingHorizontal: theme.spacing.lg2,

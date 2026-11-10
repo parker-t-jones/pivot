@@ -16,13 +16,23 @@ import {
   DEMO_PRE_GAME_MS,
   DEMO_REC_YDS,
   DEMO_TOTAL_MS,
+  DEMO_WATCH_HINT,
+  DEMO_WATCH_LABEL,
   demoAlertsToPresent,
   demoCountdownAtElapsed,
+  demoLiveStakeCards,
   demoPhaseAtElapsed,
   demoSnapshotAtElapsed,
   type DemoAlertKind,
   type DemoLiveGame,
 } from './demoGameDay';
+import {
+  downDistanceLabel,
+  fieldGaugeMarkerPercent,
+  fieldGaugeShowsRedZone,
+  fieldPositionLabel,
+  gameClockLine,
+} from './gameDisplay';
 import {
   EMPTY_PICK_HIT_TRACKER,
   detectPickHits,
@@ -331,5 +341,138 @@ describe('demo live game', () => {
       previous = live;
     }
     expect(liveAt(DEMO_HIT_AT_MS).score.home).toBeGreaterThan(liveAt(DEMO_PRE_GAME_MS).score.home);
+  });
+});
+
+describe('demo field situation (the Home hero gauge)', () => {
+  const beats = [
+    { name: 'active', at: DEMO_ACTIVE_AT_MS },
+    { name: 'closing', at: DEMO_CLOSING_AT_MS },
+    { name: 'hit', at: DEMO_HIT_AT_MS },
+  ] as const;
+  const liveOf = (elapsed: number): DemoLiveGame => {
+    const live = demoSnapshotAtElapsed(elapsed).live;
+    if (!live) throw new Error(`no live game at ${elapsed}ms`);
+    return live;
+  };
+
+  it('moves the gauge marker up the field with each beat: own 25, HBR 34, HBR 2', () => {
+    const percents = beats.map((beat) => {
+      const live = liveOf(beat.at);
+      expect(live.yards_to_endzone).not.toBeNull();
+      return fieldGaugeMarkerPercent(live.yards_to_endzone ?? 0);
+    });
+    expect(percents).toEqual([25, 66, 98]);
+    const labels = beats.map((beat) => {
+      const live = liveOf(beat.at);
+      return fieldPositionLabel(live.yards_to_endzone, live.possession_team, DEMO_AWAY_TEAM.abbr);
+    });
+    expect(labels).toEqual(['CMT 25', 'HBR 34', 'HBR 2']);
+  });
+
+  it('carries down and distance, then none for the extra point after the touchdown catch', () => {
+    const lines = beats.map((beat) => {
+      const live = liveOf(beat.at);
+      return downDistanceLabel(live.down, live.distance);
+    });
+    expect(lines).toEqual(['1st & 10', '2nd & 7', null]);
+  });
+
+  it('reads the clock line the gauge prints at each beat', () => {
+    const lines = beats.map((beat) => {
+      const live = liveOf(beat.at);
+      return gameClockLine(
+        live.quarter,
+        live.time_remaining_sec,
+        live.down,
+        live.distance,
+        live.possession_team,
+      );
+    });
+    expect(lines).toEqual(['Q3 · 7:40 · 1st & 10', 'Q3 · 5:55 · 2nd & 7', 'Q3 · 4:12']);
+  });
+
+  it('keeps CMT on the ball and the yard line on the field for the whole live phase', () => {
+    for (let elapsed = DEMO_PRE_GAME_MS; elapsed < DEMO_TOTAL_MS; elapsed += 200) {
+      const live = liveOf(elapsed);
+      expect(live.possession_team).toBe(DEMO_HOME_TEAM.abbr);
+      expect([live.home_team, live.away_team]).toEqual([DEMO_HOME_TEAM.abbr, DEMO_AWAY_TEAM.abbr]);
+      expect(live.yards_to_endzone).toBeGreaterThanOrEqual(0);
+      expect(live.yards_to_endzone).toBeLessThanOrEqual(100);
+      expect(live.in_red_zone).toBe(fieldGaugeShowsRedZone(live.yards_to_endzone ?? 100));
+    }
+  });
+
+  it('only shows RED ZONE on the last beat', () => {
+    expect(beats.map((beat) => liveOf(beat.at).in_red_zone)).toEqual([false, false, true]);
+  });
+
+  it('steps the score with the beats: 10-7, 10-7, then 17-7', () => {
+    expect(beats.map((beat) => liveOf(beat.at).score)).toEqual([
+      { home: 10, away: 7 },
+      { home: 10, away: 7 },
+      { home: 17, away: 7 },
+    ]);
+  });
+
+  it('uses only neutral team colors, never a real team color', () => {
+    const live = liveOf(DEMO_ACTIVE_AT_MS);
+    expect(live.home_team_primary_color).toBe(live.away_team_primary_color);
+    expect(live.home_team_secondary_color).toBe(live.away_team_secondary_color);
+  });
+});
+
+describe('demoLiveStakeCards (the Home hero model)', () => {
+  it('has no card before kickoff', () => {
+    expect(demoLiveStakeCards(demoSnapshotAtElapsed(0).live)).toEqual([]);
+  });
+
+  it('builds one NOW ACTIVE card at every beat, with the player on field and the demo button', () => {
+    for (const elapsed of [DEMO_ACTIVE_AT_MS, DEMO_CLOSING_AT_MS, DEMO_HIT_AT_MS]) {
+      const cards = demoLiveStakeCards(demoSnapshotAtElapsed(elapsed).live);
+      expect(cards).toHaveLength(1);
+      const card = cards[0];
+      expect(card?.game.game_id).toBe('demo-game');
+      expect(card?.eyebrow).toBe('NOW ACTIVE');
+      expect(card?.active).toBe(true);
+      expect(card?.chips.map((chip) => chip.text)).toEqual(['R. Vance WR · ON FIELD']);
+      expect(card?.chips[0]?.tone).toBe('on_field');
+      expect(card?.buttonLabel).toBe(DEMO_WATCH_LABEL);
+      expect(card?.opensLink).toBe(true);
+    }
+  });
+
+  it('carries the live game of its beat, so the card score and gauge advance', () => {
+    const first = demoLiveStakeCards(demoSnapshotAtElapsed(DEMO_ACTIVE_AT_MS).live)[0];
+    const last = demoLiveStakeCards(demoSnapshotAtElapsed(DEMO_HIT_AT_MS).live)[0];
+    expect(first?.game.score).toEqual({ home: 10, away: 7 });
+    expect(last?.game.score).toEqual({ home: 17, away: 7 });
+    expect(last?.game.yards_to_endzone).toBe(2);
+  });
+
+  it('names no real service, team or betting term in the button, hint or chips', () => {
+    const card = demoLiveStakeCards(demoSnapshotAtElapsed(DEMO_ACTIVE_AT_MS).live)[0];
+    const text = [DEMO_WATCH_LABEL, DEMO_WATCH_HINT, ...(card?.chips.map((c) => c.text) ?? [])]
+      .join(' ')
+      .toLowerCase();
+    for (const word of [
+      'youtube',
+      'hulu',
+      'fubo',
+      'sling',
+      'directv',
+      'espn',
+      'peacock',
+      'prime',
+      'paramount',
+      'sunday ticket',
+      'edge',
+      'odds',
+      'bet',
+      'stake',
+    ]) {
+      expect(text).not.toContain(word);
+    }
+    for (const team of REAL_NFL_TEAM_NAMES) expect(text).not.toContain(team);
   });
 });

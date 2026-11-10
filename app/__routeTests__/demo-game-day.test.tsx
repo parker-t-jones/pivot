@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { Linking } from 'react-native';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DemoGameDayScreen from '../app/(app)/demo-game-day';
@@ -14,6 +15,8 @@ import {
   DEMO_HIT_AT_MS,
   DEMO_PRE_GAME_MS,
   DEMO_TOTAL_MS,
+  DEMO_WATCH_HINT,
+  DEMO_WATCH_LABEL,
 } from '../lib/demoGameDay';
 
 const appState = vi.hoisted(() => {
@@ -39,6 +42,18 @@ vi.mock('react-native', async () => {
     },
   };
 });
+
+// The real live game card reads font names from `lib/fonts`, which loads expo-font (needs `__DEV__`).
+vi.mock('../lib/fonts', () => ({
+  fonts: {
+    teamNickname: 'sans-serif',
+    sansBold: 'sans-serif',
+    sansSemiBold: 'sans-serif',
+    monoBold: 'monospace',
+    monoSemiBold: 'monospace',
+    monoMedium: 'monospace',
+  },
+}));
 
 vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(async () => undefined),
@@ -140,7 +155,7 @@ describe('DemoGameDayScreen: countdown', () => {
     expect(container.textContent).toContain('Pivot is watching for your picks');
     expect(container.textContent).toContain('CMT');
     expect(container.textContent).toContain('HBR');
-    expect(byId('demo-watchlist')).toBeNull();
+    expect(byId('demo-home-live')).toBeNull();
 
     await advance(DEMO_COUNTDOWN_TICK_MS);
     expect(byId('demo-countdown')?.textContent).toBe('0:09');
@@ -162,22 +177,71 @@ describe('DemoGameDayScreen: countdown', () => {
   });
 });
 
-describe('DemoGameDayScreen: Watchlist view', () => {
-  it('goes live as the Watchlist: header, YOUR PICKS section, both pick cards, no bespoke live row', async () => {
+describe('DemoGameDayScreen: Home live view', () => {
+  it('goes live as Home on a game day: NOW ACTIVE hero with the gauge, then YOUR PICKS', async () => {
     await mount();
     await advance(DEMO_PRE_GAME_MS);
     expect(byId('demo-countdown-card')).toBeNull();
+    expect(byId('demo-watchlist')).toBeNull();
     expect(byId('demo-live-row')).toBeNull();
-    const watchlist = byId('demo-watchlist');
-    expect(watchlist).not.toBeNull();
-    expect(watchlist?.textContent).toContain('Watchlist');
-    expect(watchlist?.textContent).toContain('YOUR PICKS · 2');
-    const section = byId('demo-watchlist-picks');
+    const home = byId('demo-home-live');
+    expect(home).not.toBeNull();
+    expect(byId('demo-home-live-eyebrow')?.textContent).toBe('● LIVE · 1 GAME');
+    const hero = byId('demo-home-live-hero');
+    expect(hero?.textContent).toContain('NOW ACTIVE');
+    expect(byId('live-score-left')?.textContent).toBe('COMETS10');
+    expect(byId('live-score-right')?.textContent).toBe('7HARBOR');
+    expect(hero?.textContent).toContain('CMT 25');
+    expect(hero?.textContent).toContain('Q3 · 7:40 · 1st & 10');
+    expect(hero?.textContent).toContain('R. Vance WR · ON FIELD');
+    const section = byId('demo-home-live-picks');
+    expect(section?.textContent).toContain('YOUR PICKS · 2');
     expect(section?.querySelectorAll('[data-testid="pick-card-live"]')).toHaveLength(2);
     expect(container.textContent).toContain('R. Vance over 68.5 rec yds');
     expect(container.textContent).toContain('47 rec yds · 21.5 to go');
     expect(byId('pick-card-bar-fill-hit')).toBeNull();
-    expect(container.textContent).not.toMatch(/watch on/i);
+  });
+
+  it('moves the hero gauge, clock and score with the three beats', async () => {
+    await mount();
+    await advance(DEMO_ACTIVE_AT_MS);
+    expect(byId('demo-home-live-hero')?.textContent).toContain('CMT 25');
+
+    await advance(DEMO_CLOSING_AT_MS - DEMO_ACTIVE_AT_MS);
+    expect(byId('demo-home-live-hero')?.textContent).toContain('HBR 34');
+    expect(byId('demo-home-live-hero')?.textContent).toContain('Q3 · 5:55 · 2nd & 7');
+    expect(byId('live-score-left')?.textContent).toBe('COMETS10');
+
+    await advance(DEMO_HIT_AT_MS - DEMO_CLOSING_AT_MS);
+    expect(byId('demo-home-live-hero')?.textContent).toContain('HBR 2');
+    expect(byId('demo-home-live-hero')?.textContent).toContain('RED ZONE');
+    expect(byId('live-score-left')?.textContent).toBe('COMETS17');
+  });
+
+  it('opens nothing from the Watch button: only the demo hint, no link and no network call', async () => {
+    const openURL = vi.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const canOpenURL = vi.spyOn(Linking, 'canOpenURL').mockResolvedValue(true);
+    const windowOpen = vi.spyOn(window, 'open').mockReturnValue(null);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    await mount();
+    await advance(DEMO_PRE_GAME_MS);
+    const button = Array.from(container.querySelectorAll('[role="button"]')).find((el) =>
+      (el.textContent ?? '').includes(DEMO_WATCH_LABEL),
+    );
+    expect(button).toBeDefined();
+    expect(byId('demo-watch-hint')).toBeNull();
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(byId('demo-watch-hint')?.textContent).toBe(DEMO_WATCH_HINT);
+    expect(openURL).not.toHaveBeenCalled();
+    expect(canOpenURL).not.toHaveBeenCalled();
+    expect(windowOpen).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(router.dismissTo).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it('steps the card up with each alert: 47, then 62, then the hit with the green bar and glow', async () => {
@@ -420,7 +484,7 @@ describe('DemoGameDayScreen: local-only', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('keeps the whole demo free of real teams, players, watch buttons and betting talk', async () => {
+  it('keeps the whole demo free of real teams, players, services and betting talk', async () => {
     await mount();
     const seen: string[] = [container.textContent ?? ''];
     await advance(DEMO_TOTAL_MS + STEP_MS, () => {
@@ -429,7 +493,9 @@ describe('DemoGameDayScreen: local-only', () => {
     const text = seen.join(' ');
     expect(text).not.toMatch(/\b(SEA|DAL)\b/);
     expect(text).not.toMatch(/metcalf/i);
-    expect(text).not.toMatch(/watch on/i);
+    // The one Watch button is the demo's own label; no real service is ever named.
+    expect(text.split(DEMO_WATCH_LABEL).join('')).not.toMatch(/watch on/i);
+    expect(text).not.toMatch(/youtube|hulu|fubo|sling|directv|espn|peacock|sunday ticket/i);
     expect(text).not.toMatch(/stake/i);
     expect(text).not.toMatch(/\b(odds|bet|bets|wager|edge)\b/i);
     expect(text).toContain('DEMO');
