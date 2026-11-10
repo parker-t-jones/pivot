@@ -7,7 +7,7 @@ import { syncUserBetGames } from '../lib/betIndex.js';
 import type { Json } from '../lib/database.types.js';
 import { demoAccountFixed, userIsDemo } from '../lib/demoAccount.js';
 import { demoStakesResponse } from '../lib/demoFixture.js';
-import { ApiError } from '../lib/errors.js';
+import { ApiError, rethrowIfOwnAccountRowMissing } from '../lib/errors.js';
 import {
   FREE_BET_LIMIT,
   countFreeSlots,
@@ -173,7 +173,10 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
         .select('subscription_tier')
         .eq('id', user.id)
         .single();
-      if (userError) throw userError;
+      if (userError) {
+        rethrowIfOwnAccountRowMissing(userError);
+        throw userError;
+      }
       if (userRow.subscription_tier !== 'pro') {
         const { used } = countFreeSlots(
           weekRows,

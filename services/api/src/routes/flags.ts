@@ -12,7 +12,7 @@ import { loadWeekBets, mergeBetRows, type BetChip, type WeekBets } from '../lib/
 import { userIsDemo } from '../lib/demoAccount.js';
 import { demoFlagsResponse } from '../lib/demoFixture.js';
 import { runnerHeartbeatFresh } from '../runner/heartbeat.js';
-import { ApiError } from '../lib/errors.js';
+import { ApiError, rethrowIfOwnAccountRowMissing } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { loadOpponentRedZone } from '../lib/opponentFlagsCurrent.js';
 import { requireUser } from '../plugins/auth.js';
@@ -89,7 +89,10 @@ const flagsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .select('subscription_tier, preferences')
       .eq('id', user.id)
       .single();
-    if (userError) throw userError;
+    if (userError) {
+      rethrowIfOwnAccountRowMissing(userError);
+      throw userError;
+    }
     const preferences = parsePreferences(userRow.preferences);
     const indexedBetGames = await fastify.lineupCache.getUserBetGames(user.id, nflState.week);
     const weekBets =

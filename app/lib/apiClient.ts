@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { setAccountNotFoundNotice } from './accountNotFoundNotice';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
@@ -22,11 +23,29 @@ interface RequestOptions {
   body?: unknown;
 }
 
-function throwIfErrorResponse(status: number, parsedBody: unknown): void {
+const ACCOUNT_NOT_FOUND_MESSAGE = "Your account isn't available anymore. Please sign in again.";
+
+/**
+ * `401 account_not_found` (services/api/src/lib/errors.ts) means the session's JWT is still
+ * signature-valid but the account behind it is gone — most often the user deleted their account
+ * from another tab/device. JWTs are stateless, so this client has no way to know until a request
+ * fails this way. Clear the stored session immediately rather than letting the caller retry or
+ * show a generic error: `supabase.auth.signOut()` fires `onAuthStateChange('SIGNED_OUT')`, which
+ * `SessionContext` already turns into `session = null`, and `_layout.tsx`'s existing auth redirect
+ * already sends a session-less user to `/(auth)/welcome` — no new redirect/error-boundary needed.
+ * The explanation is stashed in `accountNotFoundNotice` for that screen to show once.
+ */
+async function throwIfErrorResponse(status: number, parsedBody: unknown): Promise<never> {
   const errorBody =
     parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody
       ? (parsedBody as { error: { code?: string; message?: string; details?: unknown } }).error
       : null;
+
+  if (status === 401 && errorBody?.code === 'account_not_found') {
+    setAccountNotFoundNotice(errorBody.message ?? ACCOUNT_NOT_FOUND_MESSAGE);
+    await supabase.auth.signOut();
+  }
+
   throw new ApiRequestError(
     status,
     errorBody?.code ?? 'unknown_error',
@@ -75,7 +94,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   // surfaced disconnect/delete as false failures even when the server succeeded.
   if (response.status === 204 || response.status === 205) {
     if (!response.ok) {
-      throwIfErrorResponse(response.status, null);
+      await throwIfErrorResponse(response.status, null);
     }
     return undefined as T;
   }
@@ -88,7 +107,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       parsedBody = JSON.parse(trimmed) as unknown;
     } catch {
       if (!response.ok) {
-        throwIfErrorResponse(response.status, null);
+        await throwIfErrorResponse(response.status, null);
       }
       throw new ApiRequestError(
         response.status,
@@ -99,7 +118,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
-    throwIfErrorResponse(response.status, parsedBody);
+    await throwIfErrorResponse(response.status, parsedBody);
   }
 
   return parsedBody as T;

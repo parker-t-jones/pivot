@@ -5,7 +5,7 @@ import '../plugins/services.js';
 import { requireUser } from '../plugins/auth.js';
 import { demoAccountFixed, userIsDemo } from '../lib/demoAccount.js';
 import { DEMO_LEAGUE_ID, demoLeague, demoLineupResponse } from '../lib/demoFixture.js';
-import { ApiError } from '../lib/errors.js';
+import { ApiError, rethrowIfOwnAccountRowMissing } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { getOwnedLeagueOrThrow } from '../lib/get-owned-league.js';
 import { assertStartedPlayersKept } from '../lib/lineupKickoffLock.js';
@@ -31,7 +31,10 @@ async function assertCanConnectLeague(
     .select('subscription_tier')
     .eq('id', userId)
     .single();
-  if (userError) throw userError;
+  if (userError) {
+    rethrowIfOwnAccountRowMissing(userError);
+    throw userError;
+  }
 
   if (userRow.subscription_tier === 'pro') {
     return { subscriptionTier: userRow.subscription_tier };
@@ -139,7 +142,10 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
         .select('subscription_tier')
         .eq('id', userId)
         .single();
-      if (userTierError) throw userTierError;
+      if (userTierError) {
+        rethrowIfOwnAccountRowMissing(userTierError);
+        throw userTierError;
+      }
       const subscriptionTier = userRow.subscription_tier;
 
       let league = existing;
@@ -428,7 +434,10 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
         .select('subscription_tier')
         .eq('id', requireUser(request).id)
         .single();
-      if (tierError) throw tierError;
+      if (tierError) {
+        rethrowIfOwnAccountRowMissing(tierError);
+        throw tierError;
+      }
       if (userRow.subscription_tier !== 'pro' && slots.length > FREE_MAX_MANUAL_LINEUP_SLOTS) {
         throw new ApiError(
           403,

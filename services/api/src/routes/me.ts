@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { sendDemoAccountAlert } from '../lib/demoAlert.js';
 import { rejectIfDemo } from '../lib/demoAccount.js';
 import { DEMO_LEAGUE_ID } from '../lib/demoFixture.js';
-import { ApiError } from '../lib/errors.js';
+import { ApiError, rethrowIfOwnAccountRowMissing } from '../lib/errors.js';
 import { betsEnabledForUser } from '../lib/features.js';
 import { getLineupSyncContext, rebuildUserLineupCache } from '../lib/lineup-sync.js';
 import { requireUser } from '../plugins/auth.js';
@@ -174,7 +174,10 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .select('id, email, preferences, subscription_tier, is_demo')
       .eq('id', user.id)
       .single();
-    if (userError) throw userError;
+    if (userError) {
+      rethrowIfOwnAccountRowMissing(userError);
+      throw userError;
+    }
 
     const { data: presenceRows, error: presenceError } = await fastify.supabase
       .from('user_app_presence')
@@ -201,7 +204,10 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .select('preferences, subscription_tier')
       .eq('id', user.id)
       .single();
-    if (existingError) throw existingError;
+    if (existingError) {
+      rethrowIfOwnAccountRowMissing(existingError);
+      throw existingError;
+    }
 
     const current = parsePreferences(existingRow.preferences);
     let nextWatched = request.body.watchedLeagueIds ?? current.watchedLeagueIds;
@@ -249,7 +255,10 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .eq('id', user.id)
       .select('id, email, preferences, subscription_tier')
       .single();
-    if (error) throw error;
+    if (error) {
+      rethrowIfOwnAccountRowMissing(error);
+      throw error;
+    }
 
     if (request.body.watchedLeagueIds !== undefined) {
       try {
@@ -385,7 +394,10 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .eq('id', user.id)
       .select('expo_push_token')
       .single();
-    if (error) throw error;
+    if (error) {
+      rethrowIfOwnAccountRowMissing(error);
+      throw error;
+    }
 
     return pushTokenResponse(data);
   });
@@ -401,7 +413,10 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
       .eq('id', user.id)
       .select('expo_push_token')
       .single();
-    if (error) throw error;
+    if (error) {
+      rethrowIfOwnAccountRowMissing(error);
+      throw error;
+    }
 
     return pushTokenResponse(data);
   });

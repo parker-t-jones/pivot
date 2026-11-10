@@ -44,6 +44,8 @@ interface LeagueRow {
 
 class FakeSupabase {
   readonly leagues: Map<string, LeagueRow>;
+  /** Issue #46: set true to simulate the caller's `users` row being gone (JWT outlived it). */
+  userRowMissing = false;
 
   constructor(seed: LeagueRow[]) {
     this.leagues = new Map(seed.map((row) => [row.id, row]));
@@ -55,10 +57,16 @@ class FakeSupabase {
         select: () => ({
           eq: () => ({
             maybeSingle: async () => ({ data: { is_demo: false }, error: null }),
-            single: async () => ({
-              data: { is_demo: false, subscription_tier: 'free' },
-              error: null,
-            }),
+            single: async () =>
+              this.userRowMissing
+                ? {
+                    data: null,
+                    error: { code: 'PGRST116', message: 'JSON object requested, 0 rows returned' },
+                  }
+                : {
+                    data: { is_demo: false, subscription_tier: 'free' },
+                    error: null,
+                  },
           }),
         }),
       };
@@ -202,5 +210,36 @@ describe('PATCH /leagues/:id', () => {
     });
     expect(response.statusCode).toBe(404);
     expect(response.json().error.code).toBe('league_not_found');
+  });
+});
+
+describe('PUT /leagues/:id/lineup', () => {
+  let app: Awaited<ReturnType<typeof buildTestApp>>;
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  it('issue #46: returns 401 account_not_found (not 500) when the JWT outlives the users row', async () => {
+    app = await buildTestApp([
+      seedLeague({ id: MANUAL_ID, platform: 'manual', name: 'Manual League' }),
+    ]);
+    app.fake.userRowMissing = true;
+    const token = await signToken({ sub: USER_ID, email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'PUT',
+      url: `/leagues/${MANUAL_ID}/lineup`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { week: 5, slots: [] },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: {
+        code: 'account_not_found',
+        message: "Your account isn't available anymore. Please sign in again.",
+      },
+    });
   });
 });

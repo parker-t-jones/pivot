@@ -1,7 +1,6 @@
 import { InMemoryGameStateStore, InMemoryRealtimeBus } from '@pivot/dispatcher';
 import Fastify from 'fastify';
 import {
-  hasZodFastifySchemaValidationErrors,
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider,
@@ -9,7 +8,7 @@ import {
 import { SignJWT } from 'jose';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
-import { ApiError, toErrorBody } from '../lib/errors.js';
+import { apiErrorHandler } from '../lib/errors.js';
 import { FEATURE_BETS_INVALID, loadFeatureBets } from '../lib/features.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
@@ -102,7 +101,13 @@ class FakeSupabase {
           eq: (_col: string, userId: string) => ({
             single: async () => {
               const existing = this.users.get(userId);
-              if (!existing) return { data: null, error: { message: 'not found' } };
+              // Mirrors real Postgrest: `.single()` on 0 rows is `PGRST116`, not a generic error.
+              if (!existing) {
+                return {
+                  data: null,
+                  error: { code: 'PGRST116', message: 'JSON object requested, 0 rows returned' },
+                };
+              }
               return { data: existing, error: null };
             },
             maybeSingle: async () => {
@@ -220,22 +225,9 @@ async function buildTestApp(
   const fastify = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
   fastify.setValidatorCompiler(validatorCompiler);
   fastify.setSerializerCompiler(serializerCompiler);
-  // Mirrors server.ts's error handler (Section 9 `{ error: { code, message } }` shape under test).
-  fastify.setErrorHandler((error, _request, reply) => {
-    if (hasZodFastifySchemaValidationErrors(error)) {
-      return reply.status(400).send({
-        error: {
-          code: 'validation_error',
-          message: 'Request validation failed.',
-          details: error.validation,
-        },
-      });
-    }
-    if (error instanceof ApiError) {
-      return reply.status(error.statusCode).send(toErrorBody(error));
-    }
-    throw error;
-  });
+  // Section 9 `{ error: { code, message } }` shape under test — the real handler, not a mirror,
+  // so a case like `OwnAccountRowMissingError` → 401 `account_not_found` is exercised for real.
+  fastify.setErrorHandler(apiErrorHandler);
 
   await fastify.register(authPlugin, {
     jwtSecret: JWT_SECRET,
@@ -498,6 +490,27 @@ describe('GET /me', () => {
     app = await buildTestApp();
     const response = await app.fastify.inject({ method: 'GET', url: '/me' });
     expect(response.statusCode).toBe(401);
+  });
+
+  it('issue #46: returns 401 account_not_found (not 500) when the JWT outlives the users row', async () => {
+    // No seed/userRows for 'user-1' — the row is gone (e.g. the account was deleted from
+    // another tab) but the JWT is still signature-valid.
+    app = await buildTestApp();
+    const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+
+    const response = await app.fastify.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: {
+        code: 'account_not_found',
+        message: "Your account isn't available anymore. Please sign in again.",
+      },
+    });
   });
 });
 

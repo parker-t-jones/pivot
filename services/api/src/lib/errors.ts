@@ -28,6 +28,41 @@ export function toErrorBody(error: ApiError): {
 }
 
 /**
+ * Thrown in place of a raw Postgrest error when a `.single()` lookup of the *authenticated
+ * caller's own* `public.users` row (keyed by `requireUser(request).id`) comes back with zero
+ * rows. That specific shape — `error.code === 'PGRST116'` ("JSON object requested, ... 0 rows") —
+ * means the account was deleted (or its row otherwise removed) after a still-valid JWT was
+ * issued: JWTs are stateless, so `fastify.authenticate` (services/api/src/plugins/auth.ts) only
+ * verifies the signature/claims and has no way to know the row is gone. `apiErrorHandler` below
+ * turns this into a clean `401 account_not_found` instead of an opaque 500.
+ *
+ * Deliberately a distinct class, not a blanket "any PGRST116 is this" rule in the handler: a
+ * `.single()` call elsewhere (e.g. a leagues/stakes/picks row looked up by its own id, already
+ * ownership-checked) going to 0 rows is a different, genuinely-unexpected bug and should stay a
+ * 500 — see `rethrowIfOwnAccountRowMissing` below, which is the only place this gets thrown, and
+ * only for a caller's-own-`users`-row lookup.
+ */
+export class OwnAccountRowMissingError extends Error {
+  constructor() {
+    super('The authenticated user has no public.users row.');
+  }
+}
+
+/**
+ * Call this (instead of a bare `if (error) throw error`) at every call site that does a
+ * `.single()` (or an update's `.select().single()`) lookup of the caller's own `users` row keyed
+ * by `requireUser(request).id`. Turns Postgrest's "0 rows" shape into `OwnAccountRowMissingError`
+ * so `apiErrorHandler` reports `401 account_not_found` instead of a raw 500 — one shared check,
+ * applied only at call sites that opt in, rather than a per-route patch or a blanket PGRST116 rule.
+ * Not for a `.single()`/`.maybeSingle()` on any other table or row.
+ */
+export function rethrowIfOwnAccountRowMissing(error: { code?: string } | null): void {
+  if (error?.code === 'PGRST116') {
+    throw new OwnAccountRowMissingError();
+  }
+}
+
+/**
  * Shared Fastify error handler: Zod → 400, ApiError → its status, FastifyError with a
  * real `statusCode` (≥400) → that status (so framework 4xxs aren't flattened to 500),
  * everything else → opaque 500.
@@ -49,6 +84,16 @@ export function apiErrorHandler(
   }
   if (error instanceof ApiError) {
     reply.status(error.statusCode).send(toErrorBody(error));
+    return;
+  }
+
+  if (error instanceof OwnAccountRowMissingError) {
+    reply.status(401).send({
+      error: {
+        code: 'account_not_found',
+        message: "Your account isn't available anymore. Please sign in again.",
+      },
+    });
     return;
   }
 
