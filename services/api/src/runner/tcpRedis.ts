@@ -29,7 +29,7 @@ import {
 import type { FlagEvent } from '@pivot/shared';
 import type { RunnerHeartbeatRedis } from './heartbeat.js';
 import type { LeaderLockRedis } from './leaderLock.js';
-import { espnSeenPlaysKey, type SeenPlaySet } from './seenPlays.js';
+import { SEEN_PLAYS_TTL_SECONDS, espnSeenPlaysKey, type SeenPlaySet } from './seenPlays.js';
 
 const QUEUE_KEY = 'flag_event_queue';
 const ACTIVE_USERS_KEY = 'active_users';
@@ -94,6 +94,7 @@ export function tcpSeenPlays(redis: Redis): SeenPlaySet {
   return {
     async add(espnEventId: string, playId: string): Promise<void> {
       await redis.sadd(espnSeenPlaysKey(espnEventId), playId);
+      await redis.expire(espnSeenPlaysKey(espnEventId), SEEN_PLAYS_TTL_SECONDS);
     },
     async has(espnEventId: string, playId: string): Promise<boolean> {
       const found = await redis.sismember(espnSeenPlaysKey(espnEventId), playId);
