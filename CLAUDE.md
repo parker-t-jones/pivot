@@ -47,7 +47,11 @@ Runtime gotcha: `@pivot/engine`, `@pivot/dispatcher`, `@pivot/ingestion`, `@pivo
 
 A task is not done until all of these pass, run serially (parallel suites cause timeouts that look like failures):
 
-1. `pnpm test` → **0 failed**. Skips must be only the known suites: the two Redis suites (5 skipped tests) always; the local-only `phiChiFlagDiff` replay (1 test) whenever its gitignored recording `experiments/logs/recordings/2026-09-28/401872963` is missing (it exists only on Parker's Mac, so CI and fresh clones skip it); plus `publicGrants` and `flagEventInsert` when `services/api/.env` does not point `SUPABASE_URL` at a local Supabase. Any other skip, or a new failure, is a fail. CI (local Supabase, no recording) expects exactly 6 skipped; on Parker's Mac with local Supabase running, exactly 5.
+1. `pnpm test` → **0 failed**. The only allowed skips, by condition (anything else, or a new failure, is a fail):
+   - Two Redis suites, 5 tests: always (they need `CACHE_DRIVER=redis` plus Upstash env vars).
+   - `phiChiFlagDiff` replay, 1 test: when the gitignored recording `experiments/logs/recordings/2026-09-28/401872963` is missing (it exists only on Parker's Mac).
+   - `publicGrants` (2 tests), `flagEventInsert` (1), and `accountDeletionCascade` (1), 4 tests: when `services/api/.env` does not point `SUPABASE_URL` at a loopback (local) Supabase. `flagEventInsert` and `accountDeletionCascade` also skip without `SUPABASE_SERVICE_ROLE_KEY`.
+   - Expected skipped totals: CI (local Supabase, no recording) **6**; Parker's Mac (local Supabase running, recording present) **5**; fresh clone with no Supabase and no recording **10** (9 if the recording is present).
 2. `pnpm typecheck` → exit 0.
 3. `pnpm lint` → exit 0 (whole repo, not "touched files").
 4. Tests written alongside the change, covering the behavior, not just the happy path. Where a UI bug slipped past unit tests before, add a test of the rendered path.
