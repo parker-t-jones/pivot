@@ -45,5 +45,9 @@ export interface LineupCacheProvider {
  * read while that week is current (about 7 days), so 14 days always outlives its useful life while
  * old weeks still disappear. Do not shorten below a week: a missing key means no routing for that
  * user until the next rebuild.
+ *
+ * Also used for `users_with_bet:{game_id}` and `user_bet_games:{user_id}:{week}`, refreshed on
+ * every add (including historical-week resyncs). Game routing only needs the index while the
+ * game is live; 14 days outlives its week and bounds retention after the last resync.
  */
 export const LINEUP_CACHE_KEY_TTL_SECONDS = 14 * 24 * 60 * 60;

@@ -78,7 +78,9 @@ export class TcpLineupCache implements LineupCacheProvider {
 
   async addUserBet(gameId: string, userId: string, week: number): Promise<void> {
     await this.redis.sadd(betKey(gameId), userId);
+    await this.redis.expire(betKey(gameId), LINEUP_CACHE_KEY_TTL_SECONDS);
     await this.redis.sadd(betGamesKey(userId, week), gameId);
+    await this.redis.expire(betGamesKey(userId, week), LINEUP_CACHE_KEY_TTL_SECONDS);
   }
 
   async removeUserBet(gameId: string, userId: string, week: number): Promise<void> {
