@@ -8,7 +8,7 @@ vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn() }) }));
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-vi.mock('../../lib/supabase', () => ({
+vi.mock('../lib/supabase', () => ({
   supabase: {
     auth: {
       getSession: vi.fn(async () => ({
@@ -18,13 +18,13 @@ vi.mock('../../lib/supabase', () => ({
     },
   },
 }));
-vi.mock('../../lib/confirm', () => ({ alertAsync: vi.fn() }));
+vi.mock('../lib/confirm', () => ({ alertAsync: vi.fn() }));
 // Keep unrelated picks mutations (and their Expo dependencies) out of this screen test.
-vi.mock('../../lib/picksClient', async () => {
-  const { apiClient } = await import('../../lib/apiClient');
+vi.mock('../lib/picksClient', async () => {
+  const { apiClient } = await import('../lib/apiClient');
   return { fetchRecap: () => apiClient.get('/picks/recap') };
 });
-vi.mock('../../components/LoadingState', () => ({
+vi.mock('../components/LoadingState', () => ({
   LoadingState: ({ message }: { message: string }) => <div>{message}</div>,
 }));
 
@@ -81,7 +81,7 @@ it('renders the unavailable sentence in ErrorState and retries the recap request
         }),
     });
   vi.stubGlobal('fetch', fetchMock);
-  const { default: RecapScreen } = await import('./recap');
+  const { default: RecapScreen } = await import('../app/(app)/recap');
 
   await act(async () => root.render(<RecapScreen />));
   expect(container.textContent).toContain(
