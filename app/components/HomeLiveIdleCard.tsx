@@ -6,8 +6,7 @@ import type { LiveGame } from '../lib/schedule';
 import { theme } from '../lib/theme';
 import { FieldGauge } from './FieldGauge';
 
-/** Semi-transparent team primary wash behind each side (nickname + score) — same treatment as
- *  `NowActiveCard`'s "Now active" scoreboard (UI-SPEC.md §2.4), scaled down for a list row. */
+/** Semi-transparent team primary wash behind each side (nickname + score), scaled for a list row. */
 const TEAM_NAME_WASH_ALPHA = 0.32;
 
 interface HomeLiveIdleCardProps {
@@ -17,9 +16,8 @@ interface HomeLiveIdleCardProps {
 
 /**
  * PLAN.md Section 10 Home State 2 — live stake games, no flags right now. The hero area of the
- * live board (`HomeLiveView`). Each row gets the same field-aligned scoreboard treatment as
- * `NowActiveCard` (team-color washes, split score divider) so the card doesn't regress to a plain
- * "@" matchup line the moment a flag clears.
+ * live board (`HomeLiveView`). Each row uses a field-aligned scoreboard
+ * with team-color washes and a split score divider.
  */
 export function HomeLiveIdleCard({ liveGames }: HomeLiveIdleCardProps) {
   return (

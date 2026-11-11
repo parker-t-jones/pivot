@@ -11,7 +11,7 @@ import {
 } from '../lib/gameDisplay';
 import { GameAnchor } from '../lib/gameAnchor';
 import { betChipLabel } from '../lib/homeBets';
-import { FlagChip } from './NowActiveCard';
+import { FlagChip } from './FlagChip';
 import { OtherWaysToWatch } from './OtherWaysToWatch';
 import { fonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
@@ -39,7 +39,7 @@ function teamDotColor(hex: string): string {
 
 /**
  * PLAN.md Section 10 Home State 1 "Also flagged" — every other flagged game below
- * `NowActiveCard`. Two cards per row (wrap below); situation cards (stacked abbrs + color dots,
+ * the primary flag card. Two cards per row (wrap below); situation cards (stacked abbrs + color dots,
  * clock / field position / down-distance); intentionally no `FieldGauge` and no
  * `accentBorder`/`panelGlow` — that treatment stays reserved for the primary flag card
  * (UI-SPEC.md §3.3). NFL team logos are a non-goal (no logo field on `GameSummary`).
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   card: {
-    // Same canvas black as NowActiveCard (not `surface`).
+    // Match the Home canvas background.
     backgroundColor: theme.colors.background,
     borderColor: theme.colors.border,
     borderRadius: theme.radii.md,
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     rowGap: theme.spacing.sm,
   },
-  /** Same eyebrow family as NowActiveCard's "Now active" label (UI-SPEC.md §2.4). */
+  /** Shared eyebrow typography (UI-SPEC.md §2.4). */
   label: {
     color: theme.colors.textTertiary,
     fontFamily: theme.type.eyebrow.fontFamily,
