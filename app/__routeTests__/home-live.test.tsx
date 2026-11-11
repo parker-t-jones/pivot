@@ -3,6 +3,7 @@ import { act, type EffectCallback } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
+import { fetchMe } from '../lib/me';
 import HomeScreen from '../app/(app)/(tabs)/index';
 import {
   MNF_AIRINGS,
@@ -317,6 +318,29 @@ function opacitiesAbove(el: HTMLElement): string[] {
 }
 
 describe('Home live day (real screen)', () => {
+  it('holds the final cold-start stage while Home data is pending, then renders the games', async () => {
+    useScenario(state2());
+    let release!: (value: Awaited<ReturnType<typeof fetchMe>>) => void;
+    const profile = await fetchMe();
+    vi.mocked(fetchMe).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    await act(async () => root.render(<HomeScreen />));
+    expect(text()).toContain('Finding your games…');
+    const field = container.querySelector('[data-testid="yard-line-loader"]');
+    expect(field?.getAttribute('aria-valuenow')).toBe('6');
+    expect(field?.getAttribute('aria-label')).toBe('Loading');
+    expect(container.querySelector('[data-testid="yard-line-ball"]')).toBeTruthy();
+    await act(async () => {
+      release(profile);
+    });
+    expect(container.querySelector('[data-testid="yard-line-loader"]')).toBeNull();
+    expect(text()).toContain('Your live games');
+  });
+
   it('state2: live pick games and no flags render the live cards, not an Also flagged row', async () => {
     await mountHome(state2());
     expect(text()).toContain('● LIVE · 1 GAME');
