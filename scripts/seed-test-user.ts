@@ -44,6 +44,11 @@ function testPassword(): string {
 }
 const TEST_LEAGUE_NAME = 'Test League';
 
+export const TEST_USER_PRESENCE = [
+  { service: 'espn_plus', has_subscription: true },
+  { service: 'fox_one', has_subscription: false },
+] as const;
+
 interface SleeperNflState {
   week: number;
   season: string;
@@ -249,12 +254,9 @@ export async function seedTestUser(): Promise<void> {
     .upsert(rows, { onConflict: 'league_id,week,player_id' });
   if (slotsError) throw slotsError;
 
-  console.log('Upserting streaming-service presence (ESPN+ subscribed, Fox not)...');
+  console.log('Upserting streaming-service presence (ESPN+ subscribed, FOX One not)...');
   const { error: presenceError } = await supabase.from('user_app_presence').upsert(
-    [
-      { user_id: userId, service: 'espn_plus', has_subscription: true },
-      { user_id: userId, service: 'fox', has_subscription: false },
-    ],
+    TEST_USER_PRESENCE.map((presence) => ({ user_id: userId, ...presence })),
     { onConflict: 'user_id,service' },
   );
   if (presenceError) throw presenceError;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { assignRoster } from './seed-test-user.js';
+import { assignRoster, TEST_USER_PRESENCE } from './seed-test-user.js';
+import { USER_SERVICES } from '@pivot/shared/broadcast';
 import type { Position, SlotType } from '@pivot/shared';
 
 interface RosterSpec {
@@ -34,6 +35,20 @@ const flexSpec: RosterSpec = {
   eligiblePositions: ['RB', 'WR', 'TE'],
 };
 const spec: readonly RosterSpec[] = [qbSpec, rb1Spec, rb2Spec, flexSpec];
+
+describe('test-user streaming-service presence', () => {
+  it('uses valid picker services with one subscribed and one unsubscribed row', () => {
+    expect(TEST_USER_PRESENCE).toHaveLength(2);
+    for (const presence of TEST_USER_PRESENCE) {
+      expect(USER_SERVICES).toContain(presence.service);
+    }
+    expect(new Set(TEST_USER_PRESENCE.map((presence) => presence.service)).size).toBe(2);
+    expect(TEST_USER_PRESENCE.map((presence) => presence.has_subscription).sort()).toEqual([
+      false,
+      true,
+    ]);
+  });
+});
 
 describe('assignRoster', () => {
   it('assigns the lowest-id eligible player to each spot', () => {
