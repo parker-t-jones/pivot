@@ -2,11 +2,13 @@ PIVOT — LOCAL DEV STARTUP
 ================================
 Simulator path below. Physical iPhone: see "PHYSICAL DEVICE (iOS)" after Common Fixes.
 
-The old name survives on purpose in three places below — do not "tidy" them: the repo
-directory is still `.../projects/fantasyfocus`, the bundle ID is still
-`com.fantasyfocus.app` (kept so B1's APNs credentials stay valid), and the Expo project is
+The repo directory is `.../projects/pivot`. The old name survives on purpose in
+three identifiers — do not "tidy" them: the bundle ID is still
+`com.fantasyfocus.app` (kept so B1's APNs credentials stay valid), the Expo project is
 permanently `@parkertjones/fantasy-focus` — its slug can't be changed without minting a new
-EAS project. See PLAN.md's rename notes (Aug 21, Aug 23, and Aug 26, 2026).
+EAS project — and `supabase/config.toml` keeps `project_id = "FantasyFocusApp"` so the
+local DB volume is not orphaned. See PLAN.md's rename notes (Aug 21, Aug 23, and
+Aug 26, 2026).
 
 ONE-TIME SETUP (skip if already done)
 --------------------------------------
@@ -37,13 +39,13 @@ before starting the next.
    Open the Docker Desktop app manually. Wait until it shows "running."
 
 2. Supabase (local)
-   cd /Users/parkerjones/Developer/projects/fantasyfocus
+   cd /Users/parkerjones/Developer/projects/pivot
    supabase start
    # Confirm it's up:
    supabase status
 
 3. Seed reference data (required after first start, DB reset, or `supabase db reset`)
-   cd /Users/parkerjones/Developer/projects/fantasyfocus
+   cd /Users/parkerjones/Developer/projects/pivot
    pnpm seed:players    # Sleeper player dump → players (lineup sync resolves sleeper_id here)
    pnpm seed:schedule   # ESPN slate → games (phase openers / display_phase for /state/nfl)
    # Skip only if you already seeded this local DB and have not reset it.
@@ -51,12 +53,12 @@ before starting the next.
    # and display_phase falls back to unreliable Sleeper season_type (server warns in logs).
 
 4. API server (new tab)
-   cd /Users/parkerjones/Developer/projects/fantasyfocus
+   cd /Users/parkerjones/Developer/projects/pivot
    pnpm --filter @pivot/api dev
    # Wait for: "Server listening at http://127.0.0.1:3000"
 
 5. Metro / Expo (new tab)
-   cd /Users/parkerjones/Developer/projects/fantasyfocus/app
+   cd /Users/parkerjones/Developer/projects/pivot/app
    pnpm start
    # Once the QR/menu appears, press: i
    # This opens the iOS Simulator and installs/launches the app.
