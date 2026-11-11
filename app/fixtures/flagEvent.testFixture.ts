@@ -1,0 +1,42 @@
+import type { FlagEventPayload } from '../lib/flagEventPayload';
+
+export const flagEventPayload: FlagEventPayload = {
+  event_id: 'event-1',
+  user_id: 'user-1',
+  game_id: 'game-1',
+  event_type: 'flag_added',
+  old_state: null,
+  new_state: {
+    gameId: 'game-1',
+    flagged: true,
+    priorityScore: 60,
+    reasons: [{ type: 'offense_active', triggeringPlayerIds: [] }],
+    computedAt: 1,
+    possession_team: 'CMT',
+  },
+  action: {
+    type: 'prompt',
+    cta: 'switch_primary',
+    recommended_source: null,
+    deep_link_url: null,
+  },
+  game_summary: {
+    home_team: 'CMT',
+    away_team: 'HBR',
+    home_team_name: 'Comets',
+    away_team_name: 'Harbor',
+    home_team_primary_color: '',
+    home_team_secondary_color: '',
+    away_team_primary_color: '',
+    away_team_secondary_color: '',
+    score: { home: 10, away: 7 },
+    quarter: 3,
+    time_remaining_sec: 400,
+    possession_team: 'CMT',
+    yards_to_endzone: 75,
+    down: 1,
+    distance: 10,
+    in_red_zone: false,
+  },
+  flagged_players: [],
+};

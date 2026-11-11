@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { flagEventPayload } from '../fixtures/flagEvent.testFixture';
 import {
   DEMO_ACTIVE_AT_MS,
   DEMO_ALERT_MAX_SPACING_MS,
@@ -23,6 +24,7 @@ import {
   demoLiveStakeCards,
   demoPhaseAtElapsed,
   demoSnapshotAtElapsed,
+  isDemoNotificationData,
   type DemoAlertKind,
   type DemoLiveGame,
 } from './demoGameDay';
@@ -57,6 +59,31 @@ const propOf = (elapsed: number) => {
   if (!prop) throw new Error('no demo prop');
   return prop;
 };
+
+describe('isDemoNotificationData', () => {
+  it('rejects a real flag-event payload', () => {
+    expect(isDemoNotificationData(flagEventPayload)).toBe(false);
+  });
+
+  it.each(DEMO_ALERTS)('recognizes the $kind demo notification', ({ kind }) => {
+    expect(isDemoNotificationData({ demo: true, kind })).toBe(true);
+  });
+
+  it.each([
+    {},
+    null,
+    undefined,
+    'demo',
+    { demo: 'true', kind: 'active' },
+    { demo: true },
+    { demo: true, kind: 'unknown' },
+    { demo: true, kind: null },
+    { demo: false, kind: 'active' },
+    { kind: 'active' },
+  ])('rejects unrecognized data: %j', (data) => {
+    expect(isDemoNotificationData(data)).toBe(false);
+  });
+});
 
 describe('demoPhaseAtElapsed', () => {
   it('is pre_game before the kickoff threshold', () => {

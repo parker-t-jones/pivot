@@ -277,6 +277,17 @@ export const DEMO_ALERTS: readonly DemoAlert[] = [
   },
 ];
 
+/** Demo notifications have their own banner on the demo screen. */
+export function isDemoNotificationData(data: unknown): boolean {
+  if (typeof data !== 'object' || data === null) return false;
+  return (
+    'demo' in data &&
+    data.demo === true &&
+    'kind' in data &&
+    DEMO_ALERTS.some((alert) => alert.kind === data.kind)
+  );
+}
+
 /** A stretch of demo time the app spent in the background while the OS could deliver alerts. */
 export interface DemoBackgroundSpan {
   fromMs: number;
