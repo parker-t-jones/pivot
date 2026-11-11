@@ -1070,7 +1070,7 @@ export default function HomeScreen() {
       }
     >
       {isLoading ? (
-        <LoadingState message="Loading" />
+        <LoadingState message="Finding your games…" step={6} steps={6} />
       ) : loadError ? (
         <ErrorState message={loadError} onRetry={onRefresh} />
       ) : (
