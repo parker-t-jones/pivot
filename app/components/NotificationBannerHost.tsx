@@ -7,6 +7,7 @@ import { FullWindowOverlay } from 'react-native-screens';
 
 import { FlagEventBanner, type FlagEventBannerData } from './FlagEventBanner';
 import { useSwitching } from '../contexts/SwitchingContext';
+import { isDemoNotificationData } from '../lib/demoGameDay';
 import { isFlagEventPayload } from '../lib/flagEventPayload';
 import { isPivotPushMessage, offerInTabAlert, subscribeInTabAlerts } from '../lib/inTabAlerts';
 import { recordNotificationAction, type NotificationUserAction } from '../lib/notificationActions';
@@ -64,6 +65,7 @@ export function NotificationBannerHost() {
       const { title, body, data } = notification.request.content;
 
       if (!isFlagEventPayload(data)) {
+        if (isDemoNotificationData(data)) return;
         console.warn(
           '[banner] received notification with unrecognized data shape — ignoring',
           data,
