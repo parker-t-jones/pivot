@@ -627,6 +627,11 @@ user_lineup_cache:{user_id}:{week} hash → { team_id : [position_categories] }
 
 users_with_stake:{team_id}        set → user_ids with any player on this team
 
+users_with_bet:{game_id}          set → user_ids with a manual pick on this game
+user_bet_games:{user_id}:{week}   set → game_ids indexed for rebuild cleanup
+                                  Both expire 14d (LINEUP_CACHE_KEY_TTL_SECONDS) after every add,
+                                  including historical-week resyncs. Removes preserve the TTL.
+
 active_users                      sorted set → { user_id : expiry_ms }
                                   Membership = score >= now; heartbeat scores now + 300_000ms.
                                   Expired members swept lazily.

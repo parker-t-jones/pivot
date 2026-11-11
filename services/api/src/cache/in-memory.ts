@@ -1,5 +1,20 @@
 import type { UserLineupCache } from '@pivot/shared';
-import type { LineupCacheProvider, NflState } from './types.js';
+import { LINEUP_CACHE_KEY_TTL_SECONDS, type LineupCacheProvider, type NflState } from './types.js';
+
+interface ExpiringSet {
+  members: Set<string>;
+  expiresAt: number;
+}
+
+function liveMembers(entries: Map<string, ExpiringSet>, key: string): Set<string> | undefined {
+  const entry = entries.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= Date.now()) {
+    entries.delete(key);
+    return undefined;
+  }
+  return entry.members;
+}
 
 function lineupKey(userId: string, week: number): string {
   return `${userId}:${week}`;
@@ -13,8 +28,8 @@ function betGamesKey(userId: string, week: number): string {
 export class InMemoryLineupCache implements LineupCacheProvider {
   private readonly lineups = new Map<string, UserLineupCache>();
   private readonly stakes = new Map<string, Set<string>>();
-  private readonly bets = new Map<string, Set<string>>();
-  private readonly betGames = new Map<string, Set<string>>();
+  private readonly bets = new Map<string, ExpiringSet>();
+  private readonly betGames = new Map<string, ExpiringSet>();
   private nflState: { value: NflState; expiresAt: number } | null = null;
 
   async setLineupCache(userId: string, week: number, cache: UserLineupCache): Promise<void> {
@@ -40,25 +55,26 @@ export class InMemoryLineupCache implements LineupCacheProvider {
   }
 
   async addUserBet(gameId: string, userId: string, week: number): Promise<void> {
-    const users = this.bets.get(gameId) ?? new Set<string>();
+    const users = liveMembers(this.bets, gameId) ?? new Set<string>();
     users.add(userId);
-    this.bets.set(gameId, users);
-    const games = this.betGames.get(betGamesKey(userId, week)) ?? new Set<string>();
+    const expiresAt = Date.now() + LINEUP_CACHE_KEY_TTL_SECONDS * 1000;
+    this.bets.set(gameId, { members: users, expiresAt });
+    const games = liveMembers(this.betGames, betGamesKey(userId, week)) ?? new Set<string>();
     games.add(gameId);
-    this.betGames.set(betGamesKey(userId, week), games);
+    this.betGames.set(betGamesKey(userId, week), { members: games, expiresAt });
   }
 
   async removeUserBet(gameId: string, userId: string, week: number): Promise<void> {
-    this.bets.get(gameId)?.delete(userId);
-    this.betGames.get(betGamesKey(userId, week))?.delete(gameId);
+    liveMembers(this.bets, gameId)?.delete(userId);
+    liveMembers(this.betGames, betGamesKey(userId, week))?.delete(gameId);
   }
 
   async getUsersWithBet(gameId: string): Promise<string[]> {
-    return [...(this.bets.get(gameId) ?? [])];
+    return [...(liveMembers(this.bets, gameId) ?? [])];
   }
 
   async getUserBetGames(userId: string, week: number): Promise<string[]> {
-    return [...(this.betGames.get(betGamesKey(userId, week)) ?? [])];
+    return [...(liveMembers(this.betGames, betGamesKey(userId, week)) ?? [])];
   }
 
   async getNflState(): Promise<NflState | null> {
