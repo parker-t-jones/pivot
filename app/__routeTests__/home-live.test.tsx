@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from 'react';
+import { act, type EffectCallback } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
@@ -78,7 +78,7 @@ vi.mock('expo-router', async () => {
   return {
     useRouter: () => ({ push: () => undefined, replace: () => undefined }),
     useGlobalSearchParams: () => ({}),
-    useFocusEffect: (effect: () => void | (() => void)) => {
+    useFocusEffect: (effect: EffectCallback) => {
       React.useEffect(effect, [effect]);
     },
   };
