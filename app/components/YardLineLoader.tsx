@@ -28,10 +28,31 @@ function prefersReducedMotion(): boolean {
  * Mini field strip. Amber yard markers sweep the dark field. Screen and section
  * sizes add a faint end zone at each end, four pylons, and a top-down goalpost.
  * Compact stays a plain strip. Reduce-motion holds the markers still and pulses
- * the field's opacity. The accessible name is always "Loading".
+ * the field's opacity. With step/steps, a ball follows real stages instead,
+ * holding its position without pulsing under reduced motion. The accessible name is always "Loading".
  */
-export function YardLineLoader({ size }: { size: YardLineLoaderSize }) {
+export interface YardLineLoaderProps {
+  size: YardLineLoaderSize;
+  /** One-based real stage. Both props are required to opt in to determinate mode. */
+  step?: number;
+  steps?: number;
+}
+
+export function YardLineLoader({ size, step, steps }: YardLineLoaderProps) {
   const spec = SIZE[size];
+  const staged =
+    step !== undefined &&
+    steps !== undefined &&
+    Number.isInteger(step) &&
+    Number.isInteger(steps) &&
+    steps > 0;
+  const currentStep = staged ? Math.min(steps, Math.max(1, step)) : 1;
+  const ballSize = theme.spacing.md;
+  const start = spec.endZone || theme.spacing.xs;
+  const finish = spec.width - start - ballSize;
+  const position =
+    staged && steps > 1 ? start + ((currentStep - 1) / (steps - 1)) * (finish - start) : start;
+  const ballPosition = useRef(new Animated.Value(position)).current;
   const [reduced, setReduced] = useState(prefersReducedMotion);
   const sweep = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
@@ -51,6 +72,7 @@ export function YardLineLoader({ size }: { size: YardLineLoaderSize }) {
   useEffect(() => {
     sweep.setValue(0);
     opacity.setValue(1);
+    if (staged) return;
     if (reduced) {
       const pulse = Animated.loop(
         Animated.sequence([
@@ -81,7 +103,24 @@ export function YardLineLoader({ size }: { size: YardLineLoaderSize }) {
     );
     loop.start();
     return () => loop.stop();
-  }, [opacity, reduced, sweep]);
+  }, [opacity, reduced, staged, sweep]);
+
+  useEffect(() => {
+    if (!staged) return;
+    if (reduced) {
+      ballPosition.setValue(position);
+      return;
+    }
+    // This animation only follows a real prop change; it never advances progress itself.
+    const jump = Animated.timing(ballPosition, {
+      toValue: position,
+      duration: theme.motion.loaderJumpMs,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: false,
+    });
+    jump.start();
+    return () => jump.stop();
+  }, [ballPosition, position, reduced, staged]);
 
   const travel = spec.width - 4;
   const lead = sweep.interpolate({ inputRange: [0, 1], outputRange: [-4, travel] });
@@ -94,6 +133,9 @@ export function YardLineLoader({ size }: { size: YardLineLoaderSize }) {
     <Animated.View
       accessibilityLabel="Loading"
       accessibilityRole="progressbar"
+      aria-valuemin={staged ? 1 : undefined}
+      aria-valuemax={staged ? steps : undefined}
+      aria-valuenow={staged ? currentStep : undefined}
       style={[styles.field, { width: spec.width, height: spec.height, opacity }]}
       testID="yard-line-loader"
     >
@@ -128,19 +170,36 @@ export function YardLineLoader({ size }: { size: YardLineLoaderSize }) {
           ]}
         />
       ))}
-      <Animated.View
-        style={[
-          styles.marker,
-          reduced ? { left: spec.width * 0.32 } : { transform: [{ translateX: lead }] },
-        ]}
-        testID={reduced ? 'yard-line-static' : 'yard-line-sweep'}
-      />
-      <Animated.View
-        style={[
-          styles.marker,
-          reduced ? { left: spec.width * 0.62 } : { transform: [{ translateX: trail }] },
-        ]}
-      />
+      {staged ? (
+        <Animated.View
+          testID="yard-line-ball"
+          style={[
+            styles.ball,
+            {
+              width: ballSize,
+              height: ballSize / 2,
+              top: (spec.height - ballSize / 2) / 2,
+              left: ballPosition,
+            },
+          ]}
+        />
+      ) : (
+        <>
+          <Animated.View
+            style={[
+              styles.marker,
+              reduced ? { left: spec.width * 0.32 } : { transform: [{ translateX: lead }] },
+            ]}
+            testID={reduced ? 'yard-line-static' : 'yard-line-sweep'}
+          />
+          <Animated.View
+            style={[
+              styles.marker,
+              reduced ? { left: spec.width * 0.62 } : { transform: [{ translateX: trail }] },
+            ]}
+          />
+        </>
+      )}
       {spec.pylon > 0 ? (
         <>
           <EndZoneMarkings
@@ -221,6 +280,11 @@ function EndZoneMarkings({
 }
 
 const styles = StyleSheet.create({
+  ball: {
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.pill,
+    position: 'absolute',
+  },
   endZone: {
     backgroundColor: theme.colors.dangerMuted,
     position: 'absolute',

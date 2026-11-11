@@ -38,11 +38,11 @@ function RootNavigator() {
   }, [redirect, router]);
 
   if (redirect === 'wait') {
-    return <LoadingState message="Loading session..." />;
+    return <LoadingState message="Checking your session…" step={2} steps={5} />;
   }
 
   if (redirect === 'redirect_auth' || redirect === 'redirect_app') {
-    return <LoadingState message="Redirecting..." />;
+    return <LoadingState message="Opening your screen…" step={3} steps={5} />;
   }
 
   return (
@@ -67,7 +67,7 @@ export default function RootLayout() {
     return (
       <SafeAreaProvider>
         <WebPhoneColumn>
-          <LoadingState message="Loading" />
+          <LoadingState message="Loading fonts…" step={1} steps={5} />
         </WebPhoneColumn>
       </SafeAreaProvider>
     );

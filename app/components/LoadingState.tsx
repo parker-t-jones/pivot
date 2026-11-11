@@ -1,9 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '../lib/theme';
-import { YardLineLoader } from './YardLineLoader';
+import { YardLineLoader, type YardLineLoaderProps } from './YardLineLoader';
 
-interface LoadingStateProps {
+interface LoadingStateProps extends Pick<YardLineLoaderProps, 'step' | 'steps'> {
   message?: string;
   /** Renders inline (no `flex: 1`/centered-fill wrapper) for use inside a scroll view alongside
    *  other content, e.g. Home's cold-start spinner — as opposed to a full-screen gate. */
@@ -12,10 +12,15 @@ interface LoadingStateProps {
 
 /** Sprint 9 Phase 2 shared loading block — see `EmptyState.tsx`'s docstring for why this exists as
  *  its own component now instead of every screen's own `ActivityIndicator` + `Text` pair. */
-export function LoadingState({ message = 'Loading', inline = false }: LoadingStateProps) {
+export function LoadingState({
+  message = 'Loading',
+  inline = false,
+  step,
+  steps,
+}: LoadingStateProps) {
   return (
     <View style={inline ? styles.inline : styles.fill}>
-      <YardLineLoader size={inline ? 'section' : 'screen'} />
+      <YardLineLoader step={step} steps={steps} size={inline ? 'section' : 'screen'} />
       <Text style={styles.text}>{message}</Text>
     </View>
   );

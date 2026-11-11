@@ -1,10 +1,8 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
 
-import { YardLineLoader } from '../components/YardLineLoader';
+import { LoadingState } from '../components/LoadingState';
 import { useSession } from '../contexts/SessionContext';
 import { homeGameHref } from '../lib/notificationOpenTarget';
-import { theme } from '../lib/theme';
 
 export default function IndexScreen() {
   const { isLoading, session } = useSession();
@@ -12,11 +10,7 @@ export default function IndexScreen() {
   const game = Array.isArray(params.game) ? params.game[0] : params.game;
 
   if (isLoading) {
-    return (
-      <View style={styles.centered}>
-        <YardLineLoader size="screen" />
-      </View>
-    );
+    return <LoadingState message="Checking your session…" step={2} steps={5} />;
   }
 
   if (session) {
@@ -25,12 +19,3 @@ export default function IndexScreen() {
 
   return <Redirect href="/(auth)/welcome" />;
 }
-
-const styles = StyleSheet.create({
-  centered: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.background,
-    flex: 1,
-    justifyContent: 'center',
-  },
-});

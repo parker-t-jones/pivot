@@ -3,6 +3,7 @@ import { act, type EffectCallback } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
+import { fetchMe } from '../lib/me';
 import HomeScreen from '../app/(app)/(tabs)/index';
 import {
   MNF_AIRINGS,
@@ -317,6 +318,40 @@ function opacitiesAbove(el: HTMLElement): string[] {
 }
 
 describe('Home live day (real screen)', () => {
+  it('hands off to shaped placeholders while Home data is pending, then renders the games', async () => {
+    vi.useFakeTimers();
+    try {
+      useScenario(state2());
+      let release!: (value: Awaited<ReturnType<typeof fetchMe>>) => void;
+      const profile = await fetchMe();
+      vi.mocked(fetchMe).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      );
+      await act(async () => root.render(<HomeScreen />));
+      expect(container.querySelector('[role="progressbar"]')).toBeNull();
+      await act(async () => vi.advanceTimersByTime(150));
+      expect(container.querySelector('[data-testid="home-cold-loading"]')).toBeTruthy();
+      expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+      expect(container.querySelector('[role="progressbar"]')?.getAttribute('aria-label')).toBe(
+        'Loading',
+      );
+      expect(container.querySelector('[data-testid="yard-line-loader"]')).toBeNull();
+      expect(text()).not.toContain('Finding your games…');
+      await act(async () => {
+        release(profile);
+      });
+      expect(container.querySelector('[data-testid="home-cold-loading"]')).toBeTruthy();
+      await act(async () => vi.advanceTimersByTime(300));
+      expect(container.querySelector('[data-testid="home-cold-loading"]')).toBeNull();
+      expect(text()).toContain('Your live games');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('state2: live pick games and no flags render the live cards, not an Also flagged row', async () => {
     await mountHome(state2());
     expect(text()).toContain('● LIVE · 1 GAME');
