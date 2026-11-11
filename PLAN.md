@@ -603,6 +603,8 @@ Snapshot every 30 seconds from Redis. Used for replay/debugging.
 
 ### Redis schemas (hot path)
 
+The complete key inventory and expiry policy source of truth is [docs/REDIS-KEYS.md](docs/REDIS-KEYS.md), including #84 retention decisions and known cleanup gaps.
+
 ```
 game_state:{game_id}              hash → { game_id, home_team_id, away_team_id,
                                             possession_team_id, unit_on_field,

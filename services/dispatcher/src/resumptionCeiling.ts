@@ -1,5 +1,8 @@
 import { RESUMPTION_CEILING_MS, type ResumptionWindowOpened } from '@pivot/engine';
 
+/** Retire abandoned ceiling records after 1h rather than firing them on a late restart (#84). */
+export const RESUMPTION_OPEN_TTL_SECONDS = 60 * 60;
+
 export interface ResumptionOpenRecord {
   openedAt: number;
   revealingPlayId: string;
@@ -17,10 +20,10 @@ export interface ResumptionOpenStore {
 
 /** In-memory stand-in for the Redis key. Tests and a process without Redis use this. */
 export class InMemoryResumptionOpenStore implements ResumptionOpenStore {
-  private readonly rows = new Map<string, ResumptionOpenRecord>();
+  private readonly rows = new Map<string, { record: ResumptionOpenRecord; expiresAt: number }>();
 
   async put(key: string, record: ResumptionOpenRecord): Promise<void> {
-    this.rows.set(key, record);
+    this.rows.set(key, { record, expiresAt: Date.now() + RESUMPTION_OPEN_TTL_SECONDS * 1000 });
   }
 
   async delete(key: string): Promise<void> {
@@ -28,7 +31,12 @@ export class InMemoryResumptionOpenStore implements ResumptionOpenStore {
   }
 
   async read(key: string): Promise<ResumptionOpenRecord | null> {
-    return this.rows.get(key) ?? null;
+    const entry = this.rows.get(key);
+    if (entry && entry.expiresAt <= Date.now()) {
+      this.rows.delete(key);
+      return null;
+    }
+    return entry?.record ?? null;
   }
 }
 
@@ -64,7 +72,7 @@ export class ResumptionCeiling {
   }
 
   /**
-   * After a restart. Arms the remainder of the 4 minutes, or fires once if the deadline has passed.
+   * After a restart, if the record has not expired. Arms the remainder of the 4 minutes, or fires once if the deadline has passed.
    */
   async rearm(gameId: string): Promise<void> {
     const record = await this.deps.store.read(resumptionOpenKey(gameId));

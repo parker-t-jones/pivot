@@ -1,3 +1,6 @@
+/** Keep restart deduplication for 48h after the last write, then retire old games (Parker #84). */
+export const SEEN_PLAYS_TTL_SECONDS = 48 * 60 * 60;
+
 export function espnSeenPlaysKey(espnEventId: string): string {
   return `espn_seen_plays:${espnEventId}`;
 }
@@ -10,23 +13,29 @@ export interface SeenPlaySet {
 }
 
 export class InMemorySeenPlaySet implements SeenPlaySet {
-  private readonly sets = new Map<string, Set<string>>();
+  private readonly sets = new Map<string, { members: Set<string>; expiresAt: number }>();
 
   async add(espnEventId: string, playId: string): Promise<void> {
     const key = espnSeenPlaysKey(espnEventId);
-    const existing = this.sets.get(key);
-    if (existing !== undefined) {
-      existing.add(playId);
-      return;
+    const members = this.liveMembers(key) ?? new Set<string>();
+    members.add(playId);
+    this.sets.set(key, { members, expiresAt: Date.now() + SEEN_PLAYS_TTL_SECONDS * 1000 });
+  }
+
+  private liveMembers(key: string): Set<string> | undefined {
+    const entry = this.sets.get(key);
+    if (entry && entry.expiresAt <= Date.now()) {
+      this.sets.delete(key);
+      return undefined;
     }
-    this.sets.set(key, new Set([playId]));
+    return entry?.members;
   }
 
   async has(espnEventId: string, playId: string): Promise<boolean> {
-    return this.sets.get(espnSeenPlaysKey(espnEventId))?.has(playId) ?? false;
+    return this.liveMembers(espnSeenPlaysKey(espnEventId))?.has(playId) ?? false;
   }
 
   async members(espnEventId: string): Promise<ReadonlySet<string>> {
-    return new Set(this.sets.get(espnSeenPlaysKey(espnEventId)) ?? []);
+    return new Set(this.liveMembers(espnSeenPlaysKey(espnEventId)) ?? []);
   }
 }
