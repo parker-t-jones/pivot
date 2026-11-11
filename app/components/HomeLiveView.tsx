@@ -24,7 +24,7 @@ export function LiveModeEyebrow({ liveCount }: { liveCount: number }) {
 }
 
 interface HomeLiveViewProps {
-  /** `state1`: NowActiveCard + Also Flagged tiles. `state2`: the live stake game cards. */
+  /** The caller supplies the live-day hero for `state1` / `state2`. */
   hero: ReactNode;
   sections: LiveBoardSection[];
   /** The full week's board groups, for MY CARD. */
