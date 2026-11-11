@@ -32,10 +32,24 @@ interface RequestOptions {
  * surfacing a generic error screen.
  */
 async function throwIfErrorResponse(status: number, parsedBody: unknown): Promise<never> {
+  const candidate =
+    parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody ? parsedBody.error : null;
   const errorBody =
-    parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody
-      ? (parsedBody as { error: { code?: string; message?: string; details?: unknown } }).error
+    candidate &&
+    typeof candidate === 'object' &&
+    'code' in candidate &&
+    typeof candidate.code === 'string'
+      ? (candidate as { code: string; message?: string; details?: unknown })
       : null;
+
+  if (status === 404 && !errorBody) {
+    throw new ApiRequestError(
+      status,
+      'route_unavailable',
+      "This isn't available yet. Please try again in a little while.",
+    );
+  }
+
   const code = errorBody?.code ?? 'unknown_error';
   const message = errorBody?.message ?? `Request failed with status ${status}.`;
 
