@@ -6,6 +6,7 @@ import {
   deserializeFlagState,
   deserializeGameState,
   GAME_STATE_KEY_TTL_SECONDS,
+  RESUMPTION_OPEN_TTL_SECONDS,
   LEGACY_IOS_DEVICE_ID,
   NOTIFICATIONS_KEY_TTL_SECONDS,
   connectionCountsAsActive,
@@ -154,7 +155,7 @@ export function tcpFlagEventQueue(redis: Redis): FlagEventQueue {
 export function tcpResumptionOpenStore(redis: Redis): ResumptionOpenStore {
   return {
     async put(key: string, record: ResumptionOpenRecord): Promise<void> {
-      await redis.set(key, JSON.stringify(record));
+      await redis.set(key, JSON.stringify(record), 'EX', RESUMPTION_OPEN_TTL_SECONDS);
     },
     async delete(key: string): Promise<void> {
       await redis.del(key);

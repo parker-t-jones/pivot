@@ -95,6 +95,7 @@ export {
 } from './resumptionGate.js';
 
 export {
+  RESUMPTION_OPEN_TTL_SECONDS,
   InMemoryResumptionOpenStore,
   ResumptionCeiling,
   resumptionOpenKey,
