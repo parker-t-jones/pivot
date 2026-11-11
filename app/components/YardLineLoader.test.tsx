@@ -86,6 +86,23 @@ describe('YardLineLoader', () => {
     expect(third - second).toBeCloseTo(second - left);
   });
 
+  it('animates a jump only to the next supplied stage when motion is allowed', () => {
+    matchMedia(false);
+    vi.useFakeTimers();
+    try {
+      act(() => root.render(<YardLineLoader size="screen" step={1} steps={3} />));
+      const first = Number.parseFloat(stagedBall(host).style.left);
+      act(() => root.render(<YardLineLoader size="screen" step={2} steps={3} />));
+      act(() => vi.advanceTimersByTime(1000));
+      const second = Number.parseFloat(stagedBall(host).style.left);
+      expect(second).toBeGreaterThan(first);
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(Number.parseFloat(stagedBall(host).style.left)).toBe(second);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('never advances a staged ball with elapsed time', () => {
     matchMedia(false);
     vi.useFakeTimers();
