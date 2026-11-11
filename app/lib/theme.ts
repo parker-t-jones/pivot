@@ -63,6 +63,9 @@ export const theme = {
     hero: 20,
     pill: 999,
   },
+  motion: {
+    loaderJumpMs: 180,
+  },
   opacity: {
     disabled: 0.5,
   },
