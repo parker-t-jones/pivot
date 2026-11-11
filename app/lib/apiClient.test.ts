@@ -123,6 +123,66 @@ describe('apiClient', () => {
     await expect(apiClient.get('/empty')).resolves.toBeNull();
   });
 
+  it.each([
+    { message: 'Route GET:/picks/recap not found', error: 'Not Found', statusCode: 404 },
+    null,
+    { error: null },
+    { error: { message: 'Missing code.' } },
+    { error: { code: 404 } },
+  ])('uses a plain unavailable message for a non-Pivot 404: %j', async (body) => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: async () => JSON.stringify(body),
+    });
+
+    const { apiClient, ApiRequestError } = await import('./apiClient');
+    const call = apiClient.get('/picks/recap');
+    await expect(call).rejects.toBeInstanceOf(ApiRequestError);
+    await expect(call).rejects.toMatchObject({
+      status: 404,
+      code: 'route_unavailable',
+      message: "This isn't available yet. Please try again in a little while.",
+    });
+  });
+
+  it('preserves a Pivot 404 including its details', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: async () =>
+        JSON.stringify({
+          error: { code: 'league_not_found', message: 'League not found.', details: { id: 'abc' } },
+        }),
+    });
+
+    const { apiClient } = await import('./apiClient');
+    await expect(apiClient.get('/leagues/abc')).rejects.toMatchObject({
+      status: 404,
+      code: 'league_not_found',
+      message: 'League not found.',
+      details: { id: 'abc' },
+    });
+  });
+
+  it.each([
+    [502, { message: 'Bad gateway' }],
+    [500, { error: 'Internal Server Error', message: 'Something broke', statusCode: 500 }],
+  ])('preserves the fallback for a non-Pivot %i', async (status, body) => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status,
+      text: async () => JSON.stringify(body),
+    });
+
+    const { apiClient } = await import('./apiClient');
+    await expect(apiClient.get('/picks/recap')).rejects.toMatchObject({
+      status,
+      code: 'unknown_error',
+      message: `Request failed with status ${status}.`,
+    });
+  });
+
   it('Issue #46: signs out and alerts, rather than retrying, on account_not_found', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
