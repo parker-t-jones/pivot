@@ -28,7 +28,7 @@ export function ColdLoading({
     <View style={styles.stack} testID={`${screen}-cold-loading`}>
       <SkeletonGroup>
         <View style={[styles.stack, split && styles.split]}>
-          <View style={styles.main}>
+          <View style={[styles.main, split && styles.grow]}>
             <Skeleton style={screen === 'home' ? styles.hero : styles.week} />
             {rows}
           </View>
@@ -53,7 +53,8 @@ export function ColdLoading({
 const styles = StyleSheet.create({
   stack: { gap: theme.spacing.lg, width: '100%' },
   split: { flexDirection: 'row', alignItems: 'flex-start' },
-  main: { flex: 1, minWidth: 0, gap: theme.spacing.lg },
+  main: { minWidth: 0, gap: theme.spacing.lg },
+  grow: { flex: 1 },
   side: { width: DESKTOP_RIGHT_COLUMN, gap: theme.spacing.lg },
   // FeaturedStakeCard: band, lg body padding, eyebrow/title/chip and two md gaps.
   hero: {

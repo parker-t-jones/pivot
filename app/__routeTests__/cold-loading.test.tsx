@@ -162,6 +162,7 @@ for (const screen of ['home', 'watchlist'] as const) {
         retry?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
       expect(mocks.refresh).toHaveBeenCalledOnce();
+      expect(screen === 'home' ? mocks.me : mocks.lineup).toHaveBeenCalledTimes(2);
       await act(async () => {
         finish();
       });
