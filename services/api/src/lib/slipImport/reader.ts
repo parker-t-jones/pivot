@@ -35,10 +35,12 @@ export const SLIP_READ_PROMPT = `Read this sportsbook bet slip screenshot for an
 Return every leg of the bet as printed. For each leg:
 - market: MONEYLINE (win the game), SPREAD (point spread, including alternate spreads), GAME_TOTAL (both teams' combined points), TEAM_TOTAL (one team's points), PLAYER_STAT (over/under or N+ on a player stat), ANYTIME_TD (player scores a touchdown), FIRST_TD (player scores the first touchdown), FIRST_TO_SCORE (team scores first), FIELD_GOALS (field goals made by a team or by both teams), or OTHER for anything else (exact score, winning margin, longest reception, combined player props, non-NFL, and so on).
 - stat for PLAYER_STAT: PASS_YDS, PASS_COMP, PASS_ATT, PASS_TD, INT_THROWN, RUSH_YDS, RUSH_ATT, REC_YDS, RECEPTIONS, ANY_TD (touchdowns scored, e.g. "2+ touchdowns"), FG_MADE, or KICK_PTS. Use OTHER as the market when none fits, e.g. rushing + receiving yards.
+- team: The team the pick is on, from printed text, the logo or jersey beside the leg, or the matchup line. Prefer printed team text when a logo disagrees. Use null only when the team truly cannot be told (or for game totals). Matching to Pivot players and teams happens afterwards in code.
+- side: MORE, HIGHER and OVER mean OVER; LESS, LOWER and UNDER mean UNDER. On a pick'em screen, the highlighted arrow is the side: up = OVER, down = UNDER. When both arrows are present, the other arrow is just the unselected option. If neither is highlighted and no side is otherwise shown, leave side null. Never guess a side.
 - period: FULL unless the leg is for one quarter (Q1-Q4) or half (H1, H2).
 - Copy names, numbers, and signs exactly as printed. Do not guess anything the slip does not show: use null.
 
-Only describe the bet itself. Leave out account balances, usernames, bet IDs, stakes, payouts, and promotions.
+Only describe the bet itself. Leave out account balances, usernames, bet IDs, pick amounts, payouts, promotions, pick'em entry fees, prize tables, boosts, and rewards.
 If the image is not a bet slip, set is_bet_slip to false and return no legs.`;
 
 export class AnthropicSlipReader implements SlipReader {

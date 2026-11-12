@@ -105,7 +105,8 @@ function abbreviationsOf(team: SlipTeam): string[] {
 
 /**
  * The one team a printed name refers to: abbreviation, nickname ("Eagles", "PHI Eagles"), city
- * and nickname, or a city only when one team has it. Anything else (e.g. "New York") is null.
+ * and nickname (or its unique first letter), or a city only when one team has it.
+ * Anything else (e.g. "New York") is null.
  */
 export function resolveTeam(text: string | null, teams: readonly SlipTeam[]): SlipTeam | null {
   if (text === null) return null;
@@ -135,6 +136,14 @@ export function resolveTeam(text: string | null, teams: readonly SlipTeam[]): Sl
     }),
   );
   if (byNickname) return byNickname;
+  const byCityAndInitial = unique(
+    teams.filter((team) => {
+      const city = words(team.city).join(' ');
+      const initial = words(team.name)[0]?.[0];
+      return initial !== undefined && joined === `${city} ${initial}`;
+    }),
+  );
+  if (byCityAndInitial) return byCityAndInitial;
   return unique(teams.filter((team) => words(team.city).join(' ') === joined));
 }
 
@@ -343,12 +352,13 @@ export async function mapSlipLeg(leg: SlipLeg, lookups: SlipLookups): Promise<Im
     const printed = leg.player ?? '';
     const surname = surnameKey(printed);
     if (surname === null) return flag(`We couldn’t tell which player this is.`);
-    const candidates = (await lookups.findPlayers(surname)).filter(
-      (player) =>
-        weekTeamIds.has(player.team_id) &&
-        playerNameMatches(printed, player) &&
-        (pickTeam === null || pickTeam.id === player.team_id),
+    let candidates = (await lookups.findPlayers(surname)).filter(
+      (player) => weekTeamIds.has(player.team_id) && playerNameMatches(printed, player),
     );
+    // The model's team is only a tie-break; a unique name match is authoritative.
+    if (candidates.length > 1 && pickTeam !== null) {
+      candidates = candidates.filter((player) => player.team_id === pickTeam.id);
+    }
     if (candidates.length === 0) return flag(`We couldn’t find ${printed} in this week’s games.`);
     if (candidates.length > 1) return flag(`More than one player matches ${printed}.`);
     playerRow = candidates[0] ?? null;
@@ -369,10 +379,12 @@ export async function mapSlipLeg(leg: SlipLeg, lookups: SlipLookups): Promise<Im
   if (game === null) return flag(FLAG.game);
   const matched = game;
 
-  // Every team the slip prints for this leg has to be in the matched game.
+  // Printed matchup teams must belong to the game. For player picks, the model’s team
+  // was only a tie-break and must not veto the name match here.
   const inGame = (team: SlipTeam | null) =>
     team === null || team.id === matched.home_team_id || team.id === matched.away_team_id;
-  if (!matchupTeams.every(inGame) || !inGame(pickTeam)) return flag(FLAG.game);
+  if (!matchupTeams.every(inGame) || (built.needs !== 'player' && !inGame(pickTeam)))
+    return flag(FLAG.game);
   if (dateMismatch(leg.game_date, matched)) return flag(FLAG.otherWeek);
 
   const pick: PickInput = {
