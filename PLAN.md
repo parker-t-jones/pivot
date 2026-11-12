@@ -642,7 +642,8 @@ flag_event_queue                  sorted set → { event_json : fire_at_timestam
                                   (deferred firing queue)
 
 user_notifications:{user_id}      sorted set → { event_id : delivered_at_timestamp }
-                                  (sliding 60s window for rate limiting)
+                                  (sliding 60s window for rate limiting; writes prune scores older than
+                                  70s, keeping a 10s margin, and refresh the 3600s key expiry)
 ```
 
 
