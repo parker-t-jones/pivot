@@ -2,7 +2,7 @@
  * Same shape as `dev-server-with-live-ingest.ts`, but instead of racing a real (already-final)
  * ESPN game through its whole play-by-play in a few seconds, this pins the shared `GameStateStore`
  * to ONE hand-picked, stable "in progress" snapshot — useful for visually demoing/screenshotting a
- * Home State 2 card (`HomeLiveIdleCard`) without a timing race against how fast the real ESPN
+ * Home State 2 live games (`YourLiveGames`) without a timing race against how fast the real ESPN
  * replay blasts through an already-completed game.
  *
  *   npx tsx experiments/dev-server-demo-snapshot.ts --espn-id 401872947
