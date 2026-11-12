@@ -143,3 +143,28 @@ it('chooses the global optimum rather than a greedy first-leg match', () => {
   };
   expect(bestLegAssignment(read, expected)).toEqual([1, 0]);
 });
+
+it('keeps the raw scorecard text unchanged when mapper defaults would correct the side', () => {
+  const tally = emptyTally();
+  scoreSlip(
+    tally,
+    { is_bet_slip: true, bet_count: 1, legs: [got({ side: null })] },
+    { bet_count: 1, legs: [want] },
+  );
+  expect(formatTally(tally)).toBe(
+    [
+      'slips: 1',
+      'leg count right: 1/1 (100.0%)',
+      'bet count right: 1/1 (100.0%)',
+      'is_bet_slip right: 1/1 (100.0%)',
+      'market     1/1 (100.0%)',
+      'stat       1/1 (100.0%)',
+      'player     1/1 (100.0%)',
+      'team       1/1 (100.0%)',
+      'side       0/1 (0.0%)',
+      'line       1/1 (100.0%)',
+      'plus_style 1/1 (100.0%)',
+      'period     1/1 (100.0%)',
+    ].join('\n'),
+  );
+});

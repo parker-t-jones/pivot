@@ -59,3 +59,14 @@ it('reports lazy loader failures with an actionable message using a stub', async
   const encoder = {};
   expect(await loadAppEncoder(async () => encoder)).toBe(encoder);
 });
+
+it('parses rescore paths and rejects a missing path', () => {
+  expect(parseEvalOptions(['--rescore', '/private/results.json']).rescore).toBe(
+    '/private/results.json',
+  );
+  expect(parseEvalOptions(['/private/slips', '--rescore=/private/results.json'])).toMatchObject({
+    dir: '/private/slips',
+    rescore: '/private/results.json',
+  });
+  expect(() => parseEvalOptions(['--rescore'])).toThrow('Missing value for --rescore');
+});

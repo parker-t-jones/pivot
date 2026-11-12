@@ -36,7 +36,7 @@ pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips
 ```
 
 Default behavior remains one read per image per hardcoded candidate, raw bytes, console only.
-These are paid API calls; never run the CLI in CI. New options:
+Fresh reads are paid API calls; never run fresh reads in CI. `--rescore` is offline. Options:
 
 - `--models id1,id2`: choose candidates. `--price id=4:20` overrides USD per million input/output
   tokens; repeat for multiple models. Every model must have a supplied or table price, checked
@@ -74,3 +74,46 @@ cost money. Inspect failures and leg/bet counts alongside field accuracy.
 
 The legacy `slipImportEval.ts` still works without flags; with flags it delegates to the
 production-path CLI. Paste reviewed results into `docs/SLIP-MODEL-EVAL.md` only after real runs.
+
+## Offline import outcome scoring (#118)
+
+The raw positional and best-assignment scorecards are unchanged. A second, positional
+scorecard compares the conditions built by the real `buildCondition` (including its
+`overUnder` defaults), and resolves teams with `resolveTeam` and `EVAL_TEAMS`.
+Each leg is `match`, `flagged`, or `silent_wrong`. Player-team differences remain matches
+with informational `team_differs: blank | different` metadata, counted separately.
+Team-based legs require a resolvable team; a missing/unknown team is flagged and a different
+team is silently wrong. Expected-null teams do not penalize team differences.
+
+Slip outcomes are `unreadable`, `rejected_multiple_bets`, and `false_accept`. A slip refusal
+or false accept takes precedence: its legs are not counted as imported picks. Missing legs
+on otherwise accepted slips are flagged; extra ready legs are silently wrong. Unsupported
+reads are flagged even when ground truth is also unsupported. Counts and per-run count
+mean/min/max appear per model; each JSON record includes its leg and slip outcomes.
+
+This is a condition/team projection, not a complete import simulation. It cannot check
+player uniqueness, player identity, this week's schedule, printed matchups/dates, or database
+validation. Player-team differences are informational because unique names are authoritative;
+production uses the team only to disambiguate names. No player or game data is fetched.
+
+Re-score a saved version-1 results file for free, with no API key and no screenshots needed:
+
+```bash
+pnpm build
+env -u ANTHROPIC_API_KEY pnpm --filter @pivot/api exec tsx src/slipModelEval.ts --rescore ~/slip-results.json
+```
+
+By default it uses the saved `options.dir` (relative paths still resolve from the API package
+working directory). To move the ground truth directory, pass its absolute path first:
+
+```bash
+env -u ANTHROPIC_API_KEY pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips --rescore ~/slip-results.json --out ~/slip-results-rescored.json
+```
+
+Only reviewed `<image-base>.expected.json` files are loaded. Missing files and UNVERIFIED
+markers fail the command. Every stored read is re-scored against the current ground truth,
+including formerly draft-only records if reviewed expected files now exist. Existing usage,
+cost, latency, failure and read data are preserved. The input file is unchanged unless you
+explicitly choose it as `--out`; without `--out`, rescoring prints reports only. Read-time
+flags (`--models`, `--runs`, `--as-app`, `--production-path`, `--draft-expected`, `--price`) do
+not run in rescore mode.

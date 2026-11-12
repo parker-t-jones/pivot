@@ -13,7 +13,8 @@ export function parseEvalOptions(args: string[]) {
     runs = 1;
   let models = MODEL_CANDIDATES,
     asApp: AppProfile | undefined,
-    out: string | undefined;
+    out: string | undefined,
+    rescore: string | undefined;
   let productionPath = false,
     draftExpected = false;
   const prices: Record<string, ModelPricing> = { ...MODEL_PRICING };
@@ -29,6 +30,9 @@ export function parseEvalOptions(args: string[]) {
       return result;
     };
     switch (flag) {
+      case '--rescore':
+        rescore = value();
+        break;
       case '--models': {
         const ids = value().split(',');
         if (ids.some((id) => !id.trim()) || new Set(ids).size !== ids.length)
@@ -78,7 +82,7 @@ export function parseEvalOptions(args: string[]) {
         throw new Error(`Unknown argument: ${arg}`);
     }
   }
-  return { dir, runs, models, prices, asApp, out, productionPath, draftExpected };
+  return { dir, runs, models, prices, asApp, out, productionPath, draftExpected, rescore };
 }
 
 /** Loader is injected: unit tests never need an encoder or native binary. */
