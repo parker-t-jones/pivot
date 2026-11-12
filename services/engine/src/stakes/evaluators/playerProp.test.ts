@@ -140,3 +140,19 @@ describe('evaluatePlayerProp: leverage', () => {
     expect(propProximity(100, 'RUSH_YDS')).toBe(0);
   });
 });
+
+describe('RUSH_REC_YDS evaluator', () => {
+  it.each([
+    ['STAT_OVER', 31, 'PROP_NEAR'],
+    ['STAT_UNDER', 31, 'PROP_DANGER'],
+  ] as const)('uses the 20-yard big-play threshold for %s', (type, current, code) => {
+    const pick = stake({ type, stat: 'RUSH_REC_YDS', line: 50.5 });
+    const context = (yards: number) =>
+      ctx({
+        game: game({ possessionTeamId: HOME }),
+        playerStats: stats({ players: { [ESPN_ID]: line({ RUSH_REC_YDS: yards }) } }),
+      });
+    expect(codes(pick, context(current))).toEqual([code]);
+    expect(codes(pick, context(current - 1))).toEqual([]);
+  });
+});

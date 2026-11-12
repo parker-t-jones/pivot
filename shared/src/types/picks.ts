@@ -13,6 +13,7 @@ export type StatKey =
   | 'INT_THROWN'
   | 'RUSH_YDS'
   | 'RUSH_ATT'
+  | 'RUSH_REC_YDS'
   | 'REC_YDS'
   | 'RECEPTIONS'
   | 'ANY_TD'
@@ -27,6 +28,7 @@ export const STAT_KEYS: readonly StatKey[] = [
   'INT_THROWN',
   'RUSH_YDS',
   'RUSH_ATT',
+  'RUSH_REC_YDS',
   'REC_YDS',
   'RECEPTIONS',
   'ANY_TD',
@@ -69,6 +71,7 @@ export const STAT_LINE_RANGE: Record<StatKey, { min: number; max: number }> = {
   INT_THROWN: { min: 0.5, max: 8 },
   RUSH_YDS: { min: 0.5, max: 400 },
   RUSH_ATT: { min: 0.5, max: 50 },
+  RUSH_REC_YDS: { min: 0.5, max: 600 },
   REC_YDS: { min: 0.5, max: 400 },
   RECEPTIONS: { min: 0.5, max: 25 },
   ANY_TD: { min: 0.5, max: 6 },
@@ -77,7 +80,7 @@ export const STAT_LINE_RANGE: Record<StatKey, { min: number; max: number }> = {
 };
 
 /**
- * How far one good play moves the stat (PIVOT-STAKES-PLAN §3: rush 15, rec 25, pass 40). Counts
+ * How far one good play moves the stat (PIVOT-STAKES-PLAN §3: rush 15, rec 25, rush + rec 20, pass 40). Counts
  * move by one. Used for "near" and for leverage.
  */
 export const STAT_BIG_PLAY: Record<StatKey, number> = {
@@ -88,6 +91,7 @@ export const STAT_BIG_PLAY: Record<StatKey, number> = {
   INT_THROWN: 1,
   RUSH_YDS: 15,
   RUSH_ATT: 1,
+  RUSH_REC_YDS: 20,
   REC_YDS: 25,
   RECEPTIONS: 1,
   ANY_TD: 1,

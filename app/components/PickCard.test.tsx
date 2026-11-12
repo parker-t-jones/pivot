@@ -3,6 +3,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { formatPickLabel } from '@pivot/shared/stakeLabel';
 import { pickCardModel, type PickCardStake } from '../lib/pickCard';
 import { theme } from '../lib/theme';
 import { PickCard } from './PickCard';
@@ -226,6 +227,30 @@ describe('PickCard', () => {
       '42 rec yds · 19 to go',
     );
     expect(host.querySelector('[data-testid="pick-card-progress"]')).toBeNull();
+  });
+
+  it('renders the combined-yard pick label and progress from the shared formatter', () => {
+    const condition = { type: 'STAT_UNDER', stat: 'RUSH_REC_YDS', line: 46.5 };
+    const label = formatPickLabel(
+      { condition, subject: prop.subject, playerName: 'Aaron Jones Sr.' },
+      teams,
+    );
+    renderStake(
+      {
+        ...prop,
+        condition,
+        label,
+        progress: { status: 'live', current: 32, line: 46.5, needed: 14 },
+      },
+      true,
+    );
+    expect(host.querySelector('[data-testid="pick-card-pick"]')?.textContent).toBe(
+      'Aaron Jones Sr. under 46.5 rush + rec yds',
+    );
+    expect(host.querySelector('[data-testid="pick-card-detail"]')?.textContent).toBe(
+      '32 rush + rec yds · 14 to spare',
+    );
+    expect(host.textContent).not.toMatch(/stake/i);
   });
 
   it('uses the progress line, not the full-game bar, for a half spread', () => {

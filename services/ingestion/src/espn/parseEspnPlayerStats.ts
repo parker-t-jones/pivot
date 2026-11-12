@@ -114,6 +114,11 @@ function playerLine(athlete: AthleteCells): ParsedPlayerLine {
     if (value !== undefined) stats[stat] = value;
   }
 
+  // Missing groups count as zero; neither group leaves the parsed stat undefined.
+  if (athlete.cells.has('rushing') || athlete.cells.has('receiving')) {
+    stats.RUSH_REC_YDS = (stats.RUSH_YDS ?? 0) + (stats.REC_YDS ?? 0);
+  }
+
   let scored = 0;
   let any = false;
   for (const [group, key] of SCORED_TD_CELLS) {

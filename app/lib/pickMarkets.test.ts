@@ -16,6 +16,7 @@ describe('player prop markets', () => {
   it('lists the markets that fit the position', () => {
     expect(playerMarketsFor('TE').map((market) => market.label)).toEqual([
       'Receiving yards',
+      'Rushing + receiving yards',
       'Receptions',
       'Anytime TD',
       'First TD',
@@ -27,6 +28,13 @@ describe('player prop markets', () => {
       'Kicking points',
     ]);
     expect(playerMarketsFor('FB').map((market) => market.key)).toContain('RUSH_YDS');
+  });
+
+  it.each(['RB', 'WR', 'TE'])('offers combined yards for %s', (position) => {
+    expect(playerMarketsFor(position)).toContainEqual(
+      expect.objectContaining({ key: 'RUSH_REC_YDS', label: 'Rushing + receiving yards' }),
+    );
+    expect(statBaseline('RUSH_REC_YDS')).toBe(74.5);
   });
 
   it('has no props for a team defense', () => {
