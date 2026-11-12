@@ -38,7 +38,7 @@ export const TOUR_CARDS: readonly TourCard[] = [
     title: 'Your Watchlist.',
     body:
       "Everything you've got riding, in one place — a card per pick, with your fantasy leagues " +
-      'collapsed together. Free covers 3 picks a week; a parlay counts as one.',
+      'collapsed together. Free covers 3 bet legs a week; each single and each parlay leg uses one.',
   },
 ] as const;
 

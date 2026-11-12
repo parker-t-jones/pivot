@@ -28,6 +28,7 @@ import {
 } from '../lib/addPickGames';
 import { addPickReviewNote, stepMagnitude } from '../lib/addPickLine';
 import { resolveActiveLeagueId } from '../lib/activeLeague';
+import { ApiRequestError } from '../lib/apiClient';
 import { confirmAsync } from '../lib/confirm';
 import { fetchLeagues, fetchLineup, type LineupSlot } from '../lib/leagues';
 import { fetchMe } from '../lib/me';
@@ -111,13 +112,15 @@ interface ParlayLeg {
 }
 
 const DUPLICATE_LEG = 'That leg is already in this parlay.';
+const PARLAY_FREE_CAP =
+  'Each parlay leg uses one free pick. Upgrade to Pro to track more legs this week.';
 
 /**
  * The add-a-pick steps. Phone renders this full screen. The wide desktop drawer
  * renders the same tree over the current tab.
  *
  * Every pick saves through `POST /picks`. A parlay is built leg by leg through the same steps
- * as a single pick, then saved as one pick (docs/P2-PICKS-MODEL.md §2).
+ * as a single pick, then saved as one slip (docs/P2-PICKS-MODEL.md §2).
  *
  * Favorite and underdog start unset, so Continue stays off until both the
  * segment and a valid number are set.
@@ -196,7 +199,7 @@ export function AddPickFlow({
         const isPro = me.subscription_tier === 'pro';
         setEditsLocked(me.is_demo === true);
         setPicks(picksPage.picks);
-        // The API counts a parlay as one slot and keeps spent slots spent (#9, #10).
+        // The API counts each parlay leg as one slot and keeps spent slots spent (#9, #10).
         setAllowance({ isPro, freeLeft: freePicksLeft(picksPage, isPro) });
         const leagueId = resolveActiveLeagueId(leagues, me.preferences.watchedLeagueIds);
         if (leagueId == null) return;
@@ -447,8 +450,25 @@ export function AddPickFlow({
     }
   };
 
+  const parlayOverCap = (count: number) =>
+    allowance !== null &&
+    !allowance.isPro &&
+    allowance.freeLeft !== null &&
+    count > allowance.freeLeft;
+  const showParlayCap = () => {
+    setFormError(PARLAY_FREE_CAP);
+    promptUpgradeForCapError(
+      new ApiRequestError(403, 'stake_limit_free', 'Free pick limit reached.'),
+      openUpgrade,
+    );
+  };
+
   const addLeg = () => {
     if (parlayLegs === null) return;
+    if (parlayOverCap(parlayLegs.length + (editingLegKey === null ? 1 : 0))) {
+      showParlayCap();
+      return;
+    }
     const input = buildPickInput(draft);
     if (input === null || draft.game === null) {
       setFormError(lineMissingMessage());
@@ -537,6 +557,11 @@ export function AddPickFlow({
       );
       return;
     }
+    if (parlayOverCap(ready.length)) {
+      setImportError(PARLAY_FREE_CAP);
+      showParlayCap();
+      return;
+    }
     setParlayLegs(ready);
     setFlaggedLegs(flagged);
     setDraft(EMPTY_DRAFT);
@@ -566,6 +591,10 @@ export function AddPickFlow({
 
   const submitParlay = async () => {
     if (editsLocked || parlayLegs === null) return;
+    if (parlayOverCap(parlayLegs.length)) {
+      showParlayCap();
+      return;
+    }
     setSaving(true);
     setFormError(null);
     try {
@@ -708,8 +737,16 @@ export function AddPickFlow({
             disabled={editsLocked}
             error={formError}
             legCount={parlayLegs.length}
-            note={allowance ? addPickReviewNote('PARLAY', allowance) : null}
+            note={
+              allowance && !allowance.isPro && allowance.freeLeft !== null
+                ? `This parlay uses ${parlayLegs.length} of your ${allowance.freeLeft} remaining free picks. Each leg uses one pick.`
+                : null
+            }
             onAddLeg={() => {
+              if (parlayOverCap(parlayLegs.length + 1)) {
+                showParlayCap();
+                return;
+              }
               setFormError(null);
               setDraft(EMPTY_DRAFT);
               setStep('type');

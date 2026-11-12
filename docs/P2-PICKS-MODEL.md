@@ -57,9 +57,9 @@ Lines are multiples of 0.5. An integer line can land exactly, which is a tie.
 
 ## 3. Free cap and kickoff lock (builds on #9)
 
-- **Slot unit:** `slip_id` for a leg, the stake's own id otherwise. Survivor and fantasy rows never use a slot (unchanged).
-- `used = |distinct slot ids among the week's counted rows| + |spent rows whose slot id is not still live|`. This is #9's rule, keyed by slot id instead of stake id.
-- A slip has **kicked off** when any leg's game has (`gameHasKickedOff` in `services/api/src/lib/kickoff.ts`). Deleting a slip after that writes one `stake_spent_slots` row with `slot_kind = 'slip'`, `stake_id` = the slip id, and `game_id` = the earliest leg's game. Deleting before kickoff refunds the slot.
+- **Slot unit:** each counted stake row is one bet leg, including each parlay leg. Free accounts get 3 legs a week; singles and parlay legs share the pool. Pro is unlimited. Survivor and fantasy rows never use a slot (unchanged).
+- `used = live counted rows + sum(slots for spent rows whose stake or slip id is not still live)`. A failed delete never counts twice.
+- A slip has **kicked off** when any leg's game has (`gameHasKickedOff` in `services/api/src/lib/kickoff.ts`). Deleting a slip after that writes one `stake_spent_slots` row with `slot_kind = 'slip'`, `stake_id` = the slip id, `slots` = the slip's leg count, and `game_id` = the earliest leg's game. Deleting before kickoff refunds every leg.
 - **Live bets:** `POST` accepts in-progress games (the existing rule; `final` is rejected). A pick or slip added after kickoff counts and can't be refunded, because kickoff is already past. The API never checks the pick against the current game state: rejecting a pick that has "already cleared" would reveal that it has.
 - Over the cap: the existing **403 `stake_limit_free`**.
 

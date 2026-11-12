@@ -83,7 +83,7 @@ export async function createSlip(legs: readonly PickInput[]): Promise<unknown> {
   return await apiClient.post('/picks', { legs });
 }
 
-/** Free picks left this week. Null for Pro, where the count is hidden. */
+/** Free bet legs left this week. Null for Pro, where the count is hidden. */
 export function freePicksLeft(page: PicksPage, isPro: boolean): number | null {
   if (isPro) return null;
   return Math.max(0, page.free_limit - page.free_slots_used);

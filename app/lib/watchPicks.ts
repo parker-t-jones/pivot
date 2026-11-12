@@ -84,7 +84,7 @@ export function parlayTitle(legCount: number): string {
   return `${legCount}-leg parlay`;
 }
 
-/** A slip as one Watchlist row. It counts as one free pick, like the API (#10). */
+/** A slip as one Watchlist row. Each leg uses a free slot. */
 export function parlayRow(slip: PicksApiSlip): ManualStake | null {
   const legs = slip.legs.map(toStake);
   const focus = parlayFocusLeg(legs);

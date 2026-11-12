@@ -18,16 +18,26 @@ describe('countFreeSlots', () => {
     slip_id,
   });
 
-  it('counts a slip once, survivor and fantasy never, and spent ids not still live', () => {
+  it('counts every leg, excludes survivor and fantasy, and skips spent ids still live', () => {
     const rows = [
       row('a', 'SPREAD'),
       row('leg1', 'STAT_OVER', 'slip'),
       row('leg2', 'TEAM_TOTAL_OVER', 'slip'),
+      row('leg3', 'SPREAD', 'slip'),
+      row('op', 'OPPONENT_ROSTERED'),
       row('s', 'SURVIVOR'),
       row('f', 'ROSTERED'),
     ];
-    expect(countFreeSlots(rows, ['gone', 'a', 'slip'])).toMatchObject({ used: 3, spent: 1 });
-    expect(countFreeSlots(rows, ['gone', 'gone'])).toMatchObject({ used: 3, spent: 1 });
+    expect(
+      countFreeSlots(rows, [
+        { stake_id: 'gone', slots: 3 },
+        { stake_id: 'a', slots: 1 },
+        { stake_id: 'slip', slots: 3 },
+      ]),
+    ).toMatchObject({ used: 7, spent: 3 });
+    expect(countFreeSlots(rows.slice(1, 4), [])).toMatchObject({ used: 3, spent: 0 });
+    expect(countFreeSlots([row('a', 'SPREAD')], [])).toMatchObject({ used: 1 });
+    expect(countFreeSlots(rows.slice(4), [])).toMatchObject({ used: 0 });
   });
 });
 

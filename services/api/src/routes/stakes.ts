@@ -10,7 +10,7 @@ import {
   countFreeSlots,
   countsTowardFreeCap,
   slotIdOf,
-  spentSlotIds,
+  spentSlotRows,
 } from '../lib/freeSlots.js';
 import { gameHasKickedOff } from '../lib/kickoff.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
@@ -220,7 +220,7 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
     if (userError) throwAsAccountNotFoundIfMissingRow(userError);
     const { used: counted } = countFreeSlots(
       weekRows,
-      await spentSlotIds(fastify.supabase, user.id, row.season_year, row.week),
+      await spentSlotRows(fastify.supabase, user.id, row.season_year, row.week),
     );
     if (
       userRow.subscription_tier !== 'pro' &&
@@ -275,7 +275,7 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
     const weekRows = (data ?? []) as StakeRow[];
     const slots = countFreeSlots(
       weekRows,
-      await spentSlotIds(fastify.supabase, user.id, season, week),
+      await spentSlotRows(fastify.supabase, user.id, season, week),
     );
     // Old app builds can only show the pre-props shapes. Props, quarter/half lines, and parlay
     // legs are hidden here and listed by `GET /picks`; their slots fold into free_slots_spent.
@@ -370,7 +370,7 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
 
       // Removing a started pick is allowed, but its free slot stays spent for the week.
       // The spent row is written first: if the delete then fails, the live row still
-      // wins in spentSlotIds and nothing is counted twice.
+      // wins in spentSlotRows and nothing is counted twice.
       if (countsTowardFreeCap(stake.condition)) {
         const { data: game, error: gameError } = await fastify.supabase
           .from('games')
@@ -383,6 +383,7 @@ const stakesRoutes: FastifyPluginAsyncZod<StakesRoutesOptions> = async (fastify,
           const { error: spentError } = await fastify.supabase.from('stake_spent_slots').upsert(
             {
               stake_id: stake.id,
+              slots: 1,
               user_id: user.id,
               season: stake.season,
               week: stake.week,

@@ -18,7 +18,7 @@ export function parlayHint(legCount: number): string {
 /**
  * The parlay's own step: Add a leg and Save. The slip above lists every leg, with Remove.
  * Legs are added one at a time through the same steps as a single pick, and the parlay saves
- * as one pick.
+ * as one slip.
  */
 export function AddPickParlay({
   legCount,

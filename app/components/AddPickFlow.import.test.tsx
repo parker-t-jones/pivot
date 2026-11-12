@@ -278,6 +278,19 @@ describe('add a pick: import from screenshot', () => {
     expect(host.textContent).toContain('Player prop');
   });
 
+  it('refuses an imported parlay above the remaining allowance', async () => {
+    importResponse = async () => ({
+      kind: 'parlay',
+      legs: [KITTLE_LEG, SF_ML_LEG, KITTLE_LEG],
+      imports_left: 3,
+    });
+    await tap('Import from screenshot');
+    expect(openUpgrade).toHaveBeenCalledWith('stake_limit_free');
+    expect(host.textContent).toContain('Each parlay leg uses one free pick.');
+    expect(host.querySelectorAll('[data-testid="add-pick-slip-leg"]')).toHaveLength(0);
+    expect(api.post.mock.calls.filter(([path]) => path === '/picks')).toHaveLength(0);
+  });
+
   it('puts a parlay’s legs on the slip, holds Save until flagged legs are dismissed, and edits a leg', async () => {
     importResponse = async () => ({
       kind: 'parlay',

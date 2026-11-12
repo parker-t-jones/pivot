@@ -312,17 +312,36 @@ describe('picks routes', () => {
       expect(await h.lineupCache.getUsersWithBet(LATE_GAME)).toEqual([USER]);
     });
 
-    it('counts a parlay as one free slot', async () => {
+    it('rejects two legs with two used, without inserting a slip or stakes', async () => {
       h = await setup();
       await post({ pick: teamTotal(10.5) });
       await post({ pick: teamTotal(20.5) });
-      const slip = await post({ legs: [rushOver(), qbYards(), teamTotal(30.5)] });
-      expect(slip.statusCode).toBe(201);
+      const slip = await post({ legs: [rushOver(), qbYards()] });
+      expect(slip.statusCode).toBe(403);
+      expect(h.db.rows('pick_slips')).toHaveLength(0);
+      expect(h.db.rows('stakes')).toHaveLength(2);
       const used = await get('/picks');
-      expect(used.json().free_slots_used).toBe(3);
+      expect(used.json().free_slots_used).toBe(2);
       const over = await post({ legs: [rushOver(100.5), qbYards(300.5)] });
       expect(over.statusCode).toBe(403);
       expect(over.json().error.code).toBe('stake_limit_free');
+    });
+
+    it('rejects four legs on an empty free account before writing anything', async () => {
+      h = await setup();
+      const res = await post({ legs: [rushOver(), qbYards(), teamTotal(20.5), teamTotal(30.5)] });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe('stake_limit_free');
+      expect(h.db.rows('pick_slips')).toHaveLength(0);
+      expect(h.db.rows('stakes')).toHaveLength(0);
+    });
+
+    it('lets Pro create twelve legs', async () => {
+      h = await setup();
+      h.db.at('users', 0)['subscription_tier'] = 'pro';
+      const res = await post({ legs: Array.from({ length: 12 }, (_, i) => teamTotal(10.5 + i)) });
+      expect(res.statusCode).toBe(201);
+      expect(res.json().slip.legs).toHaveLength(12);
     });
 
     it('refuses a parlay when the free slots are already used', async () => {
@@ -372,18 +391,28 @@ describe('picks routes', () => {
       expect(h.db.rows('stake_spent_slots')).toHaveLength(0);
       expect((await get('/picks')).json().free_slots_used).toBe(0);
       expect(await h.lineupCache.getUsersWithBet(GAME)).toEqual([]);
+      expect((await post({ legs: [rushOver(), qbYards(), teamTotal(20.5)] })).statusCode).toBe(201);
     });
 
-    it('keeps one slot spent for a parlay removed after its first leg kicks off', async () => {
+    it('keeps every leg spent for a parlay removed after its first leg kicks off', async () => {
       h = await setup();
       const slip = (await post({ legs: [teamTotal(20.5, LATE_GAME), rushOver()] })).json().slip;
       h.clock.now = new Date(AFTER_KICKOFF); // GAME has kicked off, LATE_GAME has not
       expect((await del(`/picks/slips/${slip.id}`)).statusCode).toBe(204);
       expect(h.db.rows('stake_spent_slots')).toEqual([
-        expect.objectContaining({ stake_id: slip.id, slot_kind: 'slip', game_id: GAME, week: 5 }),
+        expect.objectContaining({
+          stake_id: slip.id,
+          slot_kind: 'slip',
+          slots: 2,
+          game_id: GAME,
+          week: 5,
+        }),
       ]);
-      expect((await get('/picks')).json().free_slots_used).toBe(1);
-      expect((await get('/stakes')).json().free_slots_spent).toBe(1);
+      expect((await get('/picks')).json().free_slots_used).toBe(2);
+      expect((await get('/stakes')).json().free_slots_spent).toBe(2);
+      expect((await post({ legs: [rushOver(), qbYards()] })).statusCode).toBe(403);
+      expect((await post({ pick: teamTotal(10.5) })).statusCode).toBe(201);
+      expect((await post({ pick: teamTotal(30.5) })).statusCode).toBe(403);
     });
 
     it('never counts a spent slip twice while the slip still exists', async () => {
@@ -392,12 +421,13 @@ describe('picks routes', () => {
       h.db.rows('stake_spent_slots').push({
         stake_id: slip.id,
         slot_kind: 'slip',
+        slots: 2,
         user_id: USER,
         season: 2026,
         week: 5,
         game_id: GAME,
       });
-      expect((await get('/picks')).json().free_slots_used).toBe(1);
+      expect((await get('/picks')).json().free_slots_used).toBe(2);
     });
 
     it('404s another user’s slip', async () => {
@@ -428,7 +458,7 @@ describe('picks routes', () => {
       expect(res.stakes.map((s: { condition: { type: string } }) => s.condition.type)).toEqual([
         'SPREAD',
       ]);
-      expect(res.free_slots_spent).toBe(3);
+      expect(res.free_slots_spent).toBe(4);
     });
   });
 

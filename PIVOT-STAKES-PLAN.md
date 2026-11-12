@@ -349,16 +349,16 @@ Shared watchlists (handicappers and group chats), bet-slip OCR, NBA/MLB/NCAA via
 
 ### 10.2 Tiers
 
-|                                                  | Free                         | Pro          |
-| ------------------------------------------------ | ---------------------------- | ------------ |
-| Connected leagues                                | Max **3** (unchanged)        | Unlimited    |
-| Watched leagues (Active Lineup)                  | Exactly **1** (unchanged)    | Multi-select |
-| Manual lineup size                               | Max **9** (unchanged)        | Unlimited    |
-| Bet / market stakes (survivor picks don't count) | Max **3 per NFL week** (new) | Unlimited    |
-| Opponent tracking                                | Included                     | Included     |
+|                                                  | Free                            | Pro          |
+| ------------------------------------------------ | ------------------------------- | ------------ |
+| Connected leagues                                | Max **3** (unchanged)           | Unlimited    |
+| Watched leagues (Active Lineup)                  | Exactly **1** (unchanged)       | Multi-select |
+| Manual lineup size                               | Max **9** (unchanged)           | Unlimited    |
+| Bet / market stakes (survivor picks don't count) | Max **3 bet legs per NFL week** | Unlimited    |
+| Opponent tracking                                | Included                        | Included     |
 
-- **What counts toward the 3:** any stake whose `condition.type` is not `ROSTERED`, `OPPONENT_ROSTERED` or `SURVIVOR`. That covers props, spread, total, moneyline and Kalshi stakes. **Survivor picks never count toward the 3**, so a free user can add one even with the cap full.
-- **When the count resets:** it's scoped to `(user_id, season, week)`. A stake deleted **before its game kicks off** frees its slot. One deleted after kickoff (game `in_progress`/`final`, or `scheduled_start` passed) can still be removed, but its slot stays spent for the week: `DELETE /stakes/:id` writes a row to `stake_spent_slots`, and the cap counts live stakes plus those rows. `GET /stakes` returns the count as `free_slots_spent`. Survivor picks never use a slot. Adding a stake after kickoff is allowed and counts.
+- **What counts toward the 3:** each single and each parlay leg uses one slot from the same pool. Pro is unlimited. Count rows whose `condition.type` is not `ROSTERED`, `OPPONENT_ROSTERED` or `SURVIVOR`. That covers props, spread, total, moneyline and Kalshi stakes. **Survivor picks never count toward the 3**, so a free user can add one even with the cap full.
+- **When the count resets:** it's scoped to `(user_id, season, week)`. A stake deleted **before its game kicks off** frees its slot. One deleted after kickoff (game `in_progress`/`final`, or `scheduled_start` passed) can still be removed, but its slot stays spent for the week: `DELETE /stakes/:id` writes a row to `stake_spent_slots`, and the cap counts live bet legs plus the sum of `stake_spent_slots.slots` for removed picks/slips. Removing a parlay before any leg kicks off refunds every leg; after any leg kicks off, all its legs stay spent. `GET /stakes` returns the count as `free_slots_spent`. Survivor picks never use a slot. Adding a stake after kickoff is allowed and counts.
 - **Manual lineup kickoff lock (Free and Pro):** `PUT /leagues/:id/lineup` returns **409** `lineup_player_locked` (`details.player_ids`) if it would drop a player whose game has kicked off. Adding players, and dropping players whose games haven't started, still work. Sleeper lineups follow Sleeper.
 - **Where it's enforced:** on the API. `POST /stakes` returns **403** with `code: 'stake_limit_free'` and `details: { limit: 3 }`, matching the existing cap convention. Add `stake_limit_free` to the code list in `app/lib/upgradePrompt.ts` so the paywall opens. Never enforce only on the client.
 
@@ -614,7 +614,7 @@ Changes to the existing 6 screens are marked **new** or **changed**.
      #7's early nudge). Says Pivot sends you to the game before the drive starts, and points to
      Settings → Alert timing.
   4. **"Your Watchlist."** Describes the Watchlist as shipped (week card, a card per pick,
-     fantasy leagues collapsed in All). Free covers 3 picks a week; a parlay counts as one.
+     fantasy leagues collapsed in All). Free covers 3 bet legs a week; each single and each parlay leg uses one.
   - Reachable as onboarding step 7 (`?onboarding=1`, ends at "All set") and from Settings → Help
     → "Replay tour" (ends by going back).
 - **Demo game day** (`app/lib/demoGameDay.ts`, `app/app/(app)/demo-game-day.tsx`):
