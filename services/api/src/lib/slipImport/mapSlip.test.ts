@@ -23,6 +23,7 @@ import {
   SMITH_NJIGBA,
   TEAMS,
   leg,
+  weekGame,
 } from './fixtures.test-helper.js';
 
 function lookups(overrides: Partial<SlipLookups> = {}): SlipLookups & { validated: PickInput[] } {
@@ -58,6 +59,33 @@ describe('resolveTeam', () => {
     ['Chicago Bears', CHI],
   ])('reads %s', (text, id) => {
     expect(resolveTeam(text, TEAMS)?.id).toBe(id);
+  });
+
+  it.each([
+    ['Los Angeles R', 'lar'],
+    ['Los Angeles C', 'lac'],
+    ['New York G', NYG],
+    ['New York J', '22222222-2222-4222-8222-222222222222'],
+    ['los angeles r.', 'lar'],
+    ['Los Angeles', null],
+    ['Los Angeles X', null],
+    ['R', null],
+  ])('resolves city plus nickname initial %s only when unique', (text, id) => {
+    const teams = [
+      ...TEAMS,
+      { id: 'lar', abbreviation: 'LAR', city: 'Los Angeles', name: 'Rams' },
+      { id: 'lac', abbreviation: 'LAC', city: 'Los Angeles', name: 'Chargers' },
+    ];
+    expect(resolveTeam(text, teams)?.id ?? null).toBe(id);
+  });
+
+  it('does not guess when city and nickname initial match two teams', () => {
+    expect(
+      resolveTeam('New York G', [
+        ...TEAMS,
+        { id: 'other', abbreviation: 'OTH', city: 'New York', name: 'Grizzlies' },
+      ]),
+    ).toBeNull();
   });
 
   it('reads an alias abbreviation', () => {
@@ -240,6 +268,94 @@ describe('mapSlipLeg', () => {
       lookups(),
     );
     expect(one).toMatchObject({ status: 'ready', pick: { playerId: BROWN_PHI } });
+  });
+
+  it.each(['NYG', 'KC', 'CHI', 'Unknown'])(
+    'keeps a unique player name despite model team %s',
+    async (team) => {
+      expect(
+        await mapSlipLeg(
+          leg({
+            market: 'PLAYER_STAT',
+            stat: 'RUSH_YDS',
+            player: 'Saquon Barkley',
+            side: 'OVER',
+            line: 84.5,
+            team,
+          }),
+          lookups(),
+        ),
+      ).toMatchObject({ status: 'ready', pick: { playerId: BARKLEY, gameId: GAME } });
+    },
+  );
+
+  it('still flags a conflicting printed matchup for a unique player', async () => {
+    expect(
+      await mapSlipLeg(
+        leg({
+          market: 'ANYTIME_TD',
+          player: 'Saquon Barkley',
+          team: 'NYG',
+          matchup: ['NYG', 'NYJ'],
+        }),
+        lookups(),
+      ),
+    ).toMatchObject({ status: 'flagged', reason: FLAG.game });
+  });
+
+  it.each(['New York', 'KC'])('does not use %s to invent a player match', async (team) => {
+    expect(
+      await mapSlipLeg(leg({ market: 'ANYTIME_TD', player: 'A. Brown', team }), lookups()),
+    ).toMatchObject({ status: 'flagged' });
+  });
+
+  it.each(['OVER', 'UNDER', null] as const)(
+    'maps explicit side %s and flags a missing side',
+    async (side) => {
+      const l = lookups();
+      const mapped = await mapSlipLeg(
+        leg({
+          market: 'PLAYER_STAT',
+          stat: 'RUSH_YDS',
+          player: 'Saquon Barkley',
+          line: 84.5,
+          side,
+        }),
+        l,
+      );
+      expect(mapped).toMatchObject(
+        side === null
+          ? { status: 'flagged', reason: FLAG.unclear }
+          : {
+              status: 'ready',
+              pick: {
+                condition: { type: side === 'OVER' ? 'STAT_OVER' : 'STAT_UNDER', line: 84.5 },
+              },
+            },
+      );
+      expect(l.validated).toHaveLength(side === null ? 0 : 1);
+    },
+  );
+
+  it.each([
+    ['Los Angeles R', 'lar'],
+    ['Los Angeles C', 'lac'],
+  ])('maps %s moneyline', async (team, id) => {
+    const teams = [
+      ...TEAMS,
+      { id: 'lar', abbreviation: 'LAR', city: 'Los Angeles', name: 'Rams' },
+      { id: 'lac', abbreviation: 'LAC', city: 'Los Angeles', name: 'Chargers' },
+    ];
+    const games = [weekGame({ home_team_id: 'lar', away_team_id: 'lac' })];
+    expect(
+      await mapSlipLeg(leg({ market: 'MONEYLINE', team }), lookups({ teams, games })),
+    ).toMatchObject({ status: 'ready', pick: { teamId: id } });
+    expect(
+      await mapSlipLeg(
+        leg({ market: 'MONEYLINE', team: 'Los Angeles' }),
+        lookups({ teams, games }),
+      ),
+    ).toMatchObject({ status: 'flagged', reason: FLAG.team });
   });
 
   it('flags a player not in this week’s games, and an unknown player', async () => {

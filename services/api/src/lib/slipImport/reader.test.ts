@@ -1,6 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it, vi } from 'vitest';
-import { AnthropicSlipReader, SLIP_READ_MODEL, SlipReadError, sniffImageType } from './reader.js';
+import {
+  AnthropicSlipReader,
+  SLIP_READ_MODEL,
+  SLIP_READ_PROMPT,
+  SlipReadError,
+  sniffImageType,
+} from './reader.js';
 import { SLIP_READ_JSON_SCHEMA, slipReadSchema } from './schema.js';
 import { leg } from './fixtures.test-helper.js';
 
@@ -100,4 +106,50 @@ describe('sniffImageType', () => {
     expect(sniffImageType(new TextEncoder().encode('%PDF-1.7 hello'))).toBeNull();
     expect(sniffImageType(new Uint8Array())).toBeNull();
   });
+});
+
+// These guard the instructions sent to the reader, not live model accuracy.
+describe('slip reading instructions', () => {
+  it.each([
+    'MORE, HIGHER and OVER mean OVER',
+    'LESS, LOWER and UNDER mean UNDER',
+    'up = OVER, down = UNDER',
+    'When both arrows are present, the other arrow is just the unselected option',
+    'If neither is highlighted and no side is otherwise shown, leave side null',
+    'Never guess a side',
+    'the logo or jersey beside the leg, or the matchup line',
+    'Prefer printed team text when a logo disagrees',
+    "pick'em entry fees, prize tables, boosts, and rewards",
+  ])('instructs the reader: %s', (instruction) => {
+    expect(SLIP_READ_PROMPT).toContain(instruction);
+  });
+
+  it.each(['OVER', 'UNDER', null] as const)(
+    'preserves the reader’s side %s without filling it in',
+    async (side) => {
+      const fixture = {
+        ...SLIP,
+        legs: [
+          leg({
+            market: 'PLAYER_STAT',
+            stat: 'RUSH_YDS',
+            player: 'Saquon Barkley',
+            line: 84.5,
+            side,
+          }),
+        ],
+      };
+      const { client, create } = fakeClient(message(JSON.stringify(fixture)));
+      expect(await new AnthropicSlipReader('unused', client).read(IMAGE)).toEqual(fixture);
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [
+            expect.objectContaining({
+              content: expect.arrayContaining([{ type: 'text', text: SLIP_READ_PROMPT }]),
+            }),
+          ],
+        }),
+      );
+    },
+  );
 });

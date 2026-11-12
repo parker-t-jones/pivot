@@ -92,7 +92,7 @@ export const SLIP_READ_JSON_SCHEMA: Record<string, unknown> = {
           text: {
             type: 'string',
             description:
-              'The leg as printed (selection and market), e.g. "Saquon Barkley Over 84.5 Rushing Yards". No odds, stake, payout, balance, username, or bet ID.',
+              'The leg as printed (selection and market), e.g. "Saquon Barkley Over 84.5 Rushing Yards". No odds, pick amount, payout, balance, username, or bet ID.',
           },
           market: { type: 'string', enum: [...SLIP_MARKETS] },
           stat: {
@@ -106,7 +106,7 @@ export const SLIP_READ_JSON_SCHEMA: Record<string, unknown> = {
           team: {
             ...nullable({ type: 'string' }),
             description:
-              'The team the pick is on, as printed (name, city, or abbreviation). Null for game totals.',
+              'The team the pick is on, from printed text, the logo or jersey beside the leg, or the matchup line (name, city, or abbreviation). Prefer printed text over a conflicting logo. Null only when unclear or for game totals.',
           },
           matchup: {
             type: 'array',
@@ -115,7 +115,8 @@ export const SLIP_READ_JSON_SCHEMA: Record<string, unknown> = {
           },
           side: {
             ...nullable({ type: 'string', enum: [...SLIP_SIDES] }),
-            description: 'OVER/UNDER for lines, YES/NO for touchdown scorer markets.',
+            description:
+              "OVER/UNDER for lines (MORE/HIGHER = OVER, LESS/LOWER = UNDER). On pick'em screens use the highlighted arrow: up = OVER, down = UNDER; the other arrow is unselected. Null when no side is shown; never guess. YES/NO for touchdown scorer markets.",
           },
           line: {
             ...nullable({ type: 'number' }),
