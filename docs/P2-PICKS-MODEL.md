@@ -18,12 +18,15 @@ Every pick is a row in `stakes` and is tied to exactly one game. A parlay is a `
 | Passing TDs                     | `PASS_TD`                                                | passing `passingTouchdowns`                                                                                                                                           |
 | Interceptions thrown            | `INT_THROWN`                                             | **passing** `interceptions` (not the defensive group)                                                                                                                 |
 | Rushing yards / attempts        | `RUSH_YDS` / `RUSH_ATT`                                  | rushing `rushingYards` / `rushingAttempts`                                                                                                                            |
+| Rushing + receiving yards       | `RUSH_REC_YDS`                                           | rushing `rushingYards` + receiving `receivingYards`; a missing group counts as 0; neither group leaves the parsed stat undefined                                      |
 | Receiving yards / receptions    | `REC_YDS` / `RECEPTIONS`                                 | receiving `receivingYards` / `receptions`                                                                                                                             |
 | TDs scored (e.g. 2+ = over 1.5) | `ANY_TD`                                                 | rushing + receiving + kick/punt return TDs, plus the larger of `defensiveTouchdowns` and `interceptionTouchdowns` (a pick-six may be listed in both; unverified live) |
 | FGs made                        | `FG_MADE`                                                | kicking `fieldGoalsMade/fieldGoalAttempts`, left of `/`                                                                                                               |
 | Kicking points                  | `KICK_PTS`                                               | kicking `totalKickingPoints`                                                                                                                                          |
 | Anytime TD                      | `PLAYER_EVENT`, `event: 'ANY_TD'`, `side: 'YES' \| 'NO'` | `ANY_TD` ≥ 1                                                                                                                                                          |
 | First TD                        | `PLAYER_EVENT`, `event: 'FIRST_TD'`, `side`              | §5                                                                                                                                                                    |
+
+Rushing + receiving yards uses a 0.5–600 line range and a 74.5 entry baseline for RB/WR/TE. A listed player with neither group settles at 0 through the existing engine fallback; a player absent from the final box score is void/refunded.
 
 Lines are multiples of 0.5. An integer line can land exactly, which is a tie.
 
@@ -41,7 +44,7 @@ Lines are multiples of 0.5. An integer line can land exactly, which is a tie.
 
 ### Excluded, and why
 
-- Longest rush, reception, or FG; rush + receiving yards; last TD scorer; first scoring play type; tackles and sacks. ESPN can decide these, but #10 doesn't ask for them. Each is a small addition later.
+- Longest rush, reception, or FG; last TD scorer; first scoring play type; tackles and sacks. ESPN can decide these, but #10 doesn't ask for them. Each is a small addition later.
 - Anything not in the summary boxscore (snap counts, routes, targets vs. air yards). ESPN doesn't publish it there.
 - Quarter and half moneylines, and 3-way lines. Not requested, and 3-way needs a tie as an outcome.
 - Cross-week parlays, and parlays that contain survivor or fantasy rows. A slip is one season and week of bet legs. Survivor stays a weekly pool pick.
@@ -74,7 +77,7 @@ Lines are multiples of 0.5. An integer line can land exactly, which is a tie.
 
 **Leverage** feeds the existing `betPriorityScore = max(1, round(leverage × 12))`:
 
-- Player prop: `priorityToLeverage(flag.priorityScore) × (0.5 + 0.5 × proximity)`. For an over, `proximity = 1 − min(needed / (2 × bigPlay), 1)`, with bigPlay = 15 rush yds, 25 rec yds, 40 pass yds, 1 for counts. For an under, it measures how close the stat is to going over the line. TD props get +0.25 in the red zone, capped at 1.
+- Player prop: `priorityToLeverage(flag.priorityScore) × (0.5 + 0.5 × proximity)`. For an over, `proximity = 1 − min(needed / (2 × bigPlay), 1)`, with bigPlay = 15 rush yds, 25 rec yds, 20 rush + rec yds, 40 pass yds, 1 for counts. For an under, it measures how close the stat is to going over the line. TD props get +0.25 in the red zone, capped at 1.
 - Team prop: 0.6 with the ball, 0.9 in the red zone.
 - Game-level: existing `lateGameLeverage`.
 - A slip ranks a game **once** (a game's score is the max over its picks), so a 6-leg same-game parlay doesn't outweigh everything else. On Home (`/flags/current`), a leg's leverage is ×1.0 when it is the slip's last undecided leg, ×0.8 otherwise, and 0 once the slip has lost. The runner's push priority does not apply this factor.

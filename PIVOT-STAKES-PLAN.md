@@ -105,12 +105,18 @@ export type StakeCondition =
 
 export type StatKey =
   | 'RUSH_YDS'
+  | 'RUSH_REC_YDS'
   | 'REC_YDS'
   | 'PASS_YDS'
   | 'RECEPTIONS'
   | 'RUSH_ATT'
   | 'PASS_TD'
-  | 'ANY_TD';
+  | 'ANY_TD'
+  | 'PASS_COMP'
+  | 'PASS_ATT'
+  | 'INT_THROWN'
+  | 'FG_MADE'
+  | 'KICK_PTS';
 
 export interface Stake {
   id: string;
@@ -158,7 +164,7 @@ interface Trigger {
 | ROSTERED               | `POSSESSION_START`     | NUDGE  | Existing behavior                                                                                                                                     |
 | ROSTERED               | `RED_ZONE`             | NUDGE  | Existing `FieldGauge` red-zone detection                                                                                                              |
 | OPPONENT_ROSTERED      | `OPP_RED_ZONE`         | NUDGE  | Opponent's player's team enters red zone                                                                                                              |
-| STAT_OVER              | `PROP_NEAR`            | REVEAL | Current stat ≥ 80% of line, **or** remaining need ≤ one typical big play (rush 15, rec 25, pass 40 yds)                                               |
+| STAT_OVER              | `PROP_NEAR`            | REVEAL | Current stat ≥ 80% of line, **or** remaining need ≤ one typical big play (rush 15, rec 25, rush + rec 20, pass 40 yds)                                |
 | STAT_OVER / STAT_UNDER | `PROP_LIVE_POSSESSION` | NUDGE  | The player is active (fantasy rule), whether or not the prop is decided. Gating on "unresolved" would leak the outcome (`docs/P2-PICKS-MODEL.md` §6). |
 | STAT_UNDER             | `PROP_DANGER`          | REVEAL | Same thresholds as `PROP_NEAR`, inverted framing                                                                                                      |
 | MONEYLINE / SURVIVOR   | `ONE_SCORE_LATE`       | REVEAL | Q4 or OT, margin ≤ 8                                                                                                                                  |

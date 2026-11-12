@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { slipLegSchema } from './schema.js';
 import { ApiError } from '../errors.js';
 import type { PickInput } from '../pickInput.js';
 import {
@@ -444,4 +445,36 @@ describe('mapSlipLeg', () => {
       'db down',
     );
   });
+});
+
+describe('rushing + receiving slip import', () => {
+  it.each(['OVER', 'UNDER'] as const)(
+    'maps %s to a ready pick without unsupported flags',
+    async (side) => {
+      const input = slipLegSchema.parse(
+        leg({
+          market: 'PLAYER_STAT',
+          stat: 'RUSH_REC_YDS',
+          player: 'Saquon Barkley',
+          side,
+          line: 46.5,
+        }),
+      );
+      const l = lookups();
+      const mapped = await mapSlipLeg(input, l);
+      expect(mapped).toMatchObject({
+        status: 'ready',
+        pick: {
+          playerId: BARKLEY,
+          gameId: GAME,
+          condition: {
+            type: side === 'OVER' ? 'STAT_OVER' : 'STAT_UNDER',
+            stat: 'RUSH_REC_YDS',
+            line: 46.5,
+          },
+        },
+      });
+      expect(l.validated).toHaveLength(1);
+    },
+  );
 });

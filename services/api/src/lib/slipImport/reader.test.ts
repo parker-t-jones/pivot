@@ -111,6 +111,8 @@ describe('sniffImageType', () => {
 // These guard the instructions sent to the reader, not live model accuracy.
 describe('slip reading instructions', () => {
   it.each([
+    'RUSH_REC_YDS (rushing + receiving yards)',
+    'Use OTHER as the market when none fits, e.g. passing + rushing yards.',
     'MORE, HIGHER and OVER mean OVER',
     'LESS, LOWER and UNDER mean UNDER',
     'up = OVER, down = UNDER',

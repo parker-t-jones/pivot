@@ -49,6 +49,7 @@ const STAT_LABEL: Record<string, string> = {
   INT_THROWN: 'interceptions',
   RUSH_YDS: 'rush yds',
   RUSH_ATT: 'rush attempts',
+  RUSH_REC_YDS: 'rush + rec yds',
   REC_YDS: 'rec yds',
   RECEPTIONS: 'receptions',
   ANY_TD: 'TDs',

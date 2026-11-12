@@ -117,7 +117,7 @@ describe('createGameStatsRecorder', () => {
     expect(stored?.players['111']).toEqual({
       teamId: AWAY,
       displayName: 'Bijan Robinson',
-      stats: { RUSH_YDS: 40, ANY_TD: 0 },
+      stats: { RUSH_YDS: 40, RUSH_REC_YDS: 40, ANY_TD: 0 },
     });
     expect(stored?.scoringPlays[0]?.teamId).toBe(AWAY);
     expect(recorder.latest()).toEqual(stored);

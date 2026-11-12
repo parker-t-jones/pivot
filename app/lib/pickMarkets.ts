@@ -32,6 +32,7 @@ const PLAYER_MARKETS: Record<PlayerMarketKey, PlayerMarket> = {
   INT_THROWN: stat('INT_THROWN', 'Interceptions thrown', 'interceptions thrown'),
   RUSH_YDS: stat('RUSH_YDS', 'Rushing yards', 'rushing yards'),
   RUSH_ATT: stat('RUSH_ATT', 'Rushing attempts', 'rushing attempts'),
+  RUSH_REC_YDS: stat('RUSH_REC_YDS', 'Rushing + receiving yards', 'rushing + receiving yards'),
   REC_YDS: stat('REC_YDS', 'Receiving yards', 'receiving yards'),
   RECEPTIONS: stat('RECEPTIONS', 'Receptions', 'receptions'),
   ANY_TD: stat('ANY_TD', 'TDs scored', 'touchdowns'),
@@ -54,9 +55,9 @@ const MARKETS_BY_POSITION: Record<string, readonly PlayerMarketKey[]> = {
     'RUSH_ATT',
     ...TD_MARKETS,
   ],
-  RB: ['RUSH_YDS', 'RUSH_ATT', 'REC_YDS', 'RECEPTIONS', ...TD_MARKETS],
-  WR: ['REC_YDS', 'RECEPTIONS', 'RUSH_YDS', ...TD_MARKETS],
-  TE: ['REC_YDS', 'RECEPTIONS', ...TD_MARKETS],
+  RB: ['RUSH_YDS', 'RUSH_REC_YDS', 'RUSH_ATT', 'REC_YDS', 'RECEPTIONS', ...TD_MARKETS],
+  WR: ['REC_YDS', 'RUSH_REC_YDS', 'RECEPTIONS', 'RUSH_YDS', ...TD_MARKETS],
+  TE: ['REC_YDS', 'RUSH_REC_YDS', 'RECEPTIONS', ...TD_MARKETS],
   K: ['FG_MADE', 'KICK_PTS'],
 };
 
@@ -93,6 +94,7 @@ const STAT_BASELINE: Record<StatKey, number> = {
   INT_THROWN: 0.5,
   RUSH_YDS: 49.5,
   RUSH_ATT: 14.5,
+  RUSH_REC_YDS: 74.5,
   REC_YDS: 49.5,
   RECEPTIONS: 4.5,
   ANY_TD: 1.5,

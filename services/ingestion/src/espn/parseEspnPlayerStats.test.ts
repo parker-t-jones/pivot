@@ -35,7 +35,14 @@ describe('parseEspnPlayerStats (committed final summary)', () => {
     expect(stats.players[BIJAN]).toEqual({
       teamId: 'ATL',
       displayName: 'Bijan Robinson',
-      stats: { RUSH_YDS: 194, RUSH_ATT: 29, REC_YDS: 19, RECEPTIONS: 2, ANY_TD: 2 },
+      stats: {
+        RUSH_REC_YDS: 213,
+        RUSH_YDS: 194,
+        RUSH_ATT: 29,
+        REC_YDS: 19,
+        RECEPTIONS: 2,
+        ANY_TD: 2,
+      },
     });
     expect(stats.players[WATSON]?.stats).toMatchObject({ REC_YDS: 96, RECEPTIONS: 7, ANY_TD: 1 });
   });
@@ -139,6 +146,7 @@ describe('parseEspnPlayerStats (edge shapes)', () => {
       },
     });
     expect(parseEspnPlayerStats(summary, 'g', 0).players['1']?.stats).toEqual({
+      RUSH_REC_YDS: 12,
       RUSH_YDS: 12,
       ANY_TD: 0,
     });
@@ -151,5 +159,47 @@ describe('parseEspnPlayerStats (edge shapes)', () => {
       expect(parsed.data.boxscore).toBeUndefined();
       expect(parsed.data.scoringPlays).toBeUndefined();
     }
+  });
+});
+
+describe('rushing + receiving yards', () => {
+  it('sums the committed RB fixture and every other available yardage line', () => {
+    const parsed = parseEspnPlayerStats(loadFixture(), 'g', 0);
+    expect(parsed.players[BIJAN]?.stats.RUSH_REC_YDS).toBe(213);
+    for (const player of Object.values(parsed.players)) {
+      const { RUSH_YDS, REC_YDS, RUSH_REC_YDS } = player.stats;
+      if (RUSH_YDS !== undefined || REC_YDS !== undefined) {
+        expect(RUSH_REC_YDS).toBe((RUSH_YDS ?? 0) + (REC_YDS ?? 0));
+      } else expect(RUSH_REC_YDS).toBeUndefined();
+    }
+  });
+
+  it('counts a WR with receiving only and leaves a player with neither group undefined', () => {
+    const summary = espnSummarySchema.parse({
+      boxscore: {
+        players: [
+          {
+            team: { abbreviation: 'GB' },
+            statistics: [
+              {
+                name: 'receiving',
+                keys: ['receivingYards'],
+                athletes: [{ athlete: { id: 'wr', displayName: 'A Receiver' }, stats: ['96'] }],
+              },
+              {
+                name: 'kicking',
+                keys: ['totalKickingPoints'],
+                athletes: [{ athlete: { id: 'k', displayName: 'A Kicker' }, stats: ['9'] }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const parsed = parseEspnPlayerStats(summary, 'g', 0);
+    expect(parsed.players['wr']?.stats).toMatchObject({ REC_YDS: 96, RUSH_REC_YDS: 96 });
+    expect(parsed.players['wr']?.stats.RUSH_YDS).toBeUndefined();
+    expect(parsed.players['k']).toBeDefined();
+    expect(parsed.players['k']?.stats.RUSH_REC_YDS).toBeUndefined();
   });
 });

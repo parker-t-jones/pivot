@@ -349,3 +349,61 @@ describe('isDecided', () => {
     }
   });
 });
+
+describe('RUSH_REC_YDS progress and settlement', () => {
+  it.each(['STAT_OVER', 'STAT_UNDER'] as const)(
+    '%s tracks live progress and final outcomes',
+    (type) => {
+      const pick = stake({ type, stat: 'RUSH_REC_YDS', line: 90 });
+      const context = (current: number, final: boolean) =>
+        ctx({
+          game: game({ status: final ? 'final' : 'in_progress' }),
+          playerStats: stats({ final, players: { [ESPN_ID]: line({ RUSH_REC_YDS: current }) } }),
+        });
+      expect(pickProgress(pick, context(78, false))).toEqual({
+        status: 'live',
+        current: 78,
+        line: 90,
+        needed: type === 'STAT_OVER' ? 13 : 11,
+      });
+      expect(pickProgress(pick, context(91, false)).status).toBe(
+        type === 'STAT_OVER' ? 'hit' : 'missed',
+      );
+      expect(pickProgress(pick, context(89, true)).status).toBe(
+        type === 'STAT_OVER' ? 'lost' : 'won',
+      );
+      expect(pickProgress(pick, context(91, true)).status).toBe(
+        type === 'STAT_OVER' ? 'won' : 'lost',
+      );
+      expect(pickProgress(pick, context(90, true)).status).toBe('tie');
+    },
+  );
+
+  it('settles a listed player with neither yardage group at zero through the existing fallback', () => {
+    const context = ctx({
+      game: game({ status: 'final' }),
+      playerStats: stats({ final: true, players: { [ESPN_ID]: line({ ANY_TD: 0 }) } }),
+    });
+    for (const type of ['STAT_OVER', 'STAT_UNDER'] as const) {
+      expect(pickProgress(stake({ type, stat: 'RUSH_REC_YDS', line: 46.5 }), context)).toEqual({
+        status: type === 'STAT_OVER' ? 'lost' : 'won',
+        current: 0,
+        line: 46.5,
+        needed: 0,
+      });
+    }
+  });
+
+  it('keeps an absent player pending before kickoff and voids them when final', () => {
+    const pick = stake({ type: 'STAT_UNDER', stat: 'RUSH_REC_YDS', line: 46.5 });
+    expect(pickProgress(pick, ctx({ game: game({ status: 'scheduled' }) }))).toEqual({
+      status: 'pending',
+    });
+    expect(
+      pickProgress(
+        pick,
+        ctx({ game: game({ status: 'final' }), playerStats: stats({ final: true }) }),
+      ),
+    ).toEqual({ status: 'void' });
+  });
+});

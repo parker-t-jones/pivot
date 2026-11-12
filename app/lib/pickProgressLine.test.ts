@@ -76,3 +76,13 @@ describe('parlay summary', () => {
     expect(legStateLabel({ status: 'pending' })).toBeNull();
   });
 });
+
+it('shows combined yards on settled picks and refunds a DNP', () => {
+  const condition = { type: 'STAT_UNDER', stat: 'RUSH_REC_YDS' };
+  expect(pickProgressLine({ condition, progress: { status: 'tie', current: 46 } })).toBe(
+    'Tie · refunded · 46 rush + rec yds',
+  );
+  expect(pickProgressLine({ condition, progress: { status: 'void' } })).toBe(
+    'Refunded · did not play',
+  );
+});
