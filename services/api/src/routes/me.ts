@@ -330,6 +330,11 @@ const meRoutes: FastifyPluginAsyncZod = async (fastify) => {
     if (error) {
       throw new ApiError(500, 'account_deletion_failed', error.message);
     }
+    // Deliberately detached: Redis outages/retries must never delay or fail account deletion.
+    // Postgres remains authoritative; queued events for missing users are dropped by dispatcher.
+    void Promise.resolve()
+      .then(() => fastify.lineupCache.removeUser(user.id))
+      .catch((error: unknown) => request.log.warn({ err: error }, 'Account cache cleanup failed'));
     return reply.status(204).send();
   });
 

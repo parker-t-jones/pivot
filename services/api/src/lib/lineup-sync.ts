@@ -412,21 +412,8 @@ export async function rebuildUserLineupCache(
   }
 
   const cache = assembleUserLineupCache(userId, week, rows);
-  const previous = await deps.lineupCache.getLineupCache(userId, week);
-  const nextTeamIds = new Set(cache.teamPositions.keys());
-  if (previous) {
-    for (const teamId of previous.teamPositions.keys()) {
-      if (!nextTeamIds.has(teamId)) {
-        await deps.lineupCache.removeUserStake(teamId, userId);
-      }
-    }
-  }
-
   await deps.lineupCache.setLineupCache(userId, week, cache);
-
-  for (const teamId of cache.teamPositions.keys()) {
-    await deps.lineupCache.addUserStake(teamId, userId);
-  }
+  await deps.lineupCache.replaceUserStakes(userId, [...cache.teamPositions.keys()]);
 }
 
 /** Watched leagues in `created_at` order. Does not write. */
