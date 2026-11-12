@@ -1,8 +1,7 @@
 # Slip reader model eval (#41)
 
-**Status: not yet run.** No real sportsbook slip screenshots were available in this sandbox, so
-the harness below is built and unit-tested, but has never made a real Claude API call. This file
-is a stub for Parker to fill in once he runs it on his Mac with real images and a real key.
+**Status:** The eval was run on November 12, 2026 on 7 private slips. The reader prompt
+was changed afterwards (#119); post-change results are pending Parker’s paid rerun.
 
 ## Why
 
@@ -64,9 +63,10 @@ so the comparison measures model choice only (see `multiModelReader.ts`). The ev
 server-side refusal fallback the production path uses — a cost measurement wants to know what
 each model alone costs and gets right, not what a fallback masks.
 
-## Results
+## Post-change results — PLACEHOLDER
 
-_(not run — paste the harness's comparison table here)_
+Pending Parker’s rerun on the same 7 private slips, 3 runs per model. Paste the raw and
+import-outcome scorecards here; no post-change accuracy or cost numbers are available.
 
 | model                            | leg count | bet count | is_bet_slip | field accuracy (avg) | $/image |
 | -------------------------------- | --------- | --------- | ----------- | -------------------- | ------- |
@@ -76,19 +76,19 @@ _(not run — paste the harness's comparison table here)_
 
 ### Opus 5.5
 
-_(not run)_
+_(Post-change results pending.)_
 
 ### Sonnet 5.5
 
-_(not run)_
+_(Post-change results pending.)_
 
 ### Haiku 5.5
 
-_(not run)_
+_(Post-change results pending.)_
 
 ## Recommendation
 
-_(not run — no accuracy or cost numbers exist yet, so no recommendation can be made)_
+_(Post-change recommendation pending the rerun.)_
 
 If a cheaper model's accuracy is close enough to Opus 5.5's, say so explicitly here and note it as
 a candidate follow-up to change `SLIP_READ_MODEL` — **do not change the production model as part
