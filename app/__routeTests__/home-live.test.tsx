@@ -318,27 +318,38 @@ function opacitiesAbove(el: HTMLElement): string[] {
 }
 
 describe('Home live day (real screen)', () => {
-  it('holds the final cold-start stage while Home data is pending, then renders the games', async () => {
-    useScenario(state2());
-    let release!: (value: Awaited<ReturnType<typeof fetchMe>>) => void;
-    const profile = await fetchMe();
-    vi.mocked(fetchMe).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          release = resolve;
-        }),
-    );
-    await act(async () => root.render(<HomeScreen />));
-    expect(text()).toContain('Finding your games…');
-    const field = container.querySelector('[data-testid="yard-line-loader"]');
-    expect(field?.getAttribute('aria-valuenow')).toBe('6');
-    expect(field?.getAttribute('aria-label')).toBe('Loading');
-    expect(container.querySelector('[data-testid="yard-line-ball"]')).toBeTruthy();
-    await act(async () => {
-      release(profile);
-    });
-    expect(container.querySelector('[data-testid="yard-line-loader"]')).toBeNull();
-    expect(text()).toContain('Your live games');
+  it('hands off to shaped placeholders while Home data is pending, then renders the games', async () => {
+    vi.useFakeTimers();
+    try {
+      useScenario(state2());
+      let release!: (value: Awaited<ReturnType<typeof fetchMe>>) => void;
+      const profile = await fetchMe();
+      vi.mocked(fetchMe).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      );
+      await act(async () => root.render(<HomeScreen />));
+      expect(container.querySelector('[role="progressbar"]')).toBeNull();
+      await act(async () => vi.advanceTimersByTime(150));
+      expect(container.querySelector('[data-testid="home-cold-loading"]')).toBeTruthy();
+      expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+      expect(container.querySelector('[role="progressbar"]')?.getAttribute('aria-label')).toBe(
+        'Loading',
+      );
+      expect(container.querySelector('[data-testid="yard-line-loader"]')).toBeNull();
+      expect(text()).not.toContain('Finding your games…');
+      await act(async () => {
+        release(profile);
+      });
+      expect(container.querySelector('[data-testid="home-cold-loading"]')).toBeTruthy();
+      await act(async () => vi.advanceTimersByTime(300));
+      expect(container.querySelector('[data-testid="home-cold-loading"]')).toBeNull();
+      expect(text()).toContain('Your live games');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('state2: live pick games and no flags render the live cards, not an Also flagged row', async () => {

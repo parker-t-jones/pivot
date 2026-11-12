@@ -10,7 +10,7 @@ export default function IndexScreen() {
   const game = Array.isArray(params.game) ? params.game[0] : params.game;
 
   if (isLoading) {
-    return <LoadingState message="Checking your session…" step={2} steps={6} />;
+    return <LoadingState message="Checking your session…" step={2} steps={5} />;
   }
 
   if (session) {

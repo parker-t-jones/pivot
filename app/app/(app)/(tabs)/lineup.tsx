@@ -26,6 +26,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DemoEditingBanner } from '../../../components/DemoEditingBanner';
 import { FantasyLeagueCard } from '../../../components/FantasyLeagueCard';
 import { ErrorState } from '../../../components/ErrorState';
+import { ColdLoading } from '../../../components/ColdLoading';
+import { useLoadingPlaceholder, useSlowLoading } from '../../../lib/useSlowLoading';
 import { LoadingState } from '../../../components/LoadingState';
 import { SecondaryButton } from '../../../components/SecondaryButton';
 import { PickCard } from '../../../components/PickCard';
@@ -909,12 +911,38 @@ export default function LineupScreen() {
 
   const editsLocked = me?.is_demo === true;
 
-  if (showFullLoading(lineup != null, isLoading)) {
+  const coldLoading = watchlist && showFullLoading(lineup != null, isLoading) && !loadError;
+  const placeholderVisible = useLoadingPlaceholder(coldLoading);
+  const slowLoading = useSlowLoading(coldLoading);
+
+  if (!watchlist && showFullLoading(lineup != null, isLoading)) {
     return (
       <View style={[styles.screen, styles.content, { paddingTop: insets.top + theme.spacing.lg }]}>
-        {watchlist ? <WatchlistHeader week={nflWeek} /> : <LineupHeader week={null} />}
+        <LineupHeader week={null} />
         <LoadingState message={lineupLoadingMessage(watchlist)} />
       </View>
+    );
+  }
+
+  if (watchlist && (coldLoading || (placeholderVisible && !loadError))) {
+    return (
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + theme.spacing.lg,
+            paddingBottom: insets.bottom + theme.spacing.huge,
+            paddingHorizontal:
+              watchlist && desktopTier !== 'companion' ? theme.spacing.xl : theme.spacing.lg2,
+          },
+        ]}
+      >
+        <WatchlistHeader week={nflWeek} />
+        {placeholderVisible ? (
+          <ColdLoading screen="watchlist" slow={slowLoading} onRetry={onRefresh} />
+        ) : null}
+      </ScrollView>
     );
   }
 

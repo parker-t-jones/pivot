@@ -93,7 +93,7 @@ function AppNavigator() {
   }, [router]);
 
   if (decision.action === 'wait') {
-    return <LoadingState message="Checking your leagues and alerts…" step={4} steps={6} />;
+    return <LoadingState message="Checking your leagues and alerts…" step={4} steps={5} />;
   }
 
   if (decision.action === 'leagues_error') {
@@ -114,7 +114,7 @@ function AppNavigator() {
     decision.action === 'redirect_notifications' ||
     decision.action === 'leave_notifications'
   ) {
-    return <LoadingState message="Opening your screen…" step={5} steps={6} />;
+    return <LoadingState message="Opening your screen…" step={5} steps={5} />;
   }
 
   return (

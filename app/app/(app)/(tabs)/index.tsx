@@ -12,7 +12,8 @@ import { HomeDashboard } from '../../../components/HomeDashboard';
 import { HomeLiveView, LiveModeEyebrow } from '../../../components/HomeLiveView';
 import { HomePregameView, type PregameHero } from '../../../components/HomePregameView';
 import { IdleHomeCard } from '../../../components/IdleHomeCard';
-import { LoadingState } from '../../../components/LoadingState';
+import { ColdLoading } from '../../../components/ColdLoading';
+import { useLoadingPlaceholder, useSlowLoading } from '../../../lib/useSlowLoading';
 import { YourLiveGames } from '../../../components/LiveStakeGameCard';
 import { useSwitching } from '../../../contexts/SwitchingContext';
 import { useLeaguesGate } from '../../../contexts/LeaguesGateContext';
@@ -1054,6 +1055,10 @@ export default function HomeScreen() {
       <ActiveLineupPicker leagues={leagues} me={me} onMeUpdated={handleMeUpdated} />
     ) : undefined;
 
+  const coldLoading = isLoading && homeData === null && loadError === null;
+  const placeholderVisible = useLoadingPlaceholder(coldLoading);
+  const slowLoading = useSlowLoading(coldLoading);
+
   const pausedBanner = !isLoading && !loadError ? liveFeedBanner(homeData?.liveFeedOk) : null;
 
   return (
@@ -1069,8 +1074,10 @@ export default function HomeScreen() {
         ) : undefined
       }
     >
-      {isLoading ? (
-        <LoadingState message="Finding your games…" step={6} steps={6} />
+      {(coldLoading || placeholderVisible) && !loadError ? (
+        placeholderVisible ? (
+          <ColdLoading screen="home" slow={slowLoading} onRetry={onRefresh} />
+        ) : null
       ) : loadError ? (
         <ErrorState message={loadError} onRetry={onRefresh} />
       ) : (

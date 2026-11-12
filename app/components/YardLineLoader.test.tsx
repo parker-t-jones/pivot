@@ -71,10 +71,12 @@ describe('YardLineLoader', () => {
     const first = stagedBall(host);
     const left = Number.parseFloat(first.style.left);
     expect(host.querySelector('[data-testid="yard-line-sweep"]')).toBeNull();
-    act(() => root.render(<LoadingState step={2} steps={3} message="Finding your games…" />));
+    act(() =>
+      root.render(<LoadingState step={2} steps={3} message="Checking your leagues and alerts…" />),
+    );
     const second = Number.parseFloat(stagedBall(host).style.left);
     expect(second).toBeGreaterThan(left);
-    expect(host.textContent).toContain('Finding your games…');
+    expect(host.textContent).toContain('Checking your leagues and alerts…');
     expect(host.textContent).not.toContain('Checking your session…');
     expect(host.querySelector('[data-testid="yard-line-loader"]')?.getAttribute('aria-label')).toBe(
       'Loading',

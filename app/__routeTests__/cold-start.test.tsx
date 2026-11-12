@@ -99,6 +99,7 @@ function stage(expected: number, copy: string) {
   const field = host.querySelector('[data-testid="yard-line-loader"]');
   expect(field?.getAttribute('aria-label')).toBe('Loading');
   expect(field?.getAttribute('aria-valuenow')).toBe(String(expected));
+  expect(field?.getAttribute('aria-valuemax')).toBe('5');
   expect(host.textContent).toContain(copy);
   const ball = host.querySelector<HTMLElement>('[data-testid="yard-line-ball"]');
   expect(ball).toBeTruthy();
@@ -132,7 +133,15 @@ it('waits for both concurrent checks, then shows only a real onboarding redirect
   state.push = 'denied';
   state.count = 0;
   act(() => root.render(<AppGroupLayout />));
-  expect(stage(5, 'Opening your screen…')).toBeGreaterThan(checking);
+  const final = stage(5, 'Opening your screen…');
+  expect(final).toBeGreaterThan(checking);
+  const field = host.querySelector<HTMLElement>('[data-testid="yard-line-loader"]');
+  const ball = host.querySelector<HTMLElement>('[data-testid="yard-line-ball"]');
+  const endZone = host.querySelector<HTMLElement>('[data-testid="yard-line-end-zone"]');
+  if (!field || !ball || !endZone) throw new Error('Expected the final staged loader.');
+  expect(final + Number.parseFloat(ball.style.width)).toBeCloseTo(
+    Number.parseFloat(field.style.width) - Number.parseFloat(endZone.style.width),
+  );
   expect(state.replace).toHaveBeenCalledWith('/(app)/connect-team?onboarding=1');
   state.count = 1;
   act(() => root.render(<AppGroupLayout />));
