@@ -116,7 +116,7 @@ describe.each([
     for (const key of other) expect(keys.has(key), key).toBe(true);
     expect(await cache.getUsersWithStake('old')).toEqual(['u2']);
     expect(await cache.getUsersWithBet('orphan-game')).toEqual(['u2']);
-    expect([...sets.get('active_users')!]).toEqual(['u2']);
+    expect([...(sets.get('active_users') ?? [])]).toEqual(['u2']);
     expect(client.expire).not.toHaveBeenCalled();
   });
 

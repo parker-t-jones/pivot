@@ -36,7 +36,7 @@ export async function replaceUserStakes(
 
 /** User IDs are UUIDs in production. Escape glob metacharacters for fake/local IDs too. */
 function escapeGlob(value: string): string {
-  return value.replace(/[\\*?\[\]]/g, '\\$&');
+  return value.replace(/[\\*?[\]]/g, '\\$&');
 }
 
 export async function removeUserIndexes(redis: UserIndexRedis, userId: string): Promise<void> {

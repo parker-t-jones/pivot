@@ -1035,13 +1035,13 @@ describe('DELETE /me', () => {
     'deletes the account even when cache cleanup %s',
     async (failure) => {
       app = await buildTestApp({ 'user-1': null });
-      const cleanup = vi
-        .spyOn(app.fastify.lineupCache, 'removeUser')
-        .mockImplementation(() =>
-          failure === 'rejects'
-            ? Promise.reject(new Error('Redis down'))
-            : new Promise<void>(() => {}),
-        );
+      const cleanup = vi.spyOn(app.fastify.lineupCache, 'removeUser').mockImplementation(() =>
+        failure === 'rejects'
+          ? Promise.reject(new Error('Redis down'))
+          : new Promise<void>(() => {
+              /* Simulate a Redis request that never settles. */
+            }),
+      );
       const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
       const response = await app.fastify.inject({
         method: 'DELETE',
