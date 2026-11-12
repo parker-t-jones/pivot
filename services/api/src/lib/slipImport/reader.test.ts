@@ -119,7 +119,13 @@ describe('slip reading instructions', () => {
     'When both arrows are present, the other arrow is just the unselected option',
     'If neither is highlighted and no side is otherwise shown, leave side null',
     'Never guess a side',
+    'Count bets, not legs: legs listed together under one pick amount or payout are one bet',
+    'including a parlay with a status mark on each leg, a settled parlay, or a same-game parlay',
+    'Set bet_count greater than 1 only when the screenshot shows separate bets, each with its own pick amount or payout',
     'the logo or jersey beside the leg, or the matchup line',
+    'For player legs with no printed team name, use these visual cues beside the player or the matchup header',
+    'Use null only when the team truly cannot be told (or for game totals)',
+    'Do not guess anything the slip does not show: use null',
     'Prefer printed team text when a logo disagrees',
     "pick'em entry fees, prize tables, boosts, and rewards",
   ])('instructs the reader: %s', (instruction) => {
