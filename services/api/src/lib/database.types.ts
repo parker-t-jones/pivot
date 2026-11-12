@@ -423,6 +423,7 @@ export type Database = {
           game_id: string
           season: number
           slot_kind: string
+          slots: number
           stake_id: string
           user_id: string
           week: number
@@ -432,6 +433,7 @@ export type Database = {
           game_id: string
           season: number
           slot_kind?: string
+          slots?: number
           stake_id: string
           user_id: string
           week: number
@@ -441,6 +443,7 @@ export type Database = {
           game_id?: string
           season?: number
           slot_kind?: string
+          slots?: number
           stake_id?: string
           user_id?: string
           week?: number

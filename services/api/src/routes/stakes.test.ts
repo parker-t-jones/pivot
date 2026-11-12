@@ -122,7 +122,7 @@ class Query implements PromiseLike<{ data: unknown; error: null }> {
     if (this.mode === 'upsert' && this.payload) {
       const key = this.payload[this.conflictKey];
       if (!this.rows.some((row) => row[this.conflictKey] === key)) {
-        this.rows.push({ ...this.payload });
+        this.rows.push({ slots: 1, ...this.payload });
       }
       return Promise.resolve({ data: null, error: null });
     }
@@ -587,7 +587,7 @@ describe('manual stakes', () => {
       expect((await remove(id)).statusCode).toBe(204);
       expect(mem.stakes.some((stake) => stake['id'] === id)).toBe(false);
       expect(mem.spent).toEqual([
-        { stake_id: id, user_id: USER, season: 2026, week: 5, game_id: GAME },
+        { slots: 1, stake_id: id, user_id: USER, season: 2026, week: 5, game_id: GAME },
       ]);
 
       const again = await post({ type: 'MONEYLINE', gameId: GAME, teamId: AWAY });
@@ -640,7 +640,14 @@ describe('manual stakes', () => {
       const counted = await fillFreeCap();
       const id = (counted.json() as { stake: { id: string } }).stake.id;
       // A delete that failed after the spent row was written leaves both.
-      mem.spent.push({ stake_id: id, user_id: USER, season: 2026, week: 5, game_id: GAME });
+      mem.spent.push({
+        slots: 1,
+        stake_id: id,
+        user_id: USER,
+        season: 2026,
+        week: 5,
+        game_id: GAME,
+      });
       expect((await list()).json().free_slots_spent).toBe(0);
 
       clock.now = new Date(AFTER_KICKOFF);

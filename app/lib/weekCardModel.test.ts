@@ -20,6 +20,16 @@ const free: WeekCardInputs = {
 };
 
 describe('weekCardModel', () => {
+  it('counts singles and all parlay legs in the same pool', () => {
+    const single = { condition: { type: 'SPREAD' } };
+    const slip = { condition: { type: 'PARLAY' }, legs: [single, single] };
+    expect(freeBetCount([single, slip])).toBe(3);
+    expect(freeBetCount([slip], 1)).toBe(3);
+    expect(
+      freeBetCount([{ condition: { type: 'SURVIVOR' } }, { condition: { type: 'ROSTERED' } }]),
+    ).toBe(0);
+  });
+
   it('says 3 free left for a Free user with no bets', () => {
     expect(weekCardModel(free).bets).toEqual({
       label: 'Bets & props',

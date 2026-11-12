@@ -54,7 +54,7 @@ export function isLegKind(kind: PickKind): kind is LegKind {
   return kind !== 'SURVIVOR' && kind !== 'PARLAY';
 }
 
-/** Every bet spends a free bet, a parlay once for all its legs. Survivor does not. */
+/** Every bet spends a free bet, each parlay leg uses one. Survivor does not. */
 const CAPPED_KINDS = new Set<PickKind>([
   'SPREAD',
   'TOTAL',

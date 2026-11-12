@@ -535,7 +535,7 @@ export default function LineupScreen() {
     setBets((current) => current.filter((row) => row.id !== stake.id));
     // Same rule as the API: a counted pick removed after kickoff keeps its slot spent.
     if (removalKeepsFreeSlot(stake, new Date())) {
-      setSpentSlots((current) => current + 1);
+      setSpentSlots((current) => current + freeBetCount([stake]));
     }
   };
 

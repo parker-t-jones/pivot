@@ -19,7 +19,7 @@ import {
   FREE_BET_LIMIT,
   countFreeSlots,
   countsTowardFreeCap,
-  spentSlotIds,
+  spentSlotRows,
 } from '../lib/freeSlots.js';
 import { gameHasKickedOff } from '../lib/kickoff.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
@@ -76,7 +76,7 @@ function freeCapError(): ApiError {
   return new ApiError(
     403,
     'stake_limit_free',
-    `Free accounts can track up to ${FREE_BET_LIMIT} picks a week. Upgrade to Pro for unlimited picks.`,
+    `Free accounts can track up to ${FREE_BET_LIMIT} bet legs a week. Upgrade to Pro for unlimited picks.`,
     { limit: FREE_BET_LIMIT },
   );
 }
@@ -184,9 +184,9 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
       if (userRow.subscription_tier !== 'pro') {
         const { used } = countFreeSlots(
           weekRows,
-          await spentSlotIds(fastify.supabase, user.id, season_year, week),
+          await spentSlotRows(fastify.supabase, user.id, season_year, week),
         );
-        if (used >= FREE_BET_LIMIT) throw freeCapError();
+        if (used + (isSlip ? inputs.length : 1) > FREE_BET_LIMIT) throw freeCapError();
       }
     }
 
@@ -280,7 +280,7 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
       .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
     const slots = countFreeSlots(
       weekRows,
-      await spentSlotIds(fastify.supabase, user.id, season, week),
+      await spentSlotRows(fastify.supabase, user.id, season, week),
     );
 
     const slipIds = [...new Set(rows.flatMap((row) => (row.slip_id ? [row.slip_id] : [])))];
@@ -586,7 +586,7 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
         ...new Set(((legData ?? []) as { game_id: string }[]).map((leg) => leg.game_id)),
       ];
 
-      // A slip that has kicked off keeps its slot spent. The spent row is written before the delete,
+      // A slip that has kicked off keeps all its legs spent. The spent row is written before the delete,
       // so a failed delete never refunds the slot and is never counted twice (live slip wins).
       if (legGameIds.length > 0) {
         const { data: gameData, error: gamesError } = await fastify.supabase
@@ -605,6 +605,7 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
             {
               stake_id: slip.id,
               slot_kind: 'slip',
+              slots: legData?.length ?? 0,
               user_id: user.id,
               season: slip.season,
               week: slip.week,

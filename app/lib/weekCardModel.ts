@@ -1,4 +1,4 @@
-/** Free weekly allowance for bets and props. Pro is uncapped. M1 replaces the Pro check. */
+/** Free weekly allowance for single picks and parlay legs. Pro is uncapped. M1 replaces the Pro check. */
 export const FREE_BET_ALLOWANCE = 3;
 
 const FANTASY_TYPES = new Set(['ROSTERED', 'OPPONENT_ROSTERED']);
@@ -13,14 +13,22 @@ export function countsTowardFreeCap(type: string | null | undefined): boolean {
 }
 
 /**
- * Free slots used this week: live picks that count, plus `spent` picks that were removed
+ * Free slots used this week: live single picks and parlay legs that count, plus `spent` picks that were removed
  * after kickoff (`free_slots_spent` on `GET /stakes`).
  */
 export function freeBetCount(
-  stakes: readonly { condition: { type: string } }[],
+  stakes: readonly {
+    condition: { type: string };
+    legs?: readonly { condition: { type: string } }[];
+  }[],
   spent = 0,
 ): number {
-  return stakes.filter((stake) => countsTowardFreeCap(stake.condition.type)).length + spent;
+  return stakes.reduce(
+    (sum, stake) =>
+      sum +
+      (stake.legs ? freeBetCount(stake.legs) : Number(countsTowardFreeCap(stake.condition.type))),
+    spent,
+  );
 }
 
 /** Opponent strip for the league currently selected on the chip row. */

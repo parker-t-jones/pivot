@@ -113,9 +113,9 @@ describe('GET /picks for the Watchlist and Home', () => {
     expect(parlay?.game?.status).toBe('in_progress');
   });
 
-  it("matches the API's free count: a parlay is one slot and survivor is free", () => {
-    // Prop (1) + parlay (1) are live rows; the API says 3 used, so 1 slot was spent by a removal.
-    expect(page.free_slots_spent).toBe(1);
+  it("matches the API's free count: every parlay leg uses a slot and survivor is free", () => {
+    // Prop (1) + parlay legs (2) use all 3 slots; survivor uses none.
+    expect(page.free_slots_spent).toBe(0);
     expect(freeBetCount(page.stakes, page.free_slots_spent)).toBe(3);
   });
 
@@ -167,19 +167,22 @@ describe('removing a parlay', () => {
   const parlayRow = (legs: PicksApiPick[]) =>
     at(watchPicksResponse({ ...response, picks: [], slips: [{ ...baseSlip, legs }] }).stakes, 0);
 
-  it('keeps the slot spent once any leg has kicked off', () => {
+  it('keeps every leg spent once any leg has kicked off', () => {
     const started = parlayRow([
       pick('a', { game: game('a', 'scheduled', '2026-11-15T18:00:00Z') }),
       pick('b', { game: game('b', 'scheduled', '2026-11-16T01:20:00Z') }),
     ]);
     expect(removalKeepsFreeSlot(started, now)).toBe(true);
+    const spent = freeBetCount([started]);
+    expect(spent).toBe(2);
+    expect(freeBetCount([], spent)).toBe(2);
     expect(removePickMessage(started, '2-leg parlay', { isPro: false, now })).toBe(
       `2-leg parlay\n\n${REMOVE_STARTED_PICK_NOTE}`,
     );
     expect(removePickMessage(started, '2-leg parlay', { isPro: true, now })).toBe('2-leg parlay');
   });
 
-  it('refunds the slot before every leg kicks off', () => {
+  it('refunds every leg before every leg kicks off', () => {
     const upcoming = parlayRow([
       pick('a', { game: game('a', 'scheduled', '2026-11-15T21:25:00Z') }),
       pick('b', { game: game('b', 'scheduled', '2026-11-16T01:20:00Z') }),

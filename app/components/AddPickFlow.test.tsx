@@ -267,7 +267,7 @@ describe('add a pick flow', () => {
     });
   });
 
-  it('adds parlay legs one by one, shows every leg on the slip, and saves one pick', async () => {
+  it('adds parlay legs one by one, shows every leg on the slip, and saves one slip', async () => {
     await tap('Parlay');
     expect(eyebrow()).toBe('ADD A PICK · PARLAY');
     expect(host.textContent).toContain('Add at least 2 legs.');
@@ -295,7 +295,12 @@ describe('add a pick flow', () => {
 
     expect(slipText()).toContain('LEG 2');
     expect(slipText()).toContain('Parlay · 2 of 12 legs');
-    expect(host.textContent).toContain('Uses 1 of your 2 free bets');
+    expect(host.textContent).toContain('This parlay uses 2 of your 2 remaining free picks.');
+    await tap('Add a leg');
+    expect(openUpgrade).toHaveBeenCalledWith('stake_limit_free');
+    expect(host.textContent).toContain('Each parlay leg uses one free pick.');
+    expect(host.querySelectorAll('[data-testid="add-pick-slip-leg"]')).toHaveLength(2);
+    expect(api.post).not.toHaveBeenCalled();
     await tap('Save parlay');
     expect(api.post).toHaveBeenCalledWith('/picks', {
       legs: [
