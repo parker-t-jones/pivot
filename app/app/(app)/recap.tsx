@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../components/ErrorState';
@@ -52,9 +52,7 @@ export default function RecapScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Recap</Text>
-        {Platform.OS === 'web' ? (
-          <TextButton label="Close" onPress={() => router.back()} size="small" />
-        ) : null}
+        <TextButton label="Close" onPress={() => router.back()} size="small" />
       </View>
       {isLoading ? (
         <LoadingState message="Loading your recap…" />
