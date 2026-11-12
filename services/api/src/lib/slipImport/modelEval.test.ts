@@ -150,3 +150,42 @@ describe('formatting', () => {
     expect(lines[3]).toContain('Haiku 5.5');
   });
 });
+
+it('repeats reads and reports per-run ranges and individual failures', async () => {
+  let call = 0;
+  const result = await evalModel(
+    { model: 'custom', label: 'custom' },
+    [SLIP_CASE],
+    async () => {
+      if (++call === 2) throw new Error('offline');
+      return {
+        read: { is_bet_slip: true, bet_count: 1, legs: [leg({ line: 60.5 })] },
+        usage: { input_tokens: 1_000_000, output_tokens: 0 },
+      };
+    },
+    { runs: 2, prices: { custom: { inputPerMillion: 2, outputPerMillion: 4 } } },
+  );
+  expect(call).toBe(2);
+  expect(result.runStats.cost).toEqual({ mean: 1, min: 0, max: 2 });
+  expect(result.runStats.fieldAccuracy).toEqual({ mean: 0.5, min: 0, max: 1 });
+  expect(result.records[0]).toMatchObject({ run: 1, cost: 2, failure: null, wrong: [] });
+  expect(result.records[1]).toMatchObject({ run: 2, cost: null, usage: null, failure: 'offline' });
+  expect(result.records[1]?.wrong).toHaveLength(8);
+});
+it('rejects unknown pricing before invoking even a known model', async () => {
+  let called = false;
+  await expect(
+    evalModels(
+      [
+        { model: 'claude-opus-5-5', label: 'known' },
+        { model: 'unknown', label: 'unknown' },
+      ],
+      [SLIP_CASE],
+      async () => {
+        called = true;
+        throw new Error('unexpected');
+      },
+    ),
+  ).rejects.toThrow('no pricing for model unknown');
+  expect(called).toBe(false);
+});

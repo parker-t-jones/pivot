@@ -30,3 +30,16 @@ describe('costForUsage', () => {
     );
   });
 });
+
+it('supports explicit rates and rejects inherited property names', () => {
+  expect(
+    costForUsage(
+      'custom',
+      { input_tokens: 1_000_000, output_tokens: 500_000 },
+      { custom: { inputPerMillion: 3, outputPerMillion: 6 } },
+    ),
+  ).toBe(6);
+  expect(() => costForUsage('toString', { input_tokens: 1, output_tokens: 1 })).toThrow(
+    'no pricing',
+  );
+});

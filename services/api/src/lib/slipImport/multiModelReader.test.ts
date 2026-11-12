@@ -49,3 +49,16 @@ describe('readSlipWithModel', () => {
     expect(error).toMatchObject({ reason: 'upstream', status: 529 });
   });
 });
+
+it('delegates production eval reads to the injected production reader', async () => {
+  const { productionModelReader } = await import('./multiModelReader.js');
+  const image = { mediaType: 'image/png' as const, data: 'test' };
+  const read = { is_bet_slip: false, bet_count: 0, legs: [] };
+  const usage = { input_tokens: 123, output_tokens: 45 };
+  const reader = { read: vi.fn().mockResolvedValue(read) };
+  expect(await productionModelReader(reader, () => usage)('ignored', image)).toEqual({
+    read,
+    usage,
+  });
+  expect(reader.read).toHaveBeenCalledWith(image);
+});

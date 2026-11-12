@@ -72,3 +72,11 @@ export async function readSlipWithModel(
     },
   };
 }
+
+/** Eval adapter; production reader stays unchanged and can be injected in offline tests. */
+export function productionModelReader(
+  reader: import('./reader.js').SlipReader,
+  observedUsage: () => TokenUsage | null,
+): import('./modelEval.js').ModelReader {
+  return async (_model, image) => ({ read: await reader.read(image), usage: observedUsage() });
+}

@@ -20,3 +20,11 @@ coverage
 /scripts/tmp-*.ts
 # `pnpm update:ios` export. Ignored so `eas update` sees a clean tree.
 /app/dist-update/
+
+# Private slip eval screenshots (any case) and generated eval artifacts.
+/experiments/slip-eval/**/*.[pP][nN][gG]
+/experiments/slip-eval/**/*.[jJ][pP][gG]
+/experiments/slip-eval/**/*.[jJ][pP][eE][gG]
+/experiments/slip-eval/**/*.[wW][eE][bB][pP]
+/experiments/slip-eval/**/*.[gG][iI][fF]
+/experiments/slip-eval/**/*.json

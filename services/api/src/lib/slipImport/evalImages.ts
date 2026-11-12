@@ -13,6 +13,7 @@ export interface EvalImageCase {
   name: string;
   image: SlipImage;
   expected: ExpectedSlip;
+  unverified?: boolean;
 }
 
 export interface LoadedEvalImages {
@@ -21,7 +22,10 @@ export interface LoadedEvalImages {
   skipped: string[];
 }
 
-export async function loadEvalImages(dir: string): Promise<LoadedEvalImages> {
+export async function loadEvalImages(
+  dir: string,
+  options: { allowMissingExpected?: boolean } = {},
+): Promise<LoadedEvalImages> {
   const names = (await readdir(dir)).filter((name) =>
     IMAGE_EXTENSIONS.has(extname(name).toLowerCase()),
   );
@@ -35,10 +39,32 @@ export async function loadEvalImages(dir: string): Promise<LoadedEvalImages> {
       skipped.push(name);
       continue;
     }
-    const expected = JSON.parse(
-      await readFile(join(dir, `${base}.expected.json`), 'utf8'),
-    ) as ExpectedSlip;
-    cases.push({ name, image: { mediaType, data: bytes.toString('base64') }, expected });
+    let expected: ExpectedSlip;
+    let unverified = false;
+    try {
+      const parsed = JSON.parse(
+        await readFile(join(dir, `${base}.expected.json`), 'utf8'),
+      ) as ExpectedSlip & { verification?: string };
+      if (parsed.verification)
+        throw new Error(`${base}: unverified expected data is not ground truth`);
+      expected = parsed;
+    } catch (error) {
+      if (
+        !options.allowMissingExpected ||
+        !(error instanceof Error) ||
+        !('code' in error) ||
+        error.code !== 'ENOENT'
+      )
+        throw error;
+      expected = { bet_count: 0, legs: [], is_bet_slip: false };
+      unverified = true;
+    }
+    cases.push({
+      name,
+      image: { mediaType, data: bytes.toString('base64') },
+      expected,
+      unverified,
+    });
   }
   return { cases, skipped };
 }
