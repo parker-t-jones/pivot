@@ -24,7 +24,6 @@ import { TextButton } from '../../../components/TextButton';
 import { usePushPermission } from '../../../contexts/PushPermissionContext';
 import { pickCoachMarkToShow, withCoachMarkSeen } from '../../../lib/coachMarks';
 import { useSession } from '../../../contexts/SessionContext';
-import { useUpgradeSheet } from '../../../contexts/UpgradeSheetContext';
 import { ApiRequestError } from '../../../lib/apiClient';
 import { presentDemoAlertWithoutToken } from '../../../lib/demoLocalAlert';
 import { alertTimingServices } from '../../../lib/alertTiming';
@@ -56,14 +55,7 @@ import {
   USER_SERVICE_OPTIONS,
   userServiceLabel,
 } from '../../../lib/streamingServices';
-import {
-  currentSettingsPlanLabel,
-  isLocalEntitlementActive,
-  noteServerTier,
-  settingsPlanLabel,
-  subscribeSettingsPlan,
-  type SubscriptionTier,
-} from '../../../lib/subscriptionPlan';
+import { SettingsSubscription } from '../../../components/SettingsSubscription';
 import { supabase } from '../../../lib/supabase';
 import { theme } from '../../../lib/theme';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
@@ -351,23 +343,6 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-function useSettingsPlanLabel(serverTier: string): 'Pro plan' | 'Free plan' {
-  const tier: SubscriptionTier = serverTier === 'pro' ? 'pro' : 'free';
-  const [label, setLabel] = useState<'Pro plan' | 'Free plan'>(() =>
-    settingsPlanLabel(tier, isLocalEntitlementActive()),
-  );
-
-  useEffect(() => {
-    noteServerTier(tier);
-    setLabel(currentSettingsPlanLabel());
-    return subscribeSettingsPlan(() => {
-      setLabel(currentSettingsPlanLabel());
-    });
-  }, [tier]);
-
-  return label;
-}
-
 function AccountSection({
   email,
   subscriptionTier,
@@ -387,9 +362,6 @@ function AccountSection({
   onSignOut: () => void;
   onDeleteAccount: () => void;
 }) {
-  const { openUpgrade } = useUpgradeSheet();
-  const planLabel = useSettingsPlanLabel(subscriptionTier);
-  const isPro = planLabel === 'Pro plan';
   const [isSendingDemoAlert, setIsSendingDemoAlert] = useState(false);
   const [demoAlertNote, setDemoAlertNote] = useState<string | null>(null);
 
@@ -427,49 +399,29 @@ function AccountSection({
     <SectionCard title="Account">
       {isDemo ? <DemoEditingBanner /> : null}
       <Text style={styles.rowLabel}>{email}</Text>
-      <Text style={styles.rowSubtext}>{planLabel}</Text>
-
-      <SecondaryButton
-        disabled={isDemo}
-        label="Change password"
-        onPress={onChangePassword}
-        style={styles.accountButton}
-      />
-
-      {isDemo ? (
-        <>
-          <SecondaryButton
-            disabled={isSendingDemoAlert}
-            label={isSendingDemoAlert ? 'Sending…' : 'Send a demo alert'}
-            loading={isSendingDemoAlert}
-            onPress={() => {
-              void onSendDemoAlert();
-            }}
-            style={styles.accountButton}
-          />
-          {demoAlertNote ? <Text style={styles.rowSubtext}>{demoAlertNote}</Text> : null}
-        </>
-      ) : null}
-
-      {isPro ? (
-        <TextButton
-          hitArea="padding"
-          label="Manage subscription"
-          onPress={() => {
-            void Linking.openURL('https://apps.apple.com/account/subscriptions').catch(() => {
-              void alertAsync('Could not open', 'Open Settings → Apple ID → Subscriptions.');
-            });
-          }}
-          size="smallStrong"
-          style={styles.accountButton}
-        />
-      ) : (
+      <SettingsSubscription subscriptionTier={subscriptionTier}>
         <SecondaryButton
-          label="Upgrade to Pro"
-          onPress={openUpgrade}
+          disabled={isDemo}
+          label="Change password"
+          onPress={onChangePassword}
           style={styles.accountButton}
         />
-      )}
+
+        {isDemo ? (
+          <>
+            <SecondaryButton
+              disabled={isSendingDemoAlert}
+              label={isSendingDemoAlert ? 'Sending…' : 'Send a demo alert'}
+              loading={isSendingDemoAlert}
+              onPress={() => {
+                void onSendDemoAlert();
+              }}
+              style={styles.accountButton}
+            />
+            {demoAlertNote ? <Text style={styles.rowSubtext}>{demoAlertNote}</Text> : null}
+          </>
+        ) : null}
+      </SettingsSubscription>
 
       <SecondaryButton
         disabled={isSigningOut}

@@ -11,7 +11,7 @@ import { useUpgradeSheet } from '../contexts/UpgradeSheetContext';
 import { alertAsync } from '../lib/confirm';
 import { fonts } from '../lib/fonts';
 import { fetchMe } from '../lib/me';
-import { isLocalEntitlementActive } from '../lib/subscriptionPlan';
+import { useSubscriptionStatus } from '../lib/useSubscriptionStatus';
 import {
   configurePurchases,
   customerHasPro,
@@ -64,12 +64,12 @@ export function UpgradeSheet() {
   const [pricingError, setPricingError] = useState<string | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
-  const [isPro, setIsPro] = useState(false);
+  const { status, entitlementActive } = useSubscriptionStatus(isOpen);
+  const isPro = status === 'pro';
 
   const refreshTier = useCallback(async () => {
     try {
-      const me = await fetchMe();
-      setIsPro(me.subscription_tier === 'pro' || isLocalEntitlementActive());
+      await fetchMe();
     } catch {
       // keep prior state
     }
@@ -130,15 +130,8 @@ export function UpgradeSheet() {
     }
     setIsPurchasing(true);
     try {
-      const info = await purchaseProMonthly();
-      if (customerHasPro(info)) {
-        await refreshTier();
-        void alertAsync(
-          'You are Pro',
-          'Unlimited leagues and multi-lineup watching are unlocked.',
-          [{ text: 'Done', onPress: closeUpgrade }],
-        );
-      }
+      await purchaseProMonthly();
+      await refreshTier();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Purchase failed.';
       if (!/cancel/i.test(message)) {
@@ -158,9 +151,7 @@ export function UpgradeSheet() {
     try {
       const info = await restorePurchases();
       await refreshTier();
-      if (customerHasPro(info)) {
-        void alertAsync('Restored', 'Your Pro subscription is active.');
-      } else {
+      if (!customerHasPro(info)) {
         void alertAsync(
           'Nothing to restore',
           'No active Pro subscription found for this Apple ID.',
@@ -228,6 +219,16 @@ export function UpgradeSheet() {
               ))}
             </View>
 
+            {status === 'free' ? <Text style={styles.activeLabel}>Free plan</Text> : null}
+            {status === 'activating' ? (
+              <Text accessibilityLiveRegion="polite" style={styles.activeLabel}>
+                Activating Pro...
+              </Text>
+            ) : !isPro && entitlementActive ? (
+              <Text style={styles.activeLabel}>
+                Pro isn't active on this account yet. Please restore your purchases.
+              </Text>
+            ) : null}
             {isPro ? (
               <>
                 <Text style={styles.activeLabel}>Pro is active on this account.</Text>
@@ -247,6 +248,7 @@ export function UpgradeSheet() {
               <>
                 <PrimaryButton
                   label={upgradePurchaseLabel(storePrice)}
+                  disabled={status === 'activating'}
                   loading={isPurchasing || isLoadingPrice}
                   onPress={() => void onPurchase()}
                 />

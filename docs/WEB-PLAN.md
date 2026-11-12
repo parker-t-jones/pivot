@@ -295,9 +295,7 @@ The API does enforce the free caps. It reads `users.subscription_tier` and rejec
 
 The app client never writes `subscription_tier`. The only app writer is the RevenueCat webhook, `POST /billing/revenuecat` in `services/api/src/routes/billing.ts`, using the service role.
 
-The column is still client-writable. Migration `supabase/migrations/20260510120000_users_user_app_presence.sql` enables RLS, then `users_update_own` lets `authenticated` `UPDATE` their own row with no column list, and `GRANT UPDATE ON public.users TO authenticated` is unrestricted. No later migration revokes that. The web bundle ships the anon key and a Supabase client, so a signed-in browser can `update({ subscription_tier: 'pro' })` and every check above will honor it. The iOS app has the same policy today; the web client makes the call trivial from devtools.
-
-This is a blocker for "read-only status is enough." The caps are server-side, but the bit they trust is not. Closing it means a column privilege or a trigger that ignores client updates to `subscription_tier`, with the webhook still writing through the service role. That is not part of W1–W4. Do not ship the upgrade-sheet copy as if the tier were locked.
+Migration `20261010195000_users_revoke_client_writes.sql` revokes client writes to `users`, including `subscription_tier`. The RevenueCat webhook writes the tier through the service role; the app reads it from `GET /me`.
 
 ## Implementation slices
 

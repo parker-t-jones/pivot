@@ -6,7 +6,12 @@ import Purchases, {
 } from 'react-native-purchases';
 
 import { fetchMe } from './me';
-import { noteLocalEntitlement, noteServerTier } from './subscriptionPlan';
+import {
+  clearActivation,
+  startActivation,
+  noteLocalEntitlement,
+  noteServerTier,
+} from './subscriptionPlan';
 
 /** RevenueCat entitlement id — must match the dashboard. */
 export const PRO_ENTITLEMENT_ID = 'pro';
@@ -52,6 +57,7 @@ export async function configurePurchases(userId: string): Promise<void> {
 
 /** Anonymous RevenueCat user. Call on sign-out, before the next account can purchase. */
 export async function logOutPurchases(): Promise<void> {
+  clearActivation();
   noteServerTier('free');
   noteLocalEntitlement(false);
   if (!API_KEY || Platform.OS !== 'ios' || !sdkConfigured || identifiedUserId === null) {
@@ -82,6 +88,7 @@ export function customerHasPro(info: CustomerInfo): boolean {
 
 async function refreshTierAfterStore(info: CustomerInfo): Promise<void> {
   noteLocalEntitlement(customerHasPro(info));
+  if (customerHasPro(info)) startActivation();
   try {
     await fetchMe();
   } catch (error) {

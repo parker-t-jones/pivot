@@ -4,14 +4,14 @@ type Listener = () => void;
 
 let serverTier: SubscriptionTier = 'free';
 let localEntitlementActive = false;
+export const ACTIVATION_WINDOW_MS = 3 * 60 * 1000;
+let activationUntil = 0;
+let activationTimer: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<Listener>();
 
-/** Settings copy. Local Pro wins until `GET /me` catches up after a purchase. */
-export function settingsPlanLabel(
-  server: SubscriptionTier,
-  entitlementActive: boolean,
-): 'Pro plan' | 'Free plan' {
-  return server === 'pro' || entitlementActive ? 'Pro plan' : 'Free plan';
+/** Only the server tier grants Pro. */
+export function settingsPlanLabel(server: SubscriptionTier): 'Pro plan' | 'Free plan' {
+  return server === 'pro' ? 'Pro plan' : 'Free plan';
 }
 
 function emit(): void {
@@ -19,6 +19,7 @@ function emit(): void {
 }
 
 export function noteServerTier(tier: SubscriptionTier): void {
+  if (tier === 'pro') clearActivation();
   if (tier === serverTier) return;
   serverTier = tier;
   emit();
@@ -36,7 +37,7 @@ export function isLocalEntitlementActive(): boolean {
 }
 
 export function currentSettingsPlanLabel(): 'Pro plan' | 'Free plan' {
-  return settingsPlanLabel(serverTier, localEntitlementActive);
+  return settingsPlanLabel(serverTier);
 }
 
 export function subscribeSettingsPlan(listener: Listener): () => void {
@@ -44,4 +45,26 @@ export function subscribeSettingsPlan(listener: Listener): () => void {
   return () => {
     listeners.delete(listener);
   };
+}
+
+/** Called only after a successful purchase or restore with an active entitlement. */
+export function startActivation(): void {
+  clearTimeout(activationTimer);
+  activationUntil = Date.now() + ACTIVATION_WINDOW_MS;
+  activationTimer = setTimeout(clearActivation, ACTIVATION_WINDOW_MS);
+  emit();
+}
+
+export function clearActivation(): void {
+  clearTimeout(activationTimer);
+  activationUntil = 0;
+  emit();
+}
+
+export function isActivatingPro(): boolean {
+  return serverTier !== 'pro' && Date.now() < activationUntil;
+}
+
+export function currentPlanStatus(): 'pro' | 'activating' | 'free' {
+  return serverTier === 'pro' ? 'pro' : isActivatingPro() ? 'activating' : 'free';
 }

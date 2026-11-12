@@ -22,7 +22,7 @@ const revenueCatEventSchema = z.object({
   api_version: z.string().optional(),
   event: z.object({
     type: z.string(),
-    app_user_id: z.string().min(1),
+    app_user_id: z.string().min(1).optional(),
     /** SANDBOX and PRODUCTION share the same tier rules. */
     environment: z.string().optional(),
     entitlement_ids: z.array(z.string()).nullable().optional(),
@@ -87,22 +87,31 @@ const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
       }
 
       const { event } = request.body;
+      if (!event.app_user_id || event.app_user_id.startsWith('$RCAnonymousID:')) {
+        request.log.info({ type: event.type }, 'RevenueCat event ignored (no account id)');
+        return { ok: true as const, tier: null };
+      }
       const tier = resolveTier(event);
       if (tier === null) {
         request.log.info({ type: event.type }, 'RevenueCat event ignored (no tier change)');
         return { ok: true as const, tier: null };
       }
 
-      const { error } = await fastify.supabase
+      const { data, error } = await fastify.supabase
         .from('users')
         .update({ subscription_tier: tier })
-        .eq('id', event.app_user_id);
+        .eq('id', event.app_user_id)
+        .select('id');
 
       if (error) {
         request.log.error(error, 'Failed to update subscription_tier from RevenueCat');
         throw new ApiError(500, 'internal_error', 'Failed to update subscription tier.');
       }
 
+      if (!data?.length) {
+        request.log.warn({ type: event.type }, 'RevenueCat tier update matched no account');
+        return { ok: true as const, tier: null };
+      }
       return { ok: true as const, tier };
     },
   );

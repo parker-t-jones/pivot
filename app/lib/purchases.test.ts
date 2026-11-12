@@ -67,28 +67,34 @@ describe('purchases identity and tier refresh', () => {
   });
 
   it('calls Purchases.logIn with the Supabase user id and logOut on sign-out', async () => {
-    const { purchases } = await loadModules();
+    const { purchases, plan } = await loadModules();
     await purchases.configurePurchases('8a259307-026c-4d39-ac59-bd8b1f3c8fea');
     expect(sdk.configure).toHaveBeenCalledWith({ apiKey: 'test_key' });
     expect(sdk.logIn).toHaveBeenCalledWith('8a259307-026c-4d39-ac59-bd8b1f3c8fea');
 
+    expect(plan.isLocalEntitlementActive()).toBe(true);
+    expect(plan.isActivatingPro()).toBe(false);
     await purchases.logOutPurchases();
     expect(sdk.logOut).toHaveBeenCalledTimes(1);
   });
 
-  it('refetches GET /me after purchase and shows Pro from the local entitlement', async () => {
+  it('refetches GET /me after purchase and starts activation without granting Pro', async () => {
     const { purchases, plan } = await loadModules();
     plan.noteServerTier('free');
     await purchases.purchaseProMonthly();
     expect(sdk.fetchMe).toHaveBeenCalledTimes(1);
-    expect(plan.currentSettingsPlanLabel()).toBe('Pro plan');
+    expect(plan.currentSettingsPlanLabel()).toBe('Free plan');
+    expect(plan.isActivatingPro()).toBe(true);
+    plan.clearActivation();
   });
 
-  it('refetches GET /me after restore and shows Pro from the local entitlement', async () => {
+  it('refetches GET /me after restore and starts activation without granting Pro', async () => {
     const { purchases, plan } = await loadModules();
     plan.noteServerTier('free');
     await purchases.restorePurchases();
     expect(sdk.fetchMe).toHaveBeenCalledTimes(1);
-    expect(plan.currentSettingsPlanLabel()).toBe('Pro plan');
+    expect(plan.currentSettingsPlanLabel()).toBe('Free plan');
+    expect(plan.isActivatingPro()).toBe(true);
+    plan.clearActivation();
   });
 });
