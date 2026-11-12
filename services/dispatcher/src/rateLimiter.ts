@@ -5,9 +5,10 @@ import { isPushEligibleEvent } from './collapseFlagEvents.js';
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 3;
 
-/** Decision #8: key-hygiene expiry on `user_notifications:{userId}` — cosmetic, doesn't affect the
- * sliding-window count (that's bounded by the read-side `countRecentNotifications` range), just
- * prevents the ZSET from growing unbounded for long-running users. */
+/** Retain the 60s read window plus 10s of margin for delivery/clock skew. */
+export const NOTIFICATIONS_RETENTION_MS = WINDOW_MS + 10_000;
+
+/** Idle-key hygiene, refreshed on every Redis write; score pruning bounds active keys. */
 export const NOTIFICATIONS_KEY_TTL_SECONDS = 3600;
 
 const HIGH_LEVERAGE_REASONS: ReadonlySet<FlagReasonType> = new Set([
@@ -28,7 +29,7 @@ function isHighLeverage(event: FlagEvent): boolean {
 export interface RateLimitStore {
   /** Count of notifications delivered to `userId` with `deliveredAt` in `[sinceMs, untilMs]`. */
   countRecentNotifications(userId: string, sinceMs: number, untilMs: number): Promise<number>;
-  /** Record a delivered notification and refresh the key's expiry (decision #8). Called ONLY after a
+  /** Record a delivered notification, prune scores older than retention, and refresh the key's expiry (decision #8). Called ONLY after a
    *  successful delivery — a rate-limited or dropped event must never count towards its own window. */
   recordNotification(userId: string, eventId: string, deliveredAtMs: number): Promise<void>;
 }
@@ -96,7 +97,10 @@ export class InMemoryRateLimitStore implements RateLimitStore {
   }
 
   async recordNotification(userId: string, eventId: string, deliveredAtMs: number): Promise<void> {
-    const entries = this.notifications.get(userId) ?? [];
+    const cutoff = deliveredAtMs - NOTIFICATIONS_RETENTION_MS;
+    const entries = (this.notifications.get(userId) ?? []).filter(
+      (entry) => entry.deliveredAtMs >= cutoff,
+    );
     entries.push({ eventId, deliveredAtMs });
     this.notifications.set(userId, entries);
   }

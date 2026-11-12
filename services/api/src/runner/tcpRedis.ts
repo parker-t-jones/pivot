@@ -9,6 +9,7 @@ import {
   RESUMPTION_OPEN_TTL_SECONDS,
   LEGACY_IOS_DEVICE_ID,
   NOTIFICATIONS_KEY_TTL_SECONDS,
+  NOTIFICATIONS_RETENTION_MS,
   connectionCountsAsActive,
   listLivePresenceConnections,
   parseQueuedFlagEvent,
@@ -292,6 +293,7 @@ export function tcpRateLimit(redis: Redis): RateLimitStore {
     ): Promise<void> {
       const key = notificationsKey(userId);
       await redis.zadd(key, deliveredAtMs, eventId);
+      await redis.zremrangebyscore(key, '-inf', `(${deliveredAtMs - NOTIFICATIONS_RETENTION_MS}`);
       await redis.expire(key, NOTIFICATIONS_KEY_TTL_SECONDS);
     },
   };

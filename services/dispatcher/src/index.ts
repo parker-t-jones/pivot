@@ -38,6 +38,7 @@ export { ALERT_DELAY_CACHE_TTL_MS, createAlertDelay, type AlertDelayDeps } from 
 export {
   InMemoryRateLimitStore,
   NOTIFICATIONS_KEY_TTL_SECONDS,
+  NOTIFICATIONS_RETENTION_MS,
   isInQuietHours,
   shouldRateLimit,
   type RateLimitStore,
