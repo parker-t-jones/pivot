@@ -269,19 +269,25 @@ describe('no stake users warning', () => {
   });
 });
 
-
 describe('stale stake membership regression', () => {
   it.each(['week rollover', 'expired snapshot'])('removes old teams after %s', async (reason) => {
     const cache = new InMemoryLineupCache();
     await cache.addUserStake('old-team', USER_A);
     await cache.setLineupCache(USER_A, 5, {
-      userId: USER_A, week: 5,
+      userId: USER_A,
+      week: 5,
       teamPositions: new Map([['old-team', new Set(['offense'])]]),
-      playerToTeam: new Map(), starPlayerIds: new Set(),
+      playerToTeam: new Map(),
+      starPlayerIds: new Set(),
     });
     if (reason === 'expired snapshot') vi.spyOn(cache, 'getLineupCache').mockResolvedValue(null);
     const { rebuildUserLineupCache } = await import('../lib/lineup-sync.js');
-    await rebuildUserLineupCache({ supabase: supabaseForWatchedStarters(), lineupCache: cache }, USER_A, reason === 'week rollover' ? 6 : 5, {});
+    await rebuildUserLineupCache(
+      { supabase: supabaseForWatchedStarters(), lineupCache: cache },
+      USER_A,
+      reason === 'week rollover' ? 6 : 5,
+      {},
+    );
     expect(await cache.getUsersWithStake('old-team')).toEqual([]);
     expect(await cache.getUsersWithStake('team-buf')).toEqual([USER_A]);
   });

@@ -48,6 +48,8 @@ function rebuildAwareLineupCache() {
   return {
     setLineupCache: vi.fn().mockResolvedValue(undefined),
     addUserStake: vi.fn().mockResolvedValue(undefined),
+    replaceUserStakes: vi.fn().mockResolvedValue(undefined),
+    removeUser: vi.fn().mockResolvedValue(undefined),
     getLineupCache: vi.fn().mockResolvedValue(null),
     removeUserStake: vi.fn().mockResolvedValue(undefined),
   };

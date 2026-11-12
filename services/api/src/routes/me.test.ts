@@ -1016,7 +1016,11 @@ describe('DELETE /me', () => {
     await cache.addUserBet('game-a', 'user-1', 5);
     await cache.addUserBet('game-b', 'user-1', 6);
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
-    const response = await app.fastify.inject({ method: 'DELETE', url: '/me', headers: { authorization: `Bearer ${token}` } });
+    const response = await app.fastify.inject({
+      method: 'DELETE',
+      url: '/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
     expect(response.statusCode).toBe(204);
     await vi.waitFor(async () => {
       expect(await cache.getUsersWithStake('team-a')).toEqual([]);
@@ -1027,9 +1031,33 @@ describe('DELETE /me', () => {
     });
   });
 
+  it.each(['rejects', 'never resolves'])(
+    'deletes the account even when cache cleanup %s',
+    async (failure) => {
+      app = await buildTestApp({ 'user-1': null });
+      const cleanup = vi
+        .spyOn(app.fastify.lineupCache, 'removeUser')
+        .mockImplementation(() =>
+          failure === 'rejects'
+            ? Promise.reject(new Error('Redis down'))
+            : new Promise<void>(() => {}),
+        );
+      const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
+      const response = await app.fastify.inject({
+        method: 'DELETE',
+        url: '/me',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(204);
+      expect(app.supabase.deletedAuthUserIds).toEqual(['user-1']);
+      expect(cleanup).toHaveBeenCalledWith('user-1');
+    },
+  );
+
   it('surfaces an admin API failure as account_deletion_failed rather than a generic 500', async () => {
     app = await buildTestApp({ 'user-1': null });
     app.supabase.authDeleteError = { message: 'admin API unreachable' };
+    const cleanup = vi.spyOn(app.fastify.lineupCache, 'removeUser');
     const token = await signToken({ sub: 'user-1', email: 'a@b.com' });
 
     const response = await app.fastify.inject({
@@ -1040,6 +1068,7 @@ describe('DELETE /me', () => {
 
     expect(response.statusCode).toBe(500);
     expect(response.json().error.code).toBe('account_deletion_failed');
+    expect(cleanup).not.toHaveBeenCalled();
   });
 
   it('rejects an unauthenticated request', async () => {

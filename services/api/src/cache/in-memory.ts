@@ -40,6 +40,28 @@ export class InMemoryLineupCache implements LineupCacheProvider {
     return this.lineups.get(lineupKey(userId, week)) ?? null;
   }
 
+  async replaceUserStakes(userId: string, teamIds: readonly string[]): Promise<void> {
+    const wanted = new Set(teamIds);
+    for (const teamId of wanted) await this.addUserStake(teamId, userId);
+    for (const [teamId, users] of this.stakes) {
+      if (!wanted.has(teamId)) users.delete(userId);
+      if (users.size === 0) this.stakes.delete(teamId);
+    }
+  }
+
+  async removeUser(userId: string): Promise<void> {
+    await this.replaceUserStakes(userId, []);
+    for (const [key, entry] of this.bets) {
+      entry.members.delete(userId);
+      if (entry.members.size === 0) this.bets.delete(key);
+    }
+    for (const entries of [this.lineups, this.betGames]) {
+      for (const key of entries.keys()) {
+        if (key.startsWith(`${userId}:`)) entries.delete(key);
+      }
+    }
+  }
+
   async addUserStake(teamId: string, userId: string): Promise<void> {
     const users = this.stakes.get(teamId) ?? new Set<string>();
     users.add(userId);

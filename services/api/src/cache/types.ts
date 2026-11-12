@@ -21,6 +21,11 @@ export interface LineupCacheProvider {
   setLineupCache(userId: string, week: number, cache: UserLineupCache): Promise<void>;
   getLineupCache(userId: string, week: number): Promise<UserLineupCache | null>;
 
+  /** Reconcile all team memberships without relying on a previous week's snapshot. */
+  replaceUserStakes(userId: string, teamIds: readonly string[]): Promise<void>;
+  /** Best-effort caller: remove all user-indexed cache data across weeks. Idempotent. */
+  removeUser(userId: string): Promise<void>;
+
   /** `users_with_stake:{team_id}` (Section 7). */
   addUserStake(teamId: string, userId: string): Promise<void>;
   removeUserStake(teamId: string, userId: string): Promise<void>;

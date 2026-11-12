@@ -1,3 +1,4 @@
+import { replaceUserStakes, removeUserIndexes, type UserIndexRedis } from './userCleanup.js';
 import type { Redis } from 'ioredis';
 import {
   deserializeUserLineupCache,
@@ -62,6 +63,27 @@ export class TcpLineupCache implements LineupCacheProvider {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return null;
     return deserializeUserLineupCache(parsed as SerializedUserLineupCache);
+  }
+
+  private userIndexes(): UserIndexRedis {
+    return {
+      scan: async (cursor, pattern) => {
+        const [next, keys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        return [next, keys];
+      },
+      sadd: (key, userId) => this.redis.sadd(key, userId),
+      srem: (key, userId) => this.redis.srem(key, userId),
+      del: (key) => this.redis.del(key),
+      zrem: (key, userId) => this.redis.zrem(key, userId),
+    };
+  }
+
+  async replaceUserStakes(userId: string, teamIds: readonly string[]): Promise<void> {
+    await replaceUserStakes(this.userIndexes(), userId, teamIds);
+  }
+
+  async removeUser(userId: string): Promise<void> {
+    await removeUserIndexes(this.userIndexes(), userId);
   }
 
   async addUserStake(teamId: string, userId: string): Promise<void> {
