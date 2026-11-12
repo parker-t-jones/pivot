@@ -39,7 +39,11 @@ async function main(): Promise<void> {
   console.log(`\n${formatTally(tally)}`);
 }
 
-void main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (process.argv.slice(2).some((arg) => arg.startsWith('--'))) {
+  process.argv.push('--production-path');
+  void import('./slipModelEval.js');
+} else
+  void main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { SlipLeg } from './schema.js';
-import { emptyTally, formatTally, scoreSlip, type ExpectedLeg } from './evalScore.js';
+import {
+  emptyTally,
+  formatTally,
+  scoreSlip,
+  scoreUnordered,
+  bestLegAssignment,
+  EVAL_TEAMS,
+  type ExpectedLeg,
+} from './evalScore.js';
 
 const want: ExpectedLeg = {
   market: 'PLAYER_STAT',
@@ -72,4 +80,66 @@ describe('slip eval scoring', () => {
     expect(tally.slips).toBe(2);
     expect(formatTally(tally)).toContain('is_bet_slip right: 1/2 (50.0%)');
   });
+});
+
+it('resolves NFL team names and rejects unknown or ambiguous names', () => {
+  for (const team of ['DET', 'Lions', 'Detroit Lions']) {
+    const tally = emptyTally();
+    scoreSlip(
+      tally,
+      { is_bet_slip: true, bet_count: 1, legs: [got({ team })] },
+      { bet_count: 1, legs: [{ ...want, team: 'Detroit Lions' }] },
+    );
+    expect(tally.fields.team.correct).toBe(1);
+  }
+  for (const team of ['New York', 'unknown']) {
+    const tally = emptyTally();
+    scoreSlip(
+      tally,
+      { is_bet_slip: true, bet_count: 1, legs: [got({ team })] },
+      { bet_count: 1, legs: [{ ...want, team }] },
+    );
+    expect(tally.fields.team.correct).toBe(0);
+  }
+});
+
+it('finds a global assignment for reordered, dropped, duplicate and extra legs', () => {
+  expect(EVAL_TEAMS).toHaveLength(32);
+  const expected = { bet_count: 1, legs: [want, { ...want, player: 'B', line: 10 }] };
+  const read = { is_bet_slip: true, bet_count: 1, legs: [got({ player: 'B', line: 10 }), got()] };
+  const positional = emptyTally(),
+    unordered = emptyTally();
+  scoreSlip(positional, read, expected);
+  scoreUnordered(unordered, read, expected);
+  expect(positional.fields.player.correct).toBe(0);
+  expect(unordered.fields.player.correct).toBe(2);
+  const dropped = emptyTally();
+  scoreUnordered(dropped, { ...read, legs: read.legs.slice(0, 1) }, expected);
+  expect(dropped.fields.player).toEqual({ correct: 1, total: 2 });
+  expect(dropped.legCountCorrect).toBe(0);
+  const duplicate = emptyTally();
+  scoreUnordered(duplicate, { ...read, legs: [got()] }, { bet_count: 1, legs: [want, want] });
+  expect(duplicate.fields.player.correct).toBe(1);
+  const extra = emptyTally();
+  scoreUnordered(extra, { ...read, legs: [...read.legs, got()] }, expected);
+  expect(extra.legCountCorrect).toBe(0);
+});
+
+it('chooses the global optimum rather than a greedy first-leg match', () => {
+  const expected = {
+    bet_count: 1,
+    legs: [
+      { ...want, player: 'A', line: 10, team: 'PHI' },
+      { ...want, player: 'B', line: 20, team: 'DET' },
+    ],
+  };
+  const read = {
+    is_bet_slip: true,
+    bet_count: 1,
+    legs: [
+      got({ player: 'A', line: 10, team: 'DET' }),
+      got({ player: 'A', line: 10, team: 'CHI' }),
+    ],
+  };
+  expect(bestLegAssignment(read, expected)).toEqual([1, 0]);
 });

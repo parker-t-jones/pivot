@@ -50,4 +50,19 @@ describe('loadEvalImages', () => {
     expect(cases).toEqual([]);
     expect(skipped).toEqual(['fake.png']);
   });
+  it('never treats a draft as ground truth and rejects renamed unverified data', async () => {
+    await writeFile(join(dir, 'a.png'), PNG_HEADER);
+    await writeFile(
+      join(dir, 'a.expected.draft.json'),
+      JSON.stringify({ verification: 'UNVERIFIED', bet_count: 0, legs: [] }),
+    );
+    await expect(loadEvalImages(dir)).rejects.toThrow();
+    const loaded = await loadEvalImages(dir, { allowMissingExpected: true });
+    expect(loaded.cases[0]?.unverified).toBe(true);
+    await writeFile(
+      join(dir, 'a.expected.json'),
+      JSON.stringify({ verification: 'UNVERIFIED', bet_count: 0, legs: [] }),
+    );
+    await expect(loadEvalImages(dir, { allowMissingExpected: true })).rejects.toThrow('unverified');
+  });
 });

@@ -22,9 +22,9 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
 };
 
 /** Throws for a model this table has no rate for, rather than silently costing it as free. */
-export function costForUsage(model: string, usage: TokenUsage): number {
-  const pricing = MODEL_PRICING[model];
-  if (!pricing) throw new Error(`no pricing for model ${model}`);
+export function costForUsage(model: string, usage: TokenUsage, prices = MODEL_PRICING): number {
+  const pricing = prices[model];
+  if (!Object.hasOwn(prices, model) || !pricing) throw new Error(`no pricing for model ${model}`);
   return (
     (usage.input_tokens / 1_000_000) * pricing.inputPerMillion +
     (usage.output_tokens / 1_000_000) * pricing.outputPerMillion

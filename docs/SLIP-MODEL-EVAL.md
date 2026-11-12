@@ -8,27 +8,45 @@ is a stub for Parker to fill in once he runs it on his Mac with real images and 
 
 `AnthropicSlipReader` (`services/api/src/lib/slipImport/reader.ts`) hardcodes
 `SLIP_READ_MODEL = 'claude-opus-5-5'`, chosen without measurement when the slip import feature
-(#12) shipped. Opus 5.5 is Anthropic's priciest model ($4/M input tokens, $20/M output tokens).
+(#12) shipped. The current table estimates Opus at $4/M input tokens and $20/M output tokens; these rates are unverified.
 Reading one bet slip screenshot into structured JSON is closer to constrained extraction than
 open-ended reasoning, so a cheaper model may do just as well for a fraction of the cost — but
 that's a guess until it's measured against real slips.
 
 ## How to run it
 
-1. Collect 10-20 real sportsbook slip screenshots (a mix of DraftKings, FanDuel, and at least one
-   other book; singles and parlays; player props, spreads, totals; a quarter/half line; and at
-   least one non-slip image). **Blur or crop out balances, usernames, bet IDs, stakes, payouts,
-   and promotions before saving.**
-2. Drop each `<name>.png` (or `.jpg`) into `experiments/slip-eval/`, with a hand-written
-   `<name>.expected.json` next to it (see `experiments/slip-eval/README.md` for the shape).
-3. Run the comparison (one Claude API call per image per model — real money, three models):
+See [the eval README](../experiments/slip-eval/README.md) for ground-truth format and all flags.
+Keep a private, reviewed 10–20 image set outside the repository; include multiple books,
+markets, singles/parlays, and a non-slip. Set `ANTHROPIC_API_KEY` locally without logging it.
+From the repository root:
 
-   ```bash
-   ANTHROPIC_API_KEY=... pnpm --filter @pivot/api exec tsx src/slipModelEval.ts ../../experiments/slip-eval
-   ```
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips --runs 3 --as-app=ios --out
+pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips --runs 3 --as-app=web --out /absolute/path/to/web-results.json
+pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips --production-path --as-app=ios --out /absolute/path/to/production-smoke.json
+```
 
-4. Paste the printed comparison table below, and fill in the per-model sections and the
-   recommendation.
+Expect positional and best-assignment scores, per-run mean/min/max accuracy and cost, and
+JSON records for every image/model/run. `--models` and repeated `--price id=in:out` support
+explicit candidates and rates; unknown rates stop the run before API calls. `--draft-expected`
+creates UNVERIFIED drafts, never ground truth. Do not score unreviewed model output as truth.
+The default output and screenshots in `experiments/slip-eval` are gitignored.
+
+Native profile: JPEG quality 70 without resizing (`slipImage.ts` quality 0.7). Web profile:
+JPEG quality 85 and long edge capped at 2000px (`slipImage.web.ts`). Sharp loads only on the
+optional eval path; different platform encoders may produce different bytes.
+
+Team scoring resolves both values through production `resolveTeam` against a static 32-team
+fixture. Unknown or ambiguous strings are wrong; absent team fields match when both are null.
+Best assignment matches legs one-to-one to maximize correct fields; read failures remain in
+accuracy denominators. Inspect count checks too: field accuracy alone does not penalize extra legs.
+
+JSON failures have null cost/tokens when usage is unavailable; totals sum known usage only.
+Production-path uses `AnthropicSlipReader` unchanged and observes its SDK usage; fallback billing
+may differ from the pinned model estimate. Live API behavior, real-slip accuracy, provider rates
+and Docker builds have not been verified here. No recommendation is justified yet.
 
 ## Models compared
 
@@ -41,7 +59,7 @@ that's a guess until it's measured against real slips.
 Pricing from `services/api/src/lib/slipImport/modelCost.ts` — re-check against current Anthropic
 pricing before trusting an old run of this table; these rates can change.
 
-All three run at the same prompt, JSON schema, and `effort: 'medium'` as the production reader,
+The default comparison runs all three at the same prompt, JSON schema, and `effort: 'medium'` as the production reader,
 so the comparison measures model choice only (see `multiModelReader.ts`). The eval run skips the
 server-side refusal fallback the production path uses — a cost measurement wants to know what
 each model alone costs and gets right, not what a fallback masks.
