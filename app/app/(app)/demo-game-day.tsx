@@ -214,7 +214,9 @@ function renderPhase(
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Demo complete</Text>
-      <Text style={styles.message}>Exit to go back to your real Home — nothing here was saved.</Text>
+      <Text style={styles.message}>
+        Exit to go back to your real Home — nothing here was saved.
+      </Text>
     </View>
   );
 }
