@@ -19,8 +19,10 @@ function fakeClient() {
     zadd: vi.fn(
       async (key: string, value: number | { score: number; member: string }, member?: string) => {
         const entry = read(key) ?? { scores: new Map<string, number>() };
-        if (typeof value === 'number') entry.scores.set(member!, value);
-        else entry.scores.set(value.member, value.score);
+        if (typeof value === 'number') {
+          if (member === undefined) throw new Error('TCP ZADD requires a member');
+          entry.scores.set(member, value);
+        } else entry.scores.set(value.member, value.score);
         entries.set(key, entry);
         return 1;
       },
