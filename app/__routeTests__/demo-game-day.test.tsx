@@ -18,6 +18,7 @@ import {
   DEMO_WATCH_HINT,
   DEMO_WATCH_LABEL,
 } from '../lib/demoGameDay';
+import { theme } from '../lib/theme';
 
 const appState = vi.hoisted(() => {
   const listeners = new Set<(state: string) => void>();
@@ -58,6 +59,10 @@ vi.mock('../lib/fonts', () => ({
 vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(async () => undefined),
   ImpactFeedbackStyle: { Medium: 'medium' },
+}));
+
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }),
 }));
 
 const router = vi.hoisted(() => ({
@@ -269,7 +274,41 @@ describe('DemoGameDayScreen: Home live view', () => {
     expect(container.textContent).toContain('Demo complete');
     expect(container.textContent).toContain('DEMO — not a real game');
   });
+
+  it('keeps the banner below the status bar', async () => {
+    await mount();
+    const label = findText('DEMO — not a real game');
+    const banner = label.parentElement;
+    if (!(banner instanceof HTMLElement)) throw new Error('missing banner');
+    // The mocked top inset is 59, so the banner starts below the status bar and the island.
+    expect(parseFloat(banner.style.paddingTop)).toBe(59 + theme.spacing.sm);
+  });
+
+  it('shows the complete message in a readable color', async () => {
+    await mount();
+    await advance(DEMO_TOTAL_MS);
+    const message = findText('Exit to go back to your real Home — nothing here was saved.');
+    // The default text color is black, which disappears on the dark background.
+    expect(normalizeColor(getComputedStyle(message).color)).toBe(theme.colors.textSecondary);
+  });
 });
+
+function findText(text: string): HTMLElement {
+  const match = Array.from(document.querySelectorAll('div')).find(
+    (element) => element.children.length === 0 && element.textContent === text,
+  );
+  if (!(match instanceof HTMLElement)) throw new Error(`missing text: ${text}`);
+  return match;
+}
+
+function normalizeColor(color: string): string {
+  const match = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (!match) return color.toUpperCase();
+  const channels = [match[1], match[2], match[3]].map((channel) =>
+    Number(channel).toString(16).padStart(2, '0'),
+  );
+  return `#${channels.join('')}`.toUpperCase();
+}
 
 describe('DemoGameDayScreen: three alerts, in-app path (web, foreground, no OS delivery)', () => {
   it('shows each of the three alerts exactly once, in order, with the demo copy', async () => {
