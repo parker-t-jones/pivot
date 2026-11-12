@@ -8,7 +8,7 @@ access goes through injected providers; ingestion has no Redis key writer.
 | Key pattern                          | Redis type                                          | Writers                                                                   | Readers                                                       | Expiry and other bounds                                                                                                                                                                                                                         |
 | ------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `user_lineup_cache:{user}:{week}`    | JSON string                                         | Worker/runner `rebuildUserLineupCache`, TCP/Upstash lineup caches         | Engine lineup reader, rebuild, API flags                      | 1209600 (14d), refreshed on write; current week routing. In-memory lineup cache currently has no expiry (unchanged).                                                                                                                            |
-| `users_with_stake:{team}`            | set of user IDs                                     | Lineup rebuild, TCP/Upstash/in-memory lineup caches; SREM on team removal | Engine/dispatcher game-state providers, runner discovery      | No TTL by Parker's decision. Team key count is bounded; member count is not reliably cleaned up. See cases below.                                                                                                                               |
+| `users_with_stake:{team}`            | set of user IDs                                     | Lineup rebuild, TCP/Upstash/in-memory lineup caches; SREM on team removal | Engine/dispatcher game-state providers, runner discovery      | No TTL by Parker's decision. Team key count is bounded; rebuild explicitly reconciles memberships against all existing team sets; account deletion removes the user. No snapshot/reverse-index dependency.                                      |
 | `users_with_bet:{game}`              | set of user IDs                                     | `syncUserBetGames`, lineup caches                                         | Runner bet pass                                               | 1209600 on every add, SREM on removal; in-memory lazy expiry.                                                                                                                                                                                   |
 | `user_bet_games:{user}:{week}`       | set of game IDs                                     | `syncUserBetGames`, lineup caches                                         | Same resync's stale-game comparison                           | 1209600 on every add, SREM on removal; in-memory lazy expiry.                                                                                                                                                                                   |
 | `current_nfl_state`                  | JSON string                                         | `getCurrentNflState`, lineup caches                                       | API, worker and runner NFL state lookups                      | 300 on write; one fixed key.                                                                                                                                                                                                                    |
@@ -33,20 +33,42 @@ access goes through injected providers; ingestion has no Redis key writer.
 keys. Publishers are delivery/live-game fanout; subscribers are API sockets.
 No TTL is applicable. Scripts and experiments are outside this services inventory.
 
-## Stake cleanup findings (no behavior changes)
+## Stake and account cleanup
 
-- Normal same-week rebuild: `lib/lineup-sync.ts` reads the previous lineup cache,
-  compares its team IDs to the new lineup, and SREMs teams no longer present.
-- Failing case: add team A in week 5; rebuild week 6 with only team B. The lookup
-  is for week 6, so there is no previous team A to remove. A remains indexed.
-- Failing case: write team A, let its lineup key expire (14 days), then rebuild
-  the same week without A. `previous` is null, so no SREM occurs.
-- Failing case: delete an indexed account through `DELETE /me`. The route calls
-  Supabase `auth.admin.deleteUser` and never removes Redis memberships. Postgres
-  cascades do not clean Redis; `runner/stakeCache.ts` rebuilds only surviving users.
+`lib/lineup-sync.ts` writes the rebuilt lineup, then calls `replaceUserStakes`.
+TCP/Upstash providers use cursor-based `SCAN MATCH users_with_stake:* COUNT 100`
+and SREM the user from unwanted team sets, adding wanted memberships first.
+The in-memory provider reconciles its team map. No TTL or new reverse index is
+introduced. Week rollover, expired snapshots, and legacy memberships are repaired
+on the next successful rebuild, including an empty lineup. The runner uses this
+same rebuild path. SCAN avoids a blocking KEYS command but traverses the keyspace
+once per rebuild; this is a deliberate cost of repairing pre-existing entries
+without another index. Concurrent rebuilds for one user retain the existing
+last-writer race; this change does not serialize syncs.
 
-Parker requested no TTL and no cleanup fix in this PR. Team keys have fixed
-cardinality, but deleted/obsolete user memberships can accumulate indefinitely.
+After successful Supabase admin deletion, `DELETE /me` starts detached,
+best-effort cache cleanup. Redis failures are logged and cannot delay or fail the
+204 response. No cleanup runs on failed admin deletion or demo-account rejection.
+TCP/Upstash cleanup scans all forward stake/bet indexes (even if reverse indexes
+expired), removes the user from `active_users`, and deletes all weeks of
+`user_lineup_cache`, `user_bet_games`, `user_flag_state`, `user_notifications`,
+`presence`, `presence-vis`, and `slip_import` for that user. Other users and shared
+game state remain intact. Repeating cleanup is safe. Memory cleanup removes the
+lineup/stake/bet data that provider owns.
+
+Cleanup is not durable: a process exit, Redis outage, or concurrent in-flight writer
+can leave entries behind. Surviving users repair team memberships on rebuild;
+pre-existing deleted accounts need Parker's explicit one-time cleanup. Expiring
+user keys retain their existing bounds if cleanup cannot finish.
+
+A stale member with no lineup is skipped by `engine/onPlayEvent.ts`. With a
+surviving lineup, the engine still computes flags and may emit a removal for a
+previous flag. Dispatcher tick drops a missing account before delivery; no push
+is attempted. Stale bet members trigger a bet lookup; the runner's short-lived
+prepared-bet cache can retain recently deleted bets. Deferred queue members are
+not user-indexed keys and remain subject to the existing relevance/missing-user
+gates. `stake_fired` is indexed by stake rather than user and retains its 24h TTL.
+Pub/Sub channels are not stored keys. No demo behavior or delivery semantics change.
 
 ## Operational limits
 
