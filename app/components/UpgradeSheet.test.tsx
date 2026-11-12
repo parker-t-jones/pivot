@@ -4,6 +4,15 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UpgradeSheet } from './UpgradeSheet';
+import { SettingsSubscription } from './SettingsSubscription';
+import { fetchMe } from '../lib/me';
+import {
+  ACTIVATION_WINDOW_MS,
+  clearActivation,
+  noteLocalEntitlement,
+  noteServerTier,
+  startActivation,
+} from '../lib/subscriptionPlan';
 import {
   PRIVACY_POLICY_URL,
   TERMS_OF_USE_URL,
@@ -52,7 +61,11 @@ vi.mock('../lib/confirm', () => ({
 }));
 
 vi.mock('../lib/me', () => ({
-  fetchMe: vi.fn(async () => ({ subscription_tier: 'free' })),
+  fetchMe: vi.fn(async () => {
+    const { noteServerTier } = await import('../lib/subscriptionPlan');
+    noteServerTier('free');
+    return { subscription_tier: 'free' };
+  }),
 }));
 
 vi.mock('../lib/purchases', () => ({
@@ -92,6 +105,14 @@ describe('UpgradeSheet purchase disclosures', () => {
   let host: HTMLDivElement;
 
   beforeEach(() => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    clearActivation();
+    noteServerTier('free');
+    noteLocalEntitlement(false);
+    vi.mocked(fetchMe).mockImplementation(async () => {
+      noteServerTier('free');
+      return { subscription_tier: 'free' } as Awaited<ReturnType<typeof fetchMe>>;
+    });
     purchases.getProMonthlyPackage.mockReset();
     purchases.purchaseProMonthly.mockReset();
     purchases.getProMonthlyPackage.mockResolvedValue({ product: { priceString: '$4.99' } });
@@ -103,6 +124,8 @@ describe('UpgradeSheet purchase disclosures', () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    clearActivation();
+    vi.useRealTimers();
   });
 
   it('shows the store price, renewal text, both legal links, and Restore purchases', async () => {
@@ -185,5 +208,110 @@ describe('UpgradeSheet purchase disclosures', () => {
     await tap(purchaseButton());
     expect(purchases.purchaseProMonthly).toHaveBeenCalledTimes(1);
     warn.mockRestore();
+  });
+  it.each(['pro', 'activating', 'entitlement', 'free'] as const)(
+    'renders Settings and Upgrade from the %s state',
+    async (state) => {
+      if (state === 'pro') {
+        vi.mocked(fetchMe).mockImplementation(async () => {
+          noteServerTier('pro');
+          return { subscription_tier: 'pro' } as Awaited<ReturnType<typeof fetchMe>>;
+        });
+      }
+      if (state === 'activating') startActivation();
+      if (state === 'entitlement') noteLocalEntitlement(true);
+      await act(async () =>
+        root.render(
+          <>
+            <SettingsSubscription subscriptionTier={state === 'pro' ? 'pro' : 'free'} />
+            <UpgradeSheet />
+          </>,
+        ),
+      );
+      await flush();
+      const text = document.body.textContent ?? '';
+      expect(text).toContain(
+        state === 'pro' ? 'Pro plan' : state === 'activating' ? 'Activating Pro...' : 'Free plan',
+      );
+      expect(text.includes('Manage subscription')).toBe(state === 'pro');
+      expect(text.includes("Pro isn't active on this account yet.")).toBe(state === 'entitlement');
+      expect(text).toContain('Restore purchases');
+      if (state === 'activating') expect(text.match(/Activating Pro\.\.\./g)).toHaveLength(2);
+      if (state === 'free' || state === 'entitlement')
+        expect(text.match(/Free plan/g)).toHaveLength(2);
+      if (state === 'pro') expect(text).toContain('Pro is active on this account.');
+    },
+  );
+
+  it('shows activation in both rendered paths after a purchase in this session', async () => {
+    purchases.purchaseProMonthly.mockImplementation(async () => {
+      noteLocalEntitlement(true);
+      startActivation();
+      return { entitlements: { active: { pro: {} } } };
+    });
+    await act(async () =>
+      root.render(
+        <>
+          <SettingsSubscription subscriptionTier="free" />
+          <UpgradeSheet />
+        </>,
+      ),
+    );
+    await flush();
+    const buy = Array.from(document.body.querySelectorAll('[role="button"]')).find(
+      (button) => button.textContent === 'Upgrade — $4.99',
+    );
+    expect(buy).toBeInstanceOf(HTMLElement);
+    await tap(buy as HTMLElement);
+    expect(document.body.textContent?.match(/Activating Pro\.\.\./g)).toHaveLength(2);
+    expect(document.body.textContent).not.toContain('Manage subscription');
+    expect(document.body.textContent).not.toContain('Pro is active on this account.');
+  });
+
+  it('retries /me during activation, then renders Free on expiry and stops retrying', async () => {
+    vi.useFakeTimers();
+    startActivation();
+    await act(async () =>
+      root.render(
+        <>
+          <SettingsSubscription subscriptionTier="free" />
+          <UpgradeSheet />
+        </>,
+      ),
+    );
+    await flush();
+    vi.mocked(fetchMe).mockClear();
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(fetchMe).toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(ACTIVATION_WINDOW_MS));
+    expect(document.body.textContent).not.toContain('Activating Pro...');
+    expect(document.body.textContent).toContain('Free plan');
+    const calls = vi.mocked(fetchMe).mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(fetchMe).toHaveBeenCalledTimes(calls);
+  });
+
+  it('renders Pro and stops activation retries when /me confirms it', async () => {
+    vi.useFakeTimers();
+    startActivation();
+    await act(async () =>
+      root.render(
+        <>
+          <SettingsSubscription subscriptionTier="free" />
+          <UpgradeSheet />
+        </>,
+      ),
+    );
+    await flush();
+    vi.mocked(fetchMe).mockImplementation(async () => {
+      noteServerTier('pro');
+      return { subscription_tier: 'pro' } as Awaited<ReturnType<typeof fetchMe>>;
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(document.body.textContent).toContain('Pro plan');
+    expect(document.body.textContent).not.toContain('Activating Pro...');
+    const calls = vi.mocked(fetchMe).mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(fetchMe).toHaveBeenCalledTimes(calls);
   });
 });
