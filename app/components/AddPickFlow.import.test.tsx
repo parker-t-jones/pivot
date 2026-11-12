@@ -278,17 +278,172 @@ describe('add a pick: import from screenshot', () => {
     expect(host.textContent).toContain('Player prop');
   });
 
-  it('refuses an imported parlay above the remaining allowance', async () => {
+  const sixLegs = () =>
+    Array.from({ length: 6 }, (_, index) => ({
+      ...KITTLE_LEG,
+      pick: { ...KITTLE_LEG.pick, condition: { ...KITTLE_LEG.pick.condition, line: 50.5 + index } },
+    }));
+
+  function choices(): HTMLElement[] {
+    return Array.from(
+      host.querySelectorAll<HTMLElement>('[aria-label^="Select "], [aria-label^="Deselect "]'),
+    );
+  }
+
+  async function choose(index: number): Promise<void> {
+    act(() => choices()[index]?.click());
+    await flush();
+  }
+
+  it('keeps six ready legs, limits selection to two, and frees a slot on deselect', async () => {
+    importResponse = async () => ({ kind: 'parlay', legs: sixLegs(), imports_left: 3 });
+    await tap('Import from screenshot');
+    expect(openUpgrade).not.toHaveBeenCalled();
+    expect(host.textContent).toContain(
+      'You have 2 free picks left this week. Choose up to 2 of these 6 legs.',
+    );
+    expect(pressable('Continue').getAttribute('aria-disabled')).toBe('true');
+    await choose(0);
+    await choose(1);
+    expect(choices()[2]?.getAttribute('aria-disabled')).toBe('true');
+    await choose(2);
+    expect(
+      choices().filter((node) => node.getAttribute('aria-label')?.startsWith('Deselect ')),
+    ).toHaveLength(2);
+    await choose(0);
+    expect(choices()[2]?.getAttribute('aria-disabled')).not.toBe('true');
+    await choose(2);
+    await tap('Continue');
+    expect(host.querySelectorAll('[data-testid="add-pick-slip-leg"]')).toHaveLength(2);
+    expect(host.querySelector('[data-testid="add-pick-import-flags"]')).toBeNull();
+    await tap('Save parlay');
+    expect(api.post).toHaveBeenCalledWith('/picks', {
+      legs: [sixLegs()[1]?.pick, sixLegs()[2]?.pick],
+    });
+  });
+
+  it('continues one selected leg as a single pick', async () => {
+    importResponse = async () => ({ kind: 'parlay', legs: sixLegs(), imports_left: 3 });
+    await tap('Import from screenshot');
+    await choose(0);
+    await tap('Continue');
+    expect(host.textContent).toContain('Check the pick we read from your screenshot.');
+    await tap('Add a pick');
+    expect(api.post).toHaveBeenCalledWith('/picks', { pick: sixLegs()[0]?.pick });
+  });
+
+  it('keeps unsupported legs outside selection and preserves Needs your check', async () => {
     importResponse = async () => ({
       kind: 'parlay',
-      legs: [KITTLE_LEG, SF_ML_LEG, KITTLE_LEG],
+      legs: [...sixLegs(), FLAGGED_LEG],
       imports_left: 3,
     });
     await tap('Import from screenshot');
+    expect(choices()).toHaveLength(6);
+    expect(host.textContent).toContain('NEEDS YOUR CHECK');
+    await choose(0);
+    await tap('Continue');
+    expect(pressable('Add a pick').getAttribute('aria-disabled')).toBe('true');
+    await tap('Dismiss');
+    await tap('Add a pick');
+    expect(api.post).toHaveBeenCalledWith('/picks', { pick: sixLegs()[0]?.pick });
+  });
+
+  it('keeps exactly-at-cap imports on the existing parlay review', async () => {
+    importResponse = async () => ({
+      kind: 'parlay',
+      legs: [KITTLE_LEG, SF_ML_LEG],
+      imports_left: 3,
+    });
+    await tap('Import from screenshot');
+    expect(host.querySelector('[data-testid="add-pick-import-choices"]')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="add-pick-slip-leg"]')).toHaveLength(2);
+    expect(pressable('Save parlay').getAttribute('aria-disabled')).not.toBe('true');
+  });
+
+  it('never limits Pro imports', async () => {
+    act(() => root.unmount());
+    host.remove();
+    tier = 'pro';
+    picksPage = { ...picksPage, free_slots_used: 3 };
+    await render();
+    importResponse = async () => ({ kind: 'parlay', legs: sixLegs(), imports_left: 3 });
+    await tap('Import from screenshot');
+    expect(host.querySelector('[data-testid="add-pick-import-choices"]')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="add-pick-slip-leg"]')).toHaveLength(6);
+    expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('waits for the server allowance and handles zero picks left after import starts', async () => {
+    act(() => root.unmount());
+    host.remove();
+    let resolveAllowance!: (value: unknown) => void;
+    api.get.mockImplementation((path) =>
+      path.startsWith('/picks')
+        ? new Promise((resolve) => {
+            resolveAllowance = resolve;
+          })
+        : routeGet(path),
+    );
+    await render();
+    importResponse = async () => ({ kind: 'parlay', legs: sixLegs(), imports_left: 3 });
+    await tap('Import from screenshot');
+    expect(host.textContent).toContain('Loading your free picks left');
+    expect(host.querySelector('[data-testid="add-pick-parlay"]')).toBeNull();
+    await act(async () => resolveAllowance({ ...picksPage, free_slots_used: 3 }));
+    await flush();
+    expect(host.textContent).toContain('You have 0 free picks left this week.');
+    expect(choices().every((node) => node.getAttribute('aria-disabled') === 'true')).toBe(true);
+    expect(pressable('Continue').getAttribute('aria-disabled')).toBe('true');
+    expect(openUpgrade).not.toHaveBeenCalled();
+    await tap('Upgrade to Pro');
     expect(openUpgrade).toHaveBeenCalledWith('stake_limit_free');
-    expect(host.textContent).toContain('Each parlay leg uses one free pick.');
-    expect(host.querySelectorAll('[data-testid="add-pick-slip-leg"]')).toHaveLength(0);
     expect(api.post.mock.calls.filter(([path]) => path === '/picks')).toHaveLength(0);
+  });
+
+  it('uses singular copy and caps selection when only one free pick remains', async () => {
+    act(() => root.unmount());
+    host.remove();
+    picksPage = { ...picksPage, free_slots_used: 2 };
+    await render();
+    importResponse = async () => ({ kind: 'parlay', legs: sixLegs(), imports_left: 3 });
+    await tap('Import from screenshot');
+    expect(host.textContent).toContain('You have 1 free pick left this week. Choose up to 1');
+    await choose(0);
+    expect(choices()[1]?.getAttribute('aria-disabled')).toBe('true');
+    await tap('Continue');
+    await tap('Add a pick');
+    expect(api.post).toHaveBeenCalledWith('/picks', { pick: sixLegs()[0]?.pick });
+  });
+
+  it('retains the import after an allowance failure and retries without using another import', async () => {
+    act(() => root.unmount());
+    host.remove();
+    api.get.mockImplementation((path) =>
+      path.startsWith('/picks') ? Promise.reject(new Error('offline')) : routeGet(path),
+    );
+    await render();
+    importResponse = async () => ({ kind: 'parlay', legs: sixLegs(), imports_left: 3 });
+    await tap('Import from screenshot');
+    expect(host.textContent).toContain('Could not load your free picks left.');
+    expect(choices()).toHaveLength(0);
+    api.get.mockImplementation(routeGet);
+    await tap('Retry');
+    expect(choices()).toHaveLength(6);
+    expect(api.post.mock.calls.filter(([path]) => path === '/picks/import')).toHaveLength(1);
+  });
+
+  it('preserves the authoritative cap error when allowance changes before save', async () => {
+    importResponse = async () => ({ kind: 'parlay', legs: sixLegs(), imports_left: 3 });
+    await tap('Import from screenshot');
+    await choose(0);
+    await tap('Continue');
+    api.post.mockRejectedValueOnce(
+      new ApiRequestError(403, 'stake_limit_free', 'Free pick limit reached.'),
+    );
+    await tap('Add a pick');
+    expect(openUpgrade).toHaveBeenCalledWith('stake_limit_free');
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 
   it('puts a parlay’s legs on the slip, holds Save until flagged legs are dismissed, and edits a leg', async () => {

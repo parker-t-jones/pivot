@@ -90,6 +90,8 @@ import { DemoEditingBanner } from './DemoEditingBanner';
 import { ErrorState } from './ErrorState';
 import { ListRow } from './ListRow';
 import { LoadingState } from './LoadingState';
+import { PrimaryButton } from './PrimaryButton';
+import { SecondaryButton } from './SecondaryButton';
 import { PlayerSearchField } from './PlayerSearchField';
 import { SlipImportButton } from './SlipImportButton';
 import { TextButton } from './TextButton';
@@ -154,6 +156,9 @@ export function AddPickFlow({
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   /** Set after a screenshot import: the review asks the user to check what was read. */
+  const [pendingImport, setPendingImport] = useState<SlipImportResult | null>(null);
+  const [importChoices, setImportChoices] = useState<ParlayLeg[] | null>(null);
+  const [selectedImportKeys, setSelectedImportKeys] = useState<string[]>([]);
   const [imported, setImported] = useState(false);
   const [flaggedLegs, setFlaggedLegs] = useState<FlaggedLeg[]>([]);
   /** The parlay leg being edited. Its replacement takes its place. */
@@ -516,7 +521,15 @@ export function AddPickFlow({
   };
 
   /** Puts an import into the normal review: a single pick at its review, a parlay's legs on the slip. */
-  const applyImport = (result: SlipImportResult) => {
+  useEffect(() => {
+    if (
+      pendingImport === null ||
+      allowance === null ||
+      (!allowance.isPro && allowance.freeLeft === null)
+    )
+      return;
+    const result = pendingImport;
+    setPendingImport(null);
     const ready: ParlayLeg[] = [];
     const flagged: FlaggedLeg[] = [];
     for (const leg of result.legs) {
@@ -541,6 +554,13 @@ export function AddPickFlow({
       });
     }
 
+    if (!allowance.isPro && allowance.freeLeft !== null && ready.length > allowance.freeLeft) {
+      setImportChoices(ready);
+      setSelectedImportKeys([]);
+      setFlaggedLegs(flagged);
+      return;
+    }
+
     const [only] = ready;
     if (result.kind === 'single' && only !== undefined) {
       setParlayLegs(null);
@@ -557,17 +577,12 @@ export function AddPickFlow({
       );
       return;
     }
-    if (parlayOverCap(ready.length)) {
-      setImportError(PARLAY_FREE_CAP);
-      showParlayCap();
-      return;
-    }
     setParlayLegs(ready);
     setFlaggedLegs(flagged);
     setDraft(EMPTY_DRAFT);
     setImported(true);
     setStep('legs');
-  };
+  }, [pendingImport, allowance]);
 
   const importImage = (image: string) => {
     if (editsLocked || importing) return;
@@ -575,7 +590,7 @@ export function AddPickFlow({
     setImportError(null);
     void (async () => {
       try {
-        applyImport(await importSlip(image));
+        setPendingImport(await importSlip(image));
       } catch (error) {
         setImportError(slipImportErrorMessage(error));
       } finally {
@@ -642,6 +657,118 @@ export function AddPickFlow({
   );
 
   const playerMarkets = draft.player ? playerMarketsFor(draft.player.position) : [];
+
+  if (pendingImport !== null || importChoices !== null) {
+    const limit = allowance?.freeLeft ?? 0;
+    const continueImport = () => {
+      const chosen = importChoices?.filter((leg) => selectedImportKeys.includes(leg.key)) ?? [];
+      if (chosen.length === 0 || chosen.length > limit) return;
+      setImportChoices(null);
+      setImported(true);
+      const [only] = chosen;
+      if (chosen.length === 1 && only) {
+        setParlayLegs(null);
+        setDraft(only.draft);
+        setStep('confirm');
+      } else {
+        setParlayLegs(chosen);
+        setDraft(EMPTY_DRAFT);
+        setStep('legs');
+      }
+    };
+    return (
+      <ScrollView
+        style={styles.screen}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + theme.spacing.lg,
+            paddingBottom: insets.bottom + theme.spacing.huge,
+          },
+        ]}
+      >
+        <TextButton
+          label="Back"
+          onPress={() => {
+            setPendingImport(null);
+            setImportChoices(null);
+            setFlaggedLegs([]);
+          }}
+        />
+        {pendingImport !== null ? (
+          allowance?.freeLeft === null && !allowance.isPro ? (
+            <ErrorState
+              message="Could not load your free picks left."
+              onRetry={() => {
+                setAllowance(null);
+                void (async () => {
+                  try {
+                    const [me, nfl] = await Promise.all([fetchMe(), fetchNflState()]);
+                    const page = await fetchPicks(nfl.week);
+                    const isPro = me.subscription_tier === 'pro';
+                    setAllowance({ isPro, freeLeft: freePicksLeft(page, isPro) });
+                  } catch {
+                    setAllowance({ isPro: false, freeLeft: null });
+                  }
+                })();
+              }}
+            />
+          ) : (
+            <LoadingState message="Loading your free picks left…" />
+          )
+        ) : (
+          <View style={styles.stack} testID="add-pick-import-choices">
+            <Text style={styles.muted}>
+              {`You have ${limit} free ${limit === 1 ? 'pick' : 'picks'} left this week. Choose up to ${limit} of these ${importChoices?.length} legs.`}
+            </Text>
+            {importChoices?.map((leg) => {
+              const selected = selectedImportKeys.includes(leg.key);
+              const full = !selected && selectedImportKeys.length >= limit;
+              return (
+                <ListRow
+                  key={leg.key}
+                  title={leg.text}
+                  subtitle={
+                    full
+                      ? limit === 0
+                        ? 'You have no free picks left this week.'
+                        : 'Deselect a leg to free a pick.'
+                      : undefined
+                  }
+                  trailing={
+                    <SecondaryButton
+                      label={selected ? 'Deselect' : 'Select'}
+                      accessibilityLabel={`${selected ? 'Deselect' : 'Select'} ${leg.text}`}
+                      disabled={editsLocked || full}
+                      onPress={() =>
+                        setSelectedImportKeys((keys) =>
+                          selected
+                            ? keys.filter((key) => key !== leg.key)
+                            : keys.length < limit
+                              ? [...keys, leg.key]
+                              : keys,
+                        )
+                      }
+                    />
+                  }
+                />
+              );
+            })}
+            <AddPickImportFlags legs={flaggedLegs} onDismiss={dismissFlag} disabled={editsLocked} />
+            <TextButton label="Upgrade to Pro" onPress={() => openUpgrade('stake_limit_free')} />
+            <PrimaryButton
+              label="Continue"
+              disabled={
+                editsLocked || selectedImportKeys.length === 0 || selectedImportKeys.length > limit
+              }
+              onPress={continueImport}
+            />
+          </View>
+        )}
+      </ScrollView>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -858,9 +985,13 @@ export function AddPickFlow({
           </Text>
         ) : null}
 
+        {step === 'confirm' && imported && !inParlay ? (
+          <AddPickImportFlags legs={flaggedLegs} onDismiss={dismissFlag} disabled={editsLocked} />
+        ) : null}
+
         {step === 'confirm' && kind ? (
           <AddPickReview
-            disabled={editsLocked}
+            disabled={editsLocked || (!inParlay && flaggedLegs.length > 0)}
             error={formError}
             note={!inParlay && allowance ? addPickReviewNote(kind, allowance) : null}
             onSubmit={inParlay ? addLeg : () => void submitSingle()}
