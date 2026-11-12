@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { InMemoryLineupCache } from '../cache/in-memory.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import { unreachableNflStateSource } from '../lib/nflStateSource.test-helper.js';
@@ -266,5 +266,23 @@ describe('no stake users warning', () => {
     await warn([], () => Promise.resolve([]));
     await warn(live, (teamId) => Promise.resolve(teamId === 'mia' ? ['user-1'] : []));
     expect(logs).toEqual([]);
+  });
+});
+
+
+describe('stale stake membership regression', () => {
+  it.each(['week rollover', 'expired snapshot'])('removes old teams after %s', async (reason) => {
+    const cache = new InMemoryLineupCache();
+    await cache.addUserStake('old-team', USER_A);
+    await cache.setLineupCache(USER_A, 5, {
+      userId: USER_A, week: 5,
+      teamPositions: new Map([['old-team', new Set(['offense'])]]),
+      playerToTeam: new Map(), starPlayerIds: new Set(),
+    });
+    if (reason === 'expired snapshot') vi.spyOn(cache, 'getLineupCache').mockResolvedValue(null);
+    const { rebuildUserLineupCache } = await import('../lib/lineup-sync.js');
+    await rebuildUserLineupCache({ supabase: supabaseForWatchedStarters(), lineupCache: cache }, USER_A, reason === 'week rollover' ? 6 : 5, {});
+    expect(await cache.getUsersWithStake('old-team')).toEqual([]);
+    expect(await cache.getUsersWithStake('team-buf')).toEqual([USER_A]);
   });
 });
