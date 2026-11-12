@@ -12,10 +12,24 @@ import {
 import { readSlipWithModel, productionModelReader } from './lib/slipImport/multiModelReader.js';
 import { AnthropicSlipReader, SLIP_READ_MODEL } from './lib/slipImport/reader.js';
 import { APP_PROFILES, loadAppEncoder, parseEvalOptions } from './lib/slipImport/evalOptions.js';
+import { rescoreResults } from './lib/slipImport/rescore.js';
 import { costForUsage, type TokenUsage } from './lib/slipImport/modelCost.js';
 
 async function main(): Promise<void> {
   const options = parseEvalOptions(process.argv.slice(2));
+  if (options.rescore) {
+    const explicitDir =
+      process.argv[2] && !process.argv[2].startsWith('--') ? options.dir : undefined;
+    const rescored = await rescoreResults(options.rescore, explicitDir);
+    if (options.out) {
+      await mkdir(dirname(options.out), { recursive: true });
+      await writeFile(options.out, JSON.stringify(rescored, null, 2), { mode: 0o600 });
+      console.log(`JSON written to ${options.out}`);
+    }
+    for (const result of rescored.results) console.log(`${formatModelEvalResult(result)}\n`);
+    console.log(formatComparisonTable(rescored.results));
+    return;
+  }
   if (options.productionPath) {
     if (
       options.models.some((m) => m.model !== SLIP_READ_MODEL) &&

@@ -189,3 +189,28 @@ it('rejects unknown pricing before invoking even a known model', async () => {
   ).rejects.toThrow('no pricing for model unknown');
   expect(called).toBe(false);
 });
+
+it('aggregates import counts and per-run ranges independently from raw field accuracy', async () => {
+  let call = 0;
+  const result = await evalModel(
+    { model: 'claude-haiku-5-5', label: 'Haiku' },
+    [SLIP_CASE],
+    async () => ({
+      read: { is_bet_slip: true, bet_count: ++call === 2 ? 6 : 1, legs: [leg({ line: 60.5 })] },
+      usage: null,
+    }),
+    { runs: 3 },
+  );
+  expect(result.importOutcome).toMatchObject({
+    flagged: 2,
+    rejected_multiple_bets: 1,
+    silent_wrong: 0,
+  });
+  expect(result.importRunStats.rejected_multiple_bets).toEqual({ mean: 1 / 3, min: 0, max: 1 });
+  expect(result.records.map((r) => r.importOutcome?.slips)).toEqual([
+    [],
+    ['rejected_multiple_bets'],
+    [],
+  ]);
+  expect(formatComparisonTable([result])).toContain('| 0 | 1 | 0 / 0 |');
+});

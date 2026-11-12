@@ -17,6 +17,13 @@ import {
 import { costForUsage, MODEL_PRICING, type ModelPricing, type TokenUsage } from './modelCost.js';
 import type { SlipImage } from './reader.js';
 import type { SlipRead } from './schema.js';
+import {
+  addImportOutcome,
+  emptyImportTally,
+  scoreImportOutcome,
+  type ImportOutcome,
+  type ImportTally,
+} from './importOutcome.js';
 
 export interface ModelCandidate {
   model: string;
@@ -59,6 +66,8 @@ export interface ModelEvalResult {
   failures: ReadFailure[];
   unordered: EvalTally;
   records: EvalRecord[];
+  importOutcome: ImportTally;
+  importRunStats: Record<keyof ImportTally, Stats>;
   runStats: { fieldAccuracy: Stats; unorderedAccuracy: Stats; cost: Stats };
 }
 
@@ -75,6 +84,7 @@ export interface EvalRecord {
   slipWrong: { field: string; expected: number | boolean; got: number | boolean }[];
   counts: { expected: number; got: number };
   read: SlipRead;
+  importOutcome: ImportOutcome | null;
 }
 export interface Stats {
   mean: number;
@@ -106,18 +116,8 @@ export async function evalModel(
   if (!Number.isSafeInteger(runs) || runs < 1) throw new Error('runs must be a positive integer');
   const prices = options.prices ?? MODEL_PRICING;
   costForUsage(candidate.model, { input_tokens: 0, output_tokens: 0 }, prices);
-  const tally = emptyTally(),
-    unordered = emptyTally();
-  const failures: ReadFailure[] = [],
-    records: EvalRecord[] = [];
-  const accuracies: number[] = [],
-    unorderedAccuracies: number[] = [],
-    costs: number[] = [];
-  let totalCost = 0;
+  const records: EvalRecord[] = [];
   for (let run = 1; run <= runs; run++) {
-    const runTally = emptyTally(),
-      runUnordered = emptyTally();
-    let runCost = 0;
     for (const { name, image, expected, unverified } of cases) {
       const start = performance.now();
       let got: SlipRead = { is_bet_slip: false, bet_count: 0, legs: [] };
@@ -129,61 +129,100 @@ export async function evalModel(
         got = result.read;
         usage = result.usage;
         cost = usage === null ? null : costForUsage(candidate.model, usage, prices);
-        runCost += cost ?? 0;
       } catch (error) {
         failure = error instanceof Error ? error.message : String(error);
-        failures.push({ name, message: failure });
-      }
-      const latencyMs = performance.now() - start;
-      if (!unverified) {
-        scoreSlip(tally, got, expected);
-        scoreSlip(runTally, got, expected);
-        scoreUnordered(unordered, got, expected);
-        scoreUnordered(runUnordered, got, expected);
       }
       records.push({
         name,
         model: candidate.model,
         run,
-        latencyMs,
+        latencyMs: performance.now() - start,
         usage,
         cost,
         failure,
-        wrong: unverified ? [] : wrongFields(got, expected),
+        wrong: [],
         scored: !unverified,
-        slipWrong: unverified
-          ? []
-          : [
-              { field: 'leg_count', expected: expected.legs.length, got: got.legs.length },
-              { field: 'bet_count', expected: expected.bet_count, got: got.bet_count },
-              {
-                field: 'is_bet_slip',
-                expected: expected.is_bet_slip ?? true,
-                got: got.is_bet_slip,
-              },
-            ].filter((f) => f.expected !== f.got),
+        slipWrong: [],
         counts: { expected: expected.legs.length, got: got.legs.length },
         read: got,
+        importOutcome: null,
       });
     }
-    totalCost += runCost;
-    costs.push(runCost);
-    accuracies.push(fieldAccuracy(runTally));
-    unorderedAccuracies.push(fieldAccuracy(runUnordered));
   }
+  return scoreModelRecords(
+    candidate,
+    records,
+    new Map(cases.filter((c) => !c.unverified).map((c) => [c.name, c.expected])),
+  );
+}
+
+/** Shared by fresh reads and offline rescoring; usage, cost, failures and latency are preserved. */
+export function scoreModelRecords(
+  candidate: ModelCandidate,
+  saved: EvalRecord[],
+  expected: ReadonlyMap<string, ExpectedSlip>,
+): ModelEvalResult {
+  const tally = emptyTally(),
+    unordered = emptyTally(),
+    importOutcome = emptyImportTally();
+  const perRun = new Map<
+    number,
+    { tally: EvalTally; unordered: EvalTally; outcome: ImportTally; cost: number }
+  >();
+  const records = saved.map((record) => {
+    let run = perRun.get(record.run);
+    if (!run) {
+      run = { tally: emptyTally(), unordered: emptyTally(), outcome: emptyImportTally(), cost: 0 };
+      perRun.set(record.run, run);
+    }
+    run.cost += record.cost ?? 0;
+    const want = expected.get(record.name);
+    if (!want) return { ...record, scored: false, wrong: [], slipWrong: [], importOutcome: null };
+    const got = record.read;
+    scoreSlip(tally, got, want);
+    scoreSlip(run.tally, got, want);
+    scoreUnordered(unordered, got, want);
+    scoreUnordered(run.unordered, got, want);
+    const outcome = scoreImportOutcome(got, want);
+    addImportOutcome(importOutcome, outcome);
+    addImportOutcome(run.outcome, outcome);
+    return {
+      ...record,
+      scored: true,
+      wrong: wrongFields(got, want),
+      importOutcome: outcome,
+      slipWrong: [
+        { field: 'leg_count', expected: want.legs.length, got: got.legs.length },
+        { field: 'bet_count', expected: want.bet_count, got: got.bet_count },
+        { field: 'is_bet_slip', expected: want.is_bet_slip ?? true, got: got.is_bet_slip },
+      ].filter((f) => f.expected !== f.got),
+      counts: { expected: want.legs.length, got: got.legs.length },
+    };
+  });
+  const runs = [...perRun.values()];
+  const totalCost = runs.reduce((sum, run) => sum + run.cost, 0);
+  const importRunStats = Object.fromEntries(
+    Object.keys(importOutcome).map((key) => [
+      key,
+      stats(runs.map((run) => run.outcome[key as keyof ImportTally])),
+    ]),
+  ) as Record<keyof ImportTally, Stats>;
   return {
-    model: candidate.model,
-    label: candidate.label,
+    ...candidate,
     tally,
     unordered,
-    totalCost,
-    costPerImage: cases.length ? totalCost / (cases.length * runs) : 0,
-    failures,
+    importOutcome,
+    importRunStats,
     records,
+    totalCost,
+    costPerImage: records.length ? totalCost / records.length : 0,
+    failures: records.flatMap((r) =>
+      r.failure === null ? [] : [{ name: r.name, message: r.failure }],
+    ),
     runStats: {
-      fieldAccuracy: stats(accuracies),
-      unorderedAccuracy: stats(unorderedAccuracies),
-      cost: stats(costs),
+      fieldAccuracy: stats(runs.map((r) => fieldAccuracy(r.tally))),
+      unorderedAccuracy: stats(runs.map((r) => fieldAccuracy(r.unordered))),
+      cost: stats(runs.map((r) => r.cost)),
     },
   };
 }
@@ -219,6 +258,12 @@ export function formatModelEvalResult(result: ModelEvalResult): string {
       ([key, s]) =>
         `${key} per-run mean/min/max: ${s.mean.toFixed(6)} / ${s.min.toFixed(6)} / ${s.max.toFixed(6)}`,
     ),
+    'Import outcome (condition/team projection):',
+    ...Object.entries(result.importOutcome).map(([key, count]) => `${key}: ${count}`),
+    ...Object.entries(result.importRunStats).map(
+      ([key, s]) =>
+        `${key} per-run mean/min/max: ${s.mean.toFixed(6)} / ${s.min.toFixed(6)} / ${s.max.toFixed(6)}`,
+    ),
     ...(result.records.some((r) => r.cost === null)
       ? ['Some costs/tokens are unknown; totals include known usage only.']
       : []),
@@ -235,8 +280,8 @@ export function formatModelEvalResult(result: ModelEvalResult): string {
 export function formatComparisonTable(results: ModelEvalResult[]): string {
   const pct = (n: number, d: number) => (d === 0 ? 'n/a' : `${((100 * n) / d).toFixed(1)}%`);
   const header =
-    '| model | leg count | bet count | is_bet_slip | field accuracy (positional / best assignment) | $/image |';
-  const sep = '|---|---|---|---|---|---|';
+    '| model | leg count | bet count | is_bet_slip | field accuracy (positional / best assignment) | silent_wrong | rejected_multiple_bets | team_differs (blank / different) | $/image |';
+  const sep = '|---|---|---|---|---|---|---|---|---|';
   const rows = results.map((r) => {
     const { tally } = r;
     const fieldEntries = Object.values(tally.fields);
@@ -248,6 +293,9 @@ export function formatComparisonTable(results: ModelEvalResult[]): string {
       pct(tally.betCountCorrect, tally.slips),
       pct(tally.isBetSlipCorrect, tally.slips),
       `${pct(fieldCorrect, fieldTotal)} / ${(100 * fieldAccuracy(r.unordered)).toFixed(1)}%`,
+      String(r.importOutcome.silent_wrong),
+      String(r.importOutcome.rejected_multiple_bets),
+      `${r.importOutcome.team_differs_blank} / ${r.importOutcome.team_differs_different}`,
       `$${r.costPerImage.toFixed(4)} |`,
     ].join(' | ');
   });
