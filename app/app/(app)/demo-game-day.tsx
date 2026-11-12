@@ -214,18 +214,14 @@ function renderPhase(
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Demo complete</Text>
-      <Text style={styles.body}>Exit to go back to your real Home — nothing here was saved.</Text>
+      <Text style={styles.message}>
+        Exit to go back to your real Home — nothing here was saved.
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  body: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.xl,
-  },
   bodyHost: {
     flex: 1,
   },
@@ -246,6 +242,12 @@ const styles = StyleSheet.create({
   contentCentered: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Text needs its own color: the default is black, which vanishes on the dark background.
+  message: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.type.body.size,
+    lineHeight: theme.type.body.lineHeight,
   },
   scroll: {
     flex: 1,

@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { theme } from '../lib/theme';
 import { TextButton } from './TextButton';
@@ -8,8 +9,10 @@ import { TextButton } from './TextButton';
  * never be mistaken for the real app.
  */
 export function DemoBanner({ onExit }: { onExit: () => void }) {
+  // The banner is the top edge of the screen, so it clears the status bar and Dynamic Island itself.
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.banner}>
+    <View style={[styles.banner, { paddingTop: insets.top + theme.spacing.sm }]}>
       <Text style={styles.label}>DEMO — not a real game</Text>
       <TextButton label="Exit" labelStyle={styles.exitLabel} onPress={onExit} size="smallStrong" />
     </View>
@@ -23,7 +26,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
   },
   exitLabel: {
     color: theme.colors.background,
