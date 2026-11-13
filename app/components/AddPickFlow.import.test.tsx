@@ -499,17 +499,17 @@ describe('add a pick: import from screenshot', () => {
     expect(host.textContent).toContain('Player prop');
   });
 
-  it('shows the daily limit message from the API', async () => {
+  it('shows the weekly limit message from the API', async () => {
     importResponse = async () => {
       throw new ApiRequestError(
         429,
         'slip_import_limit',
-        'You’ve used today’s 5 screenshot imports. You can still add picks yourself, imports reset tomorrow, and Pro includes more.',
+        'You’ve used this week’s 10 screenshot imports. You can still add picks yourself, and imports reset next week.',
       );
     };
     await tap('Import from screenshot');
     expect(host.querySelector('[data-testid="add-pick-import-error"]')?.textContent).toContain(
-      'You’ve used today’s 5 screenshot imports.',
+      'You’ve used this week’s 10 screenshot imports.',
     );
   });
 

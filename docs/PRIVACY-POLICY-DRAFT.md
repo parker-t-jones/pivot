@@ -54,7 +54,7 @@ you to confirm, instead of typing each one in. When this ships:
   the legs as structured data (player, bet type, line). The photo is never sent from your device
   to Anthropic directly, and never leaves our systems except for that one request.
 - **We do not save the photo or the AI's raw response.** Both exist only for the moment it takes to
-  process your upload; we only keep counts (so we can enforce a daily limit) and error details if
+  process your upload; we only keep counts (so we can enforce a weekly limit) and error details if
   something goes wrong.
 - You always review and confirm the extracted legs before anything is saved as a pick.
 - This feature is not available in the app yet. We'll update this policy and notify the App Store

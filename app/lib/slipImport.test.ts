@@ -128,9 +128,9 @@ describe('slip import client', () => {
     const limit = new ApiRequestError(
       429,
       'slip_import_limit',
-      'You’ve used today’s 5 screenshot imports.',
+      'You’ve used this week’s 10 screenshot imports.',
     );
-    expect(slipImportErrorMessage(limit)).toBe('You’ve used today’s 5 screenshot imports.');
+    expect(slipImportErrorMessage(limit)).toBe('You’ve used this week’s 10 screenshot imports.');
     expect(
       slipImportErrorMessage(new ApiRequestError(500, 'internal_error', 'Internal server error.')),
     ).toBe('We couldn’t import that screenshot. Try again, or add the pick yourself.');

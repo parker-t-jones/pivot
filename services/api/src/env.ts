@@ -46,8 +46,8 @@ const envSchema = z.object({
   ),
   /** Screenshot imports per user per NFL week, free tier. Bounds the model cost. */
   SLIP_IMPORT_WEEKLY_FREE: z.coerce.number().int().min(0).default(3),
-  /** Screenshot imports per user per day (US Eastern), Pro tier. Bounds the model cost. */
-  SLIP_IMPORT_DAILY_PRO: z.coerce.number().int().min(0).default(30),
+  /** Screenshot imports per user per NFL week, Pro tier. Bounds the model cost. */
+  SLIP_IMPORT_WEEKLY_PRO: z.coerce.number().int().min(0).default(10),
   PORT: z.coerce.number().int().positive().default(3000),
   /**
    * Extra browser origin allowed to call this API, for local Expo web (`http://localhost:8081`).
