@@ -1,17 +1,8 @@
 import { pickSlipImage } from '../lib/slipImage';
 import { SecondaryButton } from './SecondaryButton';
+import { SLIP_IMPORT_LABEL, type SlipImportButtonProps } from './slipImportShared';
 
-export interface SlipImportButtonProps {
-  /** Base64 image or data URL, after the user chose a screenshot. */
-  onImage: (image: string) => void;
-  /** No free bets left: the button opens the upgrade sheet instead of the picker. */
-  onLocked?: (() => void) | null;
-  loading: boolean;
-  disabled?: boolean;
-  onError: (message: string) => void;
-}
-
-export const SLIP_IMPORT_LABEL = 'Import from screenshot';
+export { SLIP_IMPORT_LABEL, type SlipImportButtonProps };
 
 /** "Import from screenshot" on iOS: the system photo picker. */
 export function SlipImportButton({

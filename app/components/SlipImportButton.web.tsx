@@ -3,10 +3,10 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { isImageFile, pickSlipImage, readSlipFile } from '../lib/slipImage.web';
 import { theme } from '../lib/theme';
-import { SLIP_IMPORT_LABEL, type SlipImportButtonProps } from './SlipImportButton';
 import { SecondaryButton } from './SecondaryButton';
+import { SLIP_IMPORT_LABEL, type SlipImportButtonProps } from './slipImportShared';
 
-export { SLIP_IMPORT_LABEL } from './SlipImportButton';
+export { SLIP_IMPORT_LABEL };
 
 /** "Import from screenshot" on web: a file picker, and a drop target for a screenshot file. */
 export function SlipImportButton({
