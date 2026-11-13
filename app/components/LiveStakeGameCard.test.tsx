@@ -62,6 +62,38 @@ describe('LiveStakeGameCard', () => {
     root = null;
   });
 
+  it.each([
+    ['WAS', true, 'WAS0', '14NYG', 'Commanders 0', 'Giants 14'],
+    ['NYG', true, 'NYG14', '0WAS', 'Giants 14', 'Commanders 0'],
+    [null, false, 'WAS0', '14NYG', 'Commanders 0', 'Giants 14'],
+  ] as const)(
+    'renders abbreviations and accessible scores with possession %s',
+    (possession, active, leftText, rightText, leftLabel, rightLabel) => {
+      const game: LiveGame = {
+        ...MNF_HALFTIME_LIVE,
+        home_team: 'NYG',
+        away_team: 'WAS',
+        home_team_name: 'Giants',
+        away_team_name: 'Commanders',
+        score: { home: 14, away: 0 },
+        possession_team: possession,
+      };
+      root = render(
+        createElement(LiveStakeGameCard, {
+          model: { ...modelFor(game, active), chips: [] },
+          onSwitch: vi.fn(),
+        }),
+      );
+      const left = document.querySelector('[data-testid="live-score-left"]');
+      const right = document.querySelector('[data-testid="live-score-right"]');
+      expect(left?.textContent).toBe(leftText);
+      expect(right?.textContent).toBe(rightText);
+      expect(left?.getAttribute('aria-label')).toBe(leftLabel);
+      expect(right?.getAttribute('aria-label')).toBe(rightLabel);
+      expect(document.body.textContent).not.toMatch(/Commanders|COMMANDERS|COMM…|Giants|GIANTS/);
+    },
+  );
+
   it('renders the halftime card with an outlined watch button and no gauge', () => {
     const onSwitch = vi.fn();
     root = render(

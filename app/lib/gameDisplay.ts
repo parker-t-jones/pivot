@@ -253,8 +253,10 @@ export function matchupNicknameLabel(awayName: string, homeName: string): string
 }
 
 export interface FieldAlignedMatchup {
-  leftName: string;
-  rightName: string;
+  leftLabel: string;
+  leftNickname: string;
+  rightLabel: string;
+  rightNickname: string;
   leftScore: number;
   rightScore: number;
   /** `teams.primary_color` for the left side (empty string when the catalog has none). */
@@ -264,7 +266,7 @@ export interface FieldAlignedMatchup {
 
 /**
  * Now Active scoreboard oriented like the field gauge: possessing team on the left (own goal),
- * opponent on the right (the end zone being attacked). Scores sit with their team.
+ * opponent on the right (the end zone being attacked). Abbreviations and scores sit with their team; nicknames are retained for accessibility.
  * When nobody has the ball, falls back to away-left / home-right (traditional "@" reading).
  */
 export function fieldAlignedMatchup(game: {
@@ -277,13 +279,15 @@ export function fieldAlignedMatchup(game: {
   away_team_primary_color: string;
   score: { home: number; away: number };
 }): FieldAlignedMatchup {
-  const homeName = game.home_team_name.toUpperCase();
-  const awayName = game.away_team_name.toUpperCase();
+  const homeName = game.home_team;
+  const awayName = game.away_team;
 
   if (game.possession_team === game.home_team) {
     return {
-      leftName: homeName,
-      rightName: awayName,
+      leftLabel: homeName,
+      leftNickname: game.home_team_name,
+      rightLabel: awayName,
+      rightNickname: game.away_team_name,
       leftScore: game.score.home,
       rightScore: game.score.away,
       leftPrimaryColor: game.home_team_primary_color,
@@ -292,8 +296,10 @@ export function fieldAlignedMatchup(game: {
   }
   if (game.possession_team === game.away_team) {
     return {
-      leftName: awayName,
-      rightName: homeName,
+      leftLabel: awayName,
+      leftNickname: game.away_team_name,
+      rightLabel: homeName,
+      rightNickname: game.home_team_name,
       leftScore: game.score.away,
       rightScore: game.score.home,
       leftPrimaryColor: game.away_team_primary_color,
@@ -301,8 +307,10 @@ export function fieldAlignedMatchup(game: {
     };
   }
   return {
-    leftName: awayName,
-    rightName: homeName,
+    leftLabel: awayName,
+    leftNickname: game.away_team_name,
+    rightLabel: homeName,
+    rightNickname: game.home_team_name,
     leftScore: game.score.away,
     rightScore: game.score.home,
     leftPrimaryColor: game.away_team_primary_color,

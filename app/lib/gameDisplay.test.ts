@@ -420,10 +420,25 @@ describe('fieldAlignedMatchup', () => {
     score: { home: 14, away: 0 },
   };
 
+  it('uses WAS and NYG abbreviations for long nicknames', () => {
+    expect(
+      fieldAlignedMatchup({
+        ...base,
+        home_team: 'NYG',
+        away_team: 'WAS',
+        home_team_name: 'Giants',
+        away_team_name: 'Commanders',
+        possession_team: 'WAS',
+      }),
+    ).toMatchObject({ leftLabel: 'WAS', rightLabel: 'NYG', leftScore: 0, rightScore: 14 });
+  });
+
   it('puts the possessing team on the left (own-goal side of the gauge)', () => {
     expect(fieldAlignedMatchup({ ...base, possession_team: 'BUF' })).toEqual({
-      leftName: 'BILLS',
-      rightName: 'LIONS',
+      leftLabel: 'BUF',
+      leftNickname: 'Bills',
+      rightLabel: 'DET',
+      rightNickname: 'Lions',
       leftScore: 14,
       rightScore: 0,
       leftPrimaryColor: '#00338D',
@@ -433,8 +448,10 @@ describe('fieldAlignedMatchup', () => {
 
   it('flips sides when the away team has the ball', () => {
     expect(fieldAlignedMatchup({ ...base, possession_team: 'DET' })).toEqual({
-      leftName: 'LIONS',
-      rightName: 'BILLS',
+      leftLabel: 'DET',
+      leftNickname: 'Lions',
+      rightLabel: 'BUF',
+      rightNickname: 'Bills',
       leftScore: 0,
       rightScore: 14,
       leftPrimaryColor: '#0076B6',
@@ -444,8 +461,10 @@ describe('fieldAlignedMatchup', () => {
 
   it('falls back to away-left / home-right with no possession', () => {
     expect(fieldAlignedMatchup({ ...base, possession_team: null })).toEqual({
-      leftName: 'LIONS',
-      rightName: 'BILLS',
+      leftLabel: 'DET',
+      leftNickname: 'Lions',
+      rightLabel: 'BUF',
+      rightNickname: 'Bills',
       leftScore: 0,
       rightScore: 14,
       leftPrimaryColor: '#0076B6',
