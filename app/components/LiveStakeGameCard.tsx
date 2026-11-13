@@ -55,17 +55,27 @@ export function LiveStakeGameCard({
       {model.eyebrow ? <Text style={styles.eyebrow}>{model.eyebrow}</Text> : null}
 
       <View style={styles.matchupRow}>
-        <View style={[styles.sideChip, { backgroundColor: leftWash }]} testID="live-score-left">
+        <View
+          style={[styles.sideChip, { backgroundColor: leftWash }]}
+          testID="live-score-left"
+          accessible
+          accessibilityLabel={`${matchup.leftNickname} ${matchup.leftScore}`}
+        >
           <Text style={[styles.teamName, styles.teamLeft]} numberOfLines={1}>
-            {matchup.leftName}
+            {matchup.leftLabel}
           </Text>
           <Text style={styles.score}>{matchup.leftScore}</Text>
         </View>
         <View style={styles.scoreDivider} />
-        <View style={[styles.sideChip, { backgroundColor: rightWash }]} testID="live-score-right">
+        <View
+          style={[styles.sideChip, { backgroundColor: rightWash }]}
+          testID="live-score-right"
+          accessible
+          accessibilityLabel={`${matchup.rightNickname} ${matchup.rightScore}`}
+        >
           <Text style={styles.score}>{matchup.rightScore}</Text>
           <Text style={[styles.teamName, styles.teamRight]} numberOfLines={1}>
-            {matchup.rightName}
+            {matchup.rightLabel}
           </Text>
         </View>
       </View>

@@ -106,8 +106,8 @@ describe('DemoHomeLive', () => {
     await renderAt(DEMO_ACTIVE_AT_MS);
     const hero = byId('demo-home-live-hero');
     // CMT has the ball, so it is on the left, field-aligned, with its score beside it.
-    expect(byId('live-score-left')?.textContent).toBe('COMETS10');
-    expect(byId('live-score-right')?.textContent).toBe('7HARBOR');
+    expect(byId('live-score-left')?.textContent).toBe('CMT10');
+    expect(byId('live-score-right')?.textContent).toBe('7HBR');
     expect(hero?.textContent).toContain('CMT 25');
     expect(hero?.textContent).toContain('Q3 · 7:40 · 1st & 10');
     expect(hero?.textContent).toContain('R. Vance WR · ON FIELD');
@@ -124,7 +124,7 @@ describe('DemoHomeLive', () => {
 
     await renderAt(DEMO_HIT_AT_MS);
     hero = byId('demo-home-live-hero');
-    expect(byId('live-score-left')?.textContent).toBe('COMETS17');
+    expect(byId('live-score-left')?.textContent).toBe('CMT17');
     expect(hero?.textContent).toContain('HBR 2');
     expect(hero?.textContent).toContain('Q3 · 4:12');
     expect(hero?.textContent).toContain('RED ZONE');
@@ -198,7 +198,7 @@ describe('DemoHomeLive', () => {
     expect(text).not.toMatch(/youtube|hulu|fubo|sling|directv|espn|peacock|sunday ticket/i);
     expect(text).not.toMatch(/stake/i);
     expect(text).not.toMatch(/\b(odds|bet|bets|wager|edge)\b/i);
-    expect(text).toContain('COMETS');
-    expect(text).toContain('HARBOR');
+    expect(text).toContain('CMT');
+    expect(text).toContain('HBR');
   });
 });

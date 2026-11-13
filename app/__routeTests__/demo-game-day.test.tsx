@@ -194,8 +194,8 @@ describe('DemoGameDayScreen: Home live view', () => {
     expect(byId('demo-home-live-eyebrow')?.textContent).toBe('● LIVE · 1 GAME');
     const hero = byId('demo-home-live-hero');
     expect(hero?.textContent).toContain('NOW ACTIVE');
-    expect(byId('live-score-left')?.textContent).toBe('COMETS10');
-    expect(byId('live-score-right')?.textContent).toBe('7HARBOR');
+    expect(byId('live-score-left')?.textContent).toBe('CMT10');
+    expect(byId('live-score-right')?.textContent).toBe('7HBR');
     expect(hero?.textContent).toContain('CMT 25');
     expect(hero?.textContent).toContain('Q3 · 7:40 · 1st & 10');
     expect(hero?.textContent).toContain('R. Vance WR · ON FIELD');
@@ -215,12 +215,12 @@ describe('DemoGameDayScreen: Home live view', () => {
     await advance(DEMO_CLOSING_AT_MS - DEMO_ACTIVE_AT_MS);
     expect(byId('demo-home-live-hero')?.textContent).toContain('HBR 34');
     expect(byId('demo-home-live-hero')?.textContent).toContain('Q3 · 5:55 · 2nd & 7');
-    expect(byId('live-score-left')?.textContent).toBe('COMETS10');
+    expect(byId('live-score-left')?.textContent).toBe('CMT10');
 
     await advance(DEMO_HIT_AT_MS - DEMO_CLOSING_AT_MS);
     expect(byId('demo-home-live-hero')?.textContent).toContain('HBR 2');
     expect(byId('demo-home-live-hero')?.textContent).toContain('RED ZONE');
-    expect(byId('live-score-left')?.textContent).toBe('COMETS17');
+    expect(byId('live-score-left')?.textContent).toBe('CMT17');
   });
 
   it('opens nothing from the Watch button: only the demo hint, no link and no network call', async () => {
