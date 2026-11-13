@@ -112,7 +112,9 @@ describe('sniffImageType', () => {
 describe('slip reading instructions', () => {
   it.each([
     'RUSH_REC_YDS (rushing + receiving yards)',
-    'Use OTHER as the market when none fits, e.g. passing + rushing yards.',
+    'If the printed stat is not in this list (tackles, sacks, defensive or special-teams stats',
+    'unsupported combined stats such as passing + rushing yards, or anything else), return market: OTHER with stat: null',
+    'Never substitute the closest supported stat',
     'MORE, HIGHER and OVER mean OVER',
     'LESS, LOWER and UNDER mean UNDER',
     'up = OVER, down = UNDER',
@@ -120,7 +122,8 @@ describe('slip reading instructions', () => {
     'If neither is highlighted and no side is otherwise shown, leave side null',
     'Never guess a side',
     'Count bets, not legs: legs listed together under one pick amount or payout are one bet',
-    'including a parlay with a status mark on each leg, a settled parlay, or a same-game parlay',
+    'including a parlay with a status mark or progress bar on each leg, a settled parlay, or a same-game parlay',
+    'Set bet_count to 1 for that parlay; per-leg status marks and progress bars do not make separate bets',
     'Set bet_count greater than 1 only when the screenshot shows separate bets, each with its own pick amount or payout',
     'the logo or jersey beside the leg, or the matchup line',
     'For player legs with no printed team name, use these visual cues beside the player or the matchup header',
