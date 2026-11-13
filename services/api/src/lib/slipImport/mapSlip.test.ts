@@ -174,6 +174,56 @@ describe('buildCondition', () => {
   });
 });
 
+describe('printed player stat guard', () => {
+  it.each([
+    ['3+ Cooper DeJean Tackles', 'RUSH_YDS'],
+    ['1+ Nolan Smith Total Sacks', 'ANY_TD'],
+    ['1+ Synthetic Player Tackle', 'RUSH_YDS'],
+    ['1+ Synthetic Player Sack', 'ANY_TD'],
+    ['Synthetic Player Assist Over 1.5', 'RECEPTIONS'],
+    ['Synthetic Player ASSISTS Over 1.5', 'RECEPTIONS'],
+    ['Synthetic Player Pass Defended Over 1.5', 'PASS_COMP'],
+    ['Synthetic Player Passes Defended Over 1.5', 'PASS_COMP'],
+    ['Synthetic Player Forced Fumble Over 1.5', 'RUSH_ATT'],
+    ['Synthetic Player Forced Fumbles Over 1.5', 'RUSH_ATT'],
+    ['Synthetic Player Longest Reception Over 20.5', 'REC_YDS'],
+  ] as const)('flags %s despite supported stat %s', async (text, stat) => {
+    const l = lookups();
+    expect(
+      await mapSlipLeg(leg({ text, market: 'PLAYER_STAT', stat, side: 'OVER', line: 3 }), l),
+    ).toEqual({ status: 'flagged', text, reason: FLAG.unsupported });
+    expect(l.validated).toHaveLength(0);
+  });
+
+  it.each([
+    ['Receptions', 'RECEPTIONS'],
+    ['Receiving Yards', 'REC_YDS'],
+    ['Passing TDs', 'PASS_TD'],
+    ['Rush + Rec', 'RUSH_REC_YDS'],
+    ['Interceptions', 'INT_THROWN'],
+    ['Anytime TD Scorer', 'ANY_TD'],
+    ['RecYds', 'REC_YDS'],
+    ['PaTD', 'PASS_TD'],
+    ['Ru+Rec', 'RUSH_REC_YDS'],
+    ['RuYds', 'RUSH_YDS'],
+    ['Sackson Receptions', 'RECEPTIONS'],
+  ] as const)('keeps supported printed stat %s ready', async (text, stat) => {
+    expect(
+      await mapSlipLeg(
+        leg({ text, market: 'PLAYER_STAT', stat, player: 'Saquon Barkley', side: 'OVER', line: 3 }),
+        lookups(),
+      ),
+    ).toMatchObject({ status: 'ready', pick: { condition: { stat } } });
+  });
+
+  it.each(['', null])('handles missing printed text %j defensively', (text) => {
+    const input = leg({ market: 'PLAYER_STAT', stat: 'RUSH_YDS', side: 'OVER', line: 3 });
+    // Null is outside the reader schema; exercise the runtime guard without widening it.
+    Object.assign(input, { text });
+    expect(buildCondition(input)).toMatchObject({ ok: true });
+  });
+});
+
 describe('mapSlipLeg', () => {
   it('maps a player prop to the player, his game, and the line', async () => {
     const l = lookups();

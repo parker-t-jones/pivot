@@ -199,6 +199,11 @@ type Built =
   | { ok: true; condition: StakeCondition; needs: 'team' | 'player' | 'game' | 'teamOrGame' }
   | { ok: false; reason: string };
 
+// These printed markets have no STAT_KEYS equivalent. Keep whole-word matches so
+// supported labels and sportsbook abbreviations are not mistaken for these stats.
+const UNSUPPORTED_PRINTED_STAT =
+  /\b(?:tackles?|sacks?|assists?|pass(?:es)?\s+defended|forced\s+fumbles?|longest)\b/i;
+
 function overUnder(leg: SlipLeg): { side: 'OVER' | 'UNDER'; line: number } | null {
   if (leg.line === null) return null;
   if (leg.plus_style) {
@@ -267,7 +272,9 @@ export function buildCondition(leg: SlipLeg): Built {
       };
     }
     case 'PLAYER_STAT': {
-      if (!fullGameOnly || leg.stat === null) return { ok: false, reason: FLAG.unsupported };
+      if (!fullGameOnly || leg.stat === null || UNSUPPORTED_PRINTED_STAT.test(leg.text ?? '')) {
+        return { ok: false, reason: FLAG.unsupported };
+      }
       const ou = overUnder(leg);
       if (ou === null) return { ok: false, reason: FLAG.unclear };
       return {
