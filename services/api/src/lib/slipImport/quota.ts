@@ -1,10 +1,9 @@
-import { etCalendarDateFromInstant } from '@pivot/shared';
 import type { Redis as UpstashRedis } from '@upstash/redis';
 import type { Redis } from 'ioredis';
 import type { NflState } from '../../cache/index.js';
 
 /**
- * Per-user daily counter for screenshot imports. Backed by the same Redis the API already uses;
+ * Per-user weekly counter for screenshot imports. Backed by the same Redis the API already uses;
  * in memory for local dev and tests.
  */
 export interface UsageCounter {
@@ -64,25 +63,15 @@ export class UpstashUsageCounter implements UsageCounter {
   }
 }
 
-/** Two days, so a key outlives its US Eastern day wherever the server's clock sits. Pro only:
- *  Pro's counter is still daily, keyed by ET date. */
-export const SLIP_IMPORT_PRO_KEY_TTL_SEC = 2 * 24 * 60 * 60;
-
-/** Nine days: longer than any NFL week, even a short one, so a free-tier key always expires
- *  instead of growing unbounded, but never outlives the week it was issued for. */
-export const SLIP_IMPORT_FREE_KEY_TTL_SEC = 9 * 24 * 60 * 60;
-
-/** Pro: daily counter, keyed by the US Eastern calendar date. */
-export function slipImportProKey(userId: string, now: Date): string {
-  return `slip_import:${userId}:${etCalendarDateFromInstant(now)}`;
-}
+/** Nine days: longer than an NFL week, so weekly keys expire without resetting midweek. */
+export const SLIP_IMPORT_WEEKLY_KEY_TTL_SEC = 9 * 24 * 60 * 60;
 
 /**
- * Free: weekly counter, keyed by the current NFL season/week (#40) — the week this read attempt
+ * Weekly counter for both tiers, keyed by the current NFL season/week (#40) — the week this read attempt
  * happened in, which can differ from the week a slip's legs end up matching after parsing (e.g.
  * near a week boundary). That's expected: the limit is on read attempts, not on the picks' week.
  */
-export function slipImportFreeKey(
+export function slipImportWeeklyKey(
   userId: string,
   nflState: Pick<NflState, 'season' | 'week'>,
 ): string {

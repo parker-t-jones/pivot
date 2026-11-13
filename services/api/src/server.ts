@@ -57,7 +57,7 @@ export interface BuildServerDeps {
   slipImportCounter?: UsageCounter;
 }
 
-/** Daily import counts live in the same Redis as everything else; in memory for local dev. */
+/** Weekly import counts live in the same Redis as everything else; in memory for local dev. */
 function slipImportCounter(env: Env, commandRedis: Redis | undefined): UsageCounter {
   if (commandRedis) return new TcpUsageCounter(commandRedis);
   if (env.CACHE_DRIVER === 'redis' && env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
@@ -168,7 +168,7 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
           ? new AnthropicSlipReader(env.ANTHROPIC_API_KEY)
           : null,
     counter: deps.slipImportCounter ?? slipImportCounter(env, commandRedis),
-    limits: { free: env.SLIP_IMPORT_WEEKLY_FREE, pro: env.SLIP_IMPORT_DAILY_PRO },
+    limits: { free: env.SLIP_IMPORT_WEEKLY_FREE, pro: env.SLIP_IMPORT_WEEKLY_PRO },
   });
   await fastify.register(gameLinksRoutes);
   await fastify.register(sessionRoutes);

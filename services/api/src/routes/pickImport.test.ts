@@ -117,8 +117,7 @@ async function setup(
   await app.register(pickImportRoutes, {
     reader,
     counter,
-    limits: options.limits ?? { free: 5, pro: 30 },
-    now: () => clock.now,
+    limits: options.limits ?? { free: 3, pro: 10 },
   });
   const token = await signToken(USER);
   const post = (payload: unknown, auth = true) =>
@@ -159,7 +158,7 @@ describe('POST /picks/import', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       kind: 'single',
-      imports_left: 4,
+      imports_left: 2,
       legs: [
         {
           status: 'ready',
@@ -245,8 +244,20 @@ describe('POST /picks/import', () => {
     expect(h.reader?.calls).toHaveLength(0);
   });
 
+  it('keeps the default free allowance at three imports per NFL week', async () => {
+    const h = await harness();
+    for (let used = 1; used <= 3; used += 1) {
+      const response = await h.post({ image: PNG });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().imports_left).toBe(3 - used);
+    }
+    const blocked = await h.post({ image: PNG });
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.json().error.details).toEqual({ limit: 3 });
+  });
+
   it('stops a free user after the weekly limit with friendly copy', async () => {
-    const h = await harness({ limits: { free: 2, pro: 30 } });
+    const h = await harness({ limits: { free: 2, pro: 10 } });
     expect((await h.post({ image: PNG })).json().imports_left).toBe(1);
     expect((await h.post({ image: PNG })).json().imports_left).toBe(0);
     const blocked = await h.post({ image: PNG });
@@ -261,7 +272,7 @@ describe('POST /picks/import', () => {
   });
 
   it('keeps the free counter for the NFL week it started in, even across a UTC midnight', async () => {
-    const h = await harness({ limits: { free: 2, pro: 30 } });
+    const h = await harness({ limits: { free: 2, pro: 10 } });
     // harness() already seeds the lineup cache with season 2026 / week 5.
     expect((await h.post({ image: PNG })).json().imports_left).toBe(1);
     // Later UTC clock, same NFL week: still charges the same counter.
@@ -278,23 +289,56 @@ describe('POST /picks/import', () => {
     expect((await h.post({ image: PNG })).statusCode).toBe(200);
   });
 
-  it('gives Pro the higher limit', async () => {
-    const h = await harness({ tier: 'pro', limits: { free: 0, pro: 1 } });
-    expect((await h.post({ image: PNG })).statusCode).toBe(200);
+  it('allows ten Pro imports per NFL week and reports the remaining allowance', async () => {
+    const h = await harness({ tier: 'pro' });
+    for (let used = 1; used <= 10; used += 1) {
+      const response = await h.post({ image: PNG });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().imports_left).toBe(10 - used);
+    }
     const blocked = await h.post({ image: PNG });
     expect(blocked.statusCode).toBe(429);
-    expect(blocked.json().error.message).not.toContain('Pro includes more');
+    expect(blocked.json().error).toEqual({
+      code: 'slip_import_limit',
+      message:
+        'You’ve used this week’s 10 screenshot imports. You can still add picks yourself, and imports reset next week.',
+      details: { limit: 10 },
+    });
+    expect(h.reader?.calls).toHaveLength(10);
   });
 
-  it('gives the import back when the model call fails on our side', async () => {
-    const reader = new FakeReader(new SlipReadError('upstream', 529));
-    const h = await harness({ reader, limits: { free: 1, pro: 1 } });
-    const failed = await h.post({ image: PNG });
-    expect(failed.statusCode).toBe(502);
-    expect(failed.json().error.code).toBe('slip_import_failed');
-    reader.result = { is_bet_slip: true, bet_count: 1, legs: [RUSH_LEG] };
-    expect((await h.post({ image: PNG })).statusCode).toBe(200);
+  it('keeps Pro usage across a new ET day in the same NFL week and resets next week', async () => {
+    const h = await harness({ tier: 'pro' });
+    for (let used = 1; used <= 10; used += 1) await h.post({ image: PNG });
+    // Oct 9 at noon ET to Oct 10 at 4 AM ET; still NFL week 5, within the TTL.
+    h.setNow(new Date('2026-10-10T08:00:00.000Z'));
+    expect((await h.post({ image: PNG })).statusCode).toBe(429);
+    expect(h.reader?.calls).toHaveLength(10);
+
+    await h.lineupCache.setNflState(
+      { season: '2026', week: 6, seasonType: 'regular', seasonStartDate: '2026-09-09' },
+      600,
+    );
+    const response = await h.post({ image: PNG });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().imports_left).toBe(9);
   });
+
+  it.each(['free', 'pro'] as const)(
+    'gives the import back for %s when the model call fails on our side',
+    async (tier) => {
+      const reader = new FakeReader(new SlipReadError('upstream', 529));
+      const h = await harness({ tier, reader, limits: { free: 1, pro: 1 } });
+      const failed = await h.post({ image: PNG });
+      expect(failed.statusCode).toBe(502);
+      expect(failed.json().error.code).toBe('slip_import_failed');
+      reader.result = { is_bet_slip: true, bet_count: 1, legs: [RUSH_LEG] };
+      const response = await h.post({ image: PNG });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().imports_left).toBe(0);
+      expect((await h.post({ image: PNG })).statusCode).toBe(429);
+    },
+  );
 
   it.each([
     [

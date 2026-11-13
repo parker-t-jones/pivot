@@ -22,10 +22,8 @@ import {
   type SlipTeam,
 } from '../lib/slipImport/mapSlip.js';
 import {
-  SLIP_IMPORT_FREE_KEY_TTL_SEC,
-  SLIP_IMPORT_PRO_KEY_TTL_SEC,
-  slipImportFreeKey,
-  slipImportProKey,
+  SLIP_IMPORT_WEEKLY_KEY_TTL_SEC,
+  slipImportWeeklyKey,
   type UsageCounter,
 } from '../lib/slipImport/quota.js';
 import { SlipReadError, sniffImageType, type SlipReader } from '../lib/slipImport/reader.js';
@@ -37,7 +35,6 @@ export interface PickImportRoutesOptions {
   reader: SlipReader | null;
   counter: UsageCounter;
   limits: SlipImportLimits;
-  now?: () => Date;
 }
 
 const bodySchema = z
@@ -60,7 +57,7 @@ function limitError(limit: number, isPro: boolean): ApiError {
     429,
     'slip_import_limit',
     isPro
-      ? `You’ve used today’s ${limit} screenshot imports. You can still add picks yourself, and imports reset tomorrow.`
+      ? `You’ve used this week’s ${limit} screenshot imports. You can still add picks yourself, and imports reset next week.`
       : `You’ve used this week’s ${limit} screenshot imports. You can still add picks yourself, imports reset next week, and Pro includes more.`,
     { limit },
   );
@@ -82,7 +79,6 @@ function decodeImage(value: string): Buffer | null {
  * or logged; logs carry counts and error kinds only.
  */
 const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (fastify, opts) => {
-  const now = opts.now ?? (() => new Date());
   fastify.addHook('preHandler', fastify.authenticate);
 
   fastify.post(
@@ -129,9 +125,8 @@ const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (
       const isPro = userRow.subscription_tier === 'pro';
       const limit = isPro ? opts.limits.pro : opts.limits.free;
       const nfl = await getCurrentNflState(fastify);
-      const key = isPro ? slipImportProKey(user.id, now()) : slipImportFreeKey(user.id, nfl);
-      const ttl = isPro ? SLIP_IMPORT_PRO_KEY_TTL_SEC : SLIP_IMPORT_FREE_KEY_TTL_SEC;
-      const used = await opts.counter.increment(key, ttl);
+      const key = slipImportWeeklyKey(user.id, nfl);
+      const used = await opts.counter.increment(key, SLIP_IMPORT_WEEKLY_KEY_TTL_SEC);
       if (used > limit) {
         await opts.counter.decrement(key);
         throw limitError(limit, isPro);

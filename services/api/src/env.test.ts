@@ -50,18 +50,18 @@ describe('PUSH_DRIVER env', () => {
     );
   });
 
-  it('leaves slip import off without ANTHROPIC_API_KEY and defaults its limits to 3/week and 30/day', async () => {
+  it('leaves slip import off without ANTHROPIC_API_KEY and defaults its limits to 3/week and 10/week', async () => {
     const { loadAndValidateEnv } = await loadEnvModule();
     const env = loadAndValidateEnv({ ...required, ANTHROPIC_API_KEY: ' ' });
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(env.SLIP_IMPORT_WEEKLY_FREE).toBe(3);
-    expect(env.SLIP_IMPORT_DAILY_PRO).toBe(30);
+    expect(env.SLIP_IMPORT_WEEKLY_PRO).toBe(10);
     const custom = loadAndValidateEnv({
       ...required,
       SLIP_IMPORT_WEEKLY_FREE: '2',
-      SLIP_IMPORT_DAILY_PRO: '50',
+      SLIP_IMPORT_WEEKLY_PRO: '50',
     });
-    expect([custom.SLIP_IMPORT_WEEKLY_FREE, custom.SLIP_IMPORT_DAILY_PRO]).toEqual([2, 50]);
+    expect([custom.SLIP_IMPORT_WEEKLY_FREE, custom.SLIP_IMPORT_WEEKLY_PRO]).toEqual([2, 50]);
   });
 
   it('accepts expo without EXPO_ACCESS_TOKEN and still constructs ExpoPushNotifier', async () => {
