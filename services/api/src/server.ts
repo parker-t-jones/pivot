@@ -42,7 +42,12 @@ import {
   UpstashUsageCounter,
   type UsageCounter,
 } from './lib/slipImport/quota.js';
-import { AnthropicSlipReader, type SlipReader } from './lib/slipImport/reader.js';
+import {
+  AnthropicSlipReader,
+  ConfirmingSlipReader,
+  SLIP_CONFIRM_MODEL,
+  type SlipReader,
+} from './lib/slipImport/reader.js';
 import { readGamePlayerStats } from './lib/gamePlayerStats.js';
 import { sleeperClient } from './providers/sleeper-client.js';
 import stateRoutes from './routes/state.js';
@@ -165,7 +170,10 @@ export async function buildServer(env: Env, deps: BuildServerDeps = {}) {
       deps.slipReader !== undefined
         ? deps.slipReader
         : env.ANTHROPIC_API_KEY
-          ? new AnthropicSlipReader(env.ANTHROPIC_API_KEY)
+          ? new ConfirmingSlipReader(
+              new AnthropicSlipReader(env.ANTHROPIC_API_KEY),
+              new AnthropicSlipReader(env.ANTHROPIC_API_KEY, undefined, SLIP_CONFIRM_MODEL),
+            )
           : null,
     counter: deps.slipImportCounter ?? slipImportCounter(env, commandRedis),
     limits: { free: env.SLIP_IMPORT_WEEKLY_FREE, pro: env.SLIP_IMPORT_WEEKLY_PRO },

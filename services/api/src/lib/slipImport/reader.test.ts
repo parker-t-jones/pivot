@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AnthropicSlipReader,
   SLIP_READ_MODEL,
+  SLIP_CONFIRM_MODEL,
+  ConfirmingSlipReader,
   SLIP_READ_PROMPT,
   SlipReadError,
   sniffImageType,
@@ -50,6 +52,25 @@ describe('AnthropicSlipReader', () => {
       ],
     });
   });
+
+  it.each([SLIP_READ_MODEL, SLIP_CONFIRM_MODEL])(
+    'passes model %s and its supported request options',
+    async (model) => {
+      const { client, create } = fakeClient(message(JSON.stringify(SLIP)));
+      await new AnthropicSlipReader('unused', client, model).read(IMAGE);
+      const params = create.mock.calls[0]?.[0 as never] as unknown as Record<string, unknown>;
+      expect(params).toMatchObject({ model, output_config: { effort: 'medium' } });
+      if (model === SLIP_READ_MODEL) {
+        expect(params).not.toHaveProperty('betas');
+        expect(params).not.toHaveProperty('fallbacks');
+      } else {
+        expect(params).toMatchObject({
+          betas: ['server-side-fallback-2026-07-01'],
+          fallbacks: 'default',
+        });
+      }
+    },
+  );
 
   it.each([
     ['a refusal', message('', 'refusal'), 'refused'],
@@ -163,4 +184,59 @@ describe('slip reading instructions', () => {
       );
     },
   );
+});
+
+describe('ConfirmingSlipReader', () => {
+  it.each([
+    SLIP,
+    { is_bet_slip: false, bet_count: 2, legs: [] },
+    { is_bet_slip: true, bet_count: 0, legs: [] },
+    { is_bet_slip: true, bet_count: 1, legs: [] },
+    { ...SLIP, legs: Array.from({ length: 13 }, () => leg()) },
+  ])('does not confirm a read other than multiple bets: %j', async (read) => {
+    const primary = { read: vi.fn().mockResolvedValue(read) };
+    const confirm = { read: vi.fn() };
+    expect(await new ConfirmingSlipReader(primary, confirm).read(IMAGE)).toBe(read);
+    expect(primary.read).toHaveBeenCalledExactlyOnceWith(IMAGE);
+    expect(confirm.read).not.toHaveBeenCalled();
+  });
+
+  it.each([1, 2])(
+    'returns the entire confirmation read with bet_count %s, once',
+    async (bet_count) => {
+      const primary = { read: vi.fn().mockResolvedValue({ ...SLIP, bet_count: 2 }) };
+      const confirmed = { ...SLIP, bet_count, legs: [leg({ text: 'confirmed' })] };
+      const confirm = { read: vi.fn().mockResolvedValue(confirmed) };
+      expect(await new ConfirmingSlipReader(primary, confirm).read(IMAGE)).toBe(confirmed);
+      expect(primary.read).toHaveBeenCalledExactlyOnceWith(IMAGE);
+      expect(confirm.read).toHaveBeenCalledExactlyOnceWith(IMAGE);
+    },
+  );
+
+  it.each(['upstream', 'refused', 'unparseable'] as const)(
+    'keeps the primary read on a %s confirmation error',
+    async (reason) => {
+      const read = { ...SLIP, bet_count: 2 };
+      const confirm = { read: vi.fn().mockRejectedValue(new SlipReadError(reason)) };
+      expect(await new ConfirmingSlipReader({ read: async () => read }, confirm).read(IMAGE)).toBe(
+        read,
+      );
+      expect(confirm.read).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('propagates primary errors without confirming', async () => {
+    const error = new SlipReadError('upstream');
+    const primary = { read: vi.fn().mockRejectedValue(error) };
+    const confirm = { read: vi.fn() };
+    await expect(new ConfirmingSlipReader(primary, confirm).read(IMAGE)).rejects.toBe(error);
+    expect(confirm.read).not.toHaveBeenCalled();
+  });
+
+  it('propagates unexpected confirmation errors', async () => {
+    const error = new Error('programming error');
+    const primary = { read: async () => ({ ...SLIP, bet_count: 2 }) };
+    const confirm = { read: vi.fn().mockRejectedValue(error) };
+    await expect(new ConfirmingSlipReader(primary, confirm).read(IMAGE)).rejects.toBe(error);
+  });
 });

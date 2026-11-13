@@ -1,16 +1,30 @@
 # Slip reader model eval (#41)
 
-**Status:** The eval was run on November 12, 2026 on 7 private slips. The reader prompt
-was changed afterwards (#119); post-change results are pending Parker’s paid rerun.
+**Status:** Issue #126 reports 13 private slips × 10 Haiku 5.5 runs with the current
+main prompt and mapper. Launch decision: Haiku 5.5 primary, one Sonnet 5.5 confirmation
+only for `is_bet_slip && bet_count > 1`. No Opus reader is configured. The composed
+path still needs Parker’s paid acceptance run; Sonnet bet-count reliability is unmeasured.
 
 ## Why
 
-`AnthropicSlipReader` (`services/api/src/lib/slipImport/reader.ts`) hardcodes
-`SLIP_READ_MODEL = 'claude-opus-5-5'`, chosen without measurement when the slip import feature
-(#12) shipped. The current table estimates Opus at $4/M input tokens and $20/M output tokens; these rates are unverified.
-Reading one bet slip screenshot into structured JSON is closer to constrained extraction than
-open-ended reasoning, so a cheaper model may do just as well for a fraction of the cost — but
-that's a guess until it's measured against real slips.
+Haiku costs much less for constrained extraction, but occasionally counts valid single-bet
+parlays as multiple bets. `ConfirmingSlipReader` re-reads those images once with Sonnet and
+returns its whole read, including when it still reports multiple bets. A `SlipReadError` from
+confirmation preserves the primary read and the route’s existing refusal. Other reads are
+returned immediately; there is no confirmation loop. The decorator logs and stores nothing.
+The route, prompt, mapper, and quotas are unchanged.
+
+### Anthropic request compatibility
+
+Checked against Anthropic’s documentation for this change:
+
+- [Effort](https://platform.claude.com/docs/en/build-with-claude/effort): Haiku 5.5 supports
+  `output_config.effort`, including `medium`. Keep the existing setting on both readers.
+- [Refusals and fallback](https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback):
+  Haiku 5.5 has no server-side fallback. Omit both the `server-side-fallback-2026-07-01`
+  beta and `fallbacks: 'default'` for Haiku. Retain them for Sonnet. This provider safety
+  fallback is separate from our bet-count confirmation; unreadable/refused Haiku reads
+  do not trigger confirmation.
 
 ## How to run it
 
@@ -24,7 +38,7 @@ pnpm install --frozen-lockfile
 pnpm build
 pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips --runs 3 --as-app=ios --out
 pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips --runs 3 --as-app=web --out /absolute/path/to/web-results.json
-pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips --production-path --as-app=ios --out /absolute/path/to/production-smoke.json
+pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips --production-path --runs 10 --as-app=ios --out /absolute/path/to/production-smoke.json
 ```
 
 Expect positional and best-assignment scores, per-run mean/min/max accuracy and cost, and
@@ -43,9 +57,12 @@ Best assignment matches legs one-to-one to maximize correct fields; read failure
 accuracy denominators. Inspect count checks too: field accuracy alone does not penalize extra legs.
 
 JSON failures have null cost/tokens when usage is unavailable; totals sum known usage only.
-Production-path uses `AnthropicSlipReader` unchanged and observes its SDK usage; fallback billing
-may differ from the pinned model estimate. Live API behavior, real-slip accuracy, provider rates
-and Docker builds have not been verified here. No recommendation is justified yet.
+Production-path runs the same composed Haiku/Sonnet reader as the server and observes each SDK
+call’s usage. It prints the confirmation count and added cost, includes both models’ calls at
+their respective rates in per-image cost, and saves per-call model/usage in JSON records.
+Unknown confirmation cost is reported explicitly; totals include known usage only.
+Sonnet’s provider safety-fallback billing may differ from the requested-model estimate.
+Live API behavior, composed real-slip accuracy, and actual billing have not been verified here.
 
 ## Models compared
 
@@ -63,34 +80,46 @@ so the comparison measures model choice only (see `multiModelReader.ts`). The ev
 server-side refusal fallback the production path uses — a cost measurement wants to know what
 each model alone costs and gets right, not what a fallback masks.
 
-## Post-change results — PLACEHOLDER
+## Current-prompt evidence (reported in #126)
 
-Pending Parker’s rerun on the same 7 private slips, 3 runs per model. Paste the raw and
-import-outcome scorecards here; no post-change accuracy or cost numbers are available.
+13 private slips × 10 runs = 130 Haiku reads:
 
-| model                            | leg count | bet count | is_bet_slip | field accuracy (avg) | $/image |
-| -------------------------------- | --------- | --------- | ----------- | -------------------- | ------- |
-| Opus 5.5 (`claude-opus-5-5`)     | —         | —         | —           | —                    | —       |
-| Sonnet 5.5 (`claude-sonnet-5-5`) | —         | —         | —           | —                    | —       |
-| Haiku 5.5 (`claude-haiku-5-5`)   | —         | —         | —           | —                    | —       |
+| Metric                 | Haiku 5.5 primary alone                         |
+| ---------------------- | ----------------------------------------------- |
+| silent_wrong           | 0                                               |
+| flagged                | 20 (two intended OTHER legs on slip 11 per run) |
+| match                  | 629                                             |
+| field accuracy         | 95.6%                                           |
+| cost/image             | approximately $0.0011                           |
+| rejected_multiple_bets | 3/130 reads, on valid single-bet parlays        |
 
-### Opus 5.5
+Opus 5.5 never misread bet count on these slips, but is too expensive for launch.
+Sonnet’s bet-count reliability and the composed path’s outcomes are **not yet measured**.
+These numbers are issue evidence, not a run performed by this implementation session.
 
-_(Post-change results pending.)_
+False accepts on slip 05 (hedge calculator) and slip 08 (odds board): 18/20. They end as
+flagged legs rather than wrong picks. Fixing these, and changing the prompt, are out of scope.
 
-### Sonnet 5.5
+## Launch decision and acceptance
 
-_(Post-change results pending.)_
+Configure `SLIP_READ_MODEL = 'claude-haiku-5-5'` and
+`SLIP_CONFIRM_MODEL = 'claude-sonnet-5-5'`. No Opus primary or bet-count confirmation.
+Keep the Haiku $0.10/$0.50 and Sonnet $2/$10 per-million-token rates in `modelCost.ts`.
 
-### Haiku 5.5
+Before enabling production import, Parker runs with his own key and the 13 reviewed private
+slips (use the same image profile as the baseline):
 
-_(Post-change results pending.)_
+```bash
+pnpm build
+pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips --production-path --runs 10 --out /absolute/path/to/production-results.json
+```
 
-## Recommendation
+Required: **silent_wrong 0** and **rejected_multiple_bets 0**. Record confirmation count,
+added cost, total per-image cost, and the full scorecard. A confirmation that agrees on
+multiple bets or fails still permits the unchanged route to refuse; this is why the paid
+acceptance run remains necessary. If Sonnet still permits false refusals, Parker can choose
+a follow-up to confirm with Opus only on that rare path (issue estimate: ~$0.0007 average)
+or move the primary to Sonnet. Neither alternative is implemented here.
 
-_(Post-change recommendation pending the rerun.)_
-
-If a cheaper model's accuracy is close enough to Opus 5.5's, say so explicitly here and note it as
-a candidate follow-up to change `SLIP_READ_MODEL` — **do not change the production model as part
-of filling in this doc**. A worse misread becomes a user-facing wrong pick, so swapping the
-production model is a separate decision for Parker once he's seen the real numbers.
+No API key is set by this change. Production configuration waits for review, merge, and a
+passing acceptance run. Parker handles all Fly commands.

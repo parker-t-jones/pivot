@@ -20,7 +20,12 @@ import {
   leg,
 } from '../lib/slipImport/fixtures.test-helper.js';
 import { InMemoryUsageCounter } from '../lib/slipImport/quota.js';
-import { SlipReadError, type SlipImage, type SlipReader } from '../lib/slipImport/reader.js';
+import {
+  ConfirmingSlipReader,
+  SlipReadError,
+  type SlipImage,
+  type SlipReader,
+} from '../lib/slipImport/reader.js';
 import type { SlipRead } from '../lib/slipImport/schema.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
@@ -70,6 +75,7 @@ async function signToken(sub: string): Promise<string> {
 async function setup(
   options: {
     reader?: FakeReader | null;
+    composedReader?: SlipReader;
     tier?: 'free' | 'pro';
     isDemo?: boolean;
     limits?: { free: number; pro: number };
@@ -115,7 +121,7 @@ async function setup(
   const clock = { now: NOW };
   const counter = new InMemoryUsageCounter(() => clock.now.getTime());
   await app.register(pickImportRoutes, {
-    reader,
+    reader: options.composedReader ?? reader,
     counter,
     limits: options.limits ?? { free: 3, pro: 10 },
   });
@@ -366,6 +372,36 @@ describe('POST /picks/import', () => {
     const response = await h.post({ image: PNG });
     expect(response.statusCode).toBe(422);
     expect(response.json().error.code).toBe(code);
+  });
+
+  it.each(['agrees', 'fails'] as const)(
+    'keeps the multiple-bet refusal when confirmation %s',
+    async (mode) => {
+      const read = { is_bet_slip: true, bet_count: 2, legs: [RUSH_LEG, RUSH_LEG] };
+      const primary = new FakeReader(read);
+      const confirm = new FakeReader(mode === 'agrees' ? read : new SlipReadError('upstream'));
+      const h = await harness({ composedReader: new ConfirmingSlipReader(primary, confirm) });
+      const response = await h.post({ image: PNG });
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error).toMatchObject({
+        code: 'slip_import_multiple_bets',
+        message: 'That screenshot shows more than one bet. Crop it to one bet and try again.',
+      });
+      expect(primary.calls).toHaveLength(1);
+      expect(confirm.calls).toHaveLength(1);
+      expect(h.logs.join('')).not.toContain(PRIVATE_MARKER);
+      expect(h.logs.join('')).not.toContain(RUSH_LEG.text);
+    },
+  );
+
+  it('imports the corrected single-bet read after confirmation', async () => {
+    const primary = new FakeReader({ is_bet_slip: true, bet_count: 2, legs: [OTHER_LEG] });
+    const confirm = new FakeReader({ is_bet_slip: true, bet_count: 1, legs: [RUSH_LEG] });
+    const h = await harness({ composedReader: new ConfirmingSlipReader(primary, confirm) });
+    const response = await h.post({ image: PNG });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().legs).toHaveLength(1);
+    expect(response.json().legs[0].status).toBe('ready');
   });
 
   it('answers 422 when the model could not read the slip, and keeps the import spent', async () => {
