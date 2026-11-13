@@ -45,20 +45,26 @@ your subscription is active, not your card details.
 **Delivery and debugging records.** A log of which alerts we computed and sent you, used to avoid
 duplicate alerts and to debug problems.
 
-## Importing a bet slip from a photo (coming soon — not live yet)
+## Importing a pick from a screenshot
 
-We're building a feature where you can upload a photo of your bet slip and we'll read the legs for
-you to confirm, instead of typing each one in. When this ships:
+You can add a pick by uploading a screenshot of a bet slip instead of typing it in. Pivot reads the
+screenshot and fills in the legs for you to review.
 
-- The photo is sent directly from our server to an AI model (Anthropic) that reads it and returns
-  the legs as structured data (player, bet type, line). The photo is never sent from your device
-  to Anthropic directly, and never leaves our systems except for that one request.
-- **We do not save the photo or the AI's raw response.** Both exist only for the moment it takes to
-  process your upload; we only keep counts (so we can enforce a weekly limit) and error details if
-  something goes wrong.
-- You always review and confirm the extracted legs before anything is saved as a pick.
-- This feature is not available in the app yet. We'll update this policy and notify the App Store
-  of the change before it ships.
+- Your screenshot is sent from the app to our server, and from our server to an AI model run by
+  Anthropic, which reads it and returns the legs as structured data (player, bet type, line). The
+  app never sends it to Anthropic directly.
+- **We do not save your screenshot or the AI's raw answer.** Both exist only for the moment it takes
+  to process the request. We keep a count of how many imports you have used this week, so we can
+  enforce the weekly limit, and we log counts and error types if something goes wrong. We do not
+  log the image or what was read from it.
+- Anthropic handles the screenshot under its API terms. As of this draft, Anthropic says it does not
+  use API inputs or outputs to train its models by default and deletes them from its systems within
+  30 days, with limited exceptions such as content flagged for violating its usage policy or
+  retention required by law. [Parker: re-check this against Anthropic's current commercial data
+  retention page before publishing, and keep this paragraph in step with it.]
+- Nothing from the screenshot becomes a pick until you review the legs and save them. A screenshot
+  may show personal details such as a name, account number or balance. Crop those out if you would
+  rather Anthropic not receive them; Pivot only uses the legs.
 
 ## Who else sees your data
 
@@ -70,7 +76,8 @@ you to confirm, instead of typing each one in. When this ships:
 - **RevenueCat** manages subscriptions and tells us whether you're on Pro.
 - **Sleeper** is queried, read-only, for your fantasy roster if you connect a league — we send them
   no personal information beyond the league/roster IDs you give us.
-- **Anthropic** will process bet-slip photos once that feature ships (see above) — not yet.
+- **Anthropic** reads the screenshot when you import a pick from one (see above). It receives the
+  image only, from our server, with nothing that identifies you.
 - We use error-monitoring tooling (Sentry) for parts of our backend; it currently does not receive
   any information that identifies you.
 
@@ -114,10 +121,13 @@ generic placeholder.]
   automatically") is backed by a specific file in `docs/PRIVACY-INVENTORY.md` — re-check that table
   before editing this draft, since a wording change here should track a real code change, not the
   other way around.
-- The bet-slip section describes issue #12's _design_, which is not yet merged. Don't let this
-  section go live before the feature does, and re-verify the "we don't save it" claim against the
-  actual implementation when it ships — that's a promise this document is making on the code's
-  behalf.
+- The screenshot-import section describes shipped code (#12, `services/api/src/routes/pickImport.ts`;
+  verified for this draft: the image and the read stay in memory, and the only log lines carry
+  counts and error kinds). Publish it **before** the production `ANTHROPIC_API_KEY` is set, since
+  that is what turns the feature on. Re-verify the "we don't save it" claim whenever the import
+  route or readers change: it is a promise this document makes on the code's behalf.
+- The sentence about Anthropic's retention and training is Anthropic's published policy, not ours.
+  It can change; check it on the day you publish.
 - This is not legal advice. Have the final text reviewed by a lawyer, especially the RevenueCat
   retention carve-out and the "Changes to this policy" / contact sections, which are left as
   placeholders on purpose.
