@@ -5,12 +5,19 @@ import { dirname, extname, join } from 'node:path';
 import { loadEvalImages } from './lib/slipImport/evalImages.js';
 import {
   evalModels,
+  summarizeConfirmations,
   formatComparisonTable,
   formatModelEvalResult,
   type ModelReader,
+  type ModelCallUsage,
 } from './lib/slipImport/modelEval.js';
 import { readSlipWithModel, productionModelReader } from './lib/slipImport/multiModelReader.js';
-import { AnthropicSlipReader, SLIP_READ_MODEL } from './lib/slipImport/reader.js';
+import {
+  AnthropicSlipReader,
+  ConfirmingSlipReader,
+  SLIP_CONFIRM_MODEL,
+  SLIP_READ_MODEL,
+} from './lib/slipImport/reader.js';
 import { APP_PROFILES, loadAppEncoder, parseEvalOptions } from './lib/slipImport/evalOptions.js';
 import { rescoreResults } from './lib/slipImport/rescore.js';
 import { costForUsage, type TokenUsage } from './lib/slipImport/modelCost.js';
@@ -40,6 +47,8 @@ async function main(): Promise<void> {
   }
   for (const candidate of options.models)
     costForUsage(candidate.model, { input_tokens: 0, output_tokens: 0 }, options.prices);
+  if (options.productionPath)
+    costForUsage(SLIP_CONFIRM_MODEL, { input_tokens: 0, output_tokens: 0 }, options.prices);
   const key = process.env['ANTHROPIC_API_KEY'];
   if (!key) throw new Error('Set ANTHROPIC_API_KEY to run the slip model eval.');
   const { cases, skipped } = await loadEvalImages(options.dir, {
@@ -74,26 +83,41 @@ async function main(): Promise<void> {
   }
   const client = new Anthropic({ apiKey: key, maxRetries: 1, timeout: 60_000 });
   let usage: TokenUsage | null = null;
+  let calls: ModelCallUsage[] = [];
   // Observe the SDK response without modifying the production reader or request shape.
   if (options.productionPath) {
     client.beta.messages.create = new Proxy(client.beta.messages.create, {
       async apply(target, thisArg, args) {
+        const model = (args[0] as { model: string }).model;
+        const call: ModelCallUsage = { model, usage: null };
+        calls.push(call);
         const response = (await Reflect.apply(target, thisArg, args)) as Anthropic.Beta.BetaMessage;
-        usage = response.usage;
+        call.usage = response.usage;
+        usage = {
+          input_tokens: (usage?.input_tokens ?? 0) + response.usage.input_tokens,
+          output_tokens: (usage?.output_tokens ?? 0) + response.usage.output_tokens,
+        };
         return response;
       },
     });
   }
-  const productionReader = options.productionPath ? new AnthropicSlipReader(key, client) : null;
+  const productionReader = options.productionPath
+    ? new ConfirmingSlipReader(
+        new AnthropicSlipReader(key, client),
+        new AnthropicSlipReader(key, client, SLIP_CONFIRM_MODEL),
+      )
+    : null;
   const read: ModelReader = productionReader
     ? productionModelReader(
         {
           read: (image) => {
             usage = null;
+            calls = [];
             return productionReader.read(image);
           },
         },
         () => usage,
+        () => calls,
       )
     : (model, image) => readSlipWithModel(client, model, image);
   console.log(
@@ -129,6 +153,20 @@ async function main(): Promise<void> {
   }
   for (const result of results) console.log(`${formatModelEvalResult(result)}\n`);
   console.log(formatComparisonTable(results));
+  if (options.productionPath) {
+    const confirmations = summarizeConfirmations(
+      results.flatMap((r) => r.records),
+      SLIP_CONFIRM_MODEL,
+      options.prices,
+    );
+    console.log(
+      `Confirmations: ${confirmations.count}; added cost: $${confirmations.cost.toFixed(6)} (included in per-image cost).`,
+    );
+    if (confirmations.unknownCosts)
+      console.log(
+        `${confirmations.unknownCosts} confirmation call(s) have unknown cost; totals include known usage only.`,
+      );
+  }
 }
 void main().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : error);

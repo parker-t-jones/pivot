@@ -28,7 +28,8 @@ export class SlipReadError extends Error {
   }
 }
 
-export const SLIP_READ_MODEL = 'claude-opus-5-5';
+export const SLIP_READ_MODEL = 'claude-haiku-5-5';
+export const SLIP_CONFIRM_MODEL = 'claude-sonnet-5-5';
 
 export const SLIP_READ_PROMPT = `Read this sportsbook bet slip screenshot for an NFL pick tracker.
 
@@ -48,7 +49,11 @@ If the image is not a bet slip, set is_bet_slip to false and return no legs.`;
 export class AnthropicSlipReader implements SlipReader {
   private readonly client: Anthropic;
 
-  constructor(apiKey: string, client?: Anthropic) {
+  constructor(
+    apiKey: string,
+    client?: Anthropic,
+    private readonly model = SLIP_READ_MODEL,
+  ) {
     // One quick retry; the user is waiting on a spinner.
     this.client = client ?? new Anthropic({ apiKey, maxRetries: 1, timeout: 60_000 });
   }
@@ -57,10 +62,12 @@ export class AnthropicSlipReader implements SlipReader {
     let message: Anthropic.Beta.BetaMessage;
     try {
       message = await this.client.beta.messages.create({
-        model: SLIP_READ_MODEL,
+        model: this.model,
         max_tokens: 8000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
+        // Haiku 5.5 has no server-side fallback (Anthropic refusals-and-fallback docs).
+        ...(this.model === 'claude-haiku-5-5'
+          ? {}
+          : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }),
         output_config: {
           effort: 'medium',
           format: { type: 'json_schema', schema: SLIP_READ_JSON_SCHEMA },
@@ -102,6 +109,25 @@ export class AnthropicSlipReader implements SlipReader {
     const parsed = slipReadSchema.safeParse(json);
     if (!parsed.success) throw new SlipReadError('unparseable');
     return parsed.data;
+  }
+}
+
+/** Recheck only a multiple-bet read, once. Neither images nor reads are logged or stored. */
+export class ConfirmingSlipReader implements SlipReader {
+  constructor(
+    private readonly primary: SlipReader,
+    private readonly confirm: SlipReader,
+  ) {}
+
+  async read(image: SlipImage): Promise<SlipRead> {
+    const primary = await this.primary.read(image);
+    if (!primary.is_bet_slip || primary.bet_count <= 1) return primary;
+    try {
+      return await this.confirm.read(image);
+    } catch (error) {
+      if (!(error instanceof SlipReadError)) throw error;
+      return primary;
+    }
   }
 }
 

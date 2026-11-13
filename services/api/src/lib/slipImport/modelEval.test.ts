@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   evalModel,
+  summarizeConfirmations,
   evalModels,
   formatComparisonTable,
   formatModelEvalResult,
   type ImageCase,
   type ModelReader,
 } from './modelEval.js';
-import { SlipReadError } from './reader.js';
+import { ConfirmingSlipReader, SlipReadError } from './reader.js';
 import { leg } from './fixtures.test-helper.js';
+import { productionModelReader } from './multiModelReader.js';
 
 const IMAGE = { mediaType: 'image/png' as const, data: 'aaaa' };
 
@@ -40,6 +42,52 @@ describe('evalModel', () => {
     expect(result.costPerImage).toBeCloseTo(24, 6);
     expect(result.failures).toEqual([]);
   });
+
+  it.each([false, true])(
+    'costs both composed production calls at their own rates (confirmation fails: %s)',
+    async (fails) => {
+      const primaryUsage = { input_tokens: 1000, output_tokens: 100 };
+      const confirmUsage = { input_tokens: 2000, output_tokens: 200 };
+      const calls: import('./modelEval.js').ModelCallUsage[] = [];
+      const primaryRead = { is_bet_slip: true, bet_count: 2, legs: [leg()] };
+      const confirmedRead = { ...primaryRead, bet_count: 1 };
+      const composed = new ConfirmingSlipReader(
+        {
+          read: async () => {
+            calls.push({ model: 'claude-haiku-5-5', usage: primaryUsage });
+            return primaryRead;
+          },
+        },
+        {
+          read: async () => {
+            calls.push({ model: 'claude-sonnet-5-5', usage: fails ? null : confirmUsage });
+            if (fails) throw new SlipReadError('upstream');
+            return confirmedRead;
+          },
+        },
+      );
+      const read = productionModelReader(
+        composed,
+        () => primaryUsage,
+        () => calls,
+      );
+      const result = await evalModel(
+        { model: 'claude-haiku-5-5', label: 'Production' },
+        [SLIP_CASE],
+        read,
+      );
+      expect(calls).toHaveLength(2);
+      expect(summarizeConfirmations(result.records, 'claude-sonnet-5-5')).toEqual({
+        count: 1,
+        cost: fails ? 0 : 0.006,
+        unknownCosts: fails ? 1 : 0,
+      });
+      expect(result.records[0]?.read).toEqual(fails ? primaryRead : confirmedRead);
+      expect(result.totalCost).toBeCloseTo(fails ? 0.00015 : 0.00615, 8);
+      expect(result.costPerImage).toBeCloseTo(result.totalCost, 8);
+      expect(formatModelEvalResult(result).includes('Some costs/tokens are unknown')).toBe(fails);
+    },
+  );
 
   it('scores a read failure as a dropped, non-slip read and records it as a failure', async () => {
     const read: ModelReader = async () => {

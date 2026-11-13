@@ -52,10 +52,16 @@ export interface ReadFailure {
   message: string;
 }
 
+export interface ModelCallUsage {
+  model: string;
+  /** Null when a call throws before the SDK returns usage. */
+  usage: TokenUsage | null;
+}
+
 export type ModelReader = (
   model: string,
   image: SlipImage,
-) => Promise<{ read: SlipRead; usage: TokenUsage | null }>;
+) => Promise<{ read: SlipRead; usage: TokenUsage | null; calls?: ModelCallUsage[] }>;
 
 export interface ModelEvalResult {
   model: string;
@@ -77,6 +83,7 @@ export interface EvalRecord {
   run: number;
   latencyMs: number;
   usage: TokenUsage | null;
+  calls?: ModelCallUsage[];
   cost: number | null;
   failure: string | null;
   wrong: ReturnType<typeof wrongFields>;
@@ -124,11 +131,23 @@ export async function evalModel(
       let usage: TokenUsage | null = null,
         cost: number | null = null,
         failure: string | null = null;
+      let calls: ModelCallUsage[] | undefined;
       try {
         const result = await read(candidate.model, image);
         got = result.read;
         usage = result.usage;
-        cost = usage === null ? null : costForUsage(candidate.model, usage, prices);
+        calls = result.calls;
+        cost = calls
+          ? calls.some((call) => call.usage !== null)
+            ? calls.reduce(
+                (sum, call) =>
+                  sum + (call.usage ? costForUsage(call.model, call.usage, prices) : 0),
+                0,
+              )
+            : null
+          : usage === null
+            ? null
+            : costForUsage(candidate.model, usage, prices);
       } catch (error) {
         failure = error instanceof Error ? error.message : String(error);
       }
@@ -138,6 +157,7 @@ export async function evalModel(
         run,
         latencyMs: performance.now() - start,
         usage,
+        ...(calls ? { calls } : {}),
         cost,
         failure,
         wrong: [],
@@ -264,7 +284,7 @@ export function formatModelEvalResult(result: ModelEvalResult): string {
       ([key, s]) =>
         `${key} per-run mean/min/max: ${s.mean.toFixed(6)} / ${s.min.toFixed(6)} / ${s.max.toFixed(6)}`,
     ),
-    ...(result.records.some((r) => r.cost === null)
+    ...(result.records.some((r) => r.cost === null || r.calls?.some((c) => c.usage === null))
       ? ['Some costs/tokens are unknown; totals include known usage only.']
       : []),
     '',
@@ -274,6 +294,25 @@ export function formatModelEvalResult(result: ModelEvalResult): string {
     lines.push('', 'read failures:', ...result.failures.map((f) => `- ${f.name}: ${f.message}`));
   }
   return lines.join('\n');
+}
+
+/** Confirmation attempts include calls that returned no usage; cost sums known usage only. */
+export function summarizeConfirmations(
+  records: EvalRecord[],
+  model: string,
+  prices = MODEL_PRICING,
+): { count: number; cost: number; unknownCosts: number } {
+  const calls = records
+    .flatMap((record) => record.calls ?? [])
+    .filter((call) => call.model === model);
+  return {
+    count: calls.length,
+    cost: calls.reduce(
+      (sum, call) => sum + (call.usage ? costForUsage(model, call.usage, prices) : 0),
+      0,
+    ),
+    unknownCosts: calls.filter((call) => call.usage === null).length,
+  };
 }
 
 /** A compact side-by-side table, for pasting into `docs/SLIP-MODEL-EVAL.md`. */

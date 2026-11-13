@@ -77,6 +77,11 @@ export async function readSlipWithModel(
 export function productionModelReader(
   reader: import('./reader.js').SlipReader,
   observedUsage: () => TokenUsage | null,
+  observedCalls?: () => import('./modelEval.js').ModelCallUsage[],
 ): import('./modelEval.js').ModelReader {
-  return async (_model, image) => ({ read: await reader.read(image), usage: observedUsage() });
+  return async (_model, image) => ({
+    read: await reader.read(image),
+    usage: observedUsage(),
+    ...(observedCalls ? { calls: observedCalls() } : {}),
+  });
 }
