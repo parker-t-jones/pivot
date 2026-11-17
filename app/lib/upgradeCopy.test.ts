@@ -6,8 +6,22 @@ import {
   UPGRADE_LABEL_NO_PRICE,
   UPGRADE_PRICING_UNAVAILABLE,
   UPGRADE_SUBTITLE,
+  PRIVACY_POLICY_URL,
+  TERMS_OF_USE_URL,
   upgradePurchaseLabel,
 } from './upgradeCopy';
+
+describe('legal links', () => {
+  it('points Terms at a page that exists (Apple standard EULA; pivot-sports.app/terms 404s)', () => {
+    expect(TERMS_OF_USE_URL).toBe(
+      'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+    );
+  });
+
+  it('keeps the privacy policy on the marketing site', () => {
+    expect(PRIVACY_POLICY_URL).toBe('https://pivot-sports.app/privacy');
+  });
+});
 
 describe('upgrade copy', () => {
   it('speaks to every pick, and drops the survivor aside', () => {
