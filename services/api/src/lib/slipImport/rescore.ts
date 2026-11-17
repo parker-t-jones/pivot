@@ -1,7 +1,7 @@
 /** Reads saved model results and ground truth only; never constructs a reader or client. */
 import { readFile } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
-import type { ExpectedSlip } from './evalScore.js';
+import { normalizeExpected, type ExpectedSlip } from './evalScore.js';
 import { scoreModelRecords, type ModelEvalResult } from './modelEval.js';
 import { slipReadSchema } from './schema.js';
 
@@ -24,12 +24,12 @@ export async function rescoreResults(file: string, dir?: string) {
         throw new Error('Record name must be an image filename');
       if (expected.has(record.name)) continue;
       const base = record.name.slice(0, -extname(record.name).length);
-      const want = JSON.parse(
-        await readFile(join(slipsDir, `${base}.expected.json`), 'utf8'),
-      ) as ExpectedSlip & { verification?: string };
-      if (want.verification)
+      const raw = JSON.parse(await readFile(join(slipsDir, `${base}.expected.json`), 'utf8')) as {
+        verification?: string;
+      };
+      if (raw.verification)
         throw new Error(`${base}: unverified expected data is not ground truth`);
-      expected.set(record.name, want);
+      expected.set(record.name, normalizeExpected(raw, `${base}.expected.json`));
     }
   }
   return {

@@ -83,6 +83,9 @@ describe('evalModel', () => {
         unknownCosts: fails ? 1 : 0,
       });
       expect(result.records[0]?.read).toEqual(fails ? primaryRead : confirmedRead);
+      expect(result.records[0]?.confirmation).toBe(fails ? 'failed' : 'disagreed');
+      // Either way the multi-bet client would show this import for review.
+      expect(result.importOutcome.review).toBe(1);
       expect(result.totalCost).toBeCloseTo(fails ? 0.00015 : 0.00615, 8);
       expect(result.costPerImage).toBeCloseTo(result.totalCost, 8);
       expect(formatModelEvalResult(result).includes('Some costs/tokens are unknown')).toBe(fails);
@@ -249,10 +252,13 @@ it('aggregates import counts and per-run ranges independently from raw field acc
     }),
     { runs: 3 },
   );
+  // The legacy refusal no longer stops leg scoring: a multi-bet client imports that read, and
+  // without a grouping it goes to review.
   expect(result.importOutcome).toMatchObject({
-    flagged: 2,
+    flagged: 3,
     rejected_multiple_bets: 1,
     silent_wrong: 0,
+    review: 1,
   });
   expect(result.importRunStats.rejected_multiple_bets).toEqual({ mean: 1 / 3, min: 0, max: 1 });
   expect(result.records.map((r) => r.importOutcome?.slips)).toEqual([
@@ -260,5 +266,5 @@ it('aggregates import counts and per-run ranges independently from raw field acc
     ['rejected_multiple_bets'],
     [],
   ]);
-  expect(formatComparisonTable([result])).toContain('| 0 | 1 | 0 / 0 |');
+  expect(formatComparisonTable([result])).toContain('| 0 | 0 | 1 | 1 | n/a | 0 / 0 |');
 });

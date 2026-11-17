@@ -21,6 +21,7 @@ import {
 import { APP_PROFILES, loadAppEncoder, parseEvalOptions } from './lib/slipImport/evalOptions.js';
 import { rescoreResults } from './lib/slipImport/rescore.js';
 import { costForUsage, type TokenUsage } from './lib/slipImport/modelCost.js';
+import { expectedDraft } from './lib/slipImport/evalDraft.js';
 
 async function main(): Promise<void> {
   const options = parseEvalOptions(process.argv.slice(2));
@@ -134,7 +135,7 @@ async function main(): Promise<void> {
             verification:
               'UNVERIFIED MODEL DRAFT — review every field before creating ground truth',
             sourceModel: record.model,
-            ...record.read,
+            ...expectedDraft(record.read),
           },
           null,
           2,

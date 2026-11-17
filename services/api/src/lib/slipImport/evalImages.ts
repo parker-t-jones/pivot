@@ -5,7 +5,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { sniffImageType, type SlipImage } from './reader.js';
-import type { ExpectedSlip } from './evalScore.js';
+import { normalizeExpected, type ExpectedSlip } from './evalScore.js';
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 
@@ -42,12 +42,12 @@ export async function loadEvalImages(
     let expected: ExpectedSlip;
     let unverified = false;
     try {
-      const parsed = JSON.parse(
-        await readFile(join(dir, `${base}.expected.json`), 'utf8'),
-      ) as ExpectedSlip & { verification?: string };
+      const parsed = JSON.parse(await readFile(join(dir, `${base}.expected.json`), 'utf8')) as {
+        verification?: string;
+      };
       if (parsed.verification)
         throw new Error(`${base}: unverified expected data is not ground truth`);
-      expected = parsed;
+      expected = normalizeExpected(parsed, `${base}.expected.json`);
     } catch (error) {
       if (
         !options.allowMissingExpected ||

@@ -9,7 +9,7 @@ import {
   SlipReadError,
   sniffImageType,
 } from './reader.js';
-import { SLIP_READ_JSON_SCHEMA, slipReadSchema } from './schema.js';
+import { SLIP_READ_JSON_SCHEMA, slipLegSchema, type SlipLeg, type SlipRead } from './schema.js';
 import { leg } from './fixtures.test-helper.js';
 
 function fakeClient(result: unknown) {
@@ -24,7 +24,30 @@ function message(text: string, stop_reason = 'end_turn') {
   return { content: [{ type: 'text', text }], stop_reason };
 }
 
-const SLIP = { is_bet_slip: true, bet_count: 1, legs: [leg({ text: 'PHI ML' })] };
+/** The model's per-bet answer for one straight bet, and the flattened read it becomes. */
+const SLIP = {
+  is_bet_slip: true,
+  bet_count: 1,
+  bets: [{ bet_type: 'single', legs: [leg({ text: 'PHI ML' })] }],
+};
+const SLIP_READ: SlipRead = {
+  is_bet_slip: true,
+  bet_count: 1,
+  legs: [leg({ text: 'PHI ML' })],
+  bets: [{ bet_type: 'single', leg_count: 1 }],
+};
+
+function grouped(...bets: SlipLeg[][]): SlipRead {
+  return {
+    is_bet_slip: true,
+    bet_count: bets.length,
+    legs: bets.flat(),
+    bets: bets.map((legs) => ({
+      bet_type: legs.length > 1 ? ('parlay' as const) : ('single' as const),
+      leg_count: legs.length,
+    })),
+  };
+}
 const IMAGE = { mediaType: 'image/png' as const, data: 'iVBORw0KGgo=' };
 
 describe('AnthropicSlipReader', () => {
@@ -32,7 +55,7 @@ describe('AnthropicSlipReader', () => {
     const { client, create } = fakeClient(message(JSON.stringify(SLIP)));
     const read = await new AnthropicSlipReader('unused', client).read(IMAGE);
 
-    expect(read).toEqual(SLIP);
+    expect(read).toEqual(SLIP_READ);
     expect(create).toHaveBeenCalledTimes(1);
     const params = create.mock.calls[0]?.[0 as never] as unknown as Record<string, unknown>;
     expect(params).toMatchObject({
@@ -77,6 +100,11 @@ describe('AnthropicSlipReader', () => {
     ['a cut-off answer', message('{"is_bet', 'max_tokens'), 'unparseable'],
     ['text that is not JSON', message('not json'), 'unparseable'],
     ['JSON outside the schema', message('{"legs": "nope"}'), 'unparseable'],
+    [
+      'the flat pre-grouping answer',
+      message(JSON.stringify({ is_bet_slip: true, bet_count: 1, legs: [leg()] })),
+      'unparseable',
+    ],
   ])('throws on %s', async (_name, response, reason) => {
     const { client } = fakeClient(response);
     await expect(new AnthropicSlipReader('unused', client).read(IMAGE)).rejects.toMatchObject({
@@ -103,12 +131,22 @@ describe('AnthropicSlipReader', () => {
 describe('SLIP_READ_JSON_SCHEMA', () => {
   it('requires every leg field the zod schema reads', () => {
     const properties = SLIP_READ_JSON_SCHEMA['properties'] as {
-      legs: { items: { required: string[] } };
+      bets: { items: { properties: { legs: { items: { required: string[] } } } } };
     };
-    const legSchema = properties.legs.items;
-    expect([...legSchema.required].sort()).toEqual(
-      Object.keys(slipReadSchema.shape.legs.element.shape).sort(),
-    );
+    const legSchema = properties.bets.items.properties.legs.items;
+    expect([...legSchema.required].sort()).toEqual(Object.keys(slipLegSchema.shape).sort());
+  });
+
+  it('groups legs under bets, each with a bet type, and has no flat leg list', () => {
+    expect(SLIP_READ_JSON_SCHEMA['required']).toEqual(['is_bet_slip', 'bet_count', 'bets']);
+    const properties = SLIP_READ_JSON_SCHEMA['properties'] as Record<string, unknown>;
+    expect(properties).not.toHaveProperty('legs');
+    expect(properties['bets']).toMatchObject({
+      items: {
+        required: ['bet_type', 'legs'],
+        properties: { bet_type: { enum: ['single', 'parlay'] } },
+      },
+    });
   });
 });
 
@@ -152,6 +190,9 @@ describe('slip reading instructions', () => {
     'Do not guess anything the slip does not show: use null',
     'Prefer printed team text when a logo disagrees',
     "pick'em entry fees, prize tables, boosts, and rewards",
+    'Return one entry in bets for every separate bet, in the order shown, so bets has bet_count entries',
+    'never move a leg to another bet or split one parlay into several bets',
+    'bet_type is single for a straight bet with one leg and parlay for a bet with two or more legs',
   ])('instructs the reader: %s', (instruction) => {
     expect(SLIP_READ_PROMPT).toContain(instruction);
   });
@@ -159,20 +200,21 @@ describe('slip reading instructions', () => {
   it.each(['OVER', 'UNDER', null] as const)(
     'preserves the reader’s side %s without filling it in',
     async (side) => {
-      const fixture = {
-        ...SLIP,
-        legs: [
-          leg({
-            market: 'PLAYER_STAT',
-            stat: 'RUSH_YDS',
-            player: 'Saquon Barkley',
-            line: 84.5,
-            side,
-          }),
-        ],
-      };
+      const legs = [
+        leg({
+          market: 'PLAYER_STAT',
+          stat: 'RUSH_YDS',
+          player: 'Saquon Barkley',
+          line: 84.5,
+          side,
+        }),
+      ];
+      const fixture = { ...SLIP, bets: [{ bet_type: 'single', legs }] };
       const { client, create } = fakeClient(message(JSON.stringify(fixture)));
-      expect(await new AnthropicSlipReader('unused', client).read(IMAGE)).toEqual(fixture);
+      expect(await new AnthropicSlipReader('unused', client).read(IMAGE)).toEqual({
+        ...SLIP_READ,
+        legs,
+      });
       expect(create).toHaveBeenCalledWith(
         expect.objectContaining({
           messages: [
@@ -186,13 +228,50 @@ describe('slip reading instructions', () => {
   );
 });
 
+describe('AnthropicSlipReader with several bets', () => {
+  it('flattens legs in printed order and keeps each bet’s span', async () => {
+    const a = leg({ text: 'a' });
+    const b = leg({ text: 'b' });
+    const c = leg({ text: 'c' });
+    const answer = {
+      is_bet_slip: true,
+      bet_count: 2,
+      bets: [
+        { bet_type: 'parlay', legs: [a, b] },
+        { bet_type: 'single', legs: [c] },
+      ],
+    };
+    const { client } = fakeClient(message(JSON.stringify(answer)));
+    expect(await new AnthropicSlipReader('unused', client).read(IMAGE)).toEqual({
+      is_bet_slip: true,
+      bet_count: 2,
+      legs: [a, b, c],
+      bets: [
+        { bet_type: 'parlay', leg_count: 2 },
+        { bet_type: 'single', leg_count: 1 },
+      ],
+    });
+  });
+});
+
 describe('ConfirmingSlipReader', () => {
+  const ML = leg({ text: 'PHI ML', market: 'MONEYLINE', team: 'PHI' });
+  const RUSH = leg({
+    text: 'Barkley o84.5',
+    market: 'PLAYER_STAT',
+    stat: 'RUSH_YDS',
+    player: 'Saquon Barkley',
+    side: 'OVER',
+    line: 84.5,
+  });
+
   it.each([
-    SLIP,
+    SLIP_READ,
     { is_bet_slip: false, bet_count: 2, legs: [] },
     { is_bet_slip: true, bet_count: 0, legs: [] },
     { is_bet_slip: true, bet_count: 1, legs: [] },
-    { ...SLIP, legs: Array.from({ length: 13 }, () => leg()) },
+    { ...SLIP_READ, legs: Array.from({ length: 13 }, () => leg()), bets: undefined },
+    grouped([ML, RUSH]),
   ])('does not confirm a read other than multiple bets: %j', async (read) => {
     const primary = { read: vi.fn().mockResolvedValue(read) };
     const confirm = { read: vi.fn() };
@@ -201,26 +280,50 @@ describe('ConfirmingSlipReader', () => {
     expect(confirm.read).not.toHaveBeenCalled();
   });
 
-  it.each([1, 2])(
-    'returns the entire confirmation read with bet_count %s, once',
-    async (bet_count) => {
-      const primary = { read: vi.fn().mockResolvedValue({ ...SLIP, bet_count: 2 }) };
-      const confirmed = { ...SLIP, bet_count, legs: [leg({ text: 'confirmed' })] };
-      const confirm = { read: vi.fn().mockResolvedValue(confirmed) };
-      expect(await new ConfirmingSlipReader(primary, confirm).read(IMAGE)).toBe(confirmed);
-      expect(primary.read).toHaveBeenCalledExactlyOnceWith(IMAGE);
-      expect(confirm.read).toHaveBeenCalledExactlyOnceWith(IMAGE);
-    },
-  );
+  it.each([
+    ['its count', { ...SLIP_READ, bet_count: 2 }],
+    ['its grouping', { ...grouped([ML], [RUSH]), bet_count: 1 }],
+  ])('confirms a read that says several bets by %s', async (_name, read) => {
+    const confirm = { read: vi.fn().mockResolvedValue(read) };
+    await new ConfirmingSlipReader({ read: async () => read }, confirm).read(IMAGE);
+    expect(confirm.read).toHaveBeenCalledExactlyOnceWith(IMAGE);
+  });
+
+  it('returns the confirm read marked agreed when the reads hold the same bets', async () => {
+    const primary = { read: vi.fn().mockResolvedValue(grouped([ML], [RUSH])) };
+    const confirmed = grouped([{ ...RUSH, text: 'other text', odds: '-120' }], [ML]);
+    const confirm = { read: vi.fn().mockResolvedValue(confirmed) };
+    expect(await new ConfirmingSlipReader(primary, confirm).read(IMAGE)).toEqual({
+      ...confirmed,
+      confirmation: 'agreed',
+    });
+    expect(primary.read).toHaveBeenCalledExactlyOnceWith(IMAGE);
+    expect(confirm.read).toHaveBeenCalledExactlyOnceWith(IMAGE);
+  });
+
+  it.each([
+    ['one parlay instead of two singles', grouped([ML, RUSH])],
+    ['a different line', grouped([ML], [{ ...RUSH, line: 90.5 }])],
+    ['a different side', grouped([ML], [{ ...RUSH, side: 'UNDER' }])],
+    ['an extra bet', grouped([ML], [RUSH], [ML])],
+    ['not a bet slip', { is_bet_slip: false, bet_count: 0, legs: [] }],
+  ])('returns the confirm read marked disagreed for %s', async (_name, confirmed) => {
+    const primary = { read: async () => grouped([ML], [RUSH]) };
+    const confirm = { read: vi.fn().mockResolvedValue(confirmed) };
+    expect(await new ConfirmingSlipReader(primary, confirm).read(IMAGE)).toEqual({
+      ...confirmed,
+      confirmation: 'disagreed',
+    });
+  });
 
   it.each(['upstream', 'refused', 'unparseable'] as const)(
-    'keeps the primary read on a %s confirmation error',
+    'keeps the primary read marked failed on a %s confirmation error',
     async (reason) => {
-      const read = { ...SLIP, bet_count: 2 };
+      const read = grouped([ML], [RUSH]);
       const confirm = { read: vi.fn().mockRejectedValue(new SlipReadError(reason)) };
-      expect(await new ConfirmingSlipReader({ read: async () => read }, confirm).read(IMAGE)).toBe(
-        read,
-      );
+      expect(
+        await new ConfirmingSlipReader({ read: async () => read }, confirm).read(IMAGE),
+      ).toEqual({ ...read, confirmation: 'failed' });
       expect(confirm.read).toHaveBeenCalledTimes(1);
     },
   );
@@ -235,7 +338,7 @@ describe('ConfirmingSlipReader', () => {
 
   it('propagates unexpected confirmation errors', async () => {
     const error = new Error('programming error');
-    const primary = { read: async () => ({ ...SLIP, bet_count: 2 }) };
+    const primary = { read: async () => ({ ...SLIP_READ, bet_count: 2 }) };
     const confirm = { read: vi.fn().mockRejectedValue(error) };
     await expect(new ConfirmingSlipReader(primary, confirm).read(IMAGE)).rejects.toBe(error);
   });
