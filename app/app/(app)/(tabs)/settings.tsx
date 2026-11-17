@@ -57,6 +57,7 @@ import {
 } from '../../../lib/streamingServices';
 import { SettingsSubscription } from '../../../components/SettingsSubscription';
 import { supabase } from '../../../lib/supabase';
+import { TERMS_OF_USE_URL } from '../../../lib/upgradeCopy';
 import { theme } from '../../../lib/theme';
 import { useDesktopTier } from '../../../lib/useDesktopTier';
 import { webPressState } from '../../../lib/webPress';
@@ -73,7 +74,6 @@ const NOTIFICATION_MODES: {
 const SUPPORT_EMAIL = 'support@pivot-sports.app';
 const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}`;
 const PRIVACY_POLICY_URL = 'https://pivot-sports.app/privacy';
-const TERMS_OF_SERVICE_URL = 'https://pivot-sports.app/terms';
 
 const SETTINGS_SECTIONS = [
   { key: 'account', label: 'Account' },
@@ -672,7 +672,10 @@ function AboutSection() {
         accessibilityRole="link"
         label="Terms of service"
         onPress={() =>
-          openExternalUrl(TERMS_OF_SERVICE_URL, 'Visit pivot-sports.app/terms in your browser.')
+          openExternalUrl(
+            TERMS_OF_USE_URL,
+            'Visit apple.com/legal/internet-services/itunes/dev/stdeula in your browser.',
+          )
         }
         size="small"
         style={styles.aboutLink}

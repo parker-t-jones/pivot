@@ -26,7 +26,11 @@ export const UPGRADE_PLAN_LABEL = 'Pivot Pro, monthly';
 export const UPGRADE_RENEWAL_DISCLOSURE =
   'Renews automatically each month until canceled. Cancel anytime in your Apple ID subscription settings at least 24 hours before renewal.';
 
-export const TERMS_OF_USE_URL = 'https://pivot-sports.app/terms';
+/**
+ * Apple's standard EULA. pivot-sports.app has no terms page (https://pivot-sports.app/terms 404s),
+ * so Terms links point here until Pivot publishes its own terms. Used by the paywall and Settings.
+ */
+export const TERMS_OF_USE_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 export const PRIVACY_POLICY_URL = 'https://pivot-sports.app/privacy';
 
