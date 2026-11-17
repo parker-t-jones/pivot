@@ -432,7 +432,9 @@ describe('add a pick: import from screenshot', () => {
     api.get.mockImplementation(routeGet);
     await tap('Retry');
     expect(choices()).toHaveLength(6);
-    expect(api.post.mock.calls.filter(([path]) => path === '/picks/import')).toHaveLength(1);
+    expect(api.post.mock.calls.filter(([path]) => path.startsWith('/picks/import'))).toHaveLength(
+      1,
+    );
   });
 
   it('preserves the authoritative cap error when allowance changes before save', async () => {
