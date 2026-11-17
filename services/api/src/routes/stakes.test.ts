@@ -795,6 +795,26 @@ describe('manual stakes', () => {
       expect(mem.stakes).toHaveLength(2);
     });
 
+    it("keeps last week's settled bet and its result after rollover, for Recap history", async () => {
+      await setup();
+      lastWeek('40000000-0000-4000-8000-000000000004', { type: 'SPREAD', line: -3.5 });
+      const settled = mem.stakes[0];
+      if (settled === undefined) throw new Error('missing settled bet');
+      Object.assign(settled, {
+        result: 'win',
+        result_value: 7,
+        settled_at: '2026-10-05T20:30:00.000Z',
+      });
+      const before = structuredClone(settled);
+
+      expect((await list()).stakes).toEqual([]);
+      expect(
+        (await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 })).statusCode,
+      ).toBe(201);
+
+      expect(mem.stakes.find((row) => row['id'] === before['id'])).toEqual(before);
+    });
+
     it("allows this week's survivor pick after last week's", async () => {
       await setup();
       lastWeek('40000000-0000-4000-8000-000000000003', { type: 'SURVIVOR' });

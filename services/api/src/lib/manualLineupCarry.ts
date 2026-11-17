@@ -23,7 +23,8 @@ export async function carryManualLineupForward(
   week: number,
 ): Promise<boolean> {
   if (league.platform !== 'manual') return false;
-  const from = league.manual_lineup_week;
+  // `?? null` also covers a row read before the column existed.
+  const from = league.manual_lineup_week ?? null;
   if (from === null || from >= week) return false;
 
   const { data: target, error: targetError } = await supabase
@@ -71,7 +72,8 @@ export async function markManualLineupWeek(
   week: number,
 ): Promise<void> {
   if (league.platform !== 'manual') return;
-  if (league.manual_lineup_week !== null && league.manual_lineup_week >= week) return;
+  const current = league.manual_lineup_week ?? null;
+  if (current !== null && current >= week) return;
   const { error } = await supabase
     .from('leagues')
     .update({ manual_lineup_week: week })
