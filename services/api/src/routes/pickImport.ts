@@ -16,6 +16,12 @@ import {
   type SlipImportLimits,
 } from '../lib/slipImport/config.js';
 import {
+  isMultipleBetRead,
+  needsReview,
+  nonEmptyBets,
+  betTypeForLegs,
+} from '../lib/slipImport/bets.js';
+import {
   mapSlipLeg,
   type ImportedLeg,
   type SlipPlayer,
@@ -44,11 +50,33 @@ const bodySchema = z
   })
   .strict();
 
+/**
+ * The client capability for multi-bet import. A query parameter, not a body field or a header:
+ * the deployed API's body schema is strict (an unknown field is a 400), and a custom header would
+ * fail the browser's CORS preflight (`Authorization` and `Content-Type` only), so a new client
+ * talking to an older API would break. Unknown query parameters are ignored by every version.
+ */
+export const MULTI_BET_QUERY = 'multi_bet';
+export const MULTI_BET_CAPABILITY = 'v1';
+
+const querySchema = z.object({ [MULTI_BET_QUERY]: z.string().optional() });
+
+/** Most separate bets one screenshot import returns. */
+export const MAX_IMPORT_BETS = 10;
+
 function unreadable(): ApiError {
   return new ApiError(
     422,
     'slip_import_unreadable',
     'We couldn’t read a bet slip in that image. Try a clearer screenshot, or add the pick yourself.',
+  );
+}
+
+function tooManyLegs(): ApiError {
+  return new ApiError(
+    422,
+    'slip_import_too_many_legs',
+    `Pivot tracks parlays of up to ${MAX_SLIP_LEGS} legs.`,
   );
 }
 
@@ -83,9 +111,15 @@ const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (
 
   fastify.post(
     '/picks/import',
-    { schema: { body: bodySchema }, bodyLimit: SLIP_IMPORT_BODY_LIMIT + 1024 },
+    {
+      schema: { body: bodySchema, querystring: querySchema },
+      bodyLimit: SLIP_IMPORT_BODY_LIMIT + 1024,
+    },
     async (request) => {
       const user = requireUser(request);
+      // iOS 1.1.0 (build 15) and older web builds send no capability and keep the original
+      // contract: flat legs, and a 422 for a screenshot with more than one bet.
+      const multiBet = request.query[MULTI_BET_QUERY] === MULTI_BET_CAPABILITY;
       if (await userIsDemo(fastify.supabase, user.id)) throw demoAccountFixed();
       const reader = opts.reader;
       if (reader === null) {
@@ -155,19 +189,30 @@ const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (
       }
 
       if (!read.is_bet_slip || read.legs.length === 0) throw unreadable();
-      if (read.bet_count > 1) {
-        throw new ApiError(
-          422,
-          'slip_import_multiple_bets',
-          'That screenshot shows more than one bet. Crop it to one bet and try again.',
-        );
-      }
-      if (read.legs.length > MAX_SLIP_LEGS) {
-        throw new ApiError(
-          422,
-          'slip_import_too_many_legs',
-          `Pivot tracks parlays of up to ${MAX_SLIP_LEGS} legs.`,
-        );
+      const bets = nonEmptyBets(read);
+      if (!multiBet) {
+        if (isMultipleBetRead(read)) {
+          // One screenshot is one import, and this one imported nothing: give it back.
+          await opts.counter.decrement(key);
+          throw new ApiError(
+            422,
+            'slip_import_multiple_bets',
+            'That screenshot shows more than one bet. Crop it to one bet and try again.',
+          );
+        }
+        if (read.legs.length > MAX_SLIP_LEGS) throw tooManyLegs();
+      } else {
+        // `bets` is null only for a pre-grouping read with bet_count > 1; the reader never
+        // produces one, but if it did, every leg goes to review as one group.
+        const groups = bets ?? [{ bet_type: betTypeForLegs(read.legs.length), legs: read.legs }];
+        if (groups.length > MAX_IMPORT_BETS) {
+          throw new ApiError(
+            422,
+            'slip_import_too_many_bets',
+            `That screenshot shows more than ${MAX_IMPORT_BETS} bets. Crop it to fewer bets and try again.`,
+          );
+        }
+        if (groups.some((bet) => bet.legs.length > MAX_SLIP_LEGS)) throw tooManyLegs();
       }
 
       const season = Number(nfl.season);
@@ -205,15 +250,42 @@ const pickImportRoutes: FastifyPluginAsyncZod<PickImportRoutesOptions> = async (
       for (const leg of read.legs) legs.push(await mapSlipLeg(leg, lookups));
 
       const ready = legs.filter((leg) => leg.status === 'ready').length;
-      request.log.info(
-        { slipImport: { legs: legs.length, ready, flagged: legs.length - ready } },
-        'slip import',
-      );
-      return {
+      const legacy = {
         kind: legs.length > 1 ? ('parlay' as const) : ('single' as const),
         legs,
         imports_left: importsLeft,
       };
+      if (!multiBet) {
+        request.log.info(
+          { slipImport: { legs: legs.length, ready, flagged: legs.length - ready } },
+          'slip import',
+        );
+        return legacy;
+      }
+
+      // Group the mapped legs back into bets, in printed order. Mapping keeps leg order.
+      const groups = bets ?? [{ bet_type: betTypeForLegs(read.legs.length), legs: read.legs }];
+      let offset = 0;
+      const importedBets = groups.map((bet) => {
+        const slice = legs.slice(offset, offset + bet.legs.length);
+        offset += bet.legs.length;
+        return { bet_type: betTypeForLegs(slice.length), legs: slice };
+      });
+      const review = bets === null || needsReview(read);
+      request.log.info(
+        {
+          slipImport: {
+            legs: legs.length,
+            ready,
+            flagged: legs.length - ready,
+            bets: importedBets.length,
+            confirmation: read.confirmation ?? null,
+            review,
+          },
+        },
+        'slip import',
+      );
+      return { ...legacy, bets: importedBets, review };
     },
   );
 };

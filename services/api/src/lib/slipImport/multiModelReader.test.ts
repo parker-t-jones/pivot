@@ -16,7 +16,17 @@ function message(text: string, usage: { input_tokens: number; output_tokens: num
   return { content: [{ type: 'text', text }], stop_reason: 'end_turn', usage };
 }
 
-const SLIP = { is_bet_slip: true, bet_count: 1, legs: [leg({ text: 'PHI ML' })] };
+const SLIP = {
+  is_bet_slip: true,
+  bet_count: 1,
+  bets: [{ bet_type: 'single', legs: [leg({ text: 'PHI ML' })] }],
+};
+const SLIP_READ = {
+  is_bet_slip: true,
+  bet_count: 1,
+  legs: [leg({ text: 'PHI ML' })],
+  bets: [{ bet_type: 'single', leg_count: 1 }],
+};
 const IMAGE = { mediaType: 'image/png' as const, data: 'iVBORw0KGgo=' };
 
 describe('readSlipWithModel', () => {
@@ -26,7 +36,7 @@ describe('readSlipWithModel', () => {
     );
     const result = await readSlipWithModel(client, 'claude-haiku-5-5', IMAGE);
 
-    expect(result.read).toEqual(SLIP);
+    expect(result.read).toEqual(SLIP_READ);
     expect(result.usage).toEqual({ input_tokens: 1234, output_tokens: 56 });
     const params = create.mock.calls[0]?.[0 as never] as unknown as Record<string, unknown>;
     expect(params).toMatchObject({ model: 'claude-haiku-5-5' });
@@ -61,4 +71,16 @@ it('delegates production eval reads to the injected production reader', async ()
     usage,
   });
   expect(reader.read).toHaveBeenCalledWith(image);
+});
+
+it('passes the production confirm outcome next to the read, not inside it', async () => {
+  const { productionModelReader } = await import('./multiModelReader.js');
+  const image = { mediaType: 'image/png' as const, data: 'test' };
+  const read = { is_bet_slip: true, bet_count: 2, legs: [leg(), leg()] };
+  const reader = { read: vi.fn().mockResolvedValue({ ...read, confirmation: 'agreed' }) };
+  expect(await productionModelReader(reader, () => null)('ignored', image)).toEqual({
+    read,
+    usage: null,
+    confirmation: 'agreed',
+  });
 });

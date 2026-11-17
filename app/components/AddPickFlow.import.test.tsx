@@ -190,7 +190,7 @@ describe('add a pick: import from screenshot', () => {
     importResponse = async () => ({ kind: 'single', legs: [KITTLE_LEG], imports_left: 4 });
     api.get.mockImplementation(routeGet);
     api.post.mockImplementation(async (path: string) =>
-      path === '/picks/import' ? await importResponse() : {},
+      path.startsWith('/picks/import') ? await importResponse() : {},
     );
     picker.pickSlipImage.mockResolvedValue('SCREENSHOT_BASE64');
     await render();
@@ -245,7 +245,9 @@ describe('add a pick: import from screenshot', () => {
 
   it('imports a single pick into the normal review and saves only on Add a pick', async () => {
     await tap('Import from screenshot');
-    expect(api.post).toHaveBeenCalledWith('/picks/import', { image: 'SCREENSHOT_BASE64' });
+    expect(api.post).toHaveBeenCalledWith('/picks/import?multi_bet=v1', {
+      image: 'SCREENSHOT_BASE64',
+    });
     expect(api.post).not.toHaveBeenCalledWith('/picks', expect.anything());
 
     expect(host.textContent).toContain('Check the pick we read from your screenshot.');
@@ -430,7 +432,9 @@ describe('add a pick: import from screenshot', () => {
     api.get.mockImplementation(routeGet);
     await tap('Retry');
     expect(choices()).toHaveLength(6);
-    expect(api.post.mock.calls.filter(([path]) => path === '/picks/import')).toHaveLength(1);
+    expect(api.post.mock.calls.filter(([path]) => path.startsWith('/picks/import'))).toHaveLength(
+      1,
+    );
   });
 
   it('preserves the authoritative cap error when allowance changes before save', async () => {
@@ -522,5 +526,188 @@ describe('add a pick: import from screenshot', () => {
     await tap('Import from screenshot');
     expect(openUpgrade).toHaveBeenCalledWith('stake_limit_free');
     expect(picker.pickSlipImage).not.toHaveBeenCalled();
+  });
+
+  describe('a screenshot with several bets', () => {
+    const kittle = (line: number) => ({
+      ...KITTLE_LEG,
+      text: `George Kittle Over ${line} Receiving Yards`,
+      pick: { ...KITTLE_LEG.pick, condition: { ...KITTLE_LEG.pick.condition, line } },
+    });
+    const multi = (bets: { bet_type: string; legs: unknown[] }[], review = false) => ({
+      kind: 'parlay',
+      legs: bets.flatMap((bet) => bet.legs),
+      imports_left: 3,
+      bets,
+      review,
+    });
+    const picksPosts = () => api.post.mock.calls.filter(([path]) => path === '/picks');
+    const betsText = () =>
+      host.querySelector('[data-testid="add-pick-import-bets"]')?.textContent ?? '';
+
+    async function renderAs(nextTier: string, used: number): Promise<void> {
+      act(() => root.unmount());
+      host.remove();
+      tier = nextTier;
+      picksPage = { ...picksPage, free_slots_used: used };
+      await render();
+    }
+
+    it('groups legs under per-bet headers and saves every bet for Pro', async () => {
+      await renderAs('pro', 3);
+      importResponse = async () =>
+        multi([
+          { bet_type: 'single', legs: [SF_ML_LEG] },
+          { bet_type: 'parlay', legs: [kittle(59.5), FLAGGED_LEG, kittle(70.5)] },
+          { bet_type: 'single', legs: [kittle(80.5)] },
+        ]);
+      await tap('Import from screenshot');
+      expect(betsText()).toContain('We found 3 bets in your screenshot.');
+      const headers = Array.from(
+        host.querySelectorAll('[data-testid="add-pick-import-bet"]'),
+        (node) => node.textContent ?? '',
+      );
+      expect(headers[0]).toContain('Bet 1 · Single');
+      expect(headers[1]).toContain('Bet 2 · Parlay · 3 legs');
+      expect(headers[1]).toContain('Correct score 24-17');
+      expect(headers[1]).toContain('This leg won’t be added.');
+      expect(headers[2]).toContain('Bet 3 · Single');
+      expect(betsText()).not.toContain('free picks left');
+      expect(betsText()).not.toMatch(/stake/i);
+      // Pro: every matched leg starts selected.
+      expect(choices().map((node) => node.getAttribute('aria-label')?.split(' ')[0])).toEqual([
+        'Deselect',
+        'Deselect',
+        'Deselect',
+        'Deselect',
+      ]);
+      await tap('Add 4 picks');
+      expect(picksPosts().map(([, body]) => body)).toEqual([
+        { pick: SF_ML_LEG.pick },
+        { legs: [kittle(59.5).pick, kittle(70.5).pick] },
+        { pick: kittle(80.5).pick },
+      ]);
+      expect(onDismiss).toHaveBeenCalled();
+      expect(openUpgrade).not.toHaveBeenCalled();
+    });
+
+    it('preselects a free import that fits the picks left', async () => {
+      await renderAs('free', 0);
+      importResponse = async () =>
+        multi([
+          { bet_type: 'single', legs: [SF_ML_LEG] },
+          { bet_type: 'parlay', legs: [kittle(59.5), kittle(70.5)] },
+        ]);
+      await tap('Import from screenshot');
+      expect(betsText()).toContain(
+        'You have 3 free picks left this week. Each leg uses one pick, so choose up to 3 of these 3 legs.',
+      );
+      await tap('Add 3 picks');
+      expect(picksPosts().map(([, body]) => body)).toEqual([
+        { pick: SF_ML_LEG.pick },
+        { legs: [kittle(59.5).pick, kittle(70.5).pick] },
+      ]);
+    });
+
+    it('lets a free user choose legs across bets up to the picks left', async () => {
+      // Default: 1 of 3 free picks used, so 2 left for 4 legs.
+      importResponse = async () =>
+        multi([
+          { bet_type: 'parlay', legs: [kittle(59.5), kittle(70.5)] },
+          { bet_type: 'parlay', legs: [SF_ML_LEG, kittle(80.5)] },
+        ]);
+      await tap('Import from screenshot');
+      expect(betsText()).toContain(
+        'You have 2 free picks left this week. Each leg uses one pick, so choose up to 2 of these 4 legs.',
+      );
+      expect(pressable('Add 0 picks').getAttribute('aria-disabled')).toBe('true');
+      await choose(0);
+      await choose(2);
+      expect(choices()[1]?.getAttribute('aria-disabled')).toBe('true');
+      expect(choices()[3]?.getAttribute('aria-disabled')).toBe('true');
+      expect(betsText()).toContain('Deselect a leg to free a pick.');
+      await choose(0);
+      await choose(1);
+      await tap('Add 2 picks');
+      // Each parlay kept one leg, so each saves as a single pick.
+      expect(picksPosts().map(([, body]) => body)).toEqual([
+        { pick: kittle(70.5).pick },
+        { pick: SF_ML_LEG.pick },
+      ]);
+    });
+
+    it('selects nothing and says so when the API asks for a review', async () => {
+      await renderAs('pro', 0);
+      importResponse = async () =>
+        multi(
+          [
+            { bet_type: 'single', legs: [SF_ML_LEG] },
+            { bet_type: 'single', legs: [kittle(59.5)] },
+          ],
+          true,
+        );
+      await tap('Import from screenshot');
+      expect(betsText()).toContain(
+        'We weren’t sure how this screenshot splits into bets. Check each pick, and select only the ones that match your slip.',
+      );
+      expect(
+        choices().every((node) => node.getAttribute('aria-label')?.startsWith('Select ')),
+      ).toBe(true);
+      expect(pressable('Add 0 picks').getAttribute('aria-disabled')).toBe('true');
+      await choose(1);
+      await tap('Add 1 pick');
+      expect(picksPosts().map(([, body]) => body)).toEqual([{ pick: kittle(59.5).pick }]);
+    });
+
+    it('reviews even one bet when the API asks', async () => {
+      importResponse = async () =>
+        multi([{ bet_type: 'parlay', legs: [SF_ML_LEG, kittle(59.5)] }], true);
+      await tap('Import from screenshot');
+      expect(host.querySelector('[data-testid="add-pick-import-bets"]')).not.toBeNull();
+      expect(betsText()).toContain('Bet 1 · Parlay · 2 legs');
+    });
+
+    it('keeps one sure bet on the existing one-bet review', async () => {
+      importResponse = async () => multi([{ bet_type: 'parlay', legs: [SF_ML_LEG, KITTLE_LEG] }]);
+      await tap('Import from screenshot');
+      expect(host.querySelector('[data-testid="add-pick-import-bets"]')).toBeNull();
+      expect(host.querySelectorAll('[data-testid="add-pick-slip-leg"]')).toHaveLength(2);
+    });
+
+    it('drops saved bets and explains when a later save fails', async () => {
+      await renderAs('pro', 0);
+      importResponse = async () =>
+        multi([
+          { bet_type: 'single', legs: [SF_ML_LEG] },
+          { bet_type: 'single', legs: [kittle(59.5)] },
+        ]);
+      await tap('Import from screenshot');
+      api.post.mockImplementationOnce(async () => ({}));
+      api.post.mockImplementationOnce(async () => {
+        throw new ApiRequestError(403, 'stake_limit_free', 'Free pick limit reached.');
+      });
+      await tap('Add 2 picks');
+      expect(onDismiss).not.toHaveBeenCalled();
+      expect(openUpgrade).toHaveBeenCalledWith('stake_limit_free');
+      expect(host.querySelector('[data-testid="add-pick-import-bets-error"]')?.textContent).toBe(
+        'We added 1 of your 2 bets. You don’t have enough free picks left this week for the rest.',
+      );
+      expect(host.querySelectorAll('[data-testid="add-pick-import-bet"]')).toHaveLength(1);
+      expect(betsText()).toContain('Bet 1 · Single');
+      expect(betsText()).not.toContain('SF ML');
+    });
+
+    it('goes back to the type step without saving', async () => {
+      importResponse = async () =>
+        multi([
+          { bet_type: 'single', legs: [SF_ML_LEG] },
+          { bet_type: 'single', legs: [kittle(59.5)] },
+        ]);
+      await tap('Import from screenshot');
+      await tap('Back');
+      expect(host.querySelector('[data-testid="add-pick-import-bets"]')).toBeNull();
+      expect(host.textContent).toContain('Import from screenshot');
+      expect(picksPosts()).toHaveLength(0);
+    });
   });
 });

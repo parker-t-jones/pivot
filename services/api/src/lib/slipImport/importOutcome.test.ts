@@ -1,7 +1,14 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { fromModelRead } from './bets.js';
+import { normalizeExpected } from './evalScore.js';
 import { leg } from './fixtures.test-helper.js';
-import { scoreImportOutcome } from './importOutcome.js';
-import type { SlipLeg } from './schema.js';
+import {
+  addImportOutcome,
+  emptyImportTally,
+  scoreGrouping,
+  scoreImportOutcome,
+} from './importOutcome.js';
+import type { SlipLeg, SlipRead } from './schema.js';
 
 const player = leg({
   market: 'PLAYER_STAT',
@@ -62,12 +69,8 @@ it.each(['MONEYLINE', 'SPREAD', 'TEAM_TOTAL'] as const)(
     expect(outcome({ ...want, team: 'Eagles' }, want)?.outcome).toBe('match');
   },
 );
-it('reports refusals, unreadable slips and false accepts before leg scoring', () => {
+it('reports unreadable slips and false accepts before leg scoring', () => {
   const want = { bet_count: 1, legs: [player] };
-  expect(scoreImportOutcome({ is_bet_slip: true, bet_count: 6, legs: [player] }, want)).toEqual({
-    legs: [],
-    slips: ['rejected_multiple_bets'],
-  });
   expect(scoreImportOutcome({ is_bet_slip: false, bet_count: 0, legs: [] }, want).slips).toEqual([
     'unreadable',
   ]);
@@ -97,4 +100,143 @@ it('keeps unsupported reads flagged and ready reads against unsupported expectat
       { bet_count: 1, legs: [player] },
     ).legs.map((l) => l.outcome),
   ).toEqual(['match', 'silent_wrong']);
+});
+
+describe('multi-bet import outcomes', () => {
+  const ml = leg({ market: 'MONEYLINE', team: 'PHI' });
+  const total = leg({ market: 'GAME_TOTAL', side: 'UNDER', line: 41.5 });
+  function grouped(...bets: SlipLeg[][]): SlipRead {
+    return fromModelRead({
+      is_bet_slip: true,
+      bet_count: bets.length,
+      bets: bets.map((legs) => ({
+        bet_type: legs.length > 1 ? ('parlay' as const) : ('single' as const),
+        legs,
+      })),
+    });
+  }
+  const expected = (...bets: SlipLeg[][]) =>
+    normalizeExpected({
+      bets: bets.map((legs) => ({ bet_type: legs.length > 1 ? 'parlay' : 'single', legs })),
+    });
+
+  it('keeps the legacy refusal as an annotation and still scores the legs', () => {
+    const got = { is_bet_slip: true, bet_count: 6, legs: [player] };
+    expect(scoreImportOutcome(got, { bet_count: 1, legs: [player] })).toMatchObject({
+      legs: [{ outcome: 'match' }],
+      slips: ['rejected_multiple_bets'],
+    });
+    // A phantom split of a single parlay is a refusal for legacy clients...
+    const split = scoreImportOutcome(grouped([player], [ml]), expected([player, ml]));
+    expect(split.slips).toEqual(['rejected_multiple_bets', 'silent_wrong_grouping']);
+    expect(split.grouping).toBe('wrong');
+  });
+
+  it('does not count a real multi-bet slip as a refusal', () => {
+    const outcome = scoreImportOutcome(
+      grouped([player], [ml, total]),
+      expected([player], [ml, total]),
+    );
+    expect(outcome).toMatchObject({ slips: [], grouping: 'correct', multi_bet: true });
+    expect(outcome.legs.map((l) => l.outcome)).toEqual(['match', 'match', 'match']);
+  });
+
+  it('finds the grouping regardless of bet order', () => {
+    expect(scoreGrouping(grouped([ml, total], [player]), expected([player], [ml, total]))).toBe(
+      'correct',
+    );
+  });
+
+  it.each([
+    ['merged bets', grouped([player, ml, total])],
+    ['a leg in the wrong bet', grouped([player, ml], [total])],
+    ['a missing leg', grouped([player], [ml])],
+  ])('marks %s as wrong grouping', (_name, got) => {
+    expect(scoreGrouping(got, expected([player], [ml, total]))).toBe('wrong');
+  });
+
+  it('has unknown grouping for a flat multi-bet expected file or a pre-grouping read', () => {
+    expect(scoreGrouping(grouped([player], [ml]), { bet_count: 2, legs: [player, ml] })).toBeNull();
+    expect(
+      scoreGrouping(
+        { is_bet_slip: true, bet_count: 2, legs: [player, ml] },
+        expected([player], [ml]),
+      ),
+    ).toBeNull();
+    expect(scoreGrouping(grouped([player, ml]), { bet_count: 1, legs: [player, ml] })).toBe(
+      'correct',
+    );
+  });
+
+  it('turns silent errors into flagged legs and no grouping error in review', () => {
+    const got = grouped([{ ...player, line: 99 }, ml]);
+    const want = expected([player], [ml]);
+    expect(scoreImportOutcome(got, want).legs[0]?.outcome).toBe('silent_wrong');
+    expect(scoreImportOutcome(got, want).slips).toContain('silent_wrong_grouping');
+    const reviewed = scoreImportOutcome(got, want, { review: true });
+    expect(reviewed.legs[0]?.outcome).toBe('flagged');
+    expect(reviewed.slips).not.toContain('silent_wrong_grouping');
+    expect(reviewed).toMatchObject({ review: true, grouping: 'wrong' });
+  });
+
+  it('tallies review, grouping and multi-bet grouping accuracy', () => {
+    const tally = emptyImportTally();
+    addImportOutcome(tally, scoreImportOutcome(grouped([player], [ml]), expected([player], [ml])));
+    addImportOutcome(
+      tally,
+      scoreImportOutcome(grouped([player, ml]), expected([player], [ml]), { review: true }),
+    );
+    addImportOutcome(tally, scoreImportOutcome(grouped([player]), expected([player])));
+    expect(tally).toMatchObject({
+      review: 1,
+      grouping_correct: 2,
+      grouping_wrong: 1,
+      silent_wrong_grouping: 0,
+      multi_bet_slips: 2,
+      multi_bet_grouping_correct: 1,
+    });
+  });
+});
+
+describe('normalizeExpected', () => {
+  const ml = leg({ market: 'MONEYLINE', team: 'PHI' });
+
+  it('keeps the flat format unchanged', () => {
+    expect(normalizeExpected({ bet_count: 1, legs: [ml] })).toEqual({ bet_count: 1, legs: [ml] });
+    expect(normalizeExpected({ bet_count: 0, legs: [], is_bet_slip: false })).toEqual({
+      bet_count: 0,
+      legs: [],
+      is_bet_slip: false,
+    });
+  });
+
+  it('flattens the grouped format and records each bet’s span', () => {
+    expect(
+      normalizeExpected({
+        bets: [
+          { bet_type: 'parlay', legs: [ml, player] },
+          { bet_type: 'single', legs: [ml] },
+        ],
+      }),
+    ).toEqual({
+      bet_count: 2,
+      legs: [ml, player, ml],
+      bets: [
+        { bet_type: 'parlay', leg_count: 2 },
+        { bet_type: 'single', leg_count: 1 },
+      ],
+    });
+  });
+
+  it.each([
+    ['both formats', { bets: [], legs: [], bet_count: 0 }],
+    ['a bad bet type', { bets: [{ bet_type: 'teaser', legs: [ml] }] }],
+    ['an empty bet', { bets: [{ bet_type: 'single', legs: [] }] }],
+    ['a one-leg parlay', { bets: [{ bet_type: 'parlay', legs: [ml] }] }],
+    ['a mismatched count', { bet_count: 3, bets: [{ bet_type: 'single', legs: [ml] }] }],
+    ['a flat file with no count', { legs: [ml] }],
+    ['not an object', 'nope'],
+  ])('rejects %s', (_name, raw) => {
+    expect(() => normalizeExpected(raw, 'x.expected.json')).toThrow(/^x\.expected\.json: /);
+  });
 });

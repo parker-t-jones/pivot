@@ -74,12 +74,18 @@ import {
   IMPORT_EDIT_REASON,
   draftFromImportedLeg,
   fetchSlipImportEnabled,
+  importBetChoices,
   importSlip,
+  initialImportSelection,
+  isMultiBetImport,
+  planImportSaves,
   slipImportErrorMessage,
+  type ImportBetChoice,
   type FlaggedLeg,
   type SlipImportResult,
 } from '../lib/slipImport';
 import { AddPickGameList, type AddPickGameGroupModel } from './AddPickGameList';
+import { AddPickImportBets } from './AddPickImportBets';
 import { AddPickImportFlags } from './AddPickImportFlags';
 import { AddPickLineEntry } from './AddPickLineEntry';
 import { AddPickParlay, PARLAY_MAX_LEGS } from './AddPickParlay';
@@ -159,6 +165,10 @@ export function AddPickFlow({
   const [pendingImport, setPendingImport] = useState<SlipImportResult | null>(null);
   const [importChoices, setImportChoices] = useState<ParlayLeg[] | null>(null);
   const [selectedImportKeys, setSelectedImportKeys] = useState<string[]>([]);
+  /** Set for a screenshot with several bets: the grouped review replaces the one-bet steps. */
+  const [importBets, setImportBets] = useState<ImportBetChoice[] | null>(null);
+  const [importReview, setImportReview] = useState(false);
+  const [importBetsError, setImportBetsError] = useState<string | null>(null);
   const [imported, setImported] = useState(false);
   const [flaggedLegs, setFlaggedLegs] = useState<FlaggedLeg[]>([]);
   /** The parlay leg being edited. Its replacement takes its place. */
@@ -530,6 +540,20 @@ export function AddPickFlow({
       return;
     const result = pendingImport;
     setPendingImport(null);
+    if (isMultiBetImport(result)) {
+      const bets = importBetChoices(result.bets ?? [], () => {
+        legKey.current += 1;
+        return `leg-${legKey.current}`;
+      });
+      const review = result.review === true;
+      setImportBets(bets);
+      setImportReview(review);
+      setImportBetsError(null);
+      setSelectedImportKeys(
+        initialImportSelection(bets, allowance.isPro ? null : allowance.freeLeft, review),
+      );
+      return;
+    }
     const ready: ParlayLeg[] = [];
     const flagged: FlaggedLeg[] = [];
     for (const leg of result.legs) {
@@ -658,7 +682,57 @@ export function AddPickFlow({
 
   const playerMarkets = draft.player ? playerMarketsFor(draft.player.position) : [];
 
-  if (pendingImport !== null || importChoices !== null) {
+  const importLimit = allowance === null || allowance.isPro ? null : allowance.freeLeft;
+
+  /** Saves each bet with a selected leg on its own. Bets saved before a failure leave the list. */
+  const saveImportBets = async () => {
+    if (editsLocked || importBets === null || saving) return;
+    const plan = planImportSaves(importBets, selectedImportKeys);
+    if (plan.length === 0) return;
+    if (importLimit !== null && selectedImportKeys.length > importLimit) {
+      showParlayCap();
+      return;
+    }
+    setSaving(true);
+    setImportBetsError(null);
+    const saved = new Set<string>();
+    let savedLegs = 0;
+    try {
+      for (const save of plan) {
+        if (save.kind === 'pick') await createPick(save.input);
+        else await createSlip(save.inputs);
+        saved.add(save.betKey);
+        savedLegs += save.kind === 'pick' ? 1 : save.inputs.length;
+      }
+      notifyAddPickSaved();
+      onDismiss();
+    } catch (error) {
+      if (saved.size > 0) {
+        notifyAddPickSaved();
+        const savedKeys = new Set(
+          importBets
+            .filter((bet) => saved.has(bet.key))
+            .flatMap((bet) => bet.legs.map((l) => l.key)),
+        );
+        setImportBets(importBets.filter((bet) => !saved.has(bet.key)));
+        setSelectedImportKeys((keys) => keys.filter((key) => !savedKeys.has(key)));
+        if (allowance && !allowance.isPro && allowance.freeLeft !== null) {
+          setAllowance({ ...allowance, freeLeft: Math.max(0, allowance.freeLeft - savedLegs) });
+        }
+      }
+      const capped = promptUpgradeForCapError(error, openUpgrade);
+      const reason = capped
+        ? 'You don’t have enough free picks left this week for the rest.'
+        : stakeRequestError(error);
+      setImportBetsError(
+        saved.size > 0 ? `We added ${saved.size} of your ${plan.length} bets. ${reason}` : reason,
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (pendingImport !== null || importChoices !== null || importBets !== null) {
     const limit = allowance?.freeLeft ?? 0;
     const continueImport = () => {
       const chosen = importChoices?.filter((leg) => selectedImportKeys.includes(leg.key)) ?? [];
@@ -693,10 +767,33 @@ export function AddPickFlow({
           onPress={() => {
             setPendingImport(null);
             setImportChoices(null);
+            setImportBets(null);
+            setImportBetsError(null);
             setFlaggedLegs([]);
           }}
         />
-        {pendingImport !== null ? (
+        {importBets !== null ? (
+          <AddPickImportBets
+            bets={importBets}
+            disabled={editsLocked}
+            error={importBetsError}
+            limit={importLimit}
+            onSave={() => void saveImportBets()}
+            onToggle={(key) =>
+              setSelectedImportKeys((keys) =>
+                keys.includes(key)
+                  ? keys.filter((candidate) => candidate !== key)
+                  : importLimit !== null && keys.length >= importLimit
+                    ? keys
+                    : [...keys, key],
+              )
+            }
+            onUpgrade={() => openUpgrade('stake_limit_free')}
+            review={importReview}
+            saving={saving}
+            selected={selectedImportKeys}
+          />
+        ) : pendingImport !== null ? (
           allowance?.freeLeft === null && !allowance.isPro ? (
             <ErrorState
               message="Could not load your free picks left."

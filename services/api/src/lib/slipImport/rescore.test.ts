@@ -112,3 +112,20 @@ it('requires reviewed expected files and accepts an explicit directory override'
   await writeFile(join(dir, 'slip.expected.json'), JSON.stringify({ verification: 'UNVERIFIED' }));
   await expect(rescoreResults(file, dir)).rejects.toThrow('unverified expected');
 });
+
+it('rescores a pre-grouping read against a grouped expected file', async () => {
+  const { file, dir } = await fixture();
+  const td = leg({ market: 'ANYTIME_TD', player: 'Saquon Barkley', team: 'PHI', side: 'YES' });
+  await writeFile(
+    join(dir, 'slip.expected.json'),
+    JSON.stringify({ bets: [{ bet_type: 'single', legs: [td] }] }),
+  );
+  const rescored = (await rescoreResults(file)).results[0];
+  expect(rescored?.importOutcome).toMatchObject({
+    match: 2,
+    silent_wrong: 0,
+    grouping_correct: 2,
+    silent_wrong_grouping: 0,
+    multi_bet_slips: 0,
+  });
+});

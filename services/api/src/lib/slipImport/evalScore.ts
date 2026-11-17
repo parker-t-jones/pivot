@@ -3,7 +3,7 @@
  * `services/api/src/slipImportEval.ts`.
  */
 import { resolveTeam, type SlipTeam } from './mapSlip.js';
-import type { SlipLeg, SlipRead } from './schema.js';
+import { SLIP_BET_TYPES, type SlipBetSpan, type SlipLeg, type SlipRead } from './schema.js';
 
 /** The fields a reviewer writes in `<name>.expected.json`. Text and odds are not scored. */
 export const SCORED_FIELDS = [
@@ -22,10 +22,64 @@ export type ExpectedLeg = Pick<SlipLeg, ScoredField>;
 
 export interface ExpectedSlip {
   bet_count: number;
+  /** Every leg, in printed order, across all bets. */
   legs: ExpectedLeg[];
   /** Defaults to true: most eval images are real slips. Set false for a non-slip or unreadable
    *  image used to check that the reader doesn't invent legs for it. */
   is_bet_slip?: boolean;
+  /** How `legs` splits into bets, when the expected file says (the `bets` format). Without it,
+   *  a slip with `bet_count <= 1` is one bet and a larger count has unknown grouping. */
+  bets?: SlipBetSpan[];
+}
+
+/**
+ * Reads a reviewer's `<name>.expected.json`. Two formats are accepted:
+ * - flat (the original): `{ "bet_count": 1, "legs": [...] }`
+ * - grouped (multi-bet import): `{ "bets": [{ "bet_type": "parlay", "legs": [...] }, ...] }`,
+ *   where `bet_count` is optional and, when present, must equal the number of bets.
+ * Both may carry `is_bet_slip`. Anything else throws, naming the file.
+ */
+export function normalizeExpected(raw: unknown, name = 'expected file'): ExpectedSlip {
+  const fail = (why: string): never => {
+    throw new Error(`${name}: ${why}`);
+  };
+  if (typeof raw !== 'object' || raw === null) return fail('expected a JSON object');
+  const value = raw as Record<string, unknown>;
+  const rawIsBetSlip = value['is_bet_slip'];
+  if (rawIsBetSlip !== undefined && typeof rawIsBetSlip !== 'boolean')
+    fail('is_bet_slip must be true or false');
+  const isBetSlip = typeof rawIsBetSlip === 'boolean' ? rawIsBetSlip : undefined;
+  const withSlip = (slip: ExpectedSlip): ExpectedSlip =>
+    isBetSlip === undefined ? slip : { ...slip, is_bet_slip: isBetSlip };
+  const bets = value['bets'];
+  if (bets !== undefined) {
+    if (value['legs'] !== undefined) fail('use either "bets" or "legs", not both');
+    if (!Array.isArray(bets)) return fail('"bets" must be an array');
+    const spans: SlipBetSpan[] = [];
+    const legs: ExpectedLeg[] = [];
+    for (const [index, bet] of bets.entries()) {
+      const entry = bet as { bet_type?: unknown; legs?: unknown };
+      if (!SLIP_BET_TYPES.includes(entry?.bet_type as (typeof SLIP_BET_TYPES)[number]))
+        fail(`bets[${index}].bet_type must be "single" or "parlay"`);
+      if (!Array.isArray(entry.legs) || entry.legs.length === 0)
+        fail(`bets[${index}].legs must be a non-empty array`);
+      const betLegs = entry.legs as ExpectedLeg[];
+      const type = entry.bet_type as SlipBetSpan['bet_type'];
+      if ((type === 'parlay') !== betLegs.length > 1)
+        fail(`bets[${index}] is a ${type} with ${betLegs.length} leg(s)`);
+      spans.push({ bet_type: type, leg_count: betLegs.length });
+      legs.push(...betLegs);
+    }
+    const count = value['bet_count'];
+    if (count !== undefined && count !== bets.length)
+      fail(`bet_count ${String(count)} does not match ${bets.length} bets`);
+    return withSlip({ bet_count: bets.length, legs, bets: spans });
+  }
+  const flatLegs = value['legs'];
+  const flatCount = value['bet_count'];
+  if (!Array.isArray(flatLegs)) return fail('needs "legs" (flat) or "bets" (grouped)');
+  if (typeof flatCount !== 'number') return fail('the flat format needs "bet_count"');
+  return withSlip({ bet_count: flatCount, legs: flatLegs as ExpectedLeg[] });
 }
 
 export interface FieldTally {

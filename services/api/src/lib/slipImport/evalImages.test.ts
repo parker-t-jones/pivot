@@ -42,6 +42,43 @@ describe('loadEvalImages', () => {
     expect(skipped).toEqual([]);
   });
 
+  it('reads the grouped bets format and still names a malformed file', async () => {
+    const ml = {
+      market: 'MONEYLINE',
+      stat: null,
+      player: null,
+      team: 'PHI',
+      side: null,
+      line: null,
+      plus_style: false,
+      period: 'FULL',
+    };
+    await writeFile(join(dir, 'two.png'), PNG_HEADER);
+    await writeFile(
+      join(dir, 'two.expected.json'),
+      JSON.stringify({
+        bets: [
+          { bet_type: 'single', legs: [ml] },
+          { bet_type: 'parlay', legs: [ml, ml] },
+        ],
+      }),
+    );
+    const { cases } = await loadEvalImages(dir);
+    expect(cases[0]?.expected).toEqual({
+      bet_count: 2,
+      legs: [ml, ml, ml],
+      bets: [
+        { bet_type: 'single', leg_count: 1 },
+        { bet_type: 'parlay', leg_count: 2 },
+      ],
+    });
+    await writeFile(
+      join(dir, 'two.expected.json'),
+      JSON.stringify({ bets: [{ bet_type: 'parlay', legs: [ml] }] }),
+    );
+    await expect(loadEvalImages(dir)).rejects.toThrow('two.expected.json');
+  });
+
   it('skips a file with an image extension but bytes that do not sniff as one', async () => {
     await writeFile(join(dir, 'fake.png'), Buffer.from('not actually a png'));
 

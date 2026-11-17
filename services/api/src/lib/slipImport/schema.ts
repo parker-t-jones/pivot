@@ -43,21 +43,60 @@ export const slipLegSchema = z.object({
 
 export type SlipLeg = z.infer<typeof slipLegSchema>;
 
-export const slipReadSchema = z.object({
+/** The existing import kinds (`POST /picks/import`'s `kind`), reused per bet. */
+export const SLIP_BET_TYPES = ['single', 'parlay'] as const;
+export type SlipBetType = (typeof SLIP_BET_TYPES)[number];
+
+/** What the model returns: legs grouped per bet. Converted to `SlipRead` by `fromModelRead`. */
+export const modelSlipReadSchema = z.object({
   is_bet_slip: z.boolean(),
   bet_count: z.number().int().min(0),
-  legs: z.array(slipLegSchema),
+  bets: z.array(
+    z.object({
+      bet_type: z.enum(SLIP_BET_TYPES),
+      legs: z.array(slipLegSchema),
+    }),
+  ),
 });
+
+export type ModelSlipRead = z.infer<typeof modelSlipReadSchema>;
+
+/** One bet's place in `SlipRead.legs`: the next `leg_count` legs, in printed order. */
+export const slipBetSpanSchema = z.object({
+  bet_type: z.enum(SLIP_BET_TYPES),
+  leg_count: z.number().int().min(0),
+});
+
+export type SlipBetSpan = z.infer<typeof slipBetSpanSchema>;
+
+/**
+ * A read, as the route and the eval use it: every leg in printed order, plus how those legs are
+ * grouped into bets. `bets` is absent on reads saved before multi-bet import; such a read is one
+ * group when `bet_count <= 1` and has unknown grouping otherwise (see `bets.ts`).
+ */
+export const slipReadSchema = z
+  .object({
+    is_bet_slip: z.boolean(),
+    bet_count: z.number().int().min(0),
+    legs: z.array(slipLegSchema),
+    bets: z.array(slipBetSpanSchema).optional(),
+  })
+  .refine(
+    (read) =>
+      read.bets === undefined ||
+      read.bets.reduce((sum, bet) => sum + bet.leg_count, 0) === read.legs.length,
+    { message: 'bets must cover every leg exactly once' },
+  );
 
 export type SlipRead = z.infer<typeof slipReadSchema>;
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
 
-/** JSON schema sent as `output_config.format`. Mirrors `slipReadSchema`. */
+/** JSON schema sent as `output_config.format`. Mirrors `modelSlipReadSchema`. */
 export const SLIP_READ_JSON_SCHEMA: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
-  required: ['is_bet_slip', 'bet_count', 'legs'],
+  required: ['is_bet_slip', 'bet_count', 'bets'],
   properties: {
     is_bet_slip: {
       type: 'boolean',
@@ -68,71 +107,93 @@ export const SLIP_READ_JSON_SCHEMA: Record<string, unknown> = {
       description:
         'How many separate bets (tickets) the image shows. A parlay with many legs is one bet.',
     },
-    legs: {
+    bets: {
       type: 'array',
-      description: 'Every leg of the bet, in the order printed. A straight bet has one leg.',
+      description:
+        'Every separate bet in the image, in the order shown. A parlay with many legs is one bet.',
       items: {
         type: 'object',
         additionalProperties: false,
-        required: [
-          'text',
-          'market',
-          'stat',
-          'player',
-          'team',
-          'matchup',
-          'side',
-          'line',
-          'plus_style',
-          'period',
-          'game_date',
-          'odds',
-        ],
+        required: ['bet_type', 'legs'],
         properties: {
-          text: {
+          bet_type: {
             type: 'string',
-            description:
-              'The leg as printed (selection and market), e.g. "Saquon Barkley Over 84.5 Rushing Yards". No odds, pick amount, payout, balance, username, or bet ID.',
+            enum: [...SLIP_BET_TYPES],
+            description: 'single for a straight bet with one leg; parlay for two or more legs.',
           },
-          market: { type: 'string', enum: [...SLIP_MARKETS] },
-          stat: {
-            ...nullable({ type: 'string', enum: [...STAT_KEYS] }),
-            description: 'For PLAYER_STAT only: which stat. ANY_TD is a count of touchdowns.',
-          },
-          player: {
-            ...nullable({ type: 'string' }),
-            description: 'Player name exactly as printed, for player markets.',
-          },
-          team: {
-            ...nullable({ type: 'string' }),
-            description:
-              'The team the pick is on, from printed text, the logo or jersey beside the leg, or the matchup line (name, city, or abbreviation). Prefer printed text over a conflicting logo. Null only when unclear or for game totals.',
-          },
-          matchup: {
+          legs: {
             type: 'array',
-            items: { type: 'string' },
-            description: 'The teams in the game as printed for this leg, e.g. ["PHI", "CHI"].',
+            description: 'Every leg of this bet, in the order printed. A straight bet has one leg.',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: [
+                'text',
+                'market',
+                'stat',
+                'player',
+                'team',
+                'matchup',
+                'side',
+                'line',
+                'plus_style',
+                'period',
+                'game_date',
+                'odds',
+              ],
+              properties: {
+                text: {
+                  type: 'string',
+                  description:
+                    'The leg as printed (selection and market), e.g. "Saquon Barkley Over 84.5 Rushing Yards". No odds, pick amount, payout, balance, username, or bet ID.',
+                },
+                market: { type: 'string', enum: [...SLIP_MARKETS] },
+                stat: {
+                  ...nullable({ type: 'string', enum: [...STAT_KEYS] }),
+                  description: 'For PLAYER_STAT only: which stat. ANY_TD is a count of touchdowns.',
+                },
+                player: {
+                  ...nullable({ type: 'string' }),
+                  description: 'Player name exactly as printed, for player markets.',
+                },
+                team: {
+                  ...nullable({ type: 'string' }),
+                  description:
+                    'The team the pick is on, from printed text, the logo or jersey beside the leg, or the matchup line (name, city, or abbreviation). Prefer printed text over a conflicting logo. Null only when unclear or for game totals.',
+                },
+                matchup: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'The teams in the game as printed for this leg, e.g. ["PHI", "CHI"].',
+                },
+                side: {
+                  ...nullable({ type: 'string', enum: [...SLIP_SIDES] }),
+                  description:
+                    "OVER/UNDER for lines (MORE/HIGHER = OVER, LESS/LOWER = UNDER). On pick'em screens use the highlighted arrow: up = OVER, down = UNDER; the other arrow is unselected. Null when no side is shown; never guess. YES/NO for touchdown scorer markets.",
+                },
+                line: {
+                  ...nullable({ type: 'number' }),
+                  description:
+                    'The number as printed. Spreads keep their sign from the picked team (e.g. -3.5). Never the odds.',
+                },
+                plus_style: {
+                  type: 'boolean',
+                  description:
+                    'True when the line is printed as "N+" (e.g. "60+ receiving yards").',
+                },
+                period: { type: 'string', enum: [...SLIP_PERIODS] },
+                game_date: {
+                  ...nullable({ type: 'string' }),
+                  description: 'Game date as YYYY-MM-DD when the slip prints one, else null.',
+                },
+                odds: {
+                  ...nullable({ type: 'string' }),
+                  description: 'Odds as printed, e.g. "-110".',
+                },
+              },
+            },
           },
-          side: {
-            ...nullable({ type: 'string', enum: [...SLIP_SIDES] }),
-            description:
-              "OVER/UNDER for lines (MORE/HIGHER = OVER, LESS/LOWER = UNDER). On pick'em screens use the highlighted arrow: up = OVER, down = UNDER; the other arrow is unselected. Null when no side is shown; never guess. YES/NO for touchdown scorer markets.",
-          },
-          line: {
-            ...nullable({ type: 'number' }),
-            description:
-              'The number as printed. Spreads keep their sign from the picked team (e.g. -3.5). Never the odds.',
-          },
-          plus_style: {
-            type: 'boolean',
-            description: 'True when the line is printed as "N+" (e.g. "60+ receiving yards").',
-          },
-          period: { type: 'string', enum: [...SLIP_PERIODS] },
-          game_date: {
-            ...nullable({ type: 'string' }),
-            description: 'Game date as YYYY-MM-DD when the slip prints one, else null.',
-          },
-          odds: { ...nullable({ type: 'string' }), description: 'Odds as printed, e.g. "-110".' },
         },
       },
     },

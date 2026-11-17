@@ -5,8 +5,8 @@
  * `reader.ts` (and its pinned `SLIP_READ_MODEL`) is the only production path.
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { SLIP_READ_PROMPT, SlipReadError, type SlipImage } from './reader.js';
-import { SLIP_READ_JSON_SCHEMA, slipReadSchema, type SlipRead } from './schema.js';
+import { SLIP_READ_PROMPT, SlipReadError, parseModelAnswer, type SlipImage } from './reader.js';
+import { SLIP_READ_JSON_SCHEMA, type SlipRead } from './schema.js';
 import type { TokenUsage } from './modelCost.js';
 
 export interface ModelSlipRead {
@@ -62,10 +62,8 @@ export async function readSlipWithModel(
   } catch {
     throw new SlipReadError('unparseable');
   }
-  const parsed = slipReadSchema.safeParse(json);
-  if (!parsed.success) throw new SlipReadError('unparseable');
   return {
-    read: parsed.data,
+    read: parseModelAnswer(json),
     usage: {
       input_tokens: message.usage.input_tokens,
       output_tokens: message.usage.output_tokens,
@@ -79,9 +77,13 @@ export function productionModelReader(
   observedUsage: () => TokenUsage | null,
   observedCalls?: () => import('./modelEval.js').ModelCallUsage[],
 ): import('./modelEval.js').ModelReader {
-  return async (_model, image) => ({
-    read: await reader.read(image),
-    usage: observedUsage(),
-    ...(observedCalls ? { calls: observedCalls() } : {}),
-  });
+  return async (_model, image) => {
+    const { confirmation, ...read } = await reader.read(image);
+    return {
+      read,
+      usage: observedUsage(),
+      ...(observedCalls ? { calls: observedCalls() } : {}),
+      ...(confirmation ? { confirmation } : {}),
+    };
+  };
 }

@@ -1,5 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { SLIP_READ_JSON_SCHEMA, slipReadSchema, type SlipRead } from './schema.js';
+import {
+  fromModelRead,
+  isMultipleBetRead,
+  slipReadsAgree,
+  type ConfirmedSlipRead,
+} from './bets.js';
+import { SLIP_READ_JSON_SCHEMA, modelSlipReadSchema, type SlipRead } from './schema.js';
 
 export type SlipImageType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 
@@ -14,7 +20,7 @@ export interface SlipImage {
  * must not store or log either (slips show balances, usernames, and bet IDs).
  */
 export interface SlipReader {
-  read(image: SlipImage): Promise<SlipRead>;
+  read(image: SlipImage): Promise<ConfirmedSlipRead>;
 }
 
 /** The model could not read the slip into the schema, or the API call failed. */
@@ -35,7 +41,9 @@ export const SLIP_READ_PROMPT = `Read this sportsbook bet slip screenshot for an
 
 Count bets, not legs: legs listed together under one pick amount or payout are one bet, including a parlay with a status mark or progress bar on each leg, a settled parlay, or a same-game parlay. Set bet_count to 1 for that parlay; per-leg status marks and progress bars do not make separate bets. Set bet_count greater than 1 only when the screenshot shows separate bets, each with its own pick amount or payout.
 
-Return every leg of the bet as printed. For each leg:
+Return one entry in bets for every separate bet, in the order shown, so bets has bet_count entries. Put each leg under the bet it belongs to; never move a leg to another bet or split one parlay into several bets. bet_type is single for a straight bet with one leg and parlay for a bet with two or more legs, including a same-game parlay.
+
+Return every leg of each bet as printed. For each leg:
 - market: MONEYLINE (win the game), SPREAD (point spread, including alternate spreads), GAME_TOTAL (both teams' combined points), TEAM_TOTAL (one team's points), PLAYER_STAT (over/under or N+ on a player stat), ANYTIME_TD (player scores a touchdown), FIRST_TD (player scores the first touchdown), FIRST_TO_SCORE (team scores first), FIELD_GOALS (field goals made by a team or by both teams), or OTHER for anything else (exact score, winning margin, longest reception, unsupported combined player props such as passing + rushing yards, non-NFL, and so on).
 - stat for PLAYER_STAT: PASS_YDS, PASS_COMP, PASS_ATT, PASS_TD, INT_THROWN, RUSH_YDS, RUSH_ATT, RUSH_REC_YDS (rushing + receiving yards), REC_YDS, RECEPTIONS, ANY_TD (touchdowns scored, e.g. "2+ touchdowns"), FG_MADE, or KICK_PTS. If the printed stat is not in this list (tackles, sacks, defensive or special-teams stats, unsupported combined stats such as passing + rushing yards, or anything else), return market: OTHER with stat: null. Never substitute the closest supported stat.
 - team: The team the pick is on, from printed text, the logo or jersey beside the leg, or the matchup line. For player legs with no printed team name, use these visual cues beside the player or the matchup header. Prefer printed team text when a logo disagrees. Use null only when the team truly cannot be told (or for game totals). Matching to Pivot players and teams happens afterwards in code.
@@ -44,7 +52,7 @@ Return every leg of the bet as printed. For each leg:
 - Copy names, numbers, and signs exactly as printed. Do not guess anything the slip does not show: use null.
 
 Only describe the bet itself. Leave out account balances, usernames, bet IDs, pick amounts, payouts, promotions, pick'em entry fees, prize tables, boosts, and rewards.
-If the image is not a bet slip, set is_bet_slip to false and return no legs.`;
+If the image is not a bet slip, set is_bet_slip to false and return no bets.`;
 
 export class AnthropicSlipReader implements SlipReader {
   private readonly client: Anthropic;
@@ -106,29 +114,55 @@ export class AnthropicSlipReader implements SlipReader {
     } catch {
       throw new SlipReadError('unparseable');
     }
-    const parsed = slipReadSchema.safeParse(json);
-    if (!parsed.success) throw new SlipReadError('unparseable');
-    return parsed.data;
+    return parseModelAnswer(json);
   }
 }
 
-/** Recheck only a multiple-bet read, once. Neither images nor reads are logged or stored. */
+/** Validates the model's per-bet answer and flattens it into a `SlipRead`. */
+export function parseModelAnswer(json: unknown): SlipRead {
+  const parsed = modelSlipReadSchema.safeParse(json);
+  if (!parsed.success) throw new SlipReadError('unparseable');
+  return fromModelRead(parsed.data);
+}
+
+/**
+ * Rechecks a multiple-bet read once, on the confirm model. Multi-bet clients use the outcome to
+ * decide whether the user can import the grouping as read or must check each leg (see
+ * `needsReview` and the disagreement rule in `bets.ts`); legacy clients still get the
+ * multiple-bets refusal from whichever read is returned. Neither images nor reads are logged or
+ * stored.
+ *
+ * - The primary read is one bet (or not a slip): returned as is, no second call.
+ * - The confirm call fails: the primary read, marked `failed`.
+ * - The confirm read agrees: the confirm read, marked `agreed`.
+ * - The confirm read disagrees: the confirm read (the stronger model), marked `disagreed`.
+ */
 export class ConfirmingSlipReader implements SlipReader {
   constructor(
     private readonly primary: SlipReader,
     private readonly confirm: SlipReader,
   ) {}
 
-  async read(image: SlipImage): Promise<SlipRead> {
+  async read(image: SlipImage): Promise<ConfirmedSlipRead> {
     const primary = await this.primary.read(image);
-    if (!primary.is_bet_slip || primary.bet_count <= 1) return primary;
+    if (!isMultipleBetRead(primary)) return primary;
+    let confirmed: SlipRead;
     try {
-      return await this.confirm.read(image);
+      confirmed = withoutConfirmation(await this.confirm.read(image));
     } catch (error) {
       if (!(error instanceof SlipReadError)) throw error;
-      return primary;
+      return { ...withoutConfirmation(primary), confirmation: 'failed' };
     }
+    return {
+      ...confirmed,
+      confirmation: slipReadsAgree(primary, confirmed) ? 'agreed' : 'disagreed',
+    };
   }
+}
+
+function withoutConfirmation(read: ConfirmedSlipRead): SlipRead {
+  const { confirmation: _confirmation, ...rest } = read;
+  return rest;
 }
 
 /** Detects the image type from its first bytes. The client's claim is never trusted. */

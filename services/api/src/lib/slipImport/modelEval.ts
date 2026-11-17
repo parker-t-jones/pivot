@@ -17,6 +17,7 @@ import {
 import { costForUsage, MODEL_PRICING, type ModelPricing, type TokenUsage } from './modelCost.js';
 import type { SlipImage } from './reader.js';
 import type { SlipRead } from './schema.js';
+import { needsReview, type SlipConfirmation } from './bets.js';
 import {
   addImportOutcome,
   emptyImportTally,
@@ -61,7 +62,13 @@ export interface ModelCallUsage {
 export type ModelReader = (
   model: string,
   image: SlipImage,
-) => Promise<{ read: SlipRead; usage: TokenUsage | null; calls?: ModelCallUsage[] }>;
+) => Promise<{
+  read: SlipRead;
+  usage: TokenUsage | null;
+  calls?: ModelCallUsage[];
+  /** Set by the production path when its confirm pass ran. */
+  confirmation?: SlipConfirmation;
+}>;
 
 export interface ModelEvalResult {
   model: string;
@@ -84,6 +91,8 @@ export interface EvalRecord {
   latencyMs: number;
   usage: TokenUsage | null;
   calls?: ModelCallUsage[];
+  /** The production path's confirm-pass outcome, when it ran. Absent on older saved results. */
+  confirmation?: SlipConfirmation;
   cost: number | null;
   failure: string | null;
   wrong: ReturnType<typeof wrongFields>;
@@ -132,11 +141,13 @@ export async function evalModel(
         cost: number | null = null,
         failure: string | null = null;
       let calls: ModelCallUsage[] | undefined;
+      let confirmation: SlipConfirmation | undefined;
       try {
         const result = await read(candidate.model, image);
         got = result.read;
         usage = result.usage;
         calls = result.calls;
+        confirmation = result.confirmation;
         cost = calls
           ? calls.some((call) => call.usage !== null)
             ? calls.reduce(
@@ -158,6 +169,7 @@ export async function evalModel(
         latencyMs: performance.now() - start,
         usage,
         ...(calls ? { calls } : {}),
+        ...(confirmation ? { confirmation } : {}),
         cost,
         failure,
         wrong: [],
@@ -203,7 +215,10 @@ export function scoreModelRecords(
     scoreSlip(run.tally, got, want);
     scoreUnordered(unordered, got, want);
     scoreUnordered(run.unordered, got, want);
-    const outcome = scoreImportOutcome(got, want);
+    const review = needsReview(
+      record.confirmation ? { ...got, confirmation: record.confirmation } : got,
+    );
+    const outcome = scoreImportOutcome(got, want, { review });
     addImportOutcome(importOutcome, outcome);
     addImportOutcome(run.outcome, outcome);
     return {
@@ -278,8 +293,9 @@ export function formatModelEvalResult(result: ModelEvalResult): string {
       ([key, s]) =>
         `${key} per-run mean/min/max: ${s.mean.toFixed(6)} / ${s.min.toFixed(6)} / ${s.max.toFixed(6)}`,
     ),
-    'Import outcome (condition/team projection):',
+    'Import outcome (condition/team projection, multi-bet client):',
     ...Object.entries(result.importOutcome).map(([key, count]) => `${key}: ${count}`),
+    `grouping accuracy: ${groupingAccuracy(result.importOutcome)}; multi-bet slips: ${multiBetGroupingAccuracy(result.importOutcome)}`,
     ...Object.entries(result.importRunStats).map(
       ([key, s]) =>
         `${key} per-run mean/min/max: ${s.mean.toFixed(6)} / ${s.min.toFixed(6)} / ${s.max.toFixed(6)}`,
@@ -315,12 +331,27 @@ export function summarizeConfirmations(
   };
 }
 
+function ratio(n: number, d: number): string {
+  return d === 0 ? 'n/a' : `${n}/${d} (${((100 * n) / d).toFixed(1)}%)`;
+}
+
+/** Accepted reads whose bet grouping matched the slip, over reads with a known grouping. */
+export function groupingAccuracy(tally: ImportTally): string {
+  return ratio(tally.grouping_correct, tally.grouping_correct + tally.grouping_wrong);
+}
+
+/** The multi-bet grouping-accuracy metric: slips with more than one bet whose grouping the
+ *  read got right, over every such slip (unreadable or unknown-grouping reads count as wrong). */
+export function multiBetGroupingAccuracy(tally: ImportTally): string {
+  return ratio(tally.multi_bet_grouping_correct, tally.multi_bet_slips);
+}
+
 /** A compact side-by-side table, for pasting into `docs/SLIP-MODEL-EVAL.md`. */
 export function formatComparisonTable(results: ModelEvalResult[]): string {
   const pct = (n: number, d: number) => (d === 0 ? 'n/a' : `${((100 * n) / d).toFixed(1)}%`);
   const header =
-    '| model | leg count | bet count | is_bet_slip | field accuracy (positional / best assignment) | silent_wrong | rejected_multiple_bets | team_differs (blank / different) | $/image |';
-  const sep = '|---|---|---|---|---|---|---|---|---|';
+    '| model | leg count | bet count | is_bet_slip | field accuracy (positional / best assignment) | silent_wrong | silent_wrong_grouping | rejected_multiple_bets (legacy) | review | multi-bet grouping | team_differs (blank / different) | $/image |';
+  const sep = '|---|---|---|---|---|---|---|---|---|---|---|---|';
   const rows = results.map((r) => {
     const { tally } = r;
     const fieldEntries = Object.values(tally.fields);
@@ -333,7 +364,10 @@ export function formatComparisonTable(results: ModelEvalResult[]): string {
       pct(tally.isBetSlipCorrect, tally.slips),
       `${pct(fieldCorrect, fieldTotal)} / ${(100 * fieldAccuracy(r.unordered)).toFixed(1)}%`,
       String(r.importOutcome.silent_wrong),
+      String(r.importOutcome.silent_wrong_grouping),
       String(r.importOutcome.rejected_multiple_bets),
+      String(r.importOutcome.review),
+      multiBetGroupingAccuracy(r.importOutcome),
       `${r.importOutcome.team_differs_blank} / ${r.importOutcome.team_differs_different}`,
       `$${r.costPerImage.toFixed(4)} |`,
     ].join(' | ');

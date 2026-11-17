@@ -26,12 +26,12 @@ import {
   type SlipImage,
   type SlipReader,
 } from '../lib/slipImport/reader.js';
-import type { SlipRead } from '../lib/slipImport/schema.js';
+import type { SlipLeg, SlipRead } from '../lib/slipImport/schema.js';
 import type { SupabaseServiceClient } from '../lib/supabase.js';
 import authPlugin from '../plugins/auth.js';
 import servicesPlugin from '../plugins/services.js';
 import { unreachableNflStateSource } from '../lib/nflStateSource.test-helper.js';
-import pickImportRoutes from './pickImport.js';
+import pickImportRoutes, { MAX_IMPORT_BETS } from './pickImport.js';
 
 const JWT_SECRET = 'test-secret-at-least-32-characters-long';
 const USER = '2057923d-af10-4bfc-966c-db93341863f2';
@@ -133,12 +133,20 @@ async function setup(
       headers: auth ? { authorization: `Bearer ${token}` } : {},
       payload: payload as Record<string, unknown>,
     });
+  const postMulti = (payload: unknown, capability = 'v1') =>
+    app.inject({
+      method: 'POST',
+      url: `/picks/import?multi_bet=${capability}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: payload as Record<string, unknown>,
+    });
   return {
     app,
     db,
     reader,
     logs,
     post,
+    postMulti,
     lineupCache,
     setNow: (next: Date) => {
       clock.now = next;
@@ -409,5 +417,258 @@ describe('POST /picks/import', () => {
     const h = await harness({ reader, limits: { free: 1, pro: 1 } });
     expect((await h.post({ image: PNG })).statusCode).toBe(422);
     expect((await h.post({ image: PNG })).statusCode).toBe(429);
+  });
+});
+
+const ML_LEG = leg({ text: 'Eagles Moneyline', market: 'MONEYLINE', team: 'PHI' });
+const NY_TOTAL_LEG = leg({
+  text: 'Giants at Jets Under 41.5',
+  market: 'GAME_TOTAL',
+  side: 'UNDER',
+  line: 41.5,
+  matchup: ['NY Giants', 'NY Jets'],
+});
+
+/** A grouped read, as the reader returns it: one entry in `bets` per bet, in printed order. */
+function grouped(...bets: SlipLeg[][]): SlipRead {
+  return {
+    is_bet_slip: true,
+    bet_count: bets.length,
+    legs: bets.flat(),
+    bets: bets.map((legs) => ({
+      bet_type: legs.length > 1 ? ('parlay' as const) : ('single' as const),
+      leg_count: legs.length,
+    })),
+  };
+}
+
+interface BetBody {
+  bet_type: string;
+  legs: { status: string; text: string }[];
+}
+
+describe('POST /picks/import with multiple bets', () => {
+  const apps: { close(): Promise<unknown> }[] = [];
+  afterEach(async () => {
+    await Promise.all(apps.splice(0).map((app) => app.close()));
+  });
+  async function harness(options: Parameters<typeof setup>[0] = {}) {
+    const h = await setup(options);
+    apps.push(h.app);
+    return h;
+  }
+
+  describe('a legacy client (iOS 1.1.0, no capability)', () => {
+    it('gets exactly the original contract for a one-bet grouped read', async () => {
+      const h = await harness({ reader: new FakeReader(grouped([RUSH_LEG, ML_LEG])) });
+      const response = await h.post({ image: PNG });
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(Object.keys(body).sort()).toEqual(['imports_left', 'kind', 'legs']);
+      expect(body.kind).toBe('parlay');
+      expect(body.legs.map((l: { status: string }) => l.status)).toEqual(['ready', 'ready']);
+    });
+
+    it('still gets the multiple-bets 422, and the import is refunded', async () => {
+      const reader = new FakeReader(grouped([RUSH_LEG], [ML_LEG]));
+      const h = await harness({ reader, limits: { free: 1, pro: 1 } });
+      const refused = await h.post({ image: PNG });
+      expect(refused.statusCode).toBe(422);
+      expect(refused.json().error).toEqual({
+        code: 'slip_import_multiple_bets',
+        message: 'That screenshot shows more than one bet. Crop it to one bet and try again.',
+      });
+      // The only import of the week is still there.
+      reader.result = grouped([RUSH_LEG]);
+      const next = await h.post({ image: PNG });
+      expect(next.statusCode).toBe(200);
+      expect(next.json().imports_left).toBe(0);
+      expect((await h.post({ image: PNG })).statusCode).toBe(429);
+    });
+
+    it('refunds the import for a flat read whose count says several bets', async () => {
+      const reader = new FakeReader({ is_bet_slip: true, bet_count: 3, legs: [RUSH_LEG] });
+      const h = await harness({ reader, limits: { free: 1, pro: 1 } });
+      expect((await h.post({ image: PNG })).statusCode).toBe(422);
+      reader.result = grouped([RUSH_LEG]);
+      expect((await h.post({ image: PNG })).statusCode).toBe(200);
+    });
+
+    it('refuses a read grouped into two bets even when its count says one', async () => {
+      const read = { ...grouped([RUSH_LEG], [ML_LEG]), bet_count: 1 };
+      const h = await harness({ reader: new FakeReader(read) });
+      const response = await h.post({ image: PNG });
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe('slip_import_multiple_bets');
+    });
+
+    it('treats an unknown capability value as a legacy client', async () => {
+      const h = await harness({ reader: new FakeReader(grouped([RUSH_LEG], [ML_LEG])) });
+      const response = await h.postMulti({ image: PNG }, 'v999');
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe('slip_import_multiple_bets');
+    });
+
+    it('keeps the multiple-bet refusal when the confirm read agrees', async () => {
+      const read = grouped([RUSH_LEG], [ML_LEG]);
+      const confirm = new FakeReader(read);
+      const h = await harness({
+        composedReader: new ConfirmingSlipReader(new FakeReader(read), confirm),
+      });
+      expect((await h.post({ image: PNG })).statusCode).toBe(422);
+      expect(confirm.calls).toHaveLength(1);
+    });
+  });
+
+  describe('a multi-bet client', () => {
+    it('imports several singles grouped per bet, and charges one import', async () => {
+      const reader = new FakeReader(grouped([RUSH_LEG], [ML_LEG], [NY_TOTAL_LEG]));
+      const h = await harness({ reader });
+      const response = await h.postMulti({ image: PNG });
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.imports_left).toBe(2);
+      expect(body.review).toBe(false);
+      expect(body.kind).toBe('parlay');
+      expect(body.legs).toHaveLength(3);
+      expect(body.bets.map((b: BetBody) => [b.bet_type, b.legs.length])).toEqual([
+        ['single', 1],
+        ['single', 1],
+        ['single', 1],
+      ]);
+      expect(body.bets.map((b: BetBody) => b.legs[0]?.text)).toEqual([
+        RUSH_LEG.text,
+        ML_LEG.text,
+        NY_TOTAL_LEG.text,
+      ]);
+      expect(body.bets.flatMap((b: BetBody) => b.legs.map((l) => l.status))).toEqual([
+        'ready',
+        'ready',
+        'ready',
+      ]);
+      expect(h.db.rows('stakes')).toHaveLength(0);
+      expect(h.db.rows('pick_slips')).toHaveLength(0);
+    });
+
+    it('imports several parlays with their legs in order', async () => {
+      const h = await harness({
+        reader: new FakeReader(grouped([RUSH_LEG, ML_LEG], [NY_TOTAL_LEG, OTHER_LEG, ML_LEG])),
+      });
+      const body = (await h.postMulti({ image: PNG })).json();
+      expect(body.review).toBe(false);
+      expect(body.bets.map((b: BetBody) => [b.bet_type, b.legs.map((l) => l.text)])).toEqual([
+        ['parlay', [RUSH_LEG.text, ML_LEG.text]],
+        ['parlay', [NY_TOTAL_LEG.text, OTHER_LEG.text, ML_LEG.text]],
+      ]);
+      expect(body.bets[1].legs[1]).toMatchObject({ status: 'flagged' });
+    });
+
+    it('imports a mix of singles and parlays', async () => {
+      const h = await harness({
+        reader: new FakeReader(grouped([RUSH_LEG], [ML_LEG, NY_TOTAL_LEG], [OTHER_LEG])),
+      });
+      const body = (await h.postMulti({ image: PNG })).json();
+      expect(body.bets.map((b: BetBody) => `${b.bet_type}:${b.legs.length}`)).toEqual([
+        'single:1',
+        'parlay:2',
+        'single:1',
+      ]);
+      expect(body.bets[2].legs[0]).toMatchObject({ status: 'flagged', text: OTHER_LEG.text });
+    });
+
+    it('returns one bet for a one-bet slip, with the legacy fields intact', async () => {
+      const h = await harness({ reader: new FakeReader(grouped([RUSH_LEG, ML_LEG])) });
+      const body = (await h.postMulti({ image: PNG })).json();
+      expect(body).toMatchObject({ kind: 'parlay', imports_left: 2, review: false });
+      expect(body.legs).toHaveLength(2);
+      expect(body.bets).toHaveLength(1);
+      expect(body.bets[0].legs).toEqual(body.legs);
+    });
+
+    it('still charges an import for a multi-bet read; one screenshot is one import', async () => {
+      const h = await harness({
+        reader: new FakeReader(grouped([RUSH_LEG], [ML_LEG])),
+        limits: { free: 1, pro: 1 },
+      });
+      expect((await h.postMulti({ image: PNG })).json().imports_left).toBe(0);
+      expect((await h.postMulti({ image: PNG })).statusCode).toBe(429);
+    });
+
+    it('imports the confirm read without review when the two reads agree', async () => {
+      const primary = new FakeReader(grouped([RUSH_LEG], [ML_LEG, NY_TOTAL_LEG]));
+      // Same bets in another order, and printed text differs: still agreement.
+      const confirm = new FakeReader(
+        grouped([NY_TOTAL_LEG, { ...ML_LEG, text: 'PHI ML' }], [RUSH_LEG]),
+      );
+      const h = await harness({ composedReader: new ConfirmingSlipReader(primary, confirm) });
+      const body = (await h.postMulti({ image: PNG })).json();
+      expect(body.review).toBe(false);
+      expect(body.bets[0].legs[1].text).toBe('PHI ML');
+      expect(primary.calls).toHaveLength(1);
+      expect(confirm.calls).toHaveLength(1);
+    });
+
+    it('sends the confirm read to review when the reads group legs differently', async () => {
+      const primary = new FakeReader(grouped([RUSH_LEG], [ML_LEG]));
+      const confirm = new FakeReader(grouped([RUSH_LEG, ML_LEG]));
+      const h = await harness({ composedReader: new ConfirmingSlipReader(primary, confirm) });
+      const response = await h.postMulti({ image: PNG });
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.review).toBe(true);
+      expect(body.bets.map((b: BetBody) => b.bet_type)).toEqual(['parlay']);
+    });
+
+    it('sends the read to review when the reads disagree on a leg', async () => {
+      const primary = new FakeReader(grouped([RUSH_LEG], [ML_LEG]));
+      const confirm = new FakeReader(grouped([{ ...RUSH_LEG, line: 94.5 }], [ML_LEG]));
+      const h = await harness({ composedReader: new ConfirmingSlipReader(primary, confirm) });
+      expect((await h.postMulti({ image: PNG })).json().review).toBe(true);
+    });
+
+    it('keeps the primary read but requires review when the confirm call fails', async () => {
+      const primary = new FakeReader(grouped([RUSH_LEG], [ML_LEG]));
+      const confirm = new FakeReader(new SlipReadError('upstream', 529));
+      const h = await harness({ composedReader: new ConfirmingSlipReader(primary, confirm) });
+      const response = await h.postMulti({ image: PNG });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ review: true, imports_left: 2 });
+      expect(response.json().bets).toHaveLength(2);
+    });
+
+    it('sends an inconsistent read to review', async () => {
+      const read = { ...grouped([RUSH_LEG], [ML_LEG]), bet_count: 3 };
+      const h = await harness({ reader: new FakeReader(read) });
+      expect((await h.postMulti({ image: PNG })).json().review).toBe(true);
+    });
+
+    it('refuses more bets than one import returns', async () => {
+      const bets = Array.from({ length: MAX_IMPORT_BETS + 1 }, () => [RUSH_LEG]);
+      const h = await harness({ reader: new FakeReader(grouped(...bets)) });
+      const response = await h.postMulti({ image: PNG });
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe('slip_import_too_many_bets');
+    });
+
+    it('refuses a bet with more legs than a parlay holds, but not many legs across bets', async () => {
+      const twelve = Array.from({ length: 12 }, () => RUSH_LEG);
+      const ok = await harness({ reader: new FakeReader(grouped(twelve, [ML_LEG])) });
+      expect((await ok.postMulti({ image: PNG })).statusCode).toBe(200);
+      const tooMany = await harness({ reader: new FakeReader(grouped([...twelve, ML_LEG])) });
+      const response = await tooMany.postMulti({ image: PNG });
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe('slip_import_too_many_legs');
+    });
+
+    it('never logs the image or what the model read', async () => {
+      const h = await harness({ reader: new FakeReader(grouped([RUSH_LEG], [ML_LEG])) });
+      await h.postMulti({ image: PNG });
+      const all = h.logs.join('\n');
+      expect(all).toContain('"bets":2');
+      expect(all).not.toContain(PRIVATE_MARKER);
+      expect(all).not.toContain('bettor99');
+      expect(all).not.toContain('Barkley');
+      expect(all).not.toContain('Eagles');
+    });
   });
 });
