@@ -28,6 +28,7 @@ import {
   importSlip,
   slipImportErrorMessage,
   type ImportedLeg,
+  type SlipImportResult,
 } from './slipImport';
 
 const GAME = {
@@ -154,7 +155,7 @@ describe('multi-bet import', () => {
   const nextKey = () => `k${++n}`;
 
   it('uses the multi-bet review only for several bets or a review request', () => {
-    const one = { kind: 'single', legs: [ml], imports_left: 1 } as const;
+    const one: SlipImportResult = { kind: 'single', legs: [ml], imports_left: 1 };
     expect(isMultiBetImport(one)).toBe(false);
     expect(isMultiBetImport({ ...one, bets: [{ bet_type: 'single', legs: [ml] }] })).toBe(false);
     expect(

@@ -25,7 +25,10 @@ function grouped(...bets: SlipLeg[][]): SlipRead {
   return fromModelRead({
     is_bet_slip: true,
     bet_count: bets.length,
-    bets: bets.map((legs) => ({ bet_type: legs.length > 1 ? 'parlay' : 'single', legs })),
+    bets: bets.map((legs) => ({
+      bet_type: legs.length > 1 ? ('parlay' as const) : ('single' as const),
+      legs,
+    })),
   });
 }
 

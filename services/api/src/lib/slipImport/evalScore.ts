@@ -45,9 +45,10 @@ export function normalizeExpected(raw: unknown, name = 'expected file'): Expecte
   };
   if (typeof raw !== 'object' || raw === null) return fail('expected a JSON object');
   const value = raw as Record<string, unknown>;
-  const isBetSlip = value['is_bet_slip'];
-  if (isBetSlip !== undefined && typeof isBetSlip !== 'boolean')
+  const rawIsBetSlip = value['is_bet_slip'];
+  if (rawIsBetSlip !== undefined && typeof rawIsBetSlip !== 'boolean')
     fail('is_bet_slip must be true or false');
+  const isBetSlip = typeof rawIsBetSlip === 'boolean' ? rawIsBetSlip : undefined;
   const withSlip = (slip: ExpectedSlip): ExpectedSlip =>
     isBetSlip === undefined ? slip : { ...slip, is_bet_slip: isBetSlip };
   const bets = value['bets'];
@@ -74,9 +75,11 @@ export function normalizeExpected(raw: unknown, name = 'expected file'): Expecte
       fail(`bet_count ${String(count)} does not match ${bets.length} bets`);
     return withSlip({ bet_count: bets.length, legs, bets: spans });
   }
-  if (!Array.isArray(value['legs'])) return fail('needs "legs" (flat) or "bets" (grouped)');
-  if (typeof value['bet_count'] !== 'number') return fail('the flat format needs "bet_count"');
-  return withSlip({ bet_count: value['bet_count'], legs: value['legs'] as ExpectedLeg[] });
+  const flatLegs = value['legs'];
+  const flatCount = value['bet_count'];
+  if (!Array.isArray(flatLegs)) return fail('needs "legs" (flat) or "bets" (grouped)');
+  if (typeof flatCount !== 'number') return fail('the flat format needs "bet_count"');
+  return withSlip({ bet_count: flatCount, legs: flatLegs as ExpectedLeg[] });
 }
 
 export interface FieldTally {
