@@ -19,6 +19,11 @@ import { buildPickInput, draftReadout } from './pickDraft';
 import type { BetCondition, PickInput } from './picksClient';
 import {
   draftFromImportedLeg,
+  importBetChoices,
+  importBetHeader,
+  initialImportSelection,
+  isMultiBetImport,
+  planImportSaves,
   fetchSlipImportEnabled,
   importSlip,
   slipImportErrorMessage,
@@ -107,10 +112,12 @@ describe('draftFromImportedLeg', () => {
 });
 
 describe('slip import client', () => {
-  it('posts the image and nothing else', async () => {
+  it('posts the image and nothing else, with the multi-bet capability in the query', async () => {
     api.post.mockResolvedValueOnce({ kind: 'single', legs: [], imports_left: 4 });
     await importSlip('data:image/png;base64,AAAA');
-    expect(api.post).toHaveBeenCalledWith('/picks/import', { image: 'data:image/png;base64,AAAA' });
+    expect(api.post).toHaveBeenCalledWith('/picks/import?multi_bet=v1', {
+      image: 'data:image/png;base64,AAAA',
+    });
   });
 
   it('reads import as on only when /health says enabled', async () => {
@@ -135,5 +142,89 @@ describe('slip import client', () => {
       slipImportErrorMessage(new ApiRequestError(500, 'internal_error', 'Internal server error.')),
     ).toBe('We couldn’t import that screenshot. Try again, or add the pick yourself.');
     expect(slipImportErrorMessage(new Error('x'))).toContain('add the pick yourself');
+  });
+});
+
+describe('multi-bet import', () => {
+  const ml = ready(team({ type: 'MONEYLINE', side: 'TEAM' }));
+  const rec = ready(player({ type: 'STAT_OVER', stat: 'REC_YDS', line: 59.5 }), KITTLE);
+  const under = ready(game({ type: 'TOTAL_UNDER', line: 44.5 }));
+  const flagged = { status: 'flagged', text: 'Correct score 24-17', reason: 'Not yet.' } as const;
+  let n = 0;
+  const nextKey = () => `k${++n}`;
+
+  it('uses the multi-bet review only for several bets or a review request', () => {
+    const one = { kind: 'single', legs: [ml], imports_left: 1 } as const;
+    expect(isMultiBetImport(one)).toBe(false);
+    expect(isMultiBetImport({ ...one, bets: [{ bet_type: 'single', legs: [ml] }] })).toBe(false);
+    expect(
+      isMultiBetImport({ ...one, bets: [{ bet_type: 'single', legs: [ml] }], review: true }),
+    ).toBe(true);
+    expect(
+      isMultiBetImport({
+        ...one,
+        bets: [
+          { bet_type: 'single', legs: [ml] },
+          { bet_type: 'single', legs: [rec] },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it('groups ready and flagged legs per bet, with headers', () => {
+    const bets = importBetChoices(
+      [
+        { bet_type: 'single', legs: [ml] },
+        { bet_type: 'parlay', legs: [rec, flagged, under] },
+      ],
+      nextKey,
+    );
+    expect(bets.map((bet) => bet.legs.map((leg) => leg.label))).toEqual([
+      ['SF ML'],
+      [expect.stringContaining('Kittle'), expect.any(String)],
+    ]);
+    expect(bets[1]?.legs[0]?.printed).toBe('as printed');
+    expect(bets[1]?.flagged).toEqual([
+      { key: expect.any(String), text: 'Correct score 24-17', reason: 'Not yet.' },
+    ]);
+    expect(bets.map((bet, index) => importBetHeader(index, bet))).toEqual([
+      'Bet 1 · Single',
+      'Bet 2 · Parlay · 3 legs',
+    ]);
+  });
+
+  it('preselects everything only when it all fits and the grouping is sure', () => {
+    const bets = importBetChoices(
+      [
+        { bet_type: 'single', legs: [ml] },
+        { bet_type: 'parlay', legs: [rec, under] },
+      ],
+      nextKey,
+    );
+    expect(initialImportSelection(bets, null, false)).toHaveLength(3);
+    expect(initialImportSelection(bets, 3, false)).toHaveLength(3);
+    expect(initialImportSelection(bets, 2, false)).toEqual([]);
+    expect(initialImportSelection(bets, null, true)).toEqual([]);
+  });
+
+  it('plans one save per bet: a pick for one leg, a parlay for more', () => {
+    const bets = importBetChoices(
+      [
+        { bet_type: 'single', legs: [ml] },
+        { bet_type: 'parlay', legs: [rec, under] },
+        { bet_type: 'parlay', legs: [rec, ml, under] },
+        { bet_type: 'single', legs: [under] },
+      ],
+      nextKey,
+    );
+    const keys = bets.map((bet) => bet.legs.map((leg) => leg.key));
+    const selected = [keys[0]?.[0], keys[1]?.[1], keys[2]?.[0], keys[2]?.[2]].filter(
+      (key): key is string => key !== undefined,
+    );
+    expect(planImportSaves(bets, selected)).toEqual([
+      { kind: 'pick', betKey: bets[0]?.key, input: ml.pick },
+      { kind: 'pick', betKey: bets[1]?.key, input: under.pick },
+      { kind: 'slip', betKey: bets[2]?.key, inputs: [rec.pick, under.pick] },
+    ]);
   });
 });

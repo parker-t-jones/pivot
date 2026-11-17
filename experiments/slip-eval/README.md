@@ -27,6 +27,23 @@ For each `name.png`, `.jpg`, `.jpeg` or `.webp`, hand-review `name.expected.json
 Use the values in `schema.ts`. Include singles, parlays, multiple books and markets, periods,
 and a non-slip with `{ "bet_count": 0, "legs": [], "is_bet_slip": false }`.
 
+For a screenshot with more than one bet, use the grouped format instead, so the scorer can check
+how legs are split into bets. Each bet is `single` (one leg) or `parlay` (two or more legs), in
+the order shown; `bet_count` is optional and, if given, must equal the number of bets:
+
+```json
+{
+  "bets": [
+    { "bet_type": "single", "legs": [{ "market": "MONEYLINE", "...": "..." }] },
+    { "bet_type": "parlay", "legs": [{ "...": "..." }, { "...": "..." }] }
+  ]
+}
+```
+
+The flat format still works and is the same as one bet when `bet_count` is 1. A flat file with
+`bet_count` above 1 has unknown grouping: its legs are scored, but not its grouping. Use either
+`bets` or `legs`, never both. `--draft-expected` writes drafts in the grouped format.
+
 From the repository root, with `ANTHROPIC_API_KEY` already set locally (never paste keys):
 
 ```bash
@@ -85,8 +102,33 @@ with informational `team_differs: blank | different` metadata, counted separatel
 Team-based legs require a resolvable team; a missing/unknown team is flagged and a different
 team is silently wrong. Expected-null teams do not penalize team differences.
 
-Slip outcomes are `unreadable`, `rejected_multiple_bets`, and `false_accept`. A slip refusal
-or false accept takes precedence: its legs are not counted as imported picks. Missing legs
+Slip outcomes are `unreadable`, `false_accept`, `rejected_multiple_bets`, and
+`silent_wrong_grouping`. `unreadable` and `false_accept` take precedence: their legs are not
+counted as imported picks.
+
+The import outcome scores what the multi-bet client (`?multi_bet=v1`) would import:
+
+- `rejected_multiple_bets` is now a legacy-contract annotation: the read says more than one bet
+  (by count or grouping) on a single-bet slip, so iOS 1.1.0 would refuse it. The slip's legs
+  are still scored, because a multi-bet client imports that read. Before multi-bet import these
+  legs were not scored, so `silent_wrong` and `flagged` from older runs aren't directly
+  comparable; re-score old results to compare.
+- `review` counts imports the multi-bet client would show for a leg-by-leg check with nothing
+  preselected: the confirm pass failed or disagreed (production path only; the record's
+  `confirmation`), or the read is inconsistent (count differs from its bets, an empty bet, a
+  bet type that doesn't match its leg count, or no grouping with a count above 1). In review, a
+  leg that would be `silent_wrong` counts as `flagged`.
+- `grouping_correct` / `grouping_wrong`: whether the read split legs into bets the way the slip
+  does (legs matched by the best assignment; bets must correspond one to one; order of bets
+  doesn't matter). Skipped when either side's grouping is unknown.
+- `silent_wrong_grouping`: wrong grouping on a read that is not in review. The multi-bet client
+  would preselect the wrong bets (for example, save two singles instead of one parlay).
+- `multi_bet_slips` / `multi_bet_grouping_correct`: the multi-bet grouping-accuracy metric,
+  over every expected slip with more than one bet. A refused or unreadable read counts as wrong.
+  The report prints it as `multi-bet slips: n/d (p%)`, next to overall grouping accuracy.
+
+The launch gate for multi-bet import is **silent_wrong 0, silent_wrong_grouping 0, and
+rejected_multiple_bets 0** on the production path. Missing legs
 on otherwise accepted slips are flagged; extra ready legs are silently wrong. Unsupported
 reads are flagged even when ground truth is also unsupported. Counts and per-run count
 mean/min/max appear per model; each JSON record includes its leg and slip outcomes.

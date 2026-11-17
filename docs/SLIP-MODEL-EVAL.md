@@ -114,12 +114,19 @@ pnpm build
 pnpm --filter @pivot/api exec tsx src/slipModelEval.ts /absolute/path/to/slips --production-path --runs 10 --out /absolute/path/to/production-results.json
 ```
 
-Required: **silent_wrong 0** and **rejected_multiple_bets 0**. Record confirmation count,
-added cost, total per-image cost, and the full scorecard. A confirmation that agrees on
-multiple bets or fails still permits the unchanged route to refuse; this is why the paid
-acceptance run remains necessary. If Sonnet still permits false refusals, Parker can choose
-a follow-up to confirm with Opus only on that rare path (issue estimate: ~$0.0007 average)
-or move the primary to Sonnet. Neither alternative is implemented here.
+Required: **silent_wrong 0**, **silent_wrong_grouping 0**, and **rejected_multiple_bets 0**.
+Record confirmation count, `review` count, multi-bet grouping accuracy, added cost, total
+per-image cost, and the full scorecard.
+
+Since multi-bet import (`docs/MULTI-BET-SLIP-IMPORT.md`), the model returns legs grouped per
+bet, and the scorer scores what a multi-bet client imports. `rejected_multiple_bets` still
+counts single-bet slips that iOS 1.1.0 (which gets the original contract) would refuse; the
+refused import is now given back. A confirmation that fails or disagrees now sends a multi-bet
+client to review instead of refusing; for legacy clients the refusal is unchanged. The prompt and
+schema changed, so the #126 numbers above predate them: the paid acceptance run is required
+again. If Sonnet still permits false refusals, Parker can choose a follow-up to confirm with
+Opus only on that rare path (issue estimate: ~$0.0007 average) or move the primary to Sonnet.
+Neither alternative is implemented here.
 
 No API key is set by this change. Production configuration waits for review, merge, and a
 passing acceptance run. Parker handles all Fly commands.
