@@ -9,6 +9,7 @@ import { ApiError, throwAsAccountNotFoundIfMissingRow } from '../lib/errors.js';
 import { getCurrentNflState } from '../lib/nfl-state.js';
 import { getOwnedLeagueOrThrow } from '../lib/get-owned-league.js';
 import { assertStartedPlayersKept } from '../lib/lineupKickoffLock.js';
+import { carryManualLineupForward, markManualLineupWeek } from '../lib/manualLineupCarry.js';
 import {
   buildLineupResponse,
   getLineupSyncContext,
@@ -380,6 +381,22 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
         nflStateSource: fastify.nflStateSource,
       });
       const week = request.query.week ?? syncContext.week;
+      if (league.platform === 'manual' && week === syncContext.week) {
+        // A new NFL week starts with last week's manual lineup. Best effort: a failed carry
+        // still returns whatever this week holds, and the lineup worker retries.
+        try {
+          if (await carryManualLineupForward(fastify.supabase, league, week)) {
+            await writeThroughLeagueStakes(fastify.supabase, league.id, week);
+            await refreshLineupCache(
+              { supabase: fastify.supabase, lineupCache: fastify.lineupCache },
+              league,
+              week,
+            );
+          }
+        } catch (carryError) {
+          request.log.warn({ err: carryError, leagueId: league.id }, 'Manual lineup carry failed');
+        }
+      }
       return await buildLineupResponse(
         fastify.supabase,
         league,
@@ -466,6 +483,10 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
         }
       }
 
+      // Carry last week's lineup in first, so a player whose game has started this week stays
+      // locked even if this is the week's first edit.
+      await carryManualLineupForward(fastify.supabase, league, week);
+
       await assertStartedPlayersKept(fastify.supabase, {
         leagueId: league.id,
         season: league.season_year,
@@ -494,6 +515,7 @@ const leaguesRoutes: FastifyPluginAsyncZod<LeaguesRoutesOptions> = async (fastif
         );
         if (insertError) throw insertError;
       }
+      await markManualLineupWeek(fastify.supabase, league, week);
 
       await writeThroughLeagueStakes(fastify.supabase, league.id, week);
       await refreshLineupCache(

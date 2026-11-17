@@ -45,7 +45,7 @@ async function tick(): Promise<void> {
     if (result.ran) {
       console.log(
         `[lineup-sync-worker] synced ${result.syncedLeagueCount} league(s), ` +
-          `${result.failedLeagueCount} failed.`,
+          `${result.failedLeagueCount} failed, carried ${result.carriedManualLeagueCount} manual lineup(s).`,
       );
     }
   } catch (error) {

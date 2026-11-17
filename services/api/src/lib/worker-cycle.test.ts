@@ -5,7 +5,10 @@ import type { SupabaseServiceClient } from './supabase.js';
 const { getLineupSyncContext } = vi.hoisted(() => ({ getLineupSyncContext: vi.fn() }));
 const { syncLeagueLineup } = vi.hoisted(() => ({ syncLeagueLineup: vi.fn() }));
 
+const { carryManualLineups } = vi.hoisted(() => ({ carryManualLineups: vi.fn() }));
+
 vi.mock('./lineup-sync.js', () => ({ getLineupSyncContext, syncLeagueLineup }));
+vi.mock('./manualLineupWorker.js', () => ({ carryManualLineups }));
 
 const { runWorkerCycle } = await import('./worker-cycle.js');
 
@@ -43,6 +46,8 @@ describe('runWorkerCycle', () => {
   beforeEach(() => {
     getLineupSyncContext.mockReset();
     syncLeagueLineup.mockReset();
+    carryManualLineups.mockReset();
+    carryManualLineups.mockResolvedValue({ carriedLeagueCount: 0, failedLeagueCount: 0 });
   });
 
   it('syncs every tick when display_phase is regular, regardless of lastDailySyncAt', async () => {
@@ -213,5 +218,65 @@ describe('runWorkerCycle', () => {
     expect(result.ran).toBe(true);
     expect(result.syncedLeagueCount).toBe(1);
     expect(result.failedLeagueCount).toBe(1);
+  });
+
+  it('carries manual lineups into the current week before syncing Sleeper leagues', async () => {
+    getLineupSyncContext.mockResolvedValue({
+      week: 11,
+      displayPhase: 'regular',
+      regularSeasonStart: '2026-09-09',
+      seasonType: 'regular',
+    });
+    const order: string[] = [];
+    carryManualLineups.mockImplementation(() => {
+      order.push('carry');
+      return Promise.resolve({ carriedLeagueCount: 2, failedLeagueCount: 0 });
+    });
+    syncLeagueLineup.mockImplementation(() => {
+      order.push('sync');
+      return Promise.resolve({ slotCount: 9, lineupSource: 'matchup', week: 11 });
+    });
+    const supabase = makeSupabase([league('a')]);
+
+    const result = await runWorkerCycle({ ...caches, supabase }, { lastDailySyncAt: null }, NOON);
+
+    expect(carryManualLineups).toHaveBeenCalledWith(expect.objectContaining({ supabase }), 11);
+    expect(order).toEqual(['carry', 'sync']);
+    expect(result.carriedManualLeagueCount).toBe(2);
+    expect(result.syncedLeagueCount).toBe(1);
+  });
+
+  it('still syncs Sleeper leagues when the manual carry fails', async () => {
+    getLineupSyncContext.mockResolvedValue({
+      week: 11,
+      displayPhase: 'regular',
+      regularSeasonStart: '2026-09-09',
+      seasonType: 'regular',
+    });
+    carryManualLineups.mockRejectedValue(new Error('db down'));
+    syncLeagueLineup.mockResolvedValue({ slotCount: 9, lineupSource: 'matchup', week: 11 });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const supabase = makeSupabase([league('a')]);
+
+    const result = await runWorkerCycle({ ...caches, supabase }, { lastDailySyncAt: null }, NOON);
+
+    expect(result.syncedLeagueCount).toBe(1);
+    expect(result.carriedManualLeagueCount).toBe(0);
+    errorSpy.mockRestore();
+  });
+
+  it('does not carry manual lineups in the off-season', async () => {
+    getLineupSyncContext.mockResolvedValue({
+      week: 0,
+      displayPhase: 'off',
+      regularSeasonStart: '2026-09-09',
+      seasonType: 'off',
+    });
+    syncLeagueLineup.mockResolvedValue({ slotCount: 0, lineupSource: 'roster_fallback', week: 0 });
+    const supabase = makeSupabase([league('a')]);
+
+    await runWorkerCycle({ ...caches, supabase }, { lastDailySyncAt: null }, NOON);
+
+    expect(carryManualLineups).not.toHaveBeenCalled();
   });
 });

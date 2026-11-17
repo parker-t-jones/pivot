@@ -1998,6 +1998,14 @@ Issues that need resolution but don't block the build:
 
 **Resolution:** Append team city/name/abbreviation to `search_text` only when `position = 'DEF'`. Non-DEF rows stay name-only (multi-word "David M" unchanged). Literal "Defense" still matches via last_name.
 
+### Manual lineups vanished every week — RESOLVED Nov 17, 2026
+
+**Symptom:** Users with a manual league had to re-enter their lineup every week. Bets and survivor picks dropping off at the new week was expected; the fantasy lineup was not.
+
+**Root cause:** Manual lineups are stored per week in `lineup_slots` (`league_id, week, player_id`), and nothing ever copied them into the next week. Nothing deleted them either: last week's rows stayed, but `GET /leagues/:id/lineup`, the ROSTERED stakes, and the lineup cache all read the current week, which was empty. Sleeper leagues were unaffected because the worker re-syncs them from Sleeper every week.
+
+**Resolution:** `leagues.manual_lineup_week` (migration `20261117120000`) records the latest week a manual lineup was saved or carried to. When the NFL week passes it, the lineup is copied forward (stars included) and the week advances: in the lineup worker every tick of the regular season and postseason, on `GET /leagues/:id/lineup` for the current week, and before `PUT` so the kickoff lock covers the carried lineup. The ROSTERED stake write-through then maps each player to his team's game that week (a bye gets no stake but stays on the lineup). A saved empty lineup still advances the week, so it stays empty. Bets and survivor picks are unchanged: they are week-scoped `stakes` rows that leave the active week and stay in the table for history.
+
 ### Manual leagues had no edit/rename path after create — RESOLVED Aug 16, 2026
 
 **Symptom:** Fully manual leagues (`platform: 'manual'`) could only be disconnected after creation — no way to change the roster or rename. Not a regression; the create flow (`connect-team` → Add manually) never gained an edit entry point. PLAN Settings already listed rename as intended.

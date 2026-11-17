@@ -214,6 +214,7 @@ export type Database = {
           id: string
           last_synced_at: string | null
           lineup_source: string | null
+          manual_lineup_week: number | null
           name: string
           platform: string
           season_year: number
@@ -229,6 +230,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           lineup_source?: string | null
+          manual_lineup_week?: number | null
           name: string
           platform: string
           season_year: number
@@ -244,6 +246,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           lineup_source?: string | null
+          manual_lineup_week?: number | null
           name?: string
           platform?: string
           season_year?: number

@@ -5,6 +5,7 @@ import {
   syncLeagueLineup,
   type SyncLeagueLineupDeps,
 } from './lineup-sync.js';
+import { carryManualLineups } from './manualLineupWorker.js';
 import type { SupabaseServiceClient } from './supabase.js';
 
 const DAILY_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -23,6 +24,8 @@ export interface WorkerCycleResult {
   ran: boolean;
   syncedLeagueCount: number;
   failedLeagueCount: number;
+  /** Manual leagues carried into the current week this tick. */
+  carriedManualLeagueCount: number;
   nextState: WorkerCycleState;
 }
 
@@ -33,6 +36,9 @@ export interface WorkerCycleResult {
  *
  * - `display_phase` `'regular'` or `'post'`: sync every tick (caller polls every 5 minutes).
  * - `'off'` / `'pre'`: sync at most once a day (roster fallback path).
+ *
+ * In `'regular'` / `'post'`, manual lineups are carried into the current week first, so a
+ * user's manual lineup persists across weeks without them re-entering it.
  */
 export async function runWorkerCycle(
   deps: WorkerCycleDeps,
@@ -46,7 +52,25 @@ export async function runWorkerCycle(
     state.lastDailySyncAt === null || now - state.lastDailySyncAt >= DAILY_SYNC_INTERVAL_MS;
 
   if (!isActiveSeason && !dueForDailySync) {
-    return { ran: false, syncedLeagueCount: 0, failedLeagueCount: 0, nextState: state };
+    return {
+      ran: false,
+      syncedLeagueCount: 0,
+      failedLeagueCount: 0,
+      carriedManualLeagueCount: 0,
+      nextState: state,
+    };
+  }
+
+  const syncDeps: SyncLeagueLineupDeps = deps;
+  let carriedManualLeagueCount = 0;
+  if (isActiveSeason) {
+    try {
+      const carried = await carryManualLineups(syncDeps, syncContext.week);
+      carriedManualLeagueCount = carried.carriedLeagueCount;
+    } catch (carryError) {
+      // Sleeper syncs still run; the next tick retries the carry.
+      console.error('Manual lineup carry failed:', carryError);
+    }
   }
 
   const { data: leagues, error } = await deps.supabase
@@ -55,7 +79,6 @@ export async function runWorkerCycle(
     .eq('platform', 'sleeper');
   if (error) throw error;
 
-  const syncDeps: SyncLeagueLineupDeps = deps;
   let syncedLeagueCount = 0;
   let failedLeagueCount = 0;
   for (const league of leagues ?? []) {
@@ -75,6 +98,7 @@ export async function runWorkerCycle(
     ran: true,
     syncedLeagueCount,
     failedLeagueCount,
+    carriedManualLeagueCount,
     nextState: { lastDailySyncAt: isActiveSeason ? state.lastDailySyncAt : now },
   };
 }
