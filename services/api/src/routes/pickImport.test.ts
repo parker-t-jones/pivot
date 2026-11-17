@@ -442,7 +442,10 @@ function grouped(...bets: SlipLeg[][]): SlipRead {
   };
 }
 
-type BetBody = { bet_type: string; legs: { status: string; text: string }[] };
+interface BetBody {
+  bet_type: string;
+  legs: { status: string; text: string }[];
+}
 
 describe('POST /picks/import with multiple bets', () => {
   const apps: { close(): Promise<unknown> }[] = [];
