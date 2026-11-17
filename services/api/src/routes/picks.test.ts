@@ -646,6 +646,93 @@ describe('picks routes', () => {
       expect(res.week).toBe(4);
       expect(res.week_recap.picks_made).toBe(1);
     });
+
+    it('lists every past week with a settled pick, most recent first, each with all its picks', async () => {
+      h = await setup();
+      h.db.rows('stakes').push(
+        rawStake('w5-won', {
+          result: 'won',
+          result_value: 140,
+          created_at: '2026-10-09T16:00:00Z',
+        }),
+        rawStake('w5-tie', {
+          subject: { type: 'TEAM', teamId: AWAY },
+          condition: { type: 'SPREAD', line: 0 },
+          result: 'tie',
+          result_value: 0,
+          created_at: '2026-10-09T17:00:00Z',
+        }),
+        rawStake('w5-pending', { result: null }),
+        rawStake('w3-lost', { week: 3, result: 'lost', result_value: 60 }),
+        rawStake('w3-void', { week: 3, result: 'void', created_at: '2026-10-09T17:00:00Z' }),
+        // A later week than the one asked for never leaks into the history.
+        rawStake('w6-won', { week: 6, game_id: NEXT_WEEK_GAME, result: 'won', result_value: 140 }),
+        // Another user's graded pick is never read.
+        rawStake('other-user', { user_id: STRANGER, result: 'won', result_value: 140 }),
+      );
+      const res = (await get('/picks/recap')).json();
+      expect(res.weeks.map((w: { week: number }) => w.week)).toEqual([5, 3]);
+      const [week5, week3] = res.weeks;
+      expect(week5).toMatchObject({
+        week: 5,
+        picks_made: 2,
+        won: 1,
+        lost: 0,
+        tie: 1,
+        void: 0,
+        decided: 1,
+        hit_rate: 1,
+        worst: null,
+      });
+      expect(week5.best).toMatchObject({ id: 'w5-won', label: 'S. Barkley over 89.5 rush yds' });
+      expect(week5.picks.map((p: { id: string; result: string }) => [p.id, p.result])).toEqual([
+        ['w5-won', 'won'],
+        ['w5-tie', 'tie'],
+      ]);
+      expect(week3).toMatchObject({ week: 3, picks_made: 2, won: 0, lost: 1, void: 1, best: null });
+      expect(week3.worst).toMatchObject({ id: 'w3-lost', result: 'lost' });
+      expect(week3.picks.map((p: { id: string }) => p.id)).toEqual(['w3-lost', 'w3-void']);
+      expect(res.season_recap).toEqual({ won: 1, decided: 2, hit_rate: 0.5 });
+      // The single-week shape old clients read is unchanged.
+      expect(res.week_recap).toMatchObject({ picks_made: 2, won: 1, decided: 1 });
+    });
+
+    it('marks parlay legs and counts them one by one in the week history', async () => {
+      h = await setup();
+      h.db.rows('stakes').push(
+        rawStake('leg-1', { slip_id: 'slip-1', result: 'won', result_value: 140 }),
+        rawStake('leg-2', {
+          slip_id: 'slip-1',
+          subject: { type: 'TEAM', teamId: AWAY },
+          condition: { type: 'SPREAD', line: -3.5 },
+          result: 'lost',
+          result_value: -10,
+        }),
+      );
+      const res = (await get('/picks/recap')).json();
+      expect(res.weeks).toHaveLength(1);
+      expect(res.weeks[0]).toMatchObject({ picks_made: 2, won: 1, lost: 1 });
+      expect(res.weeks[0].picks.every((p: { slip_id: string }) => p.slip_id === 'slip-1')).toBe(
+        true,
+      );
+    });
+
+    it('is an empty history with no graded picks', async () => {
+      h = await setup();
+      h.db.rows('stakes').push(rawStake('pending', { result: null }));
+      const res = (await get('/picks/recap')).json();
+      expect(res.weeks).toEqual([]);
+    });
+
+    it('gives the demo account an empty recap without reading its rows', async () => {
+      h = await setup();
+      h.db.at('users', 0)['is_demo'] = true;
+      h.db.rows('stakes').push(rawStake('demo-graded', { result: 'won', result_value: 140 }));
+      const res = (await get('/picks/recap')).json();
+      expect(res.weeks).toEqual([]);
+      expect(res.week_recap).toMatchObject({ picks_made: 0, best: null, worst: null });
+      expect(res.season_recap).toEqual({ won: 0, decided: 0, hit_rate: null });
+    });
   });
 
   describe('demo account', () => {

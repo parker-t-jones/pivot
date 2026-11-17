@@ -45,28 +45,43 @@ export interface RecapPickSummary {
   result: 'won' | 'lost' | 'tie' | 'void';
   result_value: number | null;
   game_id: string;
+  /** Set on a parlay leg. Older API builds leave it out. */
+  slip_id?: string | null;
+}
+
+export interface RecapWeekTotals {
+  picks_made: number;
+  won: number;
+  lost: number;
+  tie: number;
+  void: number;
+  decided: number;
+  hit_rate: number | null;
+  best: RecapPickSummary | null;
+  worst: RecapPickSummary | null;
+}
+
+/** One past week in `GET /picks/recap` `weeks`: its totals plus every settled pick that week. */
+export interface RecapWeek extends RecapWeekTotals {
+  week: number;
+  picks: RecapPickSummary[];
 }
 
 /** `GET /picks/recap` (docs/P2-PICKS-MODEL.md §5, issue #47). */
 export interface RecapPage {
   week: number;
   season: number | null;
-  week_recap: {
-    picks_made: number;
-    won: number;
-    lost: number;
-    tie: number;
-    void: number;
-    decided: number;
-    hit_rate: number | null;
-    best: RecapPickSummary | null;
-    worst: RecapPickSummary | null;
-  };
+  week_recap: RecapWeekTotals;
   season_recap: {
     won: number;
     decided: number;
     hit_rate: number | null;
   };
+  /**
+   * Every week up to `week` with a settled pick, most recent first. Missing from API builds that
+   * predate the history; the client then falls back to `week_recap` alone.
+   */
+  weeks?: RecapWeek[];
 }
 
 export async function fetchRecap(week?: number): Promise<RecapPage> {

@@ -29,9 +29,6 @@ vi.mock('../lib/picksClient', async () => {
   const { apiClient } = await import('../lib/apiClient');
   return { fetchRecap: () => apiClient.get('/picks/recap') };
 });
-vi.mock('../components/LoadingState', () => ({
-  LoadingState: ({ message }: { message: string }) => <div>{message}</div>,
-}));
 
 let container: HTMLDivElement;
 let root: Root;
@@ -137,4 +134,132 @@ it('shows a Close button on iOS that goes back', async () => {
 
   await act(async () => close?.click());
   expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+const EMPTY_TOTALS = {
+  picks_made: 0,
+  won: 0,
+  lost: 0,
+  tie: 0,
+  void: 0,
+  decided: 0,
+  hit_rate: null,
+  best: null,
+  worst: null,
+};
+
+function summary(id: string, label: string, result: string) {
+  return { id, label, result, result_value: null, game_id: 'g1', slip_id: null };
+}
+
+const GIBBS = summary('gibbs', 'J. Gibbs over 120.5 rush + rec yds', 'won');
+const DET = summary('det', 'DET -3.5', 'lost');
+const HISTORY = {
+  week: 10,
+  season: 2026,
+  week_recap: { ...EMPTY_TOTALS, picks_made: 2, won: 1, lost: 1, decided: 2, hit_rate: 0.5 },
+  season_recap: { won: 2, decided: 3, hit_rate: 2 / 3 },
+  weeks: [
+    {
+      ...EMPTY_TOTALS,
+      week: 10,
+      picks_made: 2,
+      won: 1,
+      lost: 1,
+      decided: 2,
+      hit_rate: 0.5,
+      best: GIBBS,
+      worst: DET,
+      picks: [GIBBS, DET],
+    },
+    {
+      ...EMPTY_TOTALS,
+      week: 9,
+      picks_made: 1,
+      won: 1,
+      decided: 1,
+      hit_rate: 1,
+      best: summary('phi', 'PHI ML', 'won'),
+      picks: [summary('phi', 'PHI ML', 'won')],
+    },
+  ],
+};
+
+function okFetch(body: unknown) {
+  return vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify(body),
+  });
+}
+
+it('shows a skeleton while the recap loads', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise(() => undefined)),
+  );
+  const { default: RecapScreen } = await import('../app/(app)/recap');
+
+  await act(async () => root.render(<RecapScreen />));
+  expect(container.querySelector('[data-testid="recap-loading"]')).not.toBeNull();
+  expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
+});
+
+it('shows the season line, then every past week with the most recent one open', async () => {
+  vi.stubGlobal('fetch', okFetch(HISTORY));
+  const { default: RecapScreen } = await import('../app/(app)/recap');
+
+  await act(async () => root.render(<RecapScreen />));
+  expect(container.querySelector('[data-testid="recap-season-line"]')?.textContent).toBe(
+    '2 of 3 hit this season (67%)',
+  );
+  const weeks = Array.from(container.querySelectorAll('[data-testid^="recap-week-"]')).filter(
+    (node) => /^recap-week-\d+$/.test(node.getAttribute('data-testid') ?? ''),
+  );
+  expect(weeks.map((node) => node.getAttribute('data-testid'))).toEqual([
+    'recap-week-10',
+    'recap-week-9',
+  ]);
+
+  const week10 = container.querySelector('[data-testid="recap-week-10"]');
+  const week9 = container.querySelector('[data-testid="recap-week-9"]');
+  expect(week10?.querySelector('[data-testid="recap-week-body"]')).not.toBeNull();
+  expect(week10?.querySelector('[data-testid="recap-best"]')?.textContent).toBe(
+    'J. Gibbs over 120.5 rush + rec yds · Won',
+  );
+  expect(week10?.querySelector('[data-testid="recap-worst"]')?.textContent).toBe('DET -3.5 · Lost');
+  expect(week10?.querySelector('[data-testid="recap-pick-det"]')?.textContent).toBe('DET -3.5Lost');
+  expect(week9?.querySelector('[data-testid="recap-week-body"]')).toBeNull();
+  expect(week9?.querySelector('[data-testid="recap-week-line"]')?.textContent).toBe(
+    '1 of 1 hit (100%)',
+  );
+
+  // Expanding an older week leaves the newest open; collapsing the newest closes only it.
+  const toggle9 = week9?.querySelector<HTMLElement>('[data-testid="recap-week-toggle"]');
+  await act(async () => toggle9?.click());
+  expect(week9?.querySelector('[data-testid="recap-pick-phi"]')?.textContent).toBe('PHI MLWon');
+  expect(week10?.querySelector('[data-testid="recap-week-body"]')).not.toBeNull();
+
+  const toggle10 = week10?.querySelector<HTMLElement>('[data-testid="recap-week-toggle"]');
+  await act(async () => toggle10?.click());
+  expect(week10?.querySelector('[data-testid="recap-week-body"]')).toBeNull();
+  expect(week9?.querySelector('[data-testid="recap-week-body"]')).not.toBeNull();
+  expect(container.textContent).not.toMatch(/push|stake/i);
+});
+
+it('shows the empty state when nothing has been graded all season', async () => {
+  vi.stubGlobal(
+    'fetch',
+    okFetch({
+      ...HISTORY,
+      week_recap: EMPTY_TOTALS,
+      season_recap: { won: 0, decided: 0, hit_rate: null },
+      weeks: [],
+    }),
+  );
+  const { default: RecapScreen } = await import('../app/(app)/recap');
+
+  await act(async () => root.render(<RecapScreen />));
+  expect(container.textContent).toContain('Nothing graded yet');
+  expect(container.querySelector('[data-testid="recap-season"]')).toBeNull();
 });
