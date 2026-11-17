@@ -5,6 +5,7 @@ import {
   weeklyRecap,
   type PropPlayer,
   type RecapPickRow,
+  type WeeklyRecapTotals,
 } from '@pivot/engine';
 import type { GamePlayerStats, GameState, PickProgress, SettledResult } from '@pivot/shared';
 import { formatPickLabel, shortPlayerName, type StakeTeam } from '@pivot/shared/stakeLabel';
@@ -436,9 +437,22 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
     const season = Number(nfl.season);
     const week = request.query.week ?? nfl.week;
 
+    // The demo account is pinned to a fixture with nothing graded (GET /picks serves fixture
+    // picks with `result: null`), so its recap is always the empty one and never reads rows.
+    if (await userIsDemo(fastify.supabase, user.id)) {
+      return {
+        week,
+        season: Number.isInteger(season) ? season : null,
+        week_recap: recapWeekBody(weeklyRecap([]), new Map()),
+        season_recap: { won: 0, decided: 0, hit_rate: null },
+        weeks: [],
+      };
+    }
+
     // Fantasy rows (ROSTERED / OPPONENT_ROSTERED) never settle — pickProgress always returns
     // `unavailable` for them (docs/P2-PICKS-MODEL.md §5) — so they are excluded here exactly like
     // GET /picks excludes them from progress tracking. Survivor picks do settle and are included.
+    // History reads settled `stakes` rows; it depends on bet rows from past weeks being kept.
     const { data: seasonData, error: seasonError } = await fastify.supabase
       .from('stakes')
       .select(PICK_COLUMNS)
@@ -447,36 +461,69 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
       .lte('week', week)
       .not('result', 'is', null);
     if (seasonError) throw seasonError;
-    const settledRows = ((seasonData ?? []) as PickRow[]).filter((row) =>
-      isBetConditionType(conditionTypeOf(row.condition)),
-    );
-    const weekRows = settledRows.filter((row) => row.week === week);
+    const settledRows = ((seasonData ?? []) as PickRow[])
+      .filter(
+        (row) =>
+          row.result !== null &&
+          isBetConditionType(conditionTypeOf(row.condition)) &&
+          toStake(row) !== null,
+      )
+      .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
 
-    const recapRows: RecapPickRow[] = weekRows.flatMap((row) => {
-      const stake = toStake(row);
-      if (!stake || row.result === null) return [];
-      return [
-        {
-          id: row.id,
-          condition: stake.condition,
-          result: row.result as SettledResult,
-          resultValue: row.result_value,
-        },
-      ];
-    });
-    const totals = weeklyRecap(recapRows);
+    const summaryById = await recapSummaries(settledRows);
+    const rowsByWeek = new Map<number, PickRow[]>();
+    for (const row of settledRows) {
+      const list = rowsByWeek.get(row.week) ?? [];
+      list.push(row);
+      rowsByWeek.set(row.week, list);
+    }
+    const totalsFor = (rows: readonly PickRow[]) =>
+      weeklyRecap(
+        rows.flatMap((row): RecapPickRow[] => {
+          const stake = toStake(row);
+          if (!stake) return [];
+          return [
+            {
+              id: row.id,
+              condition: stake.condition,
+              result: row.result as SettledResult,
+              resultValue: row.result_value,
+            },
+          ];
+        }),
+      );
+
     const seasonTotals = seasonHitRate(
-      settledRows.flatMap((row) =>
-        row.result === null ? [] : [{ result: row.result as SettledResult }],
-      ),
+      settledRows.map((row) => ({ result: row.result as SettledResult })),
     );
+    const weeks = [...rowsByWeek.entries()]
+      .sort(([a], [b]) => b - a)
+      .map(([rowWeek, rows]) => ({
+        week: rowWeek,
+        ...recapWeekBody(totalsFor(rows), summaryById),
+        picks: rows.flatMap((row) => {
+          const summary = summaryById.get(row.id);
+          return summary ? [summary] : [];
+        }),
+      }));
 
-    const bestWorstIds = [totals.bestPickId, totals.worstPickId].filter(
-      (id): id is string => id !== null,
-    );
-    const bestWorstRows = weekRows.filter((row) => bestWorstIds.includes(row.id));
+    return {
+      week,
+      season: Number.isInteger(season) ? season : null,
+      week_recap: recapWeekBody(totalsFor(rowsByWeek.get(week) ?? []), summaryById),
+      season_recap: {
+        won: seasonTotals.won,
+        decided: seasonTotals.decided,
+        hit_rate: seasonTotals.hitRate,
+      },
+      /** Every week up to `week` with a settled pick, most recent first. */
+      weeks,
+    };
+  });
 
-    const gameIds = [...new Set(bestWorstRows.map((row) => row.game_id))];
+  /** Display rows (label, result) for settled picks, keyed by stake id. */
+  async function recapSummaries(rows: readonly PickRow[]): Promise<Map<string, RecapPickSummary>> {
+    const gameIds = [...new Set(rows.map((row) => row.game_id))];
     const games = new Map<string, PickGameRow>();
     if (gameIds.length > 0) {
       const { data: gameData, error: gamesError } = await fastify.supabase
@@ -503,16 +550,16 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
       abbreviation: t.abbreviation,
     }));
 
-    const bestWorstStakes = bestWorstRows.map((row) => ({ row, stake: toStake(row) }));
+    const stakes = rows.map((row) => ({ row, stake: toStake(row) }));
     const players = await loadPropPlayers(
       fastify.supabase,
-      bestWorstStakes.flatMap(({ stake }) =>
+      stakes.flatMap(({ stake }) =>
         stake?.subject.type === 'PLAYER' ? [stake.subject.playerId] : [],
       ),
     );
 
-    const summaryById = new Map(
-      bestWorstStakes.map(({ row, stake }) => {
+    return new Map(
+      stakes.map(({ row, stake }) => {
         const player =
           stake?.subject.type === 'PLAYER' ? players.get(stake.subject.playerId) : undefined;
         return [
@@ -535,32 +582,12 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
             result: row.result as SettledResult,
             result_value: row.result_value,
             game_id: row.game_id,
+            slip_id: row.slip_id ?? null,
           },
         ] as const;
       }),
     );
-
-    return {
-      week,
-      season: Number.isInteger(season) ? season : null,
-      week_recap: {
-        picks_made: totals.picksMade,
-        won: totals.won,
-        lost: totals.lost,
-        tie: totals.tie,
-        void: totals.voided,
-        decided: totals.decided,
-        hit_rate: totals.hitRate,
-        best: totals.bestPickId ? (summaryById.get(totals.bestPickId) ?? null) : null,
-        worst: totals.worstPickId ? (summaryById.get(totals.worstPickId) ?? null) : null,
-      },
-      season_recap: {
-        won: seasonTotals.won,
-        decided: seasonTotals.decided,
-        hit_rate: seasonTotals.hitRate,
-      },
-    };
-  });
+  }
 
   fastify.delete(
     '/picks/slips/:id',
@@ -634,6 +661,33 @@ const picksRoutes: FastifyPluginAsyncZod<PicksRoutesOptions> = async (fastify, o
     },
   );
 };
+
+interface RecapPickSummary {
+  id: string;
+  label: string;
+  result: SettledResult;
+  result_value: number | null;
+  game_id: string;
+  /** Set on a parlay leg. Legs are graded and counted one by one. */
+  slip_id: string | null;
+}
+
+function recapWeekBody(
+  totals: WeeklyRecapTotals,
+  summaryById: ReadonlyMap<string, RecapPickSummary>,
+) {
+  return {
+    picks_made: totals.picksMade,
+    won: totals.won,
+    lost: totals.lost,
+    tie: totals.tie,
+    void: totals.voided,
+    decided: totals.decided,
+    hit_rate: totals.hitRate,
+    best: totals.bestPickId ? (summaryById.get(totals.bestPickId) ?? null) : null,
+    worst: totals.worstPickId ? (summaryById.get(totals.worstPickId) ?? null) : null,
+  };
+}
 
 function pickBody(row: PickRow) {
   return {

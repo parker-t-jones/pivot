@@ -743,7 +743,7 @@ function HelpSection({
         style={styles.aboutLink}
       />
       <TextButton
-        label="This week's recap"
+        label="Your recap"
         onPress={() => router.push('/(app)/recap')}
         size="small"
         style={styles.aboutLink}
