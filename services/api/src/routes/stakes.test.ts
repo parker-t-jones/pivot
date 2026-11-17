@@ -752,6 +752,78 @@ describe('manual stakes', () => {
     expect(weekFive.statusCode).toBe(201);
   });
 
+  describe('week rollover', () => {
+    function lastWeek(id: string, condition: Row, subject: Row = { type: 'TEAM', teamId: AWAY }) {
+      mem.stakes.push({
+        id,
+        user_id: USER,
+        season: 2026,
+        week: 4,
+        game_id: OTHER_GAME,
+        subject,
+        condition,
+        source: 'MANUAL',
+        weight: 1,
+        created_at: '2026-10-02T15:00:00.000Z',
+      });
+    }
+
+    async function list(query = '') {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/stakes${query}`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(200);
+      return response.json() as { week: number; stakes: { id: string }[] };
+    }
+
+    it("drops last week's bets and survivor pick from the active week but keeps them for history", async () => {
+      await setup();
+      lastWeek('40000000-0000-4000-8000-000000000001', { type: 'SPREAD', line: -3.5 });
+      lastWeek('40000000-0000-4000-8000-000000000002', { type: 'SURVIVOR' });
+
+      const current = await list();
+      expect(current.week).toBe(5);
+      expect(current.stakes).toEqual([]);
+
+      const history = await list('?week=4');
+      expect(history.stakes.map((stake) => stake.id)).toEqual([
+        '40000000-0000-4000-8000-000000000001',
+        '40000000-0000-4000-8000-000000000002',
+      ]);
+      expect(mem.stakes).toHaveLength(2);
+    });
+
+    it("keeps last week's settled bet and its result after rollover, for Recap history", async () => {
+      await setup();
+      lastWeek('40000000-0000-4000-8000-000000000004', { type: 'SPREAD', line: -3.5 });
+      const settled = mem.stakes[0];
+      if (settled === undefined) throw new Error('missing settled bet');
+      Object.assign(settled, {
+        result: 'win',
+        result_value: 7,
+        settled_at: '2026-10-05T20:30:00.000Z',
+      });
+      const before = structuredClone(settled);
+
+      expect((await list()).stakes).toEqual([]);
+      expect(
+        (await post({ type: 'SPREAD', gameId: GAME, teamId: AWAY, line: -3.5 })).statusCode,
+      ).toBe(201);
+
+      expect(mem.stakes.find((row) => row['id'] === before['id'])).toEqual(before);
+    });
+
+    it("allows this week's survivor pick after last week's", async () => {
+      await setup();
+      lastWeek('40000000-0000-4000-8000-000000000003', { type: 'SURVIVOR' });
+
+      const response = await post({ type: 'SURVIVOR', gameId: GAME, teamId: AWAY });
+      expect(response.statusCode).toBe(201);
+    });
+  });
+
   it('reports a validation error before the cap when the fourth request has an invalid line', async () => {
     await setup();
     await fillFreeCap();

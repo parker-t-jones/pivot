@@ -1,7 +1,7 @@
 // Test-only in-memory Supabase for the picks tests. Supports the query shapes the picks code
-// uses: select (columns ignored), insert (one row or many), upsert, update, delete, eq, in, is,
-// not (`'is'` only), lte, single, maybeSingle, ilike (`%` wildcards), limit. Deleting a
-// `pick_slips` row cascades to its `stakes` legs, as the FK does.
+// uses: select (columns ignored), insert (one row or many), upsert (one row or many, existing
+// keys kept), update, delete, eq, in, is, not (`'is'` only), lte, single, maybeSingle, ilike
+// (`%` wildcards), limit. Deleting a `pick_slips` row cascades to its `stakes` legs, as the FK does.
 
 export type Row = Record<string, unknown>;
 
@@ -70,7 +70,7 @@ class MemQuery implements PromiseLike<Result> {
     return this;
   }
 
-  upsert(row: Row, options: { onConflict: string }): this {
+  upsert(row: Row | Row[], options: { onConflict: string; ignoreDuplicates?: boolean }): this {
     this.mode = 'upsert';
     this.payload = row;
     this.conflictKey = options.onConflict;
@@ -172,14 +172,18 @@ class MemQuery implements PromiseLike<Result> {
       rows.push(...created);
       return Promise.resolve(this.shape(created));
     }
-    if (this.mode === 'upsert' && this.payload && !Array.isArray(this.payload)) {
-      const payload = this.payload;
+    if (this.mode === 'upsert' && this.payload) {
+      // Existing rows are kept as they are (ignoreDuplicates); only new keys are inserted.
       const keys = this.conflictKey.split(',').map((key) => key.trim());
-      const exists = rows.some((row) => keys.every((key) => row[key] === payload[key]));
-      if (exists) return Promise.resolve({ data: [], error: null });
-      const created = { id: this.db.nextId(), ...payload };
-      rows.push(created);
-      return Promise.resolve({ data: [created], error: null });
+      const created: Row[] = [];
+      for (const payload of Array.isArray(this.payload) ? this.payload : [this.payload]) {
+        const exists = rows.some((row) => keys.every((key) => row[key] === payload[key]));
+        if (exists) continue;
+        const row = { id: this.db.nextId(), ...payload };
+        rows.push(row);
+        created.push(row);
+      }
+      return Promise.resolve({ data: created, error: null });
     }
     const matched = rows
       .filter((row) => this.filters.every((keep) => keep(row)))
