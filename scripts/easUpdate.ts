@@ -114,8 +114,21 @@ export function parseMessage(argv: string[]): string | null {
   return message && message.trim() && !message.startsWith('--') ? message.trim() : null;
 }
 
-function shellQuote(value: string): string {
+/** Quotes a word for `sh` only when it needs it, so plain paths and words stay bare. */
+export function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_/.:=@%+,-]+$/.test(value)) return value;
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * The command `eas env:exec` runs for the export phase. eas-cli strips one leading and one
+ * trailing quote from a command that both starts and ends with a quote character, so a command
+ * of all-quoted words (`'node' 'cli.mjs' 'easUpdate.ts' 'export'`) reached `sh` as one long word
+ * and failed with "No such file or directory". Words are quoted only when they need it, and the
+ * last word, `export`, is always bare, so the command never ends with a quote.
+ */
+export function exportShellCommand(nodePath: string, tsxCli: string, scriptPath: string): string {
+  return [nodePath, tsxCli, scriptPath, 'export'].map(shellQuote).join(' ');
 }
 
 function run(command: string, args: string[], env: NodeJS.ProcessEnv = process.env): void {
@@ -142,7 +155,7 @@ function publish(argv: string[]): void {
   rmSync(outputDir, { recursive: true, force: true });
 
   const tsxCli = createRequire(import.meta.url).resolve('tsx/cli');
-  const exportCommand = [process.execPath, tsxCli, SCRIPT_PATH, 'export'].map(shellQuote).join(' ');
+  const exportCommand = exportShellCommand(process.execPath, tsxCli, SCRIPT_PATH);
   run('eas', ['env:exec', UPDATE_ENVIRONMENT, exportCommand, '--non-interactive']);
 
   const refusal = bundleRefusal(outputDir);

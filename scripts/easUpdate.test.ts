@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
@@ -20,6 +21,7 @@ import {
   bundleRefusal,
   easUpdateArgs,
   expoExportArgs,
+  exportShellCommand,
   parseMessage,
 } from './easUpdate.js';
 
@@ -148,6 +150,48 @@ describe('publish commands', () => {
     expect(parseMessage(['--message'])).toBeNull();
     expect(parseMessage(['--message', '  '])).toBeNull();
     expect(parseMessage(['--message', '--channel'])).toBeNull();
+  });
+});
+
+/** What `eas env:exec` does to its command (eas-cli `env/exec.ts`): strip one pair of outer
+ *  quotes, then run it with a shell. */
+function easEnvExec(command: string): { status: number | null; stdout: string } {
+  const first = command[0];
+  const last = command[command.length - 1];
+  const clean =
+    (first === '"' && last === '"') || (first === "'" && last === "'")
+      ? command.slice(1, -1)
+      : command;
+  const result = spawnSync('sh', ['-c', clean], { encoding: 'utf8' });
+  return { status: result.status, stdout: result.stdout };
+}
+
+describe('the export command passed to eas env:exec', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'eas update quoting '));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('survives eas-cli stripping outer quotes and runs with every argument intact', () => {
+    // Stand-ins for tsx's CLI and this script: print the arguments they were given.
+    const cli = join(dir, "tsx cli's.mjs");
+    writeFileSync(cli, 'console.log(JSON.stringify(process.argv.slice(2)));\n');
+    const script = join(dir, 'easUpdate.ts');
+    const command = exportShellCommand(process.execPath, cli, script);
+
+    expect(command.endsWith('export')).toBe(true);
+    const result = easEnvExec(command);
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual([script, 'export']);
+  });
+
+  it('leaves plain paths unquoted', () => {
+    expect(exportShellCommand('/usr/local/bin/node', '/a/cli.mjs', '/a/easUpdate.ts')).toBe(
+      '/usr/local/bin/node /a/cli.mjs /a/easUpdate.ts export',
+    );
   });
 });
 
