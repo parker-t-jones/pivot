@@ -2,6 +2,8 @@
  * Per-bet grouping for multi-bet screenshot import. Pure, so the route, the confirm pass, and the
  * offline eval share one definition of "how many bets", "same read", and "needs review".
  */
+import { resolveTeam } from './mapSlip.js';
+import { NFL_SLIP_TEAMS } from './nflTeams.js';
 import type { ModelSlipRead, SlipBetType, SlipLeg, SlipRead } from './schema.js';
 
 export interface SlipBetGroup {
@@ -88,14 +90,39 @@ function normalizeName(value: string | null): string {
     .trim();
 }
 
+/**
+ * The team as it decides the pick. A player leg's team is left out: the player is matched by
+ * name, and a printed team only breaks ties, so a blank or differently written team on a player
+ * leg doesn't change the pick. Any other leg's team is compared as the NFL team it names, so
+ * "CHI", "CHI Bears" and "Chicago Bears" are the same team; a name that isn't an NFL team is
+ * compared as written.
+ */
+function teamKey(leg: SlipLeg): string {
+  if (leg.player !== null) return '';
+  const team = resolveTeam(leg.team, NFL_SLIP_TEAMS);
+  return team ? `team:${team.id}` : normalizeName(leg.team);
+}
+
+/**
+ * The side as it decides the pick. A touchdown scorer leg with no side is a YES bet, and an
+ * "N+" line with no side is an OVER bet (the same defaults `mapSlip.ts` applies), so a read that
+ * leaves those blank agrees with one that fills them in.
+ */
+function sideKey(leg: SlipLeg): SlipLeg['side'] {
+  if (leg.side !== null) return leg.side;
+  if (leg.market === 'ANYTIME_TD' || leg.market === 'FIRST_TD') return 'YES';
+  if (leg.plus_style) return 'OVER';
+  return null;
+}
+
 /** The fields that decide which pick a leg becomes. Printed text and odds don't count. */
 function legKey(leg: SlipLeg): string {
   return JSON.stringify([
     leg.market,
     leg.stat,
     normalizeName(leg.player),
-    normalizeName(leg.team),
-    leg.side,
+    teamKey(leg),
+    sideKey(leg),
     leg.line,
     leg.plus_style,
     leg.period,
@@ -110,10 +137,10 @@ function betKey(bet: SlipBetGroup): string {
  * The disagreement rule for the confirm pass (multi-bet import). Two reads agree only when both
  * are bet slips, neither is inconsistent, and they hold the same bets: the same number, and for
  * each bet the same type and the same legs on every pick-deciding field (market, stat, player,
- * team, side, line, N+ style, period). Order of bets and of legs within a bet doesn't matter.
- * Team names are compared as printed (normalized), so "PHI" against "Eagles" counts as a
- * disagreement: a false disagreement only costs a review, a false agreement could import a
- * wrong grouping.
+ * team, side, line, N+ style, period), compared as the pick they become (see `teamKey` and
+ * `sideKey`). Order of bets and of legs within a bet doesn't matter. Anything that would change
+ * a pick still disagrees: a false disagreement only costs a review, a false agreement could
+ * import a wrong grouping.
  */
 export function slipReadsAgree(a: SlipRead, b: SlipRead): boolean {
   if (!a.is_bet_slip || !b.is_bet_slip) return false;

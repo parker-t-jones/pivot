@@ -132,6 +132,30 @@ describe('slipReadsAgree (the confirm-pass disagreement rule)', () => {
   });
 
   it.each([
+    [
+      'the same team written another way',
+      grouped([{ ...ML, team: 'Philadelphia Eagles' }], [RUSH, TOTAL]),
+    ],
+    ['a nickname only', grouped([{ ...ML, team: 'Eagles' }], [RUSH, TOTAL])],
+    ['a player leg with a blank team', grouped([ML], [{ ...RUSH, team: null }, TOTAL])],
+    ['a player leg with a team filled in', grouped([ML], [{ ...RUSH, team: 'PHI Eagles' }, TOTAL])],
+  ])('agrees on %s', (_name, other) => {
+    expect(slipReadsAgree(base, other)).toBe(true);
+  });
+
+  it('treats a blank side as the default side for touchdown and N+ legs', () => {
+    const td = leg({ market: 'ANYTIME_TD', player: 'Saquon Barkley', side: null });
+    const plus = leg({ ...RUSH, side: null, line: 100, plus_style: true });
+    expect(
+      slipReadsAgree(
+        grouped([td], [plus]),
+        grouped([{ ...td, side: 'YES' }], [{ ...plus, side: 'OVER' }]),
+      ),
+    ).toBe(true);
+    expect(slipReadsAgree(grouped([td]), grouped([{ ...td, side: 'NO' }]))).toBe(false);
+  });
+
+  it.each([
     ['legs regrouped', grouped([ML, RUSH], [TOTAL])],
     ['a leg moved', grouped([ML, RUSH, TOTAL])],
     ['a missing bet', grouped([RUSH, TOTAL])],
@@ -139,7 +163,8 @@ describe('slipReadsAgree (the confirm-pass disagreement rule)', () => {
     ['a different side', grouped([ML], [RUSH, { ...TOTAL, side: 'OVER' }])],
     ['a different stat', grouped([ML], [{ ...RUSH, stat: 'REC_YDS' }, TOTAL])],
     ['a different period', grouped([ML], [RUSH, { ...TOTAL, period: 'H1' }])],
-    ['a team written another way', grouped([{ ...ML, team: 'Eagles' }], [RUSH, TOTAL])],
+    ['a different team', grouped([{ ...ML, team: 'DAL' }], [RUSH, TOTAL])],
+    ['a different player', grouped([ML], [{ ...RUSH, player: 'Jalen Hurts' }, TOTAL])],
     ['an inconsistent count', { ...grouped([ML], [RUSH, TOTAL]), bet_count: 3 }],
     ['not a slip', { is_bet_slip: false, bet_count: 0, legs: [] }],
   ])('disagrees on %s', (_name, other) => {
