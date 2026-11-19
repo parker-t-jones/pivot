@@ -75,9 +75,13 @@ Limits: at most 10 bets (422 `slip_import_too_many_bets`) and 12 legs per bet (4
    hold the same bets: the same number, and per bet the same type and the same multiset of legs
    compared on every pick-deciding field (market, stat, player, team, side, line, N+ style,
    period). Bet order, leg order within a bet, printed text, and odds are ignored; names are
-   compared case- and punctuation-insensitively. Team strings are compared as printed, so
-   `PHI` against `Eagles` is a disagreement: a false disagreement only costs a review, while a
-   false agreement could import a wrong grouping.
+   compared case- and punctuation-insensitively. Fields are compared as the pick they become:
+   a team leg's team is compared as the NFL team it names (`CHI`, `CHI Bears` and
+   `Chicago Bears` agree); a player leg's team is ignored (the player is matched by name); a
+   blank side on a touchdown-scorer leg counts as YES and on an `N+` line as OVER, the same
+   defaults the mapper applies. Anything that changes a pick still disagrees. (The first
+   version compared team text and sides exactly; the Nov 18 production-path eval sent 30 of 30
+   correctly grouped multi-bet reads to review because of that.)
    - Agree: the confirm read is imported, preselected as usual.
    - Disagree: the confirm read (the stronger model) is returned with `review: true`.
    - Confirm call fails: the primary read is returned with `review: true`.

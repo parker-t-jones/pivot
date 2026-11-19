@@ -3,6 +3,7 @@
  * `services/api/src/slipImportEval.ts`.
  */
 import { resolveTeam, type SlipTeam } from './mapSlip.js';
+import { NFL_SLIP_TEAMS } from './nflTeams.js';
 import { SLIP_BET_TYPES, type SlipBetSpan, type SlipLeg, type SlipRead } from './schema.js';
 
 /** The fields a reviewer writes in `<name>.expected.json`. Text and odds are not scored. */
@@ -171,40 +172,7 @@ export function formatTally(tally: EvalTally): string {
 }
 
 /** Static NFL fixture; never queries the database. */
-export const EVAL_TEAMS: readonly SlipTeam[] = [
-  { id: 'ARI', abbreviation: 'ARI', city: 'Arizona', name: 'Cardinals' },
-  { id: 'ATL', abbreviation: 'ATL', city: 'Atlanta', name: 'Falcons' },
-  { id: 'BAL', abbreviation: 'BAL', city: 'Baltimore', name: 'Ravens' },
-  { id: 'BUF', abbreviation: 'BUF', city: 'Buffalo', name: 'Bills' },
-  { id: 'CAR', abbreviation: 'CAR', city: 'Carolina', name: 'Panthers' },
-  { id: 'CHI', abbreviation: 'CHI', city: 'Chicago', name: 'Bears' },
-  { id: 'CIN', abbreviation: 'CIN', city: 'Cincinnati', name: 'Bengals' },
-  { id: 'CLE', abbreviation: 'CLE', city: 'Cleveland', name: 'Browns' },
-  { id: 'DAL', abbreviation: 'DAL', city: 'Dallas', name: 'Cowboys' },
-  { id: 'DEN', abbreviation: 'DEN', city: 'Denver', name: 'Broncos' },
-  { id: 'DET', abbreviation: 'DET', city: 'Detroit', name: 'Lions' },
-  { id: 'GB', abbreviation: 'GB', city: 'Green Bay', name: 'Packers' },
-  { id: 'HOU', abbreviation: 'HOU', city: 'Houston', name: 'Texans' },
-  { id: 'IND', abbreviation: 'IND', city: 'Indianapolis', name: 'Colts' },
-  { id: 'JAX', abbreviation: 'JAX', city: 'Jacksonville', name: 'Jaguars' },
-  { id: 'KC', abbreviation: 'KC', city: 'Kansas City', name: 'Chiefs' },
-  { id: 'LV', abbreviation: 'LV', city: 'Las Vegas', name: 'Raiders' },
-  { id: 'LAC', abbreviation: 'LAC', city: 'Los Angeles', name: 'Chargers' },
-  { id: 'LAR', abbreviation: 'LAR', city: 'Los Angeles', name: 'Rams' },
-  { id: 'MIA', abbreviation: 'MIA', city: 'Miami', name: 'Dolphins' },
-  { id: 'MIN', abbreviation: 'MIN', city: 'Minnesota', name: 'Vikings' },
-  { id: 'NE', abbreviation: 'NE', city: 'New England', name: 'Patriots' },
-  { id: 'NO', abbreviation: 'NO', city: 'New Orleans', name: 'Saints' },
-  { id: 'NYG', abbreviation: 'NYG', city: 'New York', name: 'Giants' },
-  { id: 'NYJ', abbreviation: 'NYJ', city: 'New York', name: 'Jets' },
-  { id: 'PHI', abbreviation: 'PHI', city: 'Philadelphia', name: 'Eagles' },
-  { id: 'PIT', abbreviation: 'PIT', city: 'Pittsburgh', name: 'Steelers' },
-  { id: 'SF', abbreviation: 'SF', city: 'San Francisco', name: '49ers' },
-  { id: 'SEA', abbreviation: 'SEA', city: 'Seattle', name: 'Seahawks' },
-  { id: 'TB', abbreviation: 'TB', city: 'Tampa Bay', name: 'Buccaneers' },
-  { id: 'TEN', abbreviation: 'TEN', city: 'Tennessee', name: 'Titans' },
-  { id: 'WSH', abbreviation: 'WSH', city: 'Washington', name: 'Commanders' },
-];
+export const EVAL_TEAMS: readonly SlipTeam[] = NFL_SLIP_TEAMS;
 
 export function fieldAccuracy(tally: EvalTally): number {
   const fields = Object.values(tally.fields);
