@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <radialGradient id="ambient">
+      <stop stop-color="#624638" stop-opacity=".76"/><stop offset=".6" stop-color="#624638" stop-opacity=".31"/>
+      <stop offset="1" stop-color="#0B0B0F" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="field" x2=".8" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#49372A"/><stop offset=".58" stop-color="#27211E"/><stop offset="1" stop-color="#141216"/>
+    </linearGradient>
+    <linearGradient id="overlay" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#0B0B0F" stop-opacity="0"/><stop offset="1" stop-color="#0B0B0F"/>
+    </linearGradient>
+    <linearGradient id="metal" x2="1" y2=".9" gradientUnits="objectBoundingBox">
+      <stop stop-color="#C6AA88"/><stop offset=".37" stop-color="#55443D"/><stop offset="1" stop-color="#221C1D"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="#0B0B0F"/>
+  <ellipse cx="540.0" cy="735" rx="550.8" ry="729.6" fill="url(#ambient)"/>
+  <g transform="translate(540.0 760) scale(0.93)">
+    <g fill="none" stroke="#E19451" opacity=".17"><circle cx="72" cy="-76" r="149"/><circle cx="72" cy="-76" r="184"/><circle cx="72" cy="-76" r="222"/></g>
+    <g transform="translate(-74 106) rotate(-9) scale(0.83 0.72) skewX(-23)">
+      <rect x="-289" y="-106" width="578" height="212" rx="17" fill="url(#field)" stroke="#8C6143" stroke-width="2"/>
+      <path d="M151-105h112q25 0 25 24V81q0 24-25 24H151Z" fill="#F5A018" opacity=".15"/>
+      <g fill="none" stroke="#C5A080" stroke-width="2">
+            <path d="M-230 -106v212" opacity="0.29"/>
+            <path d="M-235 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M-184 -106v212" opacity="0.29"/>
+            <path d="M-189 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M-138 -106v212" opacity="0.58"/>
+            <path d="M-92 -106v212" opacity="0.29"/>
+            <path d="M-97 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M-46 -106v212" opacity="0.29"/>
+            <path d="M-51 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M0 -106v212" opacity="0.58"/>
+            <path d="M46 -106v212" opacity="0.29"/>
+            <path d="M41 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M92 -106v212" opacity="0.29"/>
+            <path d="M87 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M138 -106v212" opacity="0.58"/>
+            <path d="M184 -106v212" opacity="0.29"/>
+            <path d="M179 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M230 -106v212" opacity="0.29"/>
+            <path d="M225 -24h10m-10 48h10" opacity=".43"/>
+      </g>
+      <path d="M-266-82H266M-266 82H266" stroke="#8C6C55" stroke-width="2" opacity=".62"/>
+      <path d="M151-105v210" stroke="#F5A018" stroke-width="3" opacity=".65"/>
+    </g>
+          <g transform="translate(25 -46) rotate(-13)">
+            <rect x="-131" y="-213" width="278" height="451" rx="46" fill="#060609" opacity=".8"/>
+            <rect x="-139" y="-226" width="278" height="451" rx="46" fill="url(#metal)"
+                  stroke="#B99675" stroke-width="2.5"/>
+            <rect x="-127" y="-214" width="254" height="427" rx="38" fill="#0B0B0F"/>
+            <rect x="-32" y="-202" width="64" height="11" rx="5.5" fill="#3D3837"/>
+            <rect x="-109" y="-140" width="218" height="192" rx="19" fill="#201917" stroke="#B2722F" stroke-width="2"/>
+            <rect x="-95" y="-93" width="190" height="106" rx="8" fill="#2E2420" stroke="#825F4B"/>
+            <path d="M-67-93v106m33-106v106M0-93v106m34-106v106m33-106v106" stroke="#AF8F76" opacity=".56"/>
+            <path d="M-67-35H61" stroke="#F5A018" stroke-width="5" stroke-linecap="round"/>
+            <circle cx="61" cy="-35" r="23" fill="#F5A018" opacity=".23"/>
+            <circle cx="61" cy="-35" r="9" fill="#FFE6B5"/>
+            <circle cx="-91" cy="-118" r="5" fill="#F5A018"/>
+            <path d="M-76-118h52m-65 149h80M52 31h34" stroke="#A28373" stroke-width="5" stroke-linecap="round"/>
+            <rect x="-109" y="74" width="218" height="62" rx="17" fill="#1D1B20" stroke="#443A37"/>
+            <rect x="-93" y="88" width="35" height="34" rx="9" fill="#50341F"/>
+            <path d="M-49 98h85m-85 16h54m-59 75H54" stroke="#8C7162" stroke-width="5" stroke-linecap="round"/>
+          </g>
+          <g transform="translate(197 -149) rotate(11)" fill="none" stroke="#FFB951" stroke-linecap="round">
+            <path d="M0-24Q17 0 0 24" stroke-width="5"/>
+            <path d="M15-39Q44 0 15 39" opacity=".72" stroke-width="4"/>
+            <path d="M32-54Q72 0 32 54" opacity=".34" stroke-width="3"/>
+          </g>
+  </g>
+  <rect y="1114" width="1080" height="403" fill="url(#overlay)"/>
+  <rect y="1517" width="1080" height="403" fill="#0B0B0F"/>
+</svg>
