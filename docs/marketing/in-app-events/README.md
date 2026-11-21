@@ -8,7 +8,7 @@ all users and require no event purchase.
 | Event                          | Start (ET)                  | End (ET)                    | Earliest planned publish (ET) |
 | ------------------------------ | --------------------------- | --------------------------- | ----------------------------- |
 | Thanksgiving Football Week     | Wed Nov 25, 2026, 7:00 p.m. | Sat Nov 28, 2026, 1:00 a.m. | Fri Nov 20, 2026, 4:00 p.m.   |
-| Fantasy Playoff Command Center | Thu Dec 17, 2026, 7:00 p.m. | Mon Jan 4, 2027, 12:30 a.m. | Thu Dec 3, 2026, 7:00 p.m.    |
+| Fantasy Playoff Command Center | Thu Dec 17, 2026, 7:00 p.m. | Tue Jan 5, 2027, 1:00 a.m.  | Thu Dec 3, 2026, 7:00 p.m.    |
 
 ## Deep link and iPhone checks
 
@@ -71,10 +71,10 @@ unverified.
    submission, select **iOS** on the draft submission screen. Click **Submit
    for Review** and check that the event status becomes **Waiting for Review**.
    Repeat for the second event.
-8. Submit Thanksgiving on Nov 20 or 21 and Fantasy Playoffs by about Dec 10.
-   Apple review timing varies. Check the event status and scheduled publish
-   time after approval. If review runs past a meaningful event window, reassess
-   the dates and time-sensitive copy before proceeding.
+8. Submit both events now. Approved events wait until their scheduled publish
+   date. Apple review timing varies, so check each event’s status and scheduled
+   publish time after approval. If review runs past a meaningful event window,
+   reassess the dates and time-sensitive copy before proceeding.
 
 [Apple's In-App Event setup and review instructions](https://developer.apple.com/help/app-store-connect/offer-in-app-events/offer-in-app-events/) ·
 [Apple's media specifications](https://developer.apple.com/help/app-store-connect/reference/in-app-events/in-app-event-media-and-audio-specifications/)
