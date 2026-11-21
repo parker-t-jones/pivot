@@ -1,0 +1,36 @@
+[
+  {
+    "referenceName": "Thanksgiving Week 2026",
+    "eventName": "Thanksgiving Football Week",
+    "shortDescription": "Five games in three days. Follow your players.",
+    "longDescription": "Follow your players and picks from Wednesday through Friday. Get alerts and open the right game on your service.",
+    "badge": "Live Event",
+    "purpose": "Appropriate for all users",
+    "startET": "2026-11-25T19:00:00-05:00",
+    "endET": "2026-11-28T01:00:00-05:00",
+    "publish": "2026-11-20T16:00:00-05:00",
+    "deepLink": "pivot://",
+    "inAppPurchaseRequired": false,
+    "media": {
+      "card": "thanksgiving-2026/card.png",
+      "details": "thanksgiving-2026/details.png"
+    }
+  },
+  {
+    "referenceName": "Fantasy Playoffs 2026",
+    "eventName": "Fantasy Playoff Command Center",
+    "shortDescription": "Follow your fantasy matchup as games unfold.",
+    "longDescription": "Track both lineups, get alerts when players are in action, and open the right game on your streaming service.",
+    "badge": "Live Event",
+    "purpose": "Appropriate for all users",
+    "startET": "2026-12-17T19:00:00-05:00",
+    "endET": "2027-01-05T01:00:00-05:00",
+    "publish": "2026-12-03T19:00:00-05:00",
+    "deepLink": "pivot://",
+    "inAppPurchaseRequired": false,
+    "media": {
+      "card": "fantasy-playoffs-2026/card.png",
+      "details": "fantasy-playoffs-2026/details.png"
+    }
+  }
+]

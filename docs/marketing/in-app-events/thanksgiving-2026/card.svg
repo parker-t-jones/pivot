@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <radialGradient id="ambient">
+      <stop stop-color="#8B4829" stop-opacity=".76"/><stop offset=".6" stop-color="#8B4829" stop-opacity=".31"/>
+      <stop offset="1" stop-color="#0B0B0F" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="field" x2=".8" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#49372A"/><stop offset=".58" stop-color="#27211E"/><stop offset="1" stop-color="#141216"/>
+    </linearGradient>
+    <linearGradient id="overlay" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#0B0B0F" stop-opacity="0"/><stop offset="1" stop-color="#0B0B0F"/>
+    </linearGradient>
+    <linearGradient id="leather" x2=".2" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#D08B4A"/><stop offset=".52" stop-color="#934B27"/><stop offset="1" stop-color="#452016"/>
+    </linearGradient>
+    <pattern id="grain" width="10" height="8" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#542C1C"/><circle cx="7" cy="6" r="1" fill="#E5AE71"/>
+    </pattern>
+  </defs>
+  <rect width="1920" height="1080" fill="#0B0B0F"/>
+  <ellipse cx="960.0" cy="395" rx="979.2" ry="410.4" fill="url(#ambient)"/>
+  <g transform="translate(960.0 420) scale(1.02)">
+    <g fill="none" stroke="#E19451" opacity=".17"><circle cx="61" cy="-11" r="127"/><circle cx="61" cy="-11" r="167"/></g>
+    <g transform="translate(-32 106) rotate(-9) scale(1 0.72) skewX(-23)">
+      <rect x="-289" y="-106" width="578" height="212" rx="17" fill="url(#field)" stroke="#8C6143" stroke-width="2"/>
+      <path d="M151-105h112q25 0 25 24V81q0 24-25 24H151Z" fill="#F5A018" opacity=".15"/>
+      <g fill="none" stroke="#C5A080" stroke-width="2">
+            <path d="M-230 -106v212" opacity="0.29"/>
+            <path d="M-235 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M-184 -106v212" opacity="0.29"/>
+            <path d="M-189 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M-138 -106v212" opacity="0.58"/>
+            <path d="M-92 -106v212" opacity="0.29"/>
+            <path d="M-97 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M-46 -106v212" opacity="0.29"/>
+            <path d="M-51 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M0 -106v212" opacity="0.58"/>
+            <path d="M46 -106v212" opacity="0.29"/>
+            <path d="M41 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M92 -106v212" opacity="0.29"/>
+            <path d="M87 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M138 -106v212" opacity="0.58"/>
+            <path d="M184 -106v212" opacity="0.29"/>
+            <path d="M179 -24h10m-10 48h10" opacity=".43"/>
+            <path d="M230 -106v212" opacity="0.29"/>
+            <path d="M225 -24h10m-10 48h10" opacity=".43"/>
+      </g>
+      <path d="M-266-82H266M-266 82H266" stroke="#8C6C55" stroke-width="2" opacity=".62"/>
+      <path d="M151-105v210" stroke="#F5A018" stroke-width="3" opacity=".65"/>
+    </g>
+          <g transform="translate(33 -46) rotate(-24)">
+            <ellipse cy="27" rx="250" ry="102" fill="#100B0A" opacity=".65"/>
+            <path d="M-251 0C-157-161 156-161 251 0C152 166-157 166-251 0Z"
+                  fill="url(#leather)" stroke="#C68A54" stroke-width="2.5"/>
+            <path d="M-251 0C-157-161 156-161 251 0C152 166-157 166-251 0Z" fill="url(#grain)" opacity=".5"/>
+            <path d="M-251 0C-118 74 108 78 251 0" fill="none" stroke="#321710" stroke-width="4"/>
+            <path d="M-189-59Q-155-11-177 60M189-59Q156-11 177 60" fill="none"
+                  stroke="#F2CB99" stroke-width="23" opacity=".83"/>
+            <path d="M-62-24Q0-36 62-24M-45-44v34m22-39v35m23-36v35m23-34v35m22-30v34"
+                  fill="none" stroke="#FFE3BB" stroke-width="7" stroke-linecap="round"/>
+          </g>
+  </g>
+  <rect y="626" width="1920" height="227" fill="url(#overlay)"/>
+  <rect y="853" width="1920" height="227" fill="#0B0B0F"/>
+</svg>
