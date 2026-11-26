@@ -16,8 +16,9 @@ export interface PlayerResultRow {
 
 /**
  * Player search box and results, shared by the manual-lineup builder (`PlayerPicker`) and the
- * player-prop step of "Add a pick". Return keeps focus in the field, the clear control keeps the
- * caret on web, and choosing a result empties the query.
+ * player-prop step of "Add a pick". Results update as you type, so the keyboard's Search key just
+ * puts the keyboard away (otherwise there is no way to close it and reach Save on a small phone).
+ * The clear control keeps the caret on web, and choosing a result empties the query.
  */
 export function PlayerSearchField({
   onSelect,
@@ -89,10 +90,9 @@ export function PlayerSearchField({
   return (
     <>
       <TextField
-        blurOnSubmit={false}
         onChangeText={onSearch}
         onSubmitEditing={() => {
-          inputRef.current?.focus();
+          inputRef.current?.blur();
         }}
         placeholder="Search players"
         ref={inputRef}
@@ -120,6 +120,7 @@ export function PlayerSearchField({
       {virtualized ? (
         <FlatList
           data={visible}
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           keyExtractor={(item) => item.player_id}
           renderItem={({ item }) => renderRow(item)}
