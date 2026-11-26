@@ -1,4 +1,4 @@
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ErrorState } from './ErrorState';
 import { PlayerSearchField } from './PlayerSearchField';
@@ -45,7 +45,15 @@ export function PlayerPicker({
       : `Your roster (${roster.length})`;
 
   return (
-    <View style={styles.content}>
+    // Tapping empty space puts the keyboard away so Save is reachable. Native only: a browser
+    // already blurs the field on an outside click, and a wrapper Pressable would eat that click.
+    <Pressable
+      accessible={false}
+      disabled={Platform.OS === 'web'}
+      onPress={Keyboard.dismiss}
+      style={styles.content}
+      testID="player-picker"
+    >
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
 
@@ -54,6 +62,7 @@ export function PlayerPicker({
       <Text style={styles.rosterHeading}>{rosterHeading}</Text>
       <FlatList
         data={roster}
+        keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         keyExtractor={(item) => item.player_id}
         renderItem={({ item }) => (
@@ -80,7 +89,7 @@ export function PlayerPicker({
         loading={isSaving}
         onPress={onSave}
       />
-    </View>
+    </Pressable>
   );
 }
 
